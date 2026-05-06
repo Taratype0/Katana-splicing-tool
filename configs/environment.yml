@@ -1,0 +1,19 @@
+name: katana-splicing-tool
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - scipy
+  - matplotlib
+  - seaborn
+  - pyyaml
+  - pip
+  - pip:
+      - PySide6==6.11.0
+      - matplotlib-venn
+      - statsmodels
+      - scikit-learn
+      - umap-learn

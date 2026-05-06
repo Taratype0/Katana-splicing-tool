@@ -1,0 +1,15 @@
+distribution:
+  mode: portable
+  bundle_python: true
+  bundle_tools: true
+  create_exe: true
+
+runtime:
+  require_rscript_for_isoform_switch: true
+  require_pysam_for_sashimi: true
+  require_samtools_for_sashimi: true
+
+paths:
+  embedded_tools_root: software
+  output_root_name: katana_output
+

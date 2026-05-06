@@ -1,0 +1,25 @@
+presets:
+  default:
+    splicing_fdr: 0.05
+    splicing_dpsi: 0.10
+    program_delta_dpsi: 0.10
+    deg_padj: 0.05
+    deg_log2fc: 1.0
+    dexseq_qvalue: 0.10
+    dtu_qvalue: 0.05
+  relaxed:
+    splicing_fdr: 0.10
+    splicing_dpsi: 0.05
+    program_delta_dpsi: 0.08
+    deg_padj: 0.10
+    deg_log2fc: 0.5
+    dexseq_qvalue: 0.10
+    dtu_qvalue: 0.10
+  strict:
+    splicing_fdr: 0.05
+    splicing_dpsi: 0.20
+    program_delta_dpsi: 0.15
+    deg_padj: 0.01
+    deg_log2fc: 1.5
+    dexseq_qvalue: 0.01
+    dtu_qvalue: 0.01
