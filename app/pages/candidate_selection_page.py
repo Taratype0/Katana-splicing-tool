@@ -168,7 +168,7 @@ class CandidateSelectionPage(QWidget):
         context = self.project_service.comparison_context(comparison_id)
         self.context_label.setText(
             f"{context['display_name']} [{context['comparison_id']}] | {context['group1']} vs {context['group2']} | "
-            "Default selection = top numeric rank genes for this comparison. Blacklist genes are excluded from downstream heatmap/cards/sashimi."
+            "Default selection = top numeric rank genes for this comparison. Each comparison tab keeps its own independent selection and blacklist. Blacklist genes are excluded from downstream heatmap/cards/sashimi."
         )
 
         catalog = self.project_service.candidate_selection_catalog(comparison_id, allow_generate=False)
@@ -188,6 +188,11 @@ class CandidateSelectionPage(QWidget):
                 "rank",
                 "gene_symbol",
                 "gene_id",
+                "n_rMATS_significant_events",
+                "significant_as_event_types",
+                "significant_as_event_ids",
+                "significant_as_event_list",
+                "as_event_summary",
                 "candidate_tier",
                 "evidence_class",
                 "direction_class",
@@ -215,7 +220,8 @@ class CandidateSelectionPage(QWidget):
         self.selection_status.setText(
             f"Selected genes: {len(self.project_service.candidate_selection_genes_for_display(comparison_id))} | "
             f"Blacklist genes: {len(blacklist)} | "
-            "Downstream evidence heatmap / candidate cards use this selection and exclude blacklist genes."
+            "Each comparison tab keeps its own independent selection / blacklist. "
+            "Downstream evidence heatmap / candidate cards use only the current comparison selection and exclude blacklist genes."
         )
 
     def _load_candidate_ranking(self) -> None:

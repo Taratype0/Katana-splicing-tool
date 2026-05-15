@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -22,14 +24,13 @@ from src.services.project_service import ProjectService
 
 
 class SashimiPage(QWidget):
-    def __init__(self, project_service: ProjectService) -> None:
+    def __init__(self, project_service: ProjectService, view_mode: str = "run") -> None:
         super().__init__()
         self.project_service = project_service
-        self.label = QLabel("Sashimi event follow-up")
-        self.explanation = QLabel(
-            "Sashimi is event-driven. Open this page to inspect available splicing events from the current candidate/event follow-up source, "
-            "filter them, select one or more events, then generate/run rmats2sashimi only for those selected events."
-        )
+        self.view_mode = view_mode
+
+        self.label = QLabel("Run Sashimi")
+        self.explanation = QLabel("")
         self.explanation.setWordWrap(True)
 
         self.comparison_tabs = QTabWidget()
@@ -39,7 +40,7 @@ class SashimiPage(QWidget):
         self.comparison_tabs.currentChanged.connect(self.refresh)
 
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Search gene / event_id / event_type")
+        self.search.setPlaceholderText("Search gene / event_id / event_type / coordinates")
         self.search.textChanged.connect(self.refresh)
 
         self.event_type_filter = QComboBox()
@@ -59,12 +60,15 @@ class SashimiPage(QWidget):
         self.dpsi_filter.setPrefix("|dPSI| >= ")
         self.dpsi_filter.valueChanged.connect(self.refresh)
 
-        self.generate_manifest_button = QPushButton("Generate selected manifest")
+        self.generate_manifest_button = QPushButton("Generate selected\nmanifest")
         self.generate_manifest_button.clicked.connect(self._generate_manifest)
-        self.run_button = QPushButton("Run selected sashimi")
+        self.run_button = QPushButton("Run selected\nsashimi")
         self.run_button.clicked.connect(self._run_sashimi)
-        self.open_output_button = QPushButton("Open output folder")
+        self.open_output_button = QPushButton("Open output\nfolder")
         self.open_output_button.clicked.connect(self._open_output_folder)
+        for button in (self.generate_manifest_button, self.run_button, self.open_output_button):
+            button.setMinimumHeight(40)
+            button.setMinimumWidth(130)
 
         self.event_table = QTableWidget(0, 0)
         self.event_table.setSortingEnabled(True)
@@ -78,12 +82,26 @@ class SashimiPage(QWidget):
         self.manifest_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.manifest_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.manifest_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.manifest_table.itemSelectionChanged.connect(self._show_details)
+
+        self.output_table = QTableWidget(0, 0)
+        self.output_table.setSortingEnabled(True)
+        self.output_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.output_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.output_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.output_table.itemSelectionChanged.connect(self._show_details)
 
         self.failed_table = QTableWidget(0, 0)
         self.failed_table.setSortingEnabled(True)
         self.failed_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.failed_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.failed_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.failed_table.itemSelectionChanged.connect(self._show_details)
+
+        self.events_label = QLabel("Available splicing events")
+        self.manifest_label = QLabel("Generated sashimi manifest rows")
+        self.output_label = QLabel("Generated sashimi output files")
+        self.failed_label = QLabel("Failed sashimi jobs")
 
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
@@ -106,26 +124,36 @@ class SashimiPage(QWidget):
         layout.addWidget(self.explanation)
         layout.addWidget(self.comparison_tabs)
         layout.addLayout(filters)
-        layout.addWidget(QLabel("Available splicing events"))
+        layout.addWidget(self.events_label)
         layout.addWidget(self.event_table, 3)
-        layout.addWidget(QLabel("Generated sashimi manifest preview"))
+        layout.addWidget(self.manifest_label)
         layout.addWidget(self.manifest_table, 2)
-        layout.addWidget(QLabel("Failed sashimi jobs"))
+        layout.addWidget(self.output_label)
+        layout.addWidget(self.output_table, 2)
+        layout.addWidget(self.failed_label)
         layout.addWidget(self.failed_table, 1)
         layout.addWidget(self.status_label)
         layout.addWidget(self.details, 1)
 
+        self._comparison_ids: list[str] = []
         self._events = pd.DataFrame()
         self._manifest = pd.DataFrame()
-        self._comparison_ids: list[str] = []
+        self._outputs = pd.DataFrame()
+        self._failures = pd.DataFrame()
+        self._apply_mode_visibility()
 
     def refresh(self) -> None:
         project = self.project_service.current_project
         if project is None:
             self._comparison_ids = []
             self.comparison_tabs.clear()
+            self._events = pd.DataFrame()
+            self._manifest = pd.DataFrame()
+            self._outputs = pd.DataFrame()
+            self._failures = pd.DataFrame()
             self._populate_table(self.event_table, pd.DataFrame())
             self._populate_table(self.manifest_table, pd.DataFrame())
+            self._populate_table(self.output_table, pd.DataFrame())
             self._populate_table(self.failed_table, pd.DataFrame())
             self.status_label.setText("Load a project first.")
             self.details.setPlainText("")
@@ -133,6 +161,7 @@ class SashimiPage(QWidget):
 
         self._refresh_comparison_tabs()
         comparison_id = self._current_comparison_id()
+
         events = self.project_service.available_sashimi_events(comparison_id, allow_generate=False)
         events = self._apply_filters(events)
         self._events = events.copy()
@@ -172,7 +201,7 @@ class SashimiPage(QWidget):
                         "geneSymbol",
                         "event_type",
                         "event_uid",
-                        "comparison_id",
+                        "comparison_name",
                         "label1",
                         "label2",
                         "event_file",
@@ -185,9 +214,32 @@ class SashimiPage(QWidget):
             else pd.DataFrame(),
         )
 
+        outputs = self.project_service.build_sashimi_output_browser(comparison_id)
+        self._outputs = outputs.copy()
+        self._populate_table(
+            self.output_table,
+            outputs[
+                [
+                    column
+                    for column in [
+                        "comparison_id",
+                        "relative_path",
+                        "file_type",
+                        "file_size",
+                        "last_modified",
+                        "preview_kind",
+                    ]
+                    if column in outputs.columns
+                ]
+            ].copy()
+            if not outputs.empty
+            else pd.DataFrame(),
+        )
+
         failures = self.project_service.last_sashimi_failures()
         if not failures.empty and comparison_id and "comparison_id" in failures.columns:
             failures = failures.loc[failures["comparison_id"].astype(str) == comparison_id].copy()
+        self._failures = failures.copy()
         self._populate_table(
             self.failed_table,
             failures[
@@ -208,17 +260,77 @@ class SashimiPage(QWidget):
             else pd.DataFrame(),
         )
 
-        if events.empty:
-            self.status_label.setText(
-                "No available splicing events found for this comparison. "
-                "Missing input: candidate event follow-up source not available. Please run 5.3.2 / 5.3.4 first."
+        manifest_state = self.project_service.module_state("sashimi_manifest")
+        plot_state = self.project_service.module_state("sashimi_plot")
+        if self.view_mode == "run":
+            if events.empty:
+                self.status_label.setText(
+                    "No available splicing events found for this comparison. "
+                    "Missing input: candidate event follow-up source not available. Please run 5.3.2 / 5.3.4 first."
+                )
+            elif plot_state.get("status") in {"finished", "failed"}:
+                self.status_label.setText(str(plot_state.get("message", "")))
+            elif manifest_state.get("status") in {"finished", "failed"}:
+                self.status_label.setText(str(manifest_state.get("message", "")))
+            else:
+                self.status_label.setText(
+                    f"Available events: {len(events)} | Generated manifest rows: {len(manifest)}. "
+                    "Select one or more events, then click 'Generate selected manifest' or 'Run selected sashimi'."
+                )
+        elif self.view_mode == "preview":
+            if manifest_state.get("status") == "failed":
+                self.status_label.setText(str(manifest_state.get("message", "")))
+            elif plot_state.get("status") == "failed":
+                self.status_label.setText(str(plot_state.get("message", "")))
+            elif outputs.empty:
+                self.status_label.setText(
+                    f"Generated manifest rows: {len(manifest)} | Generated sashimi output files: 0. "
+                    "No generated sashimi plot files were found yet. Run selected events from 5.5.2 first."
+                )
+            else:
+                self.status_label.setText(
+                    f"Generated manifest rows: {len(manifest)} | Generated sashimi output files: {len(outputs)}."
+                )
+        else:
+            self.status_label.setText(f"Failed sashimi jobs: {len(failures)}.")
+        self._show_details()
+
+    def _apply_mode_visibility(self) -> None:
+        run_mode = self.view_mode == "run"
+        preview_mode = self.view_mode == "preview"
+        failed_mode = self.view_mode == "failed"
+
+        self.search.setVisible(run_mode)
+        self.event_type_filter.setVisible(run_mode)
+        self.fdr_filter.setVisible(run_mode)
+        self.dpsi_filter.setVisible(run_mode)
+        self.generate_manifest_button.setVisible(run_mode)
+        self.run_button.setVisible(run_mode)
+
+        self.events_label.setVisible(run_mode)
+        self.event_table.setVisible(run_mode)
+        self.manifest_label.setVisible(run_mode or preview_mode)
+        self.manifest_table.setVisible(run_mode or preview_mode)
+        self.output_label.setVisible(preview_mode)
+        self.output_table.setVisible(preview_mode)
+        self.failed_label.setVisible(failed_mode)
+        self.failed_table.setVisible(failed_mode)
+
+        if run_mode:
+            self.label.setText("5.5.2 Run Sashimi")
+            self.explanation.setText(
+                "This page only lists available splicing events for the current comparison. Select events here, generate a manifest, then run rmats2sashimi only for the selected events."
+            )
+        elif preview_mode:
+            self.label.setText("5.5.3 Sashimi Preview")
+            self.explanation.setText(
+                "This page only shows generated sashimi manifest rows and any output files already written for the current comparison. It does not auto-run sashimi."
             )
         else:
-            self.status_label.setText(
-                f"Available events: {len(events)} | Generated manifest rows: {len(manifest)} | Failed jobs: {len(failures)}. "
-                "Select one or more events, then click 'Generate selected manifest' or 'Run selected sashimi'."
+            self.label.setText("5.5.4 Failed Sashimi Jobs")
+            self.explanation.setText(
+                "This page only shows event-level sashimi failures for the current comparison, including the error message and output folder."
             )
-        self._show_details()
 
     def _refresh_comparison_tabs(self) -> None:
         comparisons = self.project_service.selected_comparisons_for_display()
@@ -277,14 +389,24 @@ class SashimiPage(QWidget):
             row = self.event_table.currentRow()
             if row >= 0:
                 rows = [row]
-        if not rows or self._events.empty or "event_id" not in self._events.columns:
+        if not rows:
+            return []
+        event_col = -1
+        for idx in range(self.event_table.columnCount()):
+            header = self.event_table.horizontalHeaderItem(idx)
+            if header is not None and header.text() == "event_id":
+                event_col = idx
+                break
+        if event_col < 0:
             return []
         ids: list[str] = []
         for row in rows:
-            if row < len(self._events):
-                event_id = str(self._events.iloc[row]["event_id"]).strip()
-                if event_id and event_id not in ids:
-                    ids.append(event_id)
+            item = self.event_table.item(row, event_col)
+            if item is None:
+                continue
+            event_id = item.text().strip()
+            if event_id and event_id not in ids:
+                ids.append(event_id)
         return ids
 
     def _generate_manifest(self) -> None:
@@ -294,7 +416,7 @@ class SashimiPage(QWidget):
             self.status_label.setText("No events selected. Please select one or more splicing events first.")
             return
         try:
-            self.project_service.build_sashimi_manifest_for_events(
+            manifest = self.project_service.build_sashimi_manifest_for_events(
                 comparison_id,
                 event_ids,
                 allow_generate=False,
@@ -303,6 +425,9 @@ class SashimiPage(QWidget):
             self.status_label.setText(f"Manifest generation failed: {exc}")
             self.details.setPlainText(f"Manifest generation failed:\n{exc}")
             return
+        self.status_label.setText(
+            f"Generated sashimi manifest rows: {len(manifest)}. Open 5.5.3 to inspect the manifest and output files."
+        )
         self.refresh()
 
     def _run_sashimi(self) -> None:
@@ -323,11 +448,94 @@ class SashimiPage(QWidget):
             self.details.setPlainText(f"rmats2sashimi failed:\n{exc}")
             self.refresh()
             return
-        self.status_label.setText("rmats2sashimi finished for the selected events.")
-        self.details.setPlainText(output or "rmats2sashimi finished with no stdout output.")
+        failures = self.project_service.last_sashimi_failures()
+        if failures.empty:
+            self.status_label.setText("rmats2sashimi finished for the selected events.")
+            self.details.setPlainText(output or "rmats2sashimi finished with no stdout output.")
+        else:
+            first = failures.iloc[0]
+            self.status_label.setText(
+                f"rmats2sashimi finished with {len(failures)} failed event(s). Open 5.5.4 for the failed-job table."
+            )
+            self.details.setPlainText(
+                "\n".join(
+                    [
+                        output or "rmats2sashimi produced no successful stdout output.",
+                        "",
+                        "First failed event:",
+                        f"Gene: {first.get('gene', '')}",
+                        f"Event type: {first.get('event_type', '')}",
+                        f"Event ID: {first.get('event_id', '')}",
+                        f"Comparison: {first.get('comparison_id', '')}",
+                        f"Error: {first.get('error_message', '')}",
+                        f"Output folder: {first.get('output_folder', '')}",
+                    ]
+                )
+            )
         self.refresh()
 
     def _show_details(self) -> None:
+        if self.view_mode == "failed":
+            if self._failures.empty or self.failed_table.currentRow() < 0:
+                self.details.setPlainText("Select a failed sashimi row to inspect its event-level error details.")
+                return
+            row = min(self.failed_table.currentRow(), len(self._failures) - 1)
+            record = self._failures.iloc[row]
+            lines = [
+                f"Gene: {record.get('gene', '')}",
+                f"Event type: {record.get('event_type', '')}",
+                f"Event ID: {record.get('event_id', '')}",
+                f"Comparison: {record.get('comparison_id', '')}",
+                f"Error: {record.get('error_message', '')}",
+                f"Output folder: {record.get('output_folder', '')}",
+                f"Command: {record.get('command', '')}",
+                f"Script path: {record.get('script_path', '')}",
+                f"stderr: {record.get('stderr', '')}",
+            ]
+            self.details.setPlainText("\n".join(lines))
+            return
+
+        if self.view_mode == "preview":
+            if not self._outputs.empty and 0 <= self.output_table.currentRow() < len(self._outputs):
+                record = self._outputs.iloc[self.output_table.currentRow()]
+                self.details.setPlainText(
+                    "\n".join(
+                        [
+                            f"Comparison: {record.get('comparison_id', '')}",
+                            f"Relative path: {record.get('relative_path', '')}",
+                            f"Absolute path: {record.get('absolute_path', '')}",
+                            f"File type: {record.get('file_type', '')}",
+                            f"Preview kind: {record.get('preview_kind', '')}",
+                            f"File size: {record.get('file_size', '')}",
+                            f"Modified: {record.get('last_modified', '')}",
+                            "",
+                            "Use Open output folder to inspect or open/download the generated sashimi file.",
+                        ]
+                    )
+                )
+                return
+            if not self._manifest.empty and 0 <= self.manifest_table.currentRow() < len(self._manifest):
+                record = self._manifest.iloc[self.manifest_table.currentRow()]
+                self.details.setPlainText(
+                    "\n".join(
+                        [
+                            f"Gene: {record.get('geneSymbol', '')}",
+                            f"Event type: {record.get('event_type', '')}",
+                            f"Event ID: {record.get('event_uid', '')}",
+                            f"Comparison: {record.get('comparison_name', '')}",
+                            f"Label 1: {record.get('label1', '')}",
+                            f"Label 2: {record.get('label2', '')}",
+                            f"Event file: {record.get('event_file', '')}",
+                            f"Output dir: {record.get('outdir', '')}",
+                        ]
+                    )
+                )
+                return
+            self.details.setPlainText(
+                "No generated sashimi plot files were found for this comparison yet. Generate and run selected events from 5.5.2 first, then return here."
+            )
+            return
+
         if self._events.empty:
             self.details.setPlainText(
                 "Open this page to inspect available candidate-event follow-up rows. "
@@ -359,8 +567,6 @@ class SashimiPage(QWidget):
             return
         output_dir = project.output_root / "06_sashimi"
         output_dir.mkdir(parents=True, exist_ok=True)
-        import os
-
         os.startfile(output_dir)
 
     @staticmethod
@@ -383,3 +589,5 @@ class SashimiPage(QWidget):
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 table.setItem(row_idx, col_idx, item)
         table.setSortingEnabled(True)
+        if table.rowCount() > 0:
+            table.selectRow(0)

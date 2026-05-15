@@ -148,6 +148,11 @@ class CandidateGenePage(QWidget):
                 "rank",
                 "gene_symbol",
                 "gene_id",
+                "n_rMATS_significant_events",
+                "significant_as_event_types",
+                "significant_as_event_ids",
+                "significant_as_event_list",
+                "as_event_summary",
                 "candidate_tier",
                 "evidence_class",
                 "evidence_count",
@@ -167,11 +172,18 @@ class CandidateGenePage(QWidget):
                 "rank",
                 "gene_symbol",
                 "gene_id",
+                "n_rMATS_significant_events",
+                "significant_as_event_types",
+                "significant_as_event_ids",
+                "significant_as_event_list",
+                "as_event_summary",
                 "candidate_tier",
                 "evidence_class",
                 "evidence_count",
                 "DEG_significant",
                 "rMATS_significant",
+                "dominant_rMATS_event_type",
+                "best_rMATS_event_id",
                 "DEXSeq_significant",
                 "DTU_significant",
                 "DE_FDR",
@@ -245,6 +257,8 @@ class CandidateGenePage(QWidget):
 
     def _filter_frame(self, frame: pd.DataFrame, query: str) -> pd.DataFrame:
         filtered = frame.copy()
+        if not filtered.empty:
+            filtered = self.project_service._dedupe_candidate_frame(filtered)
         selected_comparison = self._selected_comparison()
         if selected_comparison and "comparison_id" in filtered.columns:
             filtered = filtered.loc[filtered["comparison_id"].astype(str) == selected_comparison].copy()
@@ -368,10 +382,19 @@ class CandidateGenePage(QWidget):
             self.context_label.setText("No comparison selected.")
             return
         current = self._current_frame.copy()
+        unique_gene_count = 0
+        if not current.empty:
+            gene_keys = current.get("candidate_unique_key")
+            if gene_keys is None:
+                gene_keys = current.get("gene_symbol", pd.Series("", index=current.index)).fillna("").astype(str).str.strip()
+                if "gene_id" in current.columns:
+                    gene_keys = gene_keys.where(gene_keys.ne(""), current["gene_id"].fillna("").astype(str).str.strip())
+            unique_gene_count = int(gene_keys.fillna("").astype(str).str.strip().replace("", pd.NA).dropna().nunique())
         dex_count = int(current["DEXSeq_significant"].fillna(False).astype(bool).sum()) if "DEXSeq_significant" in current.columns else 0
         dtu_count = int(current["DTU_significant"].fillna(False).astype(bool).sum()) if "DTU_significant" in current.columns else 0
         self.context_label.setText(
             f"{self.project_service.comparison_context_text(selected)} | "
+            f"Unique genes: {unique_gene_count} | "
             f"Filtered rows: {len(current)} | "
             f"DEXSeq-significant rows: {dex_count} | "
             f"DTU-significant rows: {dtu_count}"

@@ -313,11 +313,11 @@ class ResultsPage(QWidget):
         self.preview_path.setPlaceholderText("Current preview file path")
         self.preview_button = QPushButton("Data")
         self.preview_button.clicked.connect(self._show_preview_dialog)
-        self.open_folder_button = QPushButton("Open output folder")
+        self.open_folder_button = QPushButton("Open output\nfolder")
         self.open_folder_button.clicked.connect(self._open_preview_output_folder)
-        self.download_button = QPushButton("Download file")
+        self.download_button = QPushButton("Download\nfile")
         self.download_button.clicked.connect(self._download_preview_file)
-        self.export_filtered_button = QPushButton("Export current filtered table")
+        self.export_filtered_button = QPushButton("Export current\nfiltered table")
         self.export_filtered_button.clicked.connect(self._export_filtered_preview)
         self.preview_search = QLineEdit()
         self.preview_search.setPlaceholderText("Search gene_symbol / gene_id / comparison_id")
@@ -406,6 +406,18 @@ class ResultsPage(QWidget):
             self.card_open_sashimi_button,
         ):
             widget.setMinimumHeight(32)
+        for button in (
+            self.run_current_button,
+            self.detail_button,
+            self.export_png_button,
+            self.export_pdf_button,
+            self.preview_button,
+            self.open_folder_button,
+            self.download_button,
+            self.export_filtered_button,
+            self.card_open_sashimi_button,
+        ):
+            button.setMinimumWidth(128)
 
         preview_actions = QHBoxLayout()
         preview_actions.addWidget(self.preview_button)
@@ -877,15 +889,27 @@ class ResultsPage(QWidget):
             cross_matrix = self.project_service.run_state.results.cross_comparison_candidate_matrix
         if mode == "matrix":
             cross_files = self._cross_file_map()
-            self._draw_cross_candidate_summary(
+            self._draw_cross_candidate_membership_summary(
                 cross_matrix,
                 f"Candidate matrix: {pair_name}",
-                "Candidate matrix summarises candidate membership and pattern calls across comparisons.",
+                "Candidate matrix summarises how many comparisons each candidate gene appears in.",
             )
             self._populate_table(cross_matrix, [column for column in cross_matrix.columns if column in [
                 "gene_id", "gene_symbol", "candidate_pattern", "pattern_reason", "candidate_comparisons", "n_comparisons_candidate", "best_overall_tier", "best_overall_rank", "has_direction_reversal", "has_tier_change", "has_evidence_class_change"
             ] or column.startswith("is_candidate_") or column.startswith("tier_")], file_path=cross_files.get("matrix"), output_dir=self.project_service.cross_comparison_output_dir(), preview_name="Cross-comparison candidate matrix")
-            self.details.setPlainText("Cross-comparison candidate matrix built only from per-comparison candidate screening results. Use candidate_pattern and pattern_reason to understand shared, specific, gained/lost or changed-evidence genes.")
+            self.details.setPlainText(
+                "Cross-comparison candidate matrix built only from per-comparison candidate screening results.\n"
+                "Function: this is the base membership matrix. One row = one unique gene across the selected comparisons.\n"
+                "What 5.4.1 shows:\n"
+                "- whether the gene is a candidate in each comparison\n"
+                "- its per-comparison tier, rank, evidence class and direction state\n"
+                "- how many comparisons contain that gene as a candidate\n"
+                "This page is not the shared/specific pattern-classification page; it is the source matrix used by later 5.4 sections.\n"
+                "Rank meaning:\n"
+                "- rank_<comparison_id> = that gene's original within-comparison numeric rank from 5.3.1\n"
+                "- best_overall_rank = the smallest numeric rank observed across comparisons where the gene is a candidate\n"
+                "In other words, rank here is inherited from 5.3.1 and is not a new cross-comparison rank."
+            )
         elif mode == "comparison":
             self._draw_program_summary(filtered_summary, pair_name)
             self._populate_table(
@@ -927,16 +951,31 @@ class ResultsPage(QWidget):
                     ]
                 )
             ].copy() if cross_matrix is not None and not cross_matrix.empty else pd.DataFrame()
-            self._draw_cross_candidate_summary(
+            self._draw_cross_candidate_pattern_breakdown(
                 shared,
                 f"Shared / Specific / Gained / Lost: {pair_name}",
-                "Shared/specific/gained/lost view derived from candidate patterns across comparisons.",
+                "Pattern breakdown derived from the cross-comparison candidate matrix.",
             )
             cross_files = self._cross_file_map()
             self._populate_table(shared, [column for column in shared.columns if column in [
                 "gene_id", "gene_symbol", "candidate_pattern", "pattern_reason", "candidate_comparisons", "n_comparisons_candidate", "best_overall_tier", "best_overall_rank", "has_tier_change", "has_evidence_class_change"
             ]], file_path=cross_files.get("matrix"), output_dir=self.project_service.cross_comparison_output_dir(), preview_name="Cross-comparison pattern view")
-            self.details.setPlainText("Shared/specific/gained/lost candidate view derived from cross-comparison candidate patterns. If comparison order is not configured, pattern_reason will explain why gained/lost could not be assigned.")
+            self.details.setPlainText(
+                "Shared / specific / gained / lost candidate view derived from the cross-comparison candidate matrix.\n"
+                "Function: 5.4.2 is the pattern-interpretation page. Unlike 5.4.1, it does not ask only 'where is this gene present?'; it asks 'what cross-comparison pattern does this gene belong to?'\n"
+                "Definitions:\n"
+                "- shared_all: candidate in every selected comparison\n"
+                "- shared_subset: candidate in more than one comparison, but not all selected comparisons\n"
+                "- comparison_specific: candidate in exactly one comparison\n"
+                "- gained: absent earlier and present later according to the configured comparison order\n"
+                "- lost: present earlier and absent later according to the configured comparison order\n"
+                "- tier_changed: present in multiple comparisons, but candidate tier differs\n"
+                "- evidence_class_changed: present in multiple comparisons, but support/evidence class differs\n"
+                "- DEG_only_in_one_condition / splicing_only_in_one_condition: one evidence side appears only in one condition-specific context\n"
+                "Why 5.4.1 and 5.4.2 can look similar: both read the same underlying matrix, but 5.4.1 shows the raw per-gene membership table, while 5.4.2 groups genes into interpretable candidate-pattern classes.\n"
+                "Rank still means the original within-comparison numeric rank from 5.3.1.\n"
+                "best_overall_rank is not a new cross-comparison effect size; it is simply the best (lowest) within-comparison candidate rank."
+            )
         elif mode == "reversal":
             reversed_only = cross_matrix.loc[cross_matrix["candidate_pattern"].astype(str) == "direction_reversed"].copy() if cross_matrix is not None and not cross_matrix.empty else pd.DataFrame()
             self._draw_cross_candidate_summary(
@@ -990,6 +1029,109 @@ class ResultsPage(QWidget):
             for patch, label, value in zip(bars, summary.index.tolist(), summary.values.tolist(), strict=False)
         ]
         self._finalize_axes_layout(rotate_x=True, bottom=0.28)
+        self.canvas.draw_idle()
+
+    def _draw_cross_candidate_membership_summary(self, frame: pd.DataFrame | None, title: str, explanation: str) -> None:
+        self._scatter_collection = None
+        self._scatter_frame = pd.DataFrame()
+        self._pie_patches = []
+        self._heatmap_image = None
+        self._heatmap_rows = []
+        self._heatmap_cols = []
+        self._heatmap_values = None
+        self._set_explanation(explanation)
+        self.figure.clear()
+        axis = self.figure.add_subplot(111)
+        self._set_axis_title(axis, title)
+        if frame is None or frame.empty:
+            axis.axis("off")
+            axis.text(0.5, 0.5, "No rows available for this cross-comparison view.", ha="center", va="center")
+            self.canvas.draw_idle()
+            return
+        working = frame.copy()
+        membership = pd.to_numeric(
+            working.get("n_comparisons_candidate", pd.Series(dtype="float")),
+            errors="coerce",
+        ).dropna()
+        if membership.empty:
+            axis.axis("off")
+            axis.text(0.5, 0.5, "No comparison-membership counts available.", ha="center", va="center")
+            self.canvas.draw_idle()
+            return
+        summary = membership.astype(int).value_counts().sort_index()
+        labels = [f"{count} comparison{'s' if count != 1 else ''}" for count in summary.index.tolist()]
+        bars = axis.bar(labels, summary.values.tolist(), color="#4C78A8")
+        axis.set_ylabel("Genes")
+        axis.set_xlabel("Candidate membership breadth")
+        self._bar_patches = [
+            (patch, f"{label}\nGenes: {value}")
+            for patch, label, value in zip(bars, labels, summary.values.tolist(), strict=False)
+        ]
+        self._finalize_axes_layout(rotate_x=False, bottom=0.22)
+        self.canvas.draw_idle()
+
+    def _draw_cross_candidate_pattern_breakdown(self, frame: pd.DataFrame | None, title: str, explanation: str) -> None:
+        self._scatter_collection = None
+        self._scatter_frame = pd.DataFrame()
+        self._pie_patches = []
+        self._heatmap_image = None
+        self._heatmap_rows = []
+        self._heatmap_cols = []
+        self._heatmap_values = None
+        self._set_explanation(explanation)
+        self.figure.clear()
+        axis = self.figure.add_subplot(111)
+        self._set_axis_title(axis, title)
+        if frame is None or frame.empty:
+            axis.axis("off")
+            axis.text(0.5, 0.5, "No rows available for this cross-comparison pattern view.", ha="center", va="center")
+            self.canvas.draw_idle()
+            return
+        working = frame.copy()
+        pattern_order = [
+            "shared_all",
+            "shared_subset",
+            "comparison_specific",
+            "gained",
+            "lost",
+            "tier_changed",
+            "evidence_class_changed",
+            "DEG_only_in_one_condition",
+            "splicing_only_in_one_condition",
+        ]
+        pattern_colors = {
+            "shared_all": "#4C78A8",
+            "shared_subset": "#72B7B2",
+            "comparison_specific": "#F58518",
+            "gained": "#54A24B",
+            "lost": "#E45756",
+            "tier_changed": "#B279A2",
+            "evidence_class_changed": "#FF9DA6",
+            "DEG_only_in_one_condition": "#9D755D",
+            "splicing_only_in_one_condition": "#BAB0AC",
+        }
+        summary = (
+            working.get("candidate_pattern", pd.Series(dtype="object"))
+            .fillna("unclassified")
+            .astype(str)
+            .value_counts()
+        )
+        labels = [label for label in pattern_order if label in summary.index]
+        if not labels:
+            axis.axis("off")
+            axis.text(0.5, 0.5, "No candidate-pattern rows available.", ha="center", va="center")
+            self.canvas.draw_idle()
+            return
+        values = [int(summary[label]) for label in labels]
+        colors = [pattern_colors.get(label, "#4C78A8") for label in labels]
+        bars = axis.bar(labels, values, color=colors)
+        axis.set_ylabel("Genes")
+        axis.set_xlabel("Candidate pattern")
+        self._bar_patches = [
+            (patch, f"{label}\nGenes: {value}")
+            for patch, label, value in zip(bars, labels, values, strict=False)
+        ]
+        self._finalize_axes_layout(rotate_x=True, bottom=0.33)
         self.canvas.draw_idle()
 
     def _draw_cross_as_pattern_summary(
@@ -2233,6 +2375,9 @@ class ResultsPage(QWidget):
         expression_support = payload.get("expression_support")
         if not isinstance(expression_support, pd.DataFrame):
             expression_support = pd.DataFrame()
+        comparison_expression = payload.get("comparison_expression")
+        if not isinstance(comparison_expression, pd.DataFrame):
+            comparison_expression = pd.DataFrame()
         candidate_row = payload.get("candidate_row", {})
         if not isinstance(candidate_row, dict):
             candidate_row = {}
@@ -2260,6 +2405,8 @@ class ResultsPage(QWidget):
         comparison_name = str(comparison_context.get("display_name") or meta.get("comparison_id") or "")
         dominant_rule = str(payload.get("dominant_rule") or "Dominant event rule unavailable.")
         self.card_open_sashimi_button.setEnabled(not event_frame.empty)
+        as_direction_short = str(comparison_context.get("rmats_canonical_direction") or "NA").replace("rMATS canonical direction: ", "")
+        deg_direction_short = str(comparison_context.get("deg_final_direction") or "NA").replace("DEG selected/final direction: ", "")
 
         def _float(value: object) -> float | None:
             series = pd.to_numeric(pd.Series([value]), errors="coerce")
@@ -2280,6 +2427,10 @@ class ResultsPage(QWidget):
                 return "no"
             return "yes" if bool(value) else "no"
 
+        def _short_text(value: object, limit: int = 42) -> str:
+            text = str(value or "")
+            return text if len(text) <= limit else f"{text[: limit - 3]}..."
+
         def _short_event_label(row: pd.Series) -> str:
             event_type = str(row.get("event_type", "") or "")
             event_id = str(row.get("event_id", "") or "")
@@ -2287,10 +2438,11 @@ class ResultsPage(QWidget):
                 event_id = f"{event_id[:29]}..."
             return f"{event_type} | {event_id}" if event_type or event_id else "event"
 
+        event_display_frame = event_frame.loc[event_frame["significant_event"].fillna(False)].copy() if "significant_event" in event_frame.columns else event_frame.copy()
         summary_axis, events_axis, expression_axis = self.figure.subplots(
             1,
             3,
-            gridspec_kw={"width_ratios": [1.25, 1.55, 1.10]},
+            gridspec_kw={"width_ratios": [1.28, 1.72, 1.28], "wspace": 0.72},
         )
         self.figure.suptitle(f"{title}: {gene_symbol or gene_id}", fontsize=15, fontweight="bold", y=0.96)
 
@@ -2307,29 +2459,29 @@ class ResultsPage(QWidget):
                 linewidth=1.2,
             )
         )
-        summary_axis.text(0.05, 0.95, gene_symbol or gene_id or "gene", transform=summary_axis.transAxes, ha="left", va="top", fontsize=15, fontweight="bold")
-        summary_axis.text(0.05, 0.89, gene_id or "gene_id unavailable", transform=summary_axis.transAxes, ha="left", va="top", fontsize=9, color="#D1D5DB")
-        summary_axis.text(0.05, 0.83, comparison_name, transform=summary_axis.transAxes, ha="left", va="top", fontsize=10, color="#93C5FD")
+        summary_axis.text(0.06, 0.95, gene_symbol or gene_id or "gene", transform=summary_axis.transAxes, ha="left", va="top", fontsize=16, fontweight="bold", color="#F9FAFB")
+        summary_axis.text(0.06, 0.89, gene_id or "gene_id unavailable", transform=summary_axis.transAxes, ha="left", va="top", fontsize=10, color="#D1D5DB")
+        summary_axis.text(0.06, 0.83, comparison_name, transform=summary_axis.transAxes, ha="left", va="top", fontsize=10.5, color="#F9FAFB")
 
         summary_lines = [
-            f"AS canonical direction: {comparison_context.get('rmats_canonical_direction', 'NA')}",
-            f"dPSI direction: {comparison_context.get('dpsi_direction_label', 'NA')}",
-            f"DEG final direction: {comparison_context.get('deg_final_direction', 'NA')}",
-            f"log2FC direction: {comparison_context.get('log2fc_direction_label', 'NA')}",
+            f"AS canonical: {as_direction_short}",
+            f"DEG final: {deg_direction_short}",
             f"Candidate tier: {candidate_row.get('candidate_tier', 'NA')}",
             f"Evidence class: {candidate_row.get('evidence_class', 'NA')}",
             f"Direction class: {candidate_row.get('direction_class', 'NA')}",
+            f"Significant AS events: {candidate_row.get('n_rMATS_significant_events', 'NA')}",
+            f"AS types: {candidate_row.get('significant_as_event_types', 'NA')}",
+            f"AS events: {_short_text(candidate_row.get('significant_as_event_list', 'NA'), limit=72)}",
             "",
             f"DEG significant: {_fmt_bool(candidate_row.get('DEG_significant', deg_row.get('DEG_significant')))}",
             f"DE_FDR: {_fmt_num(candidate_row.get('DE_FDR', deg_row.get('DE_FDR')))}",
             f"standardized log2FC: {_fmt_signed(candidate_row.get('standardized_log2FC', deg_row.get('standardized_log2FC')))}",
-            f"Transcriptome / DEG baseMean: {_fmt_num(deg_row.get('baseMean'), digits=2)}",
             "",
         ]
         if dominant_event:
             summary_lines.extend(
                 [
-                    f"Dominant event: {dominant_event.get('event_type', 'NA')} | {dominant_event.get('event_id', 'NA')}",
+                    f"Dominant event: {dominant_event.get('event_type', 'NA')} | {_short_text(dominant_event.get('event_id', 'NA'))}",
                     f"rMATS FDR: {_fmt_num(dominant_event.get('FDR'))}",
                     f"standardized dPSI: {_fmt_signed(dominant_event.get('dPSI'))}",
                     f"PSI ({dominant_event.get('psi_experiment_group', 'experiment')}): {_fmt_num(dominant_event.get('psi_experiment'))}",
@@ -2348,19 +2500,19 @@ class ResultsPage(QWidget):
                 ]
             )
         summary_axis.text(
-            0.05,
-            0.77,
+            0.06,
+            0.79,
             "\n".join(str(line) for line in summary_lines),
             transform=summary_axis.transAxes,
             ha="left",
             va="top",
-            fontsize=9.0,
+            fontsize=8.7,
             color="#E5E7EB",
-            linespacing=1.35,
+            linespacing=1.32,
             wrap=True,
         )
         summary_axis.text(
-            0.05,
+            0.06,
             0.08,
             dominant_rule,
             transform=summary_axis.transAxes,
@@ -2372,11 +2524,11 @@ class ResultsPage(QWidget):
         )
 
         # Middle panel: full event list for this gene/current comparison.
-        if event_frame.empty:
+        if event_display_frame.empty:
             events_axis.axis("off")
-            events_axis.text(0.5, 0.5, "No AS events found for this gene in the current comparison.", ha="center", va="center", transform=events_axis.transAxes)
+            events_axis.text(0.5, 0.5, "No significant AS events found for this gene in the current comparison.", ha="center", va="center", transform=events_axis.transAxes)
         else:
-            event_plot = event_frame.copy()
+            event_plot = event_display_frame.copy()
             event_plot["plot_label"] = event_plot.apply(_short_event_label, axis=1)
             y_positions = list(range(len(event_plot)))[::-1]
             colors = ["#10B981" if (_float(value) or 0.0) >= 0 else "#8B5CF6" for value in event_plot["dPSI"]]
@@ -2404,6 +2556,9 @@ class ResultsPage(QWidget):
             events_axis.axvline(0, color="#6B7280", linewidth=1)
             events_axis.set_yticks(y_positions)
             events_axis.set_yticklabels(event_plot["plot_label"].tolist(), fontsize=8.6)
+            for tick_label in events_axis.get_yticklabels():
+                tick_label.set_horizontalalignment("left")
+            events_axis.tick_params(axis="y", pad=2)
             events_axis.set_xlabel("standardized dPSI", fontweight="bold")
             self._set_axis_title(events_axis, "AS event list")
             max_abs_dpsi = max(float(pd.to_numeric(event_plot["dPSI"], errors="coerce").abs().max()), 0.10)
@@ -2421,28 +2576,43 @@ class ResultsPage(QWidget):
                 )
 
         # Right panel: transcriptome / DEG expression support.
-        expr_frame = expression_support.copy()
-        if not expr_frame.empty and {"group", "expr"}.issubset(expr_frame.columns):
+        expr_frame = comparison_expression.copy()
+        if not expr_frame.empty and {"comparison_display_name", "comparison_mean_expr"}.issubset(expr_frame.columns):
             expr_plot = expr_frame.copy()
-            expr_plot["expr"] = pd.to_numeric(expr_plot["expr"], errors="coerce")
-            expr_plot = expr_plot.dropna(subset=["group", "expr"]).copy()
+            expr_plot["comparison_mean_expr"] = pd.to_numeric(expr_plot["comparison_mean_expr"], errors="coerce")
+            expr_plot = expr_plot.dropna(subset=["comparison_display_name", "comparison_mean_expr"]).copy()
             if expr_plot.empty:
                 expression_axis.axis("off")
             else:
+                bar_labels = expr_plot["comparison_display_name"].astype(str).tolist()
+                bar_colors = [
+                    "#F59E0B" if bool(value) else "#577590"
+                    for value in expr_plot.get("current_comparison", pd.Series(False, index=expr_plot.index)).tolist()
+                ]
                 expression_axis.bar(
-                    expr_plot["group"].astype(str).tolist(),
-                    expr_plot["expr"].tolist(),
-                    color="#577590",
-                    alpha=0.85,
+                    bar_labels,
+                    expr_plot["comparison_mean_expr"].tolist(),
+                    color=bar_colors,
+                    alpha=0.88,
                 )
-                expression_axis.tick_params(axis="x", rotation=25)
+                expression_axis.tick_params(axis="x", rotation=28)
                 expression_axis.set_ylabel("Expression", fontweight="bold")
-                self._set_axis_title(expression_axis, "Transcriptome / DEG expression")
+                self._set_axis_title(expression_axis, "Transcriptome / DEG expression across comparisons")
+                deg_sig = _fmt_bool(candidate_row.get("DEG_significant", deg_row.get("DEG_significant")))
+                sample_notes = [
+                    f"{row.get('comparison_display_name')}: {row.get('groups_note')}"
+                    for _, row in expr_plot.iterrows()
+                ]
                 expression_axis.text(
                     0.02,
                     0.98,
                     "\n".join(
                         [
+                            "Mean normalized expression per comparison.",
+                            "Current comparison is highlighted in orange.",
+                            *sample_notes,
+                            "",
+                            f"DEG significant: {deg_sig}",
                             f"DE_FDR: {_fmt_num(candidate_row.get('DE_FDR', deg_row.get('DE_FDR')))}",
                             f"standardized log2FC: {_fmt_signed(candidate_row.get('standardized_log2FC', deg_row.get('standardized_log2FC')))}",
                             f"baseMean: {_fmt_num(deg_row.get('baseMean'), digits=2)}",
@@ -2455,26 +2625,22 @@ class ResultsPage(QWidget):
                     bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "#CBD5E1", "alpha": 0.88},
                 )
         else:
-            expression_axis.axis("off")
-            expression_axis.add_patch(
-                Rectangle(
-                    (0.05, 0.08),
-                    0.90,
-                    0.84,
-                    transform=expression_axis.transAxes,
-                    facecolor="#F8FAFC",
-                    edgecolor="#CBD5E1",
-                    linewidth=1.0,
-                )
-            )
-            expression_axis.text(0.08, 0.90, "Transcriptome / DEG expression", transform=expression_axis.transAxes, ha="left", va="top", fontsize=11, fontweight="bold")
+            expression_axis.clear()
+            self._set_axis_title(expression_axis, "Transcriptome / DEG expression")
+            base_mean = _float(deg_row.get("baseMean"))
+            if base_mean is not None:
+                expression_axis.bar(["DEG baseMean"], [base_mean], color="#577590", alpha=0.82)
+                expression_axis.set_ylabel("Expression", fontweight="bold")
+                expression_axis.tick_params(axis="x", rotation=18)
+            else:
+                expression_axis.axis("off")
             expression_axis.text(
-                0.08,
-                0.82,
+                0.02,
+                0.98,
                 "\n".join(
-                    [
-                        "No separate transcriptome expression support table found.",
-                        "Showing DEG expression summary only.",
+                        [
+                            "No comparison-level expression means could be recovered from the counts file.",
+                            "Showing DEG expression summary only.",
                         "",
                         f"DEG significant: {_fmt_bool(candidate_row.get('DEG_significant', deg_row.get('DEG_significant')))}",
                         f"DE_FDR: {_fmt_num(candidate_row.get('DE_FDR', deg_row.get('DE_FDR')))}",
@@ -2485,11 +2651,12 @@ class ResultsPage(QWidget):
                 transform=expression_axis.transAxes,
                 ha="left",
                 va="top",
-                fontsize=9.0,
+                fontsize=8.5,
+                bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "#CBD5E1", "alpha": 0.92},
                 wrap=True,
             )
 
-        preview = event_frame[
+        preview = event_display_frame[
             [
                 column
                 for column in [
@@ -2525,12 +2692,12 @@ class ResultsPage(QWidget):
             list(preview.columns),
             preview_name="Gene-centered AS event list",
         )
-        self._finalize_axes_layout(left=0.07, right=0.97, top=0.84, bottom=0.10)
+        self._finalize_axes_layout(left=0.06, right=0.98, top=0.84, bottom=0.10)
         self.details.setPlainText(
             f"Gene-centered candidate card for {gene_symbol or gene_id} in {comparison_name}.\n"
             f"Gene selection rule: {meta.get('selection_rule', '')}\n"
             f"Dominant event rule: {dominant_rule}\n"
-            "The current comparison tab shows one gene card. The event table below lists every AS event for this gene in the current comparison.\n"
+            "The current comparison tab shows one gene card. The event table below lists only significant AS events for this gene in the current comparison.\n"
             "Select a specific event row and click 'Open selected event in Sashimi' to jump to Sashimi without auto-running it."
         )
         self.canvas.draw_idle()
@@ -2785,6 +2952,7 @@ class ResultsPage(QWidget):
         close_button.clicked.connect(dialog.accept)
         layout.addWidget(viewer, 1)
         layout.addWidget(close_button)
+        QTimer.singleShot(0, dialog.showMaximized)
         dialog.exec()
 
     def _show_preview_dialog(self) -> None:
@@ -2792,6 +2960,12 @@ class ResultsPage(QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle(self._preview_name or "Data preview")
         dialog.resize(1080, 680)
+        dialog.setWindowFlags(
+            dialog.windowFlags()
+            | Qt.WindowType.Window
+            | Qt.WindowType.WindowMaximizeButtonHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+        )
         layout = QVBoxLayout(dialog)
 
         path_label = QLineEdit(dialog)
@@ -2848,11 +3022,12 @@ class ResultsPage(QWidget):
                     item = QTableWidgetItem("" if pd.isna(row[column]) else str(row[column]))
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     table.setItem(row_idx, col_idx, item)
-            info.setText(
-                f"{self._preview_name}: {len(frame)} filtered row(s)"
-                + (f"; preview limited to first {self._preview_max_rows} rows" if truncated else "")
-            )
+                info.setText(
+                    f"{self._preview_name}: {len(frame)} filtered row(s)"
+                    + (f"; preview limited to first {self._preview_max_rows} rows" if truncated else "")
+                )
 
+        QTimer.singleShot(0, dialog.showMaximized)
         dialog.exec()
 
     def _draw_placeholder(self, text: str) -> None:

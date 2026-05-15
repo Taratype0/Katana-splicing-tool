@@ -29,13 +29,17 @@ from src.services.project_service import ProjectService
 
 
 class JutilsPage(QWidget):
-    def __init__(self, project_service: ProjectService) -> None:
+    def __init__(self, project_service: ProjectService, view_mode: str = "browser") -> None:
         super().__init__()
         self.project_service = project_service
+        self.view_mode = view_mode
         self.label = QLabel("Jutils output browser")
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
         self.comparison_tabs = QTabWidget()
+        self.comparison_tabs.setDocumentMode(True)
+        self.comparison_tabs.setUsesScrollButtons(True)
+        self.comparison_tabs.setMaximumHeight(36)
         self.comparison_tabs.currentChanged.connect(self.refresh)
         self.command_label = QTextEdit()
         self.command_label.setReadOnly(True)
@@ -53,6 +57,15 @@ class JutilsPage(QWidget):
         self.open_selected_button.clicked.connect(self._open_selected_file)
         self.download_button = QPushButton("Download Selected")
         self.download_button.clicked.connect(self._download_selected_file)
+        for button in (
+            self.run_button,
+            self.preview_button,
+            self.open_output_button,
+            self.open_selected_button,
+            self.download_button,
+        ):
+            button.setMinimumHeight(36)
+            button.setMinimumWidth(136)
 
         self.table = QTableWidget(0, 0)
         self.table.setSortingEnabled(True)
@@ -128,6 +141,16 @@ class JutilsPage(QWidget):
 
         report = self.project_service.jutils_report()
         browser = self.project_service.build_jutils_output_browser()
+        if self.view_mode == "heatmap" and not browser.empty and "relative_path" in browser.columns:
+            browser = browser.loc[
+                browser["relative_path"].astype(str).str.contains("heatmap|clustermap", case=False, na=False)
+            ].copy()
+            self.label.setText("Jutils heatmap outputs")
+        elif self.view_mode == "pca" and not browser.empty and "relative_path" in browser.columns:
+            browser = browser.loc[browser["relative_path"].astype(str).str.contains("pca", case=False, na=False)].copy()
+            self.label.setText("Jutils PCA outputs")
+        else:
+            self.label.setText("Jutils output browser")
         self._populate_comparison_tabs(browser)
         selected_comparison = self._selected_comparison_id()
         if selected_comparison not in (None, "__all__") and not browser.empty and "comparison_id" in browser.columns:
@@ -149,6 +172,9 @@ class JutilsPage(QWidget):
                 "Generated files:",
             ]
             lines.extend(f"- {row.get('relative_path', '')}" for row in generated_files[:200])
+            if browser.empty and self.view_mode in {"heatmap", "pca"}:
+                lines.append("")
+                lines.append(f"No {self.view_mode.upper()} previewable files matched the current browser filter. Use 'Open Output Folder' to inspect raw outputs.")
             self.details.setPlainText("\n".join(lines))
         elif status == "failed":
             self.details.setPlainText(
@@ -173,6 +199,16 @@ class JutilsPage(QWidget):
             )
         else:
             self.details.setPlainText("Run Jutils to populate output files and previews.")
+        if browser.empty and self.view_mode in {"heatmap", "pca"}:
+            self.details.setPlainText(
+                "\n".join(
+                    [
+                        f"No {self.view_mode.upper()} outputs are currently available for the selected comparison filter.",
+                        f"Output directory: {output_dir or 'not available'}",
+                        "Use 'Open Output Folder' to inspect raw files directly.",
+                    ]
+                )
+            )
         self._preview_selected()
 
     def _populate_comparison_tabs(self, frame: pd.DataFrame) -> None:
@@ -217,6 +253,8 @@ class JutilsPage(QWidget):
                 item = QTableWidgetItem("" if pd.isna(row[column]) else str(row[column]))
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.table.setItem(row_idx, col_idx, item)
+        if self.table.rowCount() > 0:
+            self.table.selectRow(0)
 
     def _run_jutils(self) -> None:
         self.status_label.setText("Jutils status: running")
@@ -263,7 +301,16 @@ class JutilsPage(QWidget):
             self.preview_stack.setCurrentWidget(self.table_preview)
         elif preview_kind == "pdf":
             self.preview_stack.setCurrentWidget(self.text_preview)
-            self.text_preview.setPlainText(f"PDF preview is not embedded.\nOpen or download:\n{path}")
+            self.text_preview.setPlainText(
+                "\n".join(
+                    [
+                        "PDF preview is not embedded in Katana.",
+                        "Use 'Open Selected File' or 'Download Selected' to inspect it directly.",
+                        "",
+                        f"Path: {path}",
+                    ]
+                )
+            )
         else:
             self.preview_stack.setCurrentWidget(self.text_preview)
             self.text_preview.setPlainText(

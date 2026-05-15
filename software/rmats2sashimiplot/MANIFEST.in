@@ -1,0 +1,3 @@
+#include these files in the python package source distribution
+include LICENSE
+include pyproject.toml

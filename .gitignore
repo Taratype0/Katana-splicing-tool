@@ -1,0 +1,33 @@
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+
+# Local environments
+.venv/
+venv/
+.python-version
+
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test / tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Local project state / generated previews
+.katana_project.yaml
+analysis_export.png
+tmp_manifest_check.py
+noDP_KOvsWT.tsv
+
+# Local outputs
+katana_output/
+*.log

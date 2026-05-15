@@ -5,16 +5,10 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib import cm
 
 
 class CardsAdapter:
-    GROUP_COLORS = {
-        "WT_NO_DP": "#4C78A8",
-        "WT_DP": "#F58518",
-        "KO_NO_DP": "#54A24B",
-        "KO_DP": "#E45756",
-    }
-
     def render_cards(self, shortlist: pd.DataFrame, expression_support: pd.DataFrame, output_root: Path) -> list[Path]:
         output_root.mkdir(parents=True, exist_ok=True)
         generated: list[Path] = []
@@ -80,7 +74,9 @@ class CardsAdapter:
             return
         groups = sub["group"].astype(str).tolist()
         exprs = [float(value) for value in sub["expr"].tolist()]
-        colors = [self.GROUP_COLORS.get(group, "#888888") for group in groups]
+        palette = cm.get_cmap("tab20", max(len(groups), 1))
+        group_colors = {group: palette(index % palette.N) for index, group in enumerate(dict.fromkeys(groups))}
+        colors = [group_colors.get(group, "#888888") for group in groups]
         ax.bar(range(len(groups)), exprs, color=colors)
         ax.set_xticks(range(len(groups)))
         ax.set_xticklabels(groups, rotation=20, ha="right")

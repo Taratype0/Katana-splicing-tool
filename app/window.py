@@ -31,7 +31,6 @@ from app.pages.cards_page import CardsPage
 from app.pages.blacklist_page import BlacklistPage
 from app.pages.input_check_page import InputCheckPage
 from app.pages.input_paths_dialog import InputPathsDialog
-from app.pages.isoform_page import IsoformPage
 from app.pages.jutils_page import JutilsPage
 from app.pages.project_page import ProjectPage
 from app.pages.results_page import ResultsPage
@@ -246,11 +245,14 @@ class MainWindow(QMainWindow):
         self.shortlist_page = ShortlistPage(self.project_service)
         self.blacklist_page = BlacklistPage(self.project_service)
         self.cards_page = CardsPage(self.project_service)
-        self.sashimi_page = SashimiPage(self.project_service)
+        self.sashimi_page = SashimiPage(self.project_service, view_mode="run")
+        self.sashimi_preview_page = SashimiPage(self.project_service, view_mode="preview")
+        self.sashimi_failed_page = SashimiPage(self.project_service, view_mode="failed")
         self.samples_page = SamplesPage(self.project_service)
-        self.isoform_page = IsoformPage(self.project_service)
         self.input_check_page = InputCheckPage(self.project_service)
-        self.jutils_page = JutilsPage(self.project_service)
+        self.jutils_heatmap_page = JutilsPage(self.project_service, view_mode="heatmap")
+        self.jutils_pca_page = JutilsPage(self.project_service, view_mode="pca")
+        self.jutils_page = JutilsPage(self.project_service, view_mode="browser")
         self.thresholds_page = ThresholdsPage(self.project_service)
         self.settings_page = SettingsPage(self.project_service, self.reload_current_project)
 
@@ -286,16 +288,15 @@ class MainWindow(QMainWindow):
         self._add_page("5.5 Sashimi", self.sashimi_hub_page)
         self._add_page("5.5.1 Input Check", self.input_check_page)
         self._add_page("5.5.2 Run Sashimi", self.sashimi_page)
-        self._add_page("5.5.3 Sashimi Preview", self.sashimi_page)
-        self._add_page("5.5.4 Failed Sashimi Jobs", self.sashimi_page)
+        self._add_page("5.5.3 Sashimi Preview", self.sashimi_preview_page)
+        self._add_page("5.5.4 Failed Sashimi Jobs", self.sashimi_failed_page)
         self._add_page("5.6 Jutils", self.jutils_hub_page)
-        self._add_page("5.6.1 Jutils Heatmap", self.landscape_heatmap_page, ("landscape", "heatmap"))
-        self._add_page("5.6.2 Jutils PCA", self.landscape_pca_page, ("landscape", "pca"))
+        self._add_page("5.6.1 Jutils Heatmap", self.jutils_heatmap_page)
+        self._add_page("5.6.2 Jutils PCA", self.jutils_pca_page)
         self._add_page("5.6.3 Jutils Output Browser", self.jutils_page)
         self._add_page("6. Samples", self.samples_page)
-        self._add_page("7. Isoform", self.isoform_page)
-        self._add_page("8. Input Check", self.input_check_page)
-        self._add_page("9. Settings", self.settings_page)
+        self._add_page("7. Input Check", self.input_check_page)
+        self._add_page("8. Settings", self.settings_page)
         self.nav.setCurrentRow(0)
 
         left_panel = QWidget()

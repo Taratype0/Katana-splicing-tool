@@ -8,6 +8,7 @@ import yaml
 import pandas as pd
 import matplotlib.pyplot as plt
 import importlib.util
+import numpy as np
 
 from src.adapters.jutils_adapter import JutilsAdapter
 from src.adapters.isoformswitch_runner import IsoformSwitchRunner
@@ -63,6 +64,7 @@ class ProjectService:
         self._sashimi_event_catalog_cache: dict[str, pd.DataFrame] = {}
         self._cross_as_pattern_cache: dict[tuple[str, float, float], dict[str, pd.DataFrame]] = {}
         self._deg_expression_cache: dict[str, pd.DataFrame] = {}
+        self._comparison_expression_support_cache: dict[str, pd.DataFrame] = {}
         self._expression_support_cache = pd.DataFrame()
         self._expression_support_loaded = False
         self._module_states = self._new_module_states()
@@ -138,6 +140,7 @@ class ProjectService:
         self._sashimi_event_catalog_cache = {}
         self._cross_as_pattern_cache = {}
         self._deg_expression_cache = {}
+        self._comparison_expression_support_cache = {}
         self._expression_support_cache = pd.DataFrame()
         self._expression_support_loaded = False
         self.current_project = self.scanner.scan(
@@ -153,10 +156,7 @@ class ProjectService:
         self.current_project.visualization_groups_confirmed = False
         self._emit_progress(progress_callback, "load pairing direction")
         self._refresh_tool_adapters()
-        if not self.current_project.selected_comparison_ids:
-            self.current_project.selected_comparison_ids = [
-                item.comparison_id for item in self.current_project.available_comparisons[:4]
-            ]
+        self._normalize_project_selection_state()
         if not self.current_project.selected_analysis_modules:
             self.current_project.selected_analysis_modules = list(self.ANALYSIS_MODULES)
         self._ensure_default_comparison_pairs()
@@ -168,6 +168,38 @@ class ProjectService:
         self._autodetect_embedded_tools()
         self._emit_progress(progress_callback, "finish load project")
         return self.current_project
+
+    def _normalize_project_selection_state(self) -> None:
+        if self.current_project is None:
+            return
+        available_ids = [item.comparison_id for item in self.current_project.available_comparisons]
+        available_lookup = set(available_ids)
+
+        selected = [
+            item
+            for item in dict.fromkeys(self.current_project.selected_comparison_ids)
+            if item in available_lookup
+        ]
+        if not selected:
+            selected = available_ids[:4]
+        self.current_project.selected_comparison_ids = selected
+
+        ordered = [
+            item
+            for item in dict.fromkeys(self.current_project.comparison_order_ids)
+            if item in available_lookup
+        ]
+        for comparison_id in available_ids:
+            if comparison_id not in ordered:
+                ordered.append(comparison_id)
+        self.current_project.comparison_order_ids = ordered
+
+        program_ids = [
+            item
+            for item in dict.fromkeys(self.current_project.program_comparison_ids)
+            if item in set(selected)
+        ]
+        self.current_project.program_comparison_ids = program_ids[:2]
 
     def confirm_project(self) -> None:
         if self.current_project is None:
@@ -707,12 +739,27 @@ class ProjectService:
     def candidate_selection_genes_for_display(self, comparison_id: str) -> list[str]:
         if self.current_project is None or not comparison_id:
             return []
-        return list(self.current_project.candidate_selection_genes.get(comparison_id, []))
+        return self._dedupe_gene_tokens(self.current_project.candidate_selection_genes.get(comparison_id, []))
 
     def candidate_blacklist_genes_for_display(self, comparison_id: str) -> list[str]:
         if self.current_project is None or not comparison_id:
             return []
-        return list(self.current_project.candidate_blacklist_genes.get(comparison_id, []))
+        return self._dedupe_gene_tokens(self.current_project.candidate_blacklist_genes.get(comparison_id, []))
+
+    @staticmethod
+    def _dedupe_gene_tokens(values: list[str] | tuple[str, ...] | set[str] | None) -> list[str]:
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for value in values or []:
+            text = str(value or "").strip()
+            if not text:
+                continue
+            key = text.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered.append(text)
+        return ordered
 
     def add_candidate_selection_gene(self, comparison_id: str, gene: str) -> None:
         if self.current_project is None:
@@ -720,24 +767,28 @@ class ProjectService:
         value = gene.strip()
         if not comparison_id or not value:
             return
+        value_key = value.lower()
         blocked = {
-            item.strip()
+            item.strip().lower()
             for item in self.current_project.candidate_blacklist_genes.get(comparison_id, [])
             if item and item.strip()
         }
-        if value in blocked:
+        if value_key in blocked:
             return
-        current = list(self.current_project.candidate_selection_genes.get(comparison_id, []))
-        if value not in current:
+        current = self._dedupe_gene_tokens(self.current_project.candidate_selection_genes.get(comparison_id, []))
+        if value_key not in {item.lower() for item in current}:
             current.append(value)
-            self.current_project.candidate_selection_genes[comparison_id] = current
+            self.current_project.candidate_selection_genes[comparison_id] = self._dedupe_gene_tokens(current)
             self.save_project_config()
 
     def remove_candidate_selection_gene(self, comparison_id: str, gene: str) -> None:
         if self.current_project is None or not comparison_id:
             raise RuntimeError("No project loaded.")
+        gene_key = str(gene or "").strip().lower()
         self.current_project.candidate_selection_genes[comparison_id] = [
-            item for item in self.current_project.candidate_selection_genes.get(comparison_id, []) if item != gene
+            item
+            for item in self.current_project.candidate_selection_genes.get(comparison_id, [])
+            if str(item or "").strip().lower() != gene_key
         ]
         self.save_project_config()
 
@@ -747,32 +798,36 @@ class ProjectService:
         value = gene.strip()
         if not comparison_id or not value:
             return
-        current = list(self.current_project.candidate_blacklist_genes.get(comparison_id, []))
-        if value not in current:
+        value_key = value.lower()
+        current = self._dedupe_gene_tokens(self.current_project.candidate_blacklist_genes.get(comparison_id, []))
+        if value_key not in {item.lower() for item in current}:
             current.append(value)
-            self.current_project.candidate_blacklist_genes[comparison_id] = current
+            self.current_project.candidate_blacklist_genes[comparison_id] = self._dedupe_gene_tokens(current)
             selected = [
                 item for item in self.current_project.candidate_selection_genes.get(comparison_id, [])
-                if item != value
+                if str(item or "").strip().lower() != value_key
             ]
-            self.current_project.candidate_selection_genes[comparison_id] = selected
+            self.current_project.candidate_selection_genes[comparison_id] = self._dedupe_gene_tokens(selected)
             self.save_project_config()
 
     def remove_candidate_blacklist_gene(self, comparison_id: str, gene: str) -> None:
         if self.current_project is None or not comparison_id:
             raise RuntimeError("No project loaded.")
+        gene_key = str(gene or "").strip().lower()
         self.current_project.candidate_blacklist_genes[comparison_id] = [
-            item for item in self.current_project.candidate_blacklist_genes.get(comparison_id, []) if item != gene
+            item
+            for item in self.current_project.candidate_blacklist_genes.get(comparison_id, [])
+            if str(item or "").strip().lower() != gene_key
         ]
         self.save_project_config()
 
     def reset_candidate_selection(self, comparison_id: str, *, top_n: int = 20) -> None:
         if self.current_project is None or not comparison_id:
             raise RuntimeError("No project loaded.")
-        self.current_project.candidate_selection_genes[comparison_id] = self._default_candidate_selection_genes(
+        self.current_project.candidate_selection_genes[comparison_id] = self._dedupe_gene_tokens(self._default_candidate_selection_genes(
             comparison_id,
             top_n=top_n,
-        )
+        ))
         self.save_project_config()
 
     def apply_gene_blacklist(self, frame: pd.DataFrame) -> pd.DataFrame:
@@ -2050,6 +2105,96 @@ class ProjectService:
         self._expression_support_cache = working
         return working.copy()
 
+    def _comparison_expression_support_frame(self, comparison_id: str | None) -> pd.DataFrame:
+        if self.current_project is None or not comparison_id:
+            return pd.DataFrame()
+        cached = self._comparison_expression_support_cache.get(comparison_id)
+        if cached is not None:
+            return cached.copy()
+        comparison = next(
+            (item for item in self.current_project.available_comparisons if item.comparison_id == comparison_id),
+            None,
+        )
+        counts_path = self.current_project.counts_path
+        if comparison is None or counts_path is None or not counts_path.exists():
+            self._comparison_expression_support_cache[comparison_id] = pd.DataFrame()
+            return pd.DataFrame()
+        try:
+            frame = pd.read_csv(counts_path, sep="\t", low_memory=False)
+        except Exception:
+            self._comparison_expression_support_cache[comparison_id] = pd.DataFrame()
+            return pd.DataFrame()
+        if frame.empty:
+            self._comparison_expression_support_cache[comparison_id] = pd.DataFrame()
+            return pd.DataFrame()
+
+        experiment_group, control_group = self._comparison_deg_direction_labels(comparison)
+        if not experiment_group or not control_group:
+            self._comparison_expression_support_cache[comparison_id] = pd.DataFrame()
+            return pd.DataFrame()
+
+        def _match_group_columns(group_label: str) -> list[str]:
+            import re
+            label = str(group_label or "").strip()
+            if not label:
+                return []
+            pattern = re.compile(rf"^{re.escape(label)}(?:$|[_\-.])", flags=re.IGNORECASE)
+            return [column for column in frame.columns if column != "gene_id" and pattern.search(str(column))]
+
+        exp_columns = _match_group_columns(experiment_group)
+        ctrl_columns = _match_group_columns(control_group)
+        if not exp_columns or not ctrl_columns:
+            self._comparison_expression_support_cache[comparison_id] = pd.DataFrame()
+            return pd.DataFrame()
+
+        working = frame.copy()
+        working["gene_id"] = self._normalized_gene_id_series(working)
+        annotation_lookup = self._annotation_gene_symbol_lookup()
+        working["gene_symbol"] = (
+            working["gene_id"].map(annotation_lookup)
+            if annotation_lookup
+            else pd.Series(pd.NA, index=working.index, dtype="object")
+        )
+        working["gene_symbol"] = working["gene_symbol"].combine_first(working["gene_id"])
+        exp_values = working[exp_columns].apply(pd.to_numeric, errors="coerce")
+        ctrl_values = working[ctrl_columns].apply(pd.to_numeric, errors="coerce")
+        working["expr_experiment"] = exp_values.mean(axis=1, skipna=True)
+        working["expr_control"] = ctrl_values.mean(axis=1, skipna=True)
+        working["gene_card_key"] = working.apply(
+            lambda row: self._gene_lookup_key(row.get("gene_id"), row.get("gene_symbol")),
+            axis=1,
+        )
+
+        rows: list[dict[str, object]] = []
+        for _, row in working.dropna(subset=["gene_card_key"]).iterrows():
+            rows.append(
+                {
+                    "comparison_id": comparison_id,
+                    "gene_card_key": row.get("gene_card_key"),
+                    "gene_id": row.get("gene_id"),
+                    "gene_symbol": row.get("gene_symbol"),
+                    "group": experiment_group,
+                    "expr": row.get("expr_experiment"),
+                    "sample_count": len(exp_columns),
+                    "expression_source": "counts_path_group_mean",
+                }
+            )
+            rows.append(
+                {
+                    "comparison_id": comparison_id,
+                    "gene_card_key": row.get("gene_card_key"),
+                    "gene_id": row.get("gene_id"),
+                    "gene_symbol": row.get("gene_symbol"),
+                    "group": control_group,
+                    "expr": row.get("expr_control"),
+                    "sample_count": len(ctrl_columns),
+                    "expression_source": "counts_path_group_mean",
+                }
+            )
+        result = pd.DataFrame(rows)
+        self._comparison_expression_support_cache[comparison_id] = result
+        return result.copy()
+
     def _deg_expression_frame(self, comparison_id: str | None) -> pd.DataFrame:
         if self.current_project is None or not comparison_id:
             return pd.DataFrame()
@@ -2336,10 +2481,54 @@ class ProjectService:
             if not subset.empty:
                 deg_row = subset.iloc[0]
 
-        expr_support = self._expression_support_frame()
+        expr_support = self._comparison_expression_support_frame(comparison_id)
+        if expr_support.empty:
+            expr_support = self._expression_support_frame()
         expr_subset = pd.DataFrame()
         if not expr_support.empty:
             expr_subset = expr_support.loc[expr_support["gene_card_key"].astype(str) == current_key].copy()
+            if "comparison_id" in expr_subset.columns and comparison_id:
+                expr_subset = expr_subset.loc[expr_subset["comparison_id"].astype(str) == str(comparison_id)].copy()
+            if expr_subset.empty:
+                gene_symbol_key = str(gene_symbol or "").strip().casefold()
+                gene_id_key = normalize_gene_id(gene_id)
+                fallback_mask = pd.Series(False, index=expr_support.index)
+                if gene_symbol_key and "gene_symbol" in expr_support.columns:
+                    fallback_mask |= expr_support["gene_symbol"].fillna("").astype(str).str.casefold().eq(gene_symbol_key)
+                if gene_id_key and "gene_id" in expr_support.columns:
+                    fallback_mask |= self._normalized_gene_id_series(expr_support).fillna("").astype(str).eq(gene_id_key)
+                expr_subset = expr_support.loc[fallback_mask].copy()
+                if "comparison_id" in expr_subset.columns and comparison_id:
+                    expr_subset = expr_subset.loc[expr_subset["comparison_id"].astype(str) == str(comparison_id)].copy()
+        comparison_expression_rows: list[dict[str, object]] = []
+        for comparison in selected_comparisons:
+            comparison_expr = self._comparison_expression_support_frame(comparison.comparison_id)
+            if comparison_expr.empty:
+                continue
+            subset = comparison_expr.loc[comparison_expr["gene_card_key"].astype(str) == current_key].copy()
+            if subset.empty:
+                gene_symbol_key = str(gene_symbol or "").strip().casefold()
+                gene_id_key = normalize_gene_id(gene_id)
+                fallback_mask = pd.Series(False, index=comparison_expr.index)
+                if gene_symbol_key and "gene_symbol" in comparison_expr.columns:
+                    fallback_mask |= comparison_expr["gene_symbol"].fillna("").astype(str).str.casefold().eq(gene_symbol_key)
+                if gene_id_key and "gene_id" in comparison_expr.columns:
+                    fallback_mask |= self._normalized_gene_id_series(comparison_expr).fillna("").astype(str).eq(gene_id_key)
+                subset = comparison_expr.loc[fallback_mask].copy()
+            if subset.empty:
+                continue
+            expr_values = pd.to_numeric(subset.get("expr"), errors="coerce")
+            if expr_values.dropna().empty:
+                continue
+            comparison_expression_rows.append(
+                {
+                    "comparison_id": comparison.comparison_id,
+                    "comparison_display_name": comparison.display_resolved_name,
+                    "comparison_mean_expr": float(expr_values.mean()),
+                    "groups_note": f"{comparison.experiment_group or comparison.source_experiment_group or 'group1'} / {comparison.control_group or comparison.source_control_group or 'group2'}",
+                    "current_comparison": bool(comparison.comparison_id == comparison_id),
+                }
+            )
         event_frame, dominant_rule = self._candidate_card_event_frame(comparison_id, current_key)
         dominant_event = event_frame.loc[event_frame["is_dominant"].fillna(False)].head(1).copy() if not event_frame.empty else pd.DataFrame()
 
@@ -2358,6 +2547,7 @@ class ProjectService:
             "candidate_row": candidate_row.to_dict() if not candidate_row.empty else {},
             "deg_row": deg_row.to_dict() if not deg_row.empty else {},
             "expression_support": expr_subset.reset_index(drop=True),
+            "comparison_expression": pd.DataFrame(comparison_expression_rows),
             "event_frame": event_frame,
             "dominant_event": dominant_event.to_dict("records")[0] if not dominant_event.empty else {},
             "dominant_rule": dominant_rule,
@@ -2375,6 +2565,7 @@ class ProjectService:
     ) -> tuple[pd.DataFrame, dict[str, object]]:
         frame = self.preview_candidate_gene_screening(allow_generate=allow_generate)
         filtered = self._filter_frame_by_comparison(frame, comparison_id)
+        filtered = self._dedupe_candidate_frame(filtered)
         if comparison_id:
             filtered = self._apply_candidate_blacklist(filtered, comparison_id)
         elif not filtered.empty and "blacklist_gene" in filtered.columns:
@@ -2414,6 +2605,7 @@ class ProjectService:
             selected = selected.sort_values(["rank", "gene_symbol"], ascending=[True, True], na_position="last").head(top_n).copy()
             selection_rule += f" Top N = {top_n}."
 
+        selected = self._dedupe_candidate_frame(selected)
         return selected.reset_index(drop=True), {
             "comparison_id": comparison_id or "",
             "source": source_key,
@@ -2426,6 +2618,7 @@ class ProjectService:
     def candidate_selection_catalog(self, comparison_id: str | None, *, allow_generate: bool = True) -> pd.DataFrame:
         frame = self.preview_candidate_gene_screening(allow_generate=allow_generate)
         filtered = self._filter_frame_by_comparison(frame, comparison_id)
+        filtered = self._dedupe_candidate_frame(filtered)
         if filtered.empty:
             return pd.DataFrame(columns=["comparison_id", "rank", "gene_symbol", "gene_id", "candidate_tier", "evidence_class", "direction_class"])
         filtered = filtered.sort_values(["rank", "gene_symbol"], ascending=[True, True], na_position="last").copy()
@@ -2438,6 +2631,13 @@ class ProjectService:
                 "candidate_tier",
                 "evidence_class",
                 "direction_class",
+                "n_rMATS_significant_events",
+                "significant_as_event_types",
+                "significant_as_event_ids",
+                "significant_as_event_list",
+                "as_event_summary",
+                "dominant_rMATS_event_type",
+                "best_rMATS_event_id",
                 "DEG_significant",
                 "rMATS_significant",
                 "DEXSeq_significant",
@@ -2471,6 +2671,7 @@ class ProjectService:
 
     def _default_candidate_selection_genes(self, comparison_id: str, *, top_n: int = 20, allow_generate: bool = True) -> list[str]:
         frame = self._filter_frame_by_comparison(self.preview_candidate_gene_screening(allow_generate=allow_generate), comparison_id)
+        frame = self._dedupe_candidate_frame(frame)
         if frame.empty:
             return []
         working = frame.sort_values(["rank", "gene_symbol"], ascending=[True, True], na_position="last").head(top_n).copy()
@@ -2496,17 +2697,16 @@ class ProjectService:
             top_n=top_n,
             allow_generate=allow_generate,
         )
+        self.current_project.candidate_selection_genes[comparison_id] = self._dedupe_gene_tokens(
+            self.current_project.candidate_selection_genes.get(comparison_id, [])
+        )
         self.save_project_config()
 
     def _candidate_selected_gene_rows(self, filtered: pd.DataFrame, comparison_id: str | None, *, top_n: int = 20, allow_generate: bool = True) -> pd.DataFrame:
         if self.current_project is None or not comparison_id:
             return filtered.sort_values(["rank", "gene_symbol"], ascending=[True, True], na_position="last").head(top_n).copy()
         self._ensure_default_candidate_selection(comparison_id, top_n=top_n, allow_generate=allow_generate)
-        selected_genes = [
-            item.strip()
-            for item in self.current_project.candidate_selection_genes.get(comparison_id, [])
-            if item and item.strip()
-        ]
+        selected_genes = self._dedupe_gene_tokens(self.current_project.candidate_selection_genes.get(comparison_id, []))
         if not selected_genes:
             return pd.DataFrame(columns=filtered.columns)
         selected = self._candidate_custom_gene_rows(filtered, comparison_id, selected_genes)
@@ -2515,7 +2715,13 @@ class ProjectService:
     def _candidate_support_table_is_stale(self, frame: pd.DataFrame) -> bool:
         if frame is None or frame.empty:
             return False
-        if "DEXSeq_significant" not in frame.columns or "DTU_significant" not in frame.columns:
+        required_columns = {
+            "DEXSeq_significant",
+            "DTU_significant",
+            "significant_as_event_ids",
+            "significant_as_event_list",
+        }
+        if not required_columns.issubset(set(frame.columns)):
             return True
         has_any_candidate_support = bool(
             frame["DEXSeq_significant"].fillna(False).astype(bool).any()
@@ -2716,6 +2922,7 @@ class ProjectService:
             elif "gene_id" not in working.columns:
                 working["gene_id"] = pd.NA
             normalized_gene_ids = working["gene_id"].map(normalize_gene_id)
+            working["normalized_gene_id"] = normalized_gene_ids
 
             if "geneSymbol" in working.columns:
                 base_symbol = working["geneSymbol"].astype("object")
@@ -2757,6 +2964,7 @@ class ProjectService:
                         "comparison_display_name",
                         "gene_symbol",
                         "gene_id",
+                        "normalized_gene_id",
                         "event_type",
                         "event_id",
                         "event_matching_key",
@@ -2782,6 +2990,63 @@ class ProjectService:
         ).reset_index(drop=True)
         self._sashimi_event_catalog_cache[cache_key] = combined.copy()
         return combined
+
+    def _significant_as_event_summary_frame(self, comparison_id: str | None) -> pd.DataFrame:
+        events = self._sashimi_event_catalog_frame(comparison_id)
+        if events.empty:
+            return pd.DataFrame(
+                columns=[
+                    "comparison_id",
+                    "normalized_gene_id",
+                    "significant_as_event_ids",
+                    "significant_as_event_list",
+                ]
+            )
+        working = events.copy()
+        working["FDR"] = pd.to_numeric(working.get("FDR"), errors="coerce")
+        working["dPSI"] = pd.to_numeric(working.get("dPSI"), errors="coerce")
+        working["significant_event"] = (
+            working["FDR"].le(self.current_thresholds.splicing_fdr)
+            & working["dPSI"].abs().ge(self.current_thresholds.splicing_dpsi)
+        )
+        working = working.loc[working["significant_event"].fillna(False)].copy()
+        if working.empty:
+            return pd.DataFrame(
+                columns=[
+                    "comparison_id",
+                    "normalized_gene_id",
+                    "significant_as_event_ids",
+                    "significant_as_event_list",
+                ]
+            )
+        working["event_label"] = working.apply(
+            lambda row: f"{row.get('event_type', '')}:{row.get('event_id', '')}",
+            axis=1,
+        )
+        rows: list[dict[str, object]] = []
+        for (comp_id, gene_id), subset in working.groupby(["comparison_id", "normalized_gene_id"], dropna=False):
+            event_ids = []
+            event_labels = []
+            seen_ids: set[str] = set()
+            seen_labels: set[str] = set()
+            for _, row in subset.sort_values(["FDR", "event_type", "event_id"], ascending=[True, True, True], na_position="last").iterrows():
+                event_id = str(row.get("event_id") or "").strip()
+                event_label = str(row.get("event_label") or "").strip()
+                if event_id and event_id not in seen_ids:
+                    seen_ids.add(event_id)
+                    event_ids.append(event_id)
+                if event_label and event_label not in seen_labels:
+                    seen_labels.add(event_label)
+                    event_labels.append(event_label)
+            rows.append(
+                {
+                    "comparison_id": str(comp_id or ""),
+                    "normalized_gene_id": str(gene_id or ""),
+                    "significant_as_event_ids": "; ".join(event_ids),
+                    "significant_as_event_list": "; ".join(event_labels),
+                }
+            )
+        return pd.DataFrame(rows)
 
     @staticmethod
     def _rmats_event_coordinates(row: pd.Series, event_type: str) -> str:
@@ -2861,6 +3126,61 @@ class ProjectService:
 
     def last_sashimi_failures(self) -> pd.DataFrame:
         return self._last_sashimi_failures.copy()
+
+    def build_sashimi_output_browser(self, comparison_id: str | None = None) -> pd.DataFrame:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        output_root = self.current_project.output_root or (self.current_project.project_root / "katana_output")
+        base = output_root / "06_sashimi" / "plots"
+        columns = [
+            "comparison_id",
+            "relative_path",
+            "absolute_path",
+            "file_type",
+            "file_size",
+            "last_modified",
+            "preview_kind",
+            "previewable",
+        ]
+        if not base.exists():
+            return pd.DataFrame(columns=columns)
+
+        safe_display_to_comparison = {
+            self._safe_output_name(comparison.display_resolved_name): comparison.comparison_id
+            for comparison in self.current_project.available_comparisons
+        }
+        rows: list[dict[str, object]] = []
+        for path in sorted(base.rglob("*")):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(base)
+            inferred_comparison = ""
+            if rel.parts:
+                inferred_comparison = safe_display_to_comparison.get(rel.parts[0], "")
+            if comparison_id and inferred_comparison and inferred_comparison != comparison_id:
+                continue
+            stat = path.stat()
+            preview_kind = self._preview_kind_for_path(path)
+            rows.append(
+                {
+                    "comparison_id": inferred_comparison,
+                    "relative_path": str(rel),
+                    "absolute_path": str(path),
+                    "file_type": path.suffix.lower().lstrip(".") or "file",
+                    "file_size": stat.st_size,
+                    "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+                    "preview_kind": preview_kind,
+                    "previewable": preview_kind in {"image", "table", "excel", "html"},
+                }
+            )
+        frame = pd.DataFrame(rows, columns=columns)
+        if frame.empty:
+            return frame
+        if comparison_id:
+            exact = frame.loc[frame["comparison_id"].astype(str) == str(comparison_id)].copy()
+            if not exact.empty:
+                frame = exact
+        return frame.sort_values(["comparison_id", "relative_path"], na_position="last").reset_index(drop=True)
 
     def write_candidate_selection_outputs(
         self,
@@ -3329,6 +3649,25 @@ class ProjectService:
             return frame.copy()
         return frame.loc[frame["comparison_id"].astype(str) == str(comparison_id)].copy()
 
+    @staticmethod
+    def _dedupe_candidate_frame(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        working = frame.copy()
+        if "candidate_unique_key" not in working.columns:
+            gene_key = working.get("gene_symbol", pd.Series("", index=working.index, dtype="object")).fillna("").astype(str).str.strip()
+            if "gene_id" in working.columns:
+                fallback = working["gene_id"].fillna("").astype(str).str.strip()
+                gene_key = gene_key.where(gene_key.ne(""), fallback)
+            working["candidate_unique_key"] = gene_key
+        subset = ["candidate_unique_key"]
+        if "comparison_id" in working.columns:
+            subset = ["comparison_id", "candidate_unique_key"]
+        sort_columns = [column for column in ["comparison_id", "rank", "gene_symbol", "gene_id"] if column in working.columns]
+        if sort_columns:
+            working = working.sort_values(sort_columns, ascending=[True] * len(sort_columns), na_position="last")
+        return working.drop_duplicates(subset=subset, keep="first").reset_index(drop=True)
+
     def _candidate_custom_gene_rows(
         self,
         frame: pd.DataFrame,
@@ -3352,7 +3691,7 @@ class ProjectService:
             and item.strip().lower() not in set(matched["gene_id"].fillna("").astype(str).str.lower())
         ]
         if not missing:
-            return matched
+            return self._dedupe_candidate_frame(matched)
         template = frame.iloc[0].copy()
         rows = []
         for gene in missing:
@@ -3384,7 +3723,7 @@ class ProjectService:
             row["candidate_reason"] = "Manual shortlist gene; no significant evidence row was found in this comparison."
             rows.append(row)
         placeholder = pd.DataFrame(rows)
-        return pd.concat([matched, placeholder], axis=0, ignore_index=True)
+        return self._dedupe_candidate_frame(pd.concat([matched, placeholder], axis=0, ignore_index=True))
 
     def _build_candidate_gene_table(
         self,
@@ -3400,6 +3739,12 @@ class ProjectService:
         if not support.empty:
             support = support.copy()
             support["normalized_gene_id"] = support.get("gene_id", pd.Series(index=support.index, dtype="object")).map(normalize_gene_id)
+            support = support.sort_values(
+                by=["comparison_id", "normalized_gene_id", "best_DEXSeq_qvalue", "best_DTU_qvalue", "n_support_methods"],
+                ascending=[True, True, True, True, False],
+                na_position="last",
+            )
+            support = support.drop_duplicates(subset=["comparison_id", "normalized_gene_id"], keep="first")
             join_columns = [column for column in ("comparison_id", "normalized_gene_id") if column in support.columns]
             if len(join_columns) == 2:
                 frame = frame.merge(
@@ -3453,6 +3798,14 @@ class ProjectService:
         frame["dominant_rMATS_event_type"] = frame.get("representative_event_type")
         frame["best_rMATS_event_id"] = frame.get("representative_event_id")
         frame["dominant_rMATS_standardized_dPSI"] = frame["standardized_dPSI"]
+        frame["significant_as_event_types"] = frame.get("sig_event_types", pd.Series("", index=frame.index)).fillna("").astype(str)
+        frame["as_event_summary"] = frame.apply(
+            lambda row: (
+                f"{int(row.get('n_rMATS_significant_events', 0) or 0)} significant AS event(s)"
+                + (f" [{row.get('significant_as_event_types', '').strip()}]" if str(row.get("significant_as_event_types", "")).strip() else "")
+            ),
+            axis=1,
+        )
         if "gene_symbol_support" in frame.columns:
             frame["gene_symbol_support"] = frame["gene_symbol_support"].where(
                 frame["gene_symbol_support"].notna() & frame["gene_symbol_support"].astype(str).str.strip().ne("")
@@ -3530,6 +3883,25 @@ class ProjectService:
         if "gene_symbol_support" in frame.columns:
             frame["gene_symbol"] = frame["gene_symbol"].combine_first(frame["gene_symbol_support"])
         frame["gene_symbol"] = frame["gene_symbol"].combine_first(frame.get("gene_id"))
+        frame["candidate_unique_key"] = frame["gene_symbol"].fillna("").astype(str).str.strip()
+        frame.loc[frame["candidate_unique_key"].eq(""), "candidate_unique_key"] = frame["normalized_gene_id"].fillna("").astype(str)
+        summary_frames: list[pd.DataFrame] = []
+        for comparison_id in frame["comparison_id"].dropna().astype(str).unique().tolist():
+            summary = self._significant_as_event_summary_frame(comparison_id)
+            if summary is not None and not summary.empty:
+                summary_frames.append(summary)
+        if summary_frames:
+            event_summary = pd.concat(summary_frames, axis=0, ignore_index=True)
+            event_summary = event_summary.drop_duplicates(subset=["comparison_id", "normalized_gene_id"], keep="first")
+            frame = frame.merge(
+                event_summary,
+                on=["comparison_id", "normalized_gene_id"],
+                how="left",
+            )
+        if "significant_as_event_ids" not in frame.columns:
+            frame["significant_as_event_ids"] = ""
+        if "significant_as_event_list" not in frame.columns:
+            frame["significant_as_event_list"] = ""
         frame["shortlist_gene"] = frame["gene_symbol"].astype(str).isin(self._shortlist_gene_set())
         frame["blacklist_gene"] = frame["gene_symbol"].astype(str).isin(set(self.blacklist_genes_for_display()))
         frame["blacklist_exclusion_reason"] = frame["blacklist_gene"].map(lambda value: "manual blacklist" if value else "")
@@ -3549,6 +3921,7 @@ class ProjectService:
             ascending=[True, True, False, True, False, True, False, False, True],
             na_position="last",
         ).reset_index(drop=True)
+        frame = frame.drop_duplicates(subset=["comparison_id", "candidate_unique_key"], keep="first").reset_index(drop=True)
         frame["rank"] = frame.groupby("comparison_id").cumcount() + 1
         return frame[
             [
@@ -3570,6 +3943,10 @@ class ProjectService:
                 "transcript_direction_flipped",
                 "rMATS_significant",
                 "n_rMATS_significant_events",
+                "significant_as_event_types",
+                "significant_as_event_ids",
+                "significant_as_event_list",
+                "as_event_summary",
                 "best_rMATS_FDR",
                 "max_abs_dPSI",
                 "dominant_rMATS_event_type",
@@ -3757,6 +4134,8 @@ class ProjectService:
         abs_dpsi_cutoff: float,
         large_delta_dpsi_cutoff: float,
     ) -> dict[str, pd.DataFrame]:
+        import numpy as np
+
         comparison_a = self._cross_as_pattern_source_frame(pair.comparison_a, abs_dpsi_cutoff)
         comparison_b = self._cross_as_pattern_source_frame(pair.comparison_b, abs_dpsi_cutoff)
         if comparison_a.empty and comparison_b.empty:
@@ -3797,8 +4176,14 @@ class ProjectService:
         merged["dPSI_B"] = pd.to_numeric(merged.get("dPSI_B"), errors="coerce")
         merged["FDR_A"] = pd.to_numeric(merged.get("FDR_A"), errors="coerce")
         merged["FDR_B"] = pd.to_numeric(merged.get("FDR_B"), errors="coerce")
-        merged["significant_A"] = merged.get("significant_A", pd.Series(False, index=merged.index)).fillna(False).astype(bool)
-        merged["significant_B"] = merged.get("significant_B", pd.Series(False, index=merged.index)).fillna(False).astype(bool)
+        merged["significant_A"] = merged.get(
+            "significant_A",
+            pd.Series(False, index=merged.index, dtype=bool),
+        ).fillna(False).astype(bool)
+        merged["significant_B"] = merged.get(
+            "significant_B",
+            pd.Series(False, index=merged.index, dtype=bool),
+        ).fillna(False).astype(bool)
         merged["direction_A"] = merged.get("direction_A", pd.Series("", index=merged.index)).fillna("").astype(str)
         merged["direction_B"] = merged.get("direction_B", pd.Series("", index=merged.index)).fillna("").astype(str)
         merged["delta_dPSI"] = merged["dPSI_A"] - merged["dPSI_B"]
@@ -4482,6 +4867,10 @@ class ProjectService:
             if item and item not in seen:
                 deduped.append(item)
                 seen.add(item)
+        if not deduped:
+            fallback = str(row.get("comparison_id", "") or row.get("comparison", "")).strip()
+            if fallback:
+                deduped.append(fallback)
         return deduped
 
     def _write_generated_sashimi_event_file(
