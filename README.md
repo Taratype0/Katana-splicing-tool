@@ -476,4 +476,6 @@ Suggested repository description:
 
 ## Author
 
-Prepared for release by **Tara**.
+Prepared for release by **Dhruba Tara Maharjan**.\
+Contact email:dhruba.tara.maharjan@ki.se
+
