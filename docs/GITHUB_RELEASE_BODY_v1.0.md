@@ -11,6 +11,8 @@ This release establishes a modular GUI workflow for:
 - cross-comparison candidate follow-up
 - event-driven sashimi review
 - Jutils output browsing
+- RBP support and cross-comparison RBP support plots
+- isoform candidate support and cross-comparison isoform support plots
 
 ## Highlights
 
@@ -21,6 +23,7 @@ This release establishes a modular GUI workflow for:
 - Gene-centered candidate screening and follow-up
 - Event selection before sashimi generation
 - Project-specific annotation loading instead of hard-coded dataset mapping
+- Cached TSV/PNG preview tabs for downstream RBP and isoform support modules
 
 ## Included in this release
 
@@ -33,6 +36,7 @@ This release establishes a modular GUI workflow for:
 - Some PDF outputs are opened externally instead of embedded inline
 - Sashimi plotting depends on the local `rmats2sashimiplot` runtime and Python dependencies such as `pysam`
 - Optional modules still depend on project-specific resource availability
+- RBP and isoform support plots are prioritization views, not causal regulatory models
 
 ## Author
 

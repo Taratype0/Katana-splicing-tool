@@ -28,13 +28,14 @@ Katana currently supports:
 - Cross-comparison candidate matrix and AS dPSI pattern comparison
 - Event-driven sashimi manifest generation and sashimi execution
 - Jutils output browsing
+- RBP support/enrichment over candidate genes
+- Isoform candidate support from quant.sf / GTF / DTU
 
 Optional / project-dependent:
 
 - Jutils heatmap / PCA outputs
 - IsoformSwitchAnalyzeR follow-up
-
-If a project does not contain usable isoform inputs, the Isoform page is hidden from navigation.
+- custom RBP gene set files
 
 ---
 
@@ -233,18 +234,15 @@ Key behavior:
 
 #### 5.4 Cross-comparison Candidate Comparison
 
-- candidate matrix
-- shared / specific / gained / lost
-- direction reversal
-- group comparison
-- direction vs strength
-- cross-comparison significant AS event dPSI pattern analysis
+- `5.4.1 Candidate Matrix`: pairwise gene-level candidate membership for comparison A vs comparison B
+- `5.4.2 Shared / Specific / Gained / Lost`: pairwise gene-level pattern explanation
+- `5.4.3 Cross-comparison AS dPSI Pattern`: event-level shared significant AS dPSI pattern prioritization
+- `5.4.4 Cross-comparison AS interaction modeling`: replicate-aware AS interaction/effect follow-up
 
 #### 5.5 Sashimi
 
 - `5.5.2 Run Sashimi` lists available splicing events and lets you select specific events
-- `5.5.3 Sashimi Preview` shows manifest rows and generated sashimi output files
-- `5.5.4 Failed Sashimi Jobs` shows event-level sashimi failures
+- `5.5.3 Sashimi Preview` shows generated PNG previews and output files
 
 Sashimi does **not** auto-run on page open.
 
@@ -260,17 +258,50 @@ If preview is not embedded (for example PDF output), Katana shows the output pat
 
 Sample-level metadata review and support configuration.
 
-### 7. Isoform
+### 7. RBP
 
-Optional advanced follow-up only.
+RBP support/enrichment is an optional prioritization layer. It checks whether the current per-comparison candidate genes overlap built-in or custom RBP/splicing-factor gene sets.
 
-If the project has no usable isoform quantification/sample inputs, this page is hidden.
+Outputs:
 
-### 8. Input Check
+- `rbp_enrichment_summary.tsv`
+- `rbp_candidate_gene_matches.tsv`
+- `07_rbp_support/cross_comparison/cross_rbp_enrichment_matrix.tsv`
+- `07_rbp_support/cross_comparison/cross_rbp_matched_gene_matrix.tsv`
+- `07_rbp_support/cross_comparison/plots/cross_rbp_enrichment_support.png`
+- `07_rbp_support/cross_comparison/plots/cross_rbp_matched_gene_matrix.png`
+- `07_rbp_support/cross_comparison/plots/pairwise_rbp_rank_support_<comparisonA>_vs_<comparisonB>.png`
+
+The `7.2 Cross-comparison RBP support` page includes a `Plots / Preview` tab. Page refresh reads cached TSV/PNG outputs only; `Run Cross-comparison RBP support` regenerates this module without triggering 5.2 / 5.3 / 5.4 / 5.5.
+
+This is not a causal RBP model; it is a transparent candidate-support and follow-up prioritization module.
+
+### 8. Isoform
+
+Isoform support has two parts:
+
+- sample design / IsoformSwitchAnalyzeR setup
+- candidate isoform support from selected candidate genes, `quant.sf`, GTF transcript annotation and optional DTU q values
+
+Outputs:
+
+- `candidate_isoform_gene_summary.tsv`
+- `candidate_isoform_transcript_support.tsv`
+- `08_isoform_candidate_support/cross_comparison/cross_isoform_gene_support_matrix.tsv`
+- `08_isoform_candidate_support/cross_comparison/cross_isoform_transcript_support_matrix.tsv`
+- `08_isoform_candidate_support/cross_comparison/plots/cross_isoform_gene_support_heatmap.png`
+- `08_isoform_candidate_support/cross_comparison/plots/cross_isoform_dominant_isoform_switches.png`
+- `08_isoform_candidate_support/cross_comparison/plots/pairwise_isoform_delta_tpm_<comparisonA>_vs_<comparisonB>.png`
+
+The `8.2 Cross-comparison isoform support` page includes a `Plots / Preview` tab. Page refresh reads cached TSV/PNG outputs only; `Run Cross-comparison Isoform support` regenerates this module without triggering 5.2 / 5.3 / 5.4 / 5.5.
+
+Isoform evidence is optional support. It does not replace DEG+rMATS candidate definition.
+
+### 9. Input Check
 
 Checks whether expected supporting inputs are present.
 
-### 9. Settings
+### 10. Settings
 
 Allows path-level runtime configuration.
 
@@ -295,6 +326,8 @@ katana_output/
   04_program_heatmap/
   05_jutils/
   06_sashimi/
+  07_rbp_support/
+  08_isoform_candidate_support/
 ```
 
 Examples of important files:
@@ -305,6 +338,8 @@ Examples of important files:
 - `heatmap_gene_list.tsv`
 - generated sashimi event files / manifests / plot folders
 - Jutils output files
+- RBP support/enrichment tables
+- isoform candidate support tables
 
 ---
 
@@ -332,16 +367,21 @@ Katana does **not** blindly trust DESeq2 file naming if the user overrides the f
 
 Katana uses **event selection first**, not automatic bulk generation.
 
+Katana now supports two sashimi runners:
+
+- `Katana native`: dependency-light native sashimi-like plots from selected rMATS events, BAM/BAI files and optional GTF annotation.
+- `rmats2sashimiplot legacy`: the original external runner, kept as an optional compatibility path.
+
 Current intended flow:
 
 1. Open `5.5.2 Run Sashimi`
 2. Filter/search available splicing events
 3. Multi-select events
 4. Click `Generate selected manifest`
-5. Click `Run selected sashimi`
-6. Inspect:
+5. Choose `Katana native` or `rmats2sashimiplot legacy`
+6. Click `Run selected sashimi`
+7. Inspect:
    - `5.5.3 Sashimi Preview`
-   - `5.5.4 Failed Sashimi Jobs`
 
 If sashimi fails, event-level error information should include:
 
@@ -354,7 +394,14 @@ If sashimi fails, event-level error information should include:
 
 Common failure cause:
 
+- missing `bamnostic` and `samtools` for `Katana native`. Katana native uses `samtools` when available and falls back to the pure-Python `bamnostic` reader on Windows.
 - missing `pysam` in the runtime used by `rmats2sashimiplot`
+
+The standalone native runner can also be called directly:
+
+```powershell
+python scripts\katana_native_sashimi.py --manifest selected_manifest.tsv --output-root katana_output --gtf annotation.gtf
+```
 
 ---
 
@@ -429,9 +476,10 @@ Validated behaviors:
 - `5.2` transcript + splicing integration pages open
 - `5.3.1` candidate ranking page opens
 - `5.3.2` candidate gene selection page opens
-- `5.5.2 / 5.5.3 / 5.5.4` sashimi pages open in distinct modes
+- `5.5.2 / 5.5.3` sashimi pages open in distinct modes
 - `5.6.1 / 5.6.2 / 5.6.3` Jutils pages open and detect available output files
-- isoform navigation stays hidden when isoform inputs are absent
+- `7 RBP` and `8 Isoform` open as explicit downstream support modules
+- `7.2` and `8.2` cross-comparison support modules generate TSV + PNG outputs and reload cached preview files without rerunning analysis
 
 Genericity checks:
 

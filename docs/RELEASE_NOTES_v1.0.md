@@ -40,6 +40,8 @@ This release focuses on:
 - shared / specific / gained / lost pattern summaries
 - direction reversal and direction-vs-strength follow-up
 - significant AS event dPSI pattern analysis across comparisons
+- cross-comparison RBP support TSV + PNG preview outputs
+- cross-comparison isoform support TSV + PNG preview outputs
 
 ### Sashimi workflow
 
@@ -52,6 +54,14 @@ This release focuses on:
 
 - separate heatmap, PCA, and output-browser pages
 - output files can be inspected even when embedded preview is unavailable
+- cached output folders are detected on reopen so generated files remain visible without rerunning Jutils
+
+### RBP and isoform support
+
+- `7.2 Cross-comparison RBP support` now writes RBP enrichment/matched-gene TSVs plus PNG plots under `07_rbp_support/cross_comparison/plots`
+- `8.2 Cross-comparison isoform support` now writes gene/transcript support TSVs plus PNG plots under `08_isoform_candidate_support/cross_comparison/plots`
+- both modules mark these outputs as support-prioritization only, not causal RBP or causal isoform models
+- page refresh reads cached TSV/PNG results only; explicit Run buttons regenerate only their own module
 
 ## Validation summary
 
@@ -61,6 +71,7 @@ Validated in the current release candidate:
 - overview, transcript + splicing, candidate ranking, candidate selection, sashimi, and Jutils pages open without immediate crashes
 - isoform navigation is hidden when isoform inputs are absent
 - source-level project-specific hard-coding has been removed from active `app/` and `src/` code paths
+- `5.6`, `7.2`, and `8.2` were smoke-tested on a local Ythdc1 project with cached output reload checks
 
 ## Known limitations
 

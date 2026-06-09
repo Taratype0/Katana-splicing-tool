@@ -31,3 +31,5 @@ noDP_KOvsWT.tsv
 # Local outputs
 katana_output/
 *.log
+docs/mockups/
+docs/run_examples/

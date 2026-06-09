@@ -52,12 +52,11 @@ Validated behaviors:
   - `5.3.2 Candidate Gene Selection`
   - `5.5.2 Run Sashimi`
   - `5.5.3 Sashimi Preview`
-  - `5.5.4 Failed Sashimi Jobs`
   - `5.6.1 Jutils Heatmap`
   - `5.6.2 Jutils PCA`
   - `5.6.3 Jutils Output Browser`
 - main window initialization succeeded
-- `7. Isoform` navigation was hidden when isoform inputs were absent
+- `7. RBP` and `8. Isoform` open as independent downstream support modules
 
 ### 3. Cross-comparison (`5.4`) validation
 
@@ -65,14 +64,14 @@ With cached upstream results available, the following cross-comparison pages wer
 
 - `5.4.1 Candidate Matrix`
 - `5.4.2 Shared / Specific / Gained / Lost`
-- `5.4.3 Direction Reversal`
-- `5.4.6 Cross-comparison significant AS event dPSI pattern analysis`
+- `5.4.3 Cross-comparison significant AS event dPSI pattern analysis`
+- `5.4.4 Cross-comparison AS interaction modeling`
 
 Validation notes:
 
-- `5.4.1 / 5.4.2 / 5.4.3` no longer behave as empty pages
-- `5.4.6` pattern recalculation no longer fails with `NameError: np is not defined`
-- for the currently configured comparison pairs in the validation project, `5.4.6` returned `0` matching rows under the default cutoffs, which is acceptable behavior when the UI reports `No events found`
+- `5.4.1 / 5.4.2 / 5.4.3 / 5.4.4` no longer behave as empty pages
+- `5.4.3` pattern recalculation no longer fails with `NameError: np is not defined`
+- for the currently configured comparison pairs in the validation project, `5.4.3` returned `0` matching rows under the default cutoffs, which is acceptable behavior when the UI reports `No events found`
 
 ### 4. Cache-assisted downstream end-to-end regression
 
@@ -86,9 +85,11 @@ Using those real upstream outputs, the following downstream modules were exercis
 - `5.3 Mechanism support preview`
 - `5.3.1 Candidate ranking rebuild`
 - `5.4 Cross-comparison candidate matrix`
-- `5.4.6 Cross-comparison significant AS event dPSI pattern analysis`
+- `5.4.3 Cross-comparison significant AS event dPSI pattern analysis`
 - `5.5 Sashimi event listing and selected-event manifest generation`
 - `5.6 Jutils output browser`
+- `7 RBP support`
+- `8 Isoform candidate support`
 
 Observed regression results on the validation project:
 
@@ -104,6 +105,7 @@ Interpretation:
 - downstream modules can read real cached upstream outputs and continue independently
 - downstream page opening does not require project-load-time chained execution
 - sashimi and Jutils paths are live on the validation project
+- RBP and isoform support pages read cached state on open and require explicit Run buttons for new outputs
 - this is a valid downstream regression pass, but it is **cache-assisted**, not a full uncached rerun from raw inputs
 
 ### 5. Genericity check

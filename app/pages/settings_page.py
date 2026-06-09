@@ -64,6 +64,9 @@ class SettingsPage(QWidget):
         self.sashimi_label = QLabel("rmats2sashimiplot: not set")
         self.sashimi_button = QPushButton("Choose rmats2sashimiplot Directory")
         self.sashimi_button.clicked.connect(self._choose_sashimi)
+        self.samtools_label = QLabel("samtools: not set")
+        self.samtools_button = QPushButton("Choose samtools")
+        self.samtools_button.clicked.connect(self._choose_samtools)
         self.suppa_label = QLabel("SUPPA: not set")
         self.suppa_button = QPushButton("Choose SUPPA Directory")
         self.suppa_button.clicked.connect(self._choose_suppa)
@@ -73,9 +76,12 @@ class SettingsPage(QWidget):
         self.gtf_label = QLabel("GTF: not set")
         self.gtf_button = QPushButton("Choose GTF")
         self.gtf_button.clicked.connect(self._choose_gtf)
-        self.fasta_label = QLabel("FASTA: not set")
-        self.fasta_button = QPushButton("Choose FASTA")
-        self.fasta_button.clicked.connect(self._choose_fasta)
+        self.genome_fasta_label = QLabel("Genome FASTA: not set")
+        self.genome_fasta_button = QPushButton("Choose Genome FASTA")
+        self.genome_fasta_button.clicked.connect(lambda: self._choose_fasta("genome_fasta"))
+        self.transcript_fasta_label = QLabel("Transcript FASTA: not set")
+        self.transcript_fasta_button = QPushButton("Choose Transcript FASTA")
+        self.transcript_fasta_button.clicked.connect(lambda: self._choose_fasta("transcript_fasta"))
         self.details = QTextEdit()
         self.details.setReadOnly(True)
         layout = QVBoxLayout(self)
@@ -106,6 +112,10 @@ class SettingsPage(QWidget):
         row_tools_2.addWidget(self.sashimi_label)
         row_tools_2.addWidget(self.sashimi_button)
         layout.addLayout(row_tools_2)
+        row_tools_native = QHBoxLayout()
+        row_tools_native.addWidget(self.samtools_label)
+        row_tools_native.addWidget(self.samtools_button)
+        layout.addLayout(row_tools_native)
         row_tools_3 = QHBoxLayout()
         row_tools_3.addWidget(self.suppa_label)
         row_tools_3.addWidget(self.suppa_button)
@@ -119,9 +129,13 @@ class SettingsPage(QWidget):
         row3.addWidget(self.gtf_button)
         layout.addLayout(row3)
         row4 = QHBoxLayout()
-        row4.addWidget(self.fasta_label)
-        row4.addWidget(self.fasta_button)
+        row4.addWidget(self.genome_fasta_label)
+        row4.addWidget(self.genome_fasta_button)
         layout.addLayout(row4)
+        row5 = QHBoxLayout()
+        row5.addWidget(self.transcript_fasta_label)
+        row5.addWidget(self.transcript_fasta_button)
+        layout.addLayout(row5)
         layout.addWidget(self.details)
 
     def refresh(self) -> None:
@@ -146,10 +160,14 @@ class SettingsPage(QWidget):
         self.rscript_label.setText(f"Rscript: {project.tool_paths.get('rscript', 'not set')}")
         self.jutils_label.setText(f"Jutils: {project.tool_paths.get('jutils', 'not set')}")
         self.sashimi_label.setText(f"rmats2sashimiplot: {project.tool_paths.get('rmats2sashimiplot', 'not set')}")
+        self.samtools_label.setText(f"samtools: {project.tool_paths.get('samtools', 'PATH lookup')}")
         self.suppa_label.setText(f"SUPPA: {project.tool_paths.get('suppa', 'not set')}")
         self.bam_label.setText(f"BAM root: {project.tool_paths.get('bam_root', 'not set')}")
         self.gtf_label.setText(f"GTF: {project.tool_paths.get('gtf', 'not set')}")
-        self.fasta_label.setText(f"FASTA: {project.tool_paths.get('fasta', 'not set')}")
+        genome_fasta = self.project_service._resolve_fasta_path("genome")
+        transcript_fasta = self.project_service._resolve_fasta_path("transcript")
+        self.genome_fasta_label.setText(f"Genome FASTA: {genome_fasta or 'not set'}")
+        self.transcript_fasta_label.setText(f"Transcript FASTA: {transcript_fasta or 'not set'}")
         self.details.setPlainText(
             "\n".join(
                 [
@@ -165,6 +183,7 @@ class SettingsPage(QWidget):
                     "",
                     f"Jutils path: {project.tool_paths.get('jutils', 'not set')}",
                     f"rmats2sashimiplot path: {project.tool_paths.get('rmats2sashimiplot', 'not set')}",
+                    f"samtools path: {project.tool_paths.get('samtools', 'PATH lookup')}",
                     f"SUPPA path: {project.tool_paths.get('suppa', 'not set')}",
                     f"BAM root: {project.tool_paths.get('bam_root', 'not set')}",
                     f"Output directory: {project.output_root}",
@@ -230,6 +249,22 @@ class SettingsPage(QWidget):
     def _choose_sashimi(self) -> None:
         self._choose_tool_directory("rmats2sashimiplot", "Select rmats2sashimiplot Directory")
 
+    def _choose_samtools(self) -> None:
+        project = self.project_service.current_project
+        if project is None:
+            return
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select samtools executable",
+            str(project.project_root),
+            "Executables (*.exe);;All Files (*)",
+        )
+        if not file_path:
+            return
+        project.tool_paths["samtools"] = file_path
+        self.project_service.save_project_config()
+        self.refresh()
+
     def _choose_suppa(self) -> None:
         self._choose_tool_directory("suppa", "Select SUPPA Directory")
 
@@ -252,7 +287,7 @@ class SettingsPage(QWidget):
         self.project_service.save_project_config()
         self.refresh()
 
-    def _choose_fasta(self) -> None:
+    def _choose_fasta(self, key: str = "fasta") -> None:
         project = self.project_service.current_project
         if project is None:
             return
@@ -264,7 +299,9 @@ class SettingsPage(QWidget):
         )
         if not file_path:
             return
-        project.tool_paths["fasta"] = file_path
+        project.tool_paths[key] = file_path
+        if key == "transcript_fasta":
+            project.tool_paths["fasta"] = file_path
         self.project_service.save_project_config()
         self.refresh()
 

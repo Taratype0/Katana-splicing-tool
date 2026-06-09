@@ -5,12 +5,13 @@ import shutil
 
 import pandas as pd
 from pandas.api.types import is_bool_dtype, is_numeric_dtype
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, QThread, Signal, Qt
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QComboBox,
     QDoubleSpinBox,
@@ -22,6 +23,26 @@ from PySide6.QtWidgets import (
 )
 
 from src.services.project_service import ProjectService
+
+
+class CandidateGenerationWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, project_service: ProjectService) -> None:
+        super().__init__()
+        self.project_service = project_service
+
+    def run(self) -> None:
+        try:
+            frame = self.project_service.preview_candidate_gene_screening(
+                allow_generate=True,
+                force_rebuild=False,
+            )
+        except Exception as exc:
+            self.failed.emit(str(exc))
+            return
+        self.finished.emit(frame)
 
 
 class CandidateGenePage(QWidget):
@@ -65,6 +86,23 @@ class CandidateGenePage(QWidget):
             ]
         )
         self.direction_filter.currentTextChanged.connect(self.refresh)
+        self.pattern_filter = QComboBox()
+        self.pattern_filter.addItems(
+            [
+                "All",
+                "shared_all",
+                "shared_subset",
+                "comparison_specific",
+                "gained",
+                "lost",
+                "direction_reversed",
+                "tier_changed",
+                "evidence_class_changed",
+                "DEG_only_in_one_condition",
+                "splicing_only_in_one_condition",
+            ]
+        )
+        self.pattern_filter.currentTextChanged.connect(self.refresh)
         self.min_abs_log2fc = QDoubleSpinBox()
         self.min_abs_log2fc.setRange(0.0, 100.0)
         self.min_abs_log2fc.setSingleStep(0.1)
@@ -86,10 +124,16 @@ class CandidateGenePage(QWidget):
         self.download_button.clicked.connect(self.download_current_file)
         self.export_button = QPushButton("Export Current View")
         self.export_button.clicked.connect(self.export_current_view)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 0)
+        self.progress.setVisible(False)
+        self.progress.setMaximumWidth(170)
         self.table = QTableWidget(0, 0)
         self.table.setSortingEnabled(True)
         self._current_frame = pd.DataFrame()
         self._current_source_path = None
+        self._candidate_thread: QThread | None = None
+        self._candidate_worker: CandidateGenerationWorker | None = None
 
         top = QHBoxLayout()
         top.addWidget(self.label)
@@ -98,9 +142,11 @@ class CandidateGenePage(QWidget):
         top.addWidget(self.class_filter)
         top.addWidget(self.evidence_filter)
         top.addWidget(self.direction_filter)
+        top.addWidget(self.pattern_filter)
         top.addWidget(self.min_abs_log2fc)
         top.addWidget(self.min_abs_dpsi)
         top.addWidget(self.generate_button)
+        top.addWidget(self.progress)
         top.addWidget(self.open_button)
         top.addWidget(self.download_button)
         top.addWidget(self.export_button)
@@ -153,6 +199,16 @@ class CandidateGenePage(QWidget):
                 "significant_as_event_ids",
                 "significant_as_event_list",
                 "as_event_summary",
+                "cross_candidate_pattern",
+                "cross_pattern_reason",
+                "cross_candidate_comparisons",
+                "cross_n_comparisons_candidate",
+                "cross_best_overall_rank",
+                "cross_comparison_effect_summary",
+                "shared_candidate",
+                "specific_candidate",
+                "gained_candidate",
+                "lost_candidate",
                 "candidate_tier",
                 "evidence_class",
                 "evidence_count",
@@ -163,6 +219,7 @@ class CandidateGenePage(QWidget):
                 "dominant_rMATS_standardized_dPSI",
                 "dominant_rMATS_event_type",
                 "candidate_reason",
+                "ranking_score",
             ]
         else:
             columns = [
@@ -177,6 +234,16 @@ class CandidateGenePage(QWidget):
                 "significant_as_event_ids",
                 "significant_as_event_list",
                 "as_event_summary",
+                "cross_candidate_pattern",
+                "cross_pattern_reason",
+                "cross_candidate_comparisons",
+                "cross_n_comparisons_candidate",
+                "cross_best_overall_rank",
+                "cross_comparison_effect_summary",
+                "shared_candidate",
+                "specific_candidate",
+                "gained_candidate",
+                "lost_candidate",
                 "candidate_tier",
                 "evidence_class",
                 "evidence_count",
@@ -193,6 +260,7 @@ class CandidateGenePage(QWidget):
                 "direction_class",
                 "shortlist_gene",
                 "blacklist_gene",
+                "ranking_score",
             ]
         available_columns = [column for column in columns if column in filtered.columns]
         self.table.setSortingEnabled(False)
@@ -225,7 +293,24 @@ class CandidateGenePage(QWidget):
         self.label.setText(f"{label_prefix} ({len(filtered)} rows)")
 
     def _generate_candidate_results(self) -> None:
-        frame = self.project_service.preview_candidate_gene_screening(allow_generate=True, force_rebuild=True)
+        if self._candidate_thread is not None:
+            self.context_label.setText("Candidate ranking is already running. Please wait for this run to finish.")
+            return
+        self.context_label.setText("Candidate ranking is running... Existing cache will be reused when valid.")
+        self.progress.setVisible(True)
+        self.generate_button.setEnabled(False)
+        self._candidate_thread = QThread(self)
+        self._candidate_worker = CandidateGenerationWorker(self.project_service)
+        self._candidate_worker.moveToThread(self._candidate_thread)
+        self._candidate_thread.started.connect(self._candidate_worker.run)
+        self._candidate_worker.finished.connect(self._on_candidate_generation_finished)
+        self._candidate_worker.failed.connect(self._on_candidate_generation_failed)
+        self._candidate_worker.finished.connect(self._candidate_thread.quit)
+        self._candidate_worker.failed.connect(self._candidate_thread.quit)
+        self._candidate_thread.finished.connect(self._cleanup_candidate_generation)
+        self._candidate_thread.start()
+
+    def _on_candidate_generation_finished(self, frame: pd.DataFrame) -> None:
         if frame is None or frame.empty:
             if self.project_service.run_state.results.tx_splicing_gene_table.empty:
                 self.context_label.setText(
@@ -235,7 +320,22 @@ class CandidateGenePage(QWidget):
                 self.context_label.setText(
                     "Candidate ranking generation finished, but no candidate rows were produced for the current project."
                 )
+        else:
+            self.context_label.setText(f"Candidate ranking ready: {len(frame)} unique comparison-gene rows loaded.")
         self.refresh()
+
+    def _on_candidate_generation_failed(self, message: str) -> None:
+        self.context_label.setText(f"Candidate ranking failed: {message}")
+
+    def _cleanup_candidate_generation(self) -> None:
+        self.progress.setVisible(False)
+        self.generate_button.setEnabled(True)
+        if self._candidate_worker is not None:
+            self._candidate_worker.deleteLater()
+        if self._candidate_thread is not None:
+            self._candidate_thread.deleteLater()
+        self._candidate_worker = None
+        self._candidate_thread = None
 
     def _resolve_current_source_path(self):
         comparison_id = self._selected_comparison()
@@ -275,6 +375,10 @@ class CandidateGenePage(QWidget):
         if selected_direction != "All" and "direction_class" in filtered.columns:
             filtered = filtered.loc[filtered["direction_class"].astype(str) == selected_direction].copy()
 
+        selected_pattern = self.pattern_filter.currentText()
+        if selected_pattern != "All" and "cross_candidate_pattern" in filtered.columns:
+            filtered = filtered.loc[filtered["cross_candidate_pattern"].astype(str) == selected_pattern].copy()
+
         if "standardized_log2FC" in filtered.columns:
             log2fc = pd.to_numeric(filtered["standardized_log2FC"], errors="coerce").abs()
             filtered = filtered.loc[log2fc >= self.min_abs_log2fc.value()].copy()
@@ -287,7 +391,18 @@ class CandidateGenePage(QWidget):
         if not query:
             return filtered
         mask = pd.Series(False, index=filtered.index)
-        for column in ["comparison_id", "gene_symbol", "gene_id", "candidate_tier", "evidence_class", "direction_class", "candidate_reason"]:
+        for column in [
+            "comparison_id",
+            "gene_symbol",
+            "gene_id",
+            "candidate_tier",
+            "evidence_class",
+            "direction_class",
+            "cross_candidate_pattern",
+            "cross_candidate_comparisons",
+            "cross_comparison_effect_summary",
+            "candidate_reason",
+        ]:
             if column in filtered.columns:
                 mask = mask | filtered[column].astype(str).str.lower().str.contains(query, na=False)
         return filtered.loc[mask].copy()
@@ -390,8 +505,8 @@ class CandidateGenePage(QWidget):
                 if "gene_id" in current.columns:
                     gene_keys = gene_keys.where(gene_keys.ne(""), current["gene_id"].fillna("").astype(str).str.strip())
             unique_gene_count = int(gene_keys.fillna("").astype(str).str.strip().replace("", pd.NA).dropna().nunique())
-        dex_count = int(current["DEXSeq_significant"].fillna(False).astype(bool).sum()) if "DEXSeq_significant" in current.columns else 0
-        dtu_count = int(current["DTU_significant"].fillna(False).astype(bool).sum()) if "DTU_significant" in current.columns else 0
+        dex_count = int(current["DEXSeq_significant"].map(self._safe_bool).sum()) if "DEXSeq_significant" in current.columns else 0
+        dtu_count = int(current["DTU_significant"].map(self._safe_bool).sum()) if "DTU_significant" in current.columns else 0
         self.context_label.setText(
             f"{self.project_service.comparison_context_text(selected)} | "
             f"Unique genes: {unique_gene_count} | "
@@ -399,6 +514,19 @@ class CandidateGenePage(QWidget):
             f"DEXSeq-significant rows: {dex_count} | "
             f"DTU-significant rows: {dtu_count}"
         )
+
+    @staticmethod
+    def _safe_bool(value) -> bool:
+        if value is None:
+            return False
+        try:
+            if pd.isna(value):
+                return False
+        except (TypeError, ValueError):
+            pass
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "y", "t"}
+        return bool(value)
 
     @staticmethod
     def _is_numeric_column(frame: pd.DataFrame, column: str) -> bool:

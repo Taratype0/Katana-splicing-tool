@@ -11,7 +11,7 @@ import pandas as pd
 from matplotlib import image as mpimg
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Patch, Rectangle
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -219,6 +219,7 @@ class ResultsPage(QWidget):
         self.group_pattern_view.addItem("Opposite direction", "opposite_direction")
         self.group_pattern_view.addItem("All shared significant events", "all_shared")
         self.group_pattern_view.addItem("Condition-specific (optional)", "condition_specific")
+        self.group_pattern_view.currentIndexChanged.connect(self.refresh)
         self.group_pattern_apply = QPushButton("Apply / Recalculate")
         self.group_pattern_apply.clicked.connect(self._apply_group_pattern_recalculate)
         self.group_pattern_controls = QWidget()
@@ -233,6 +234,52 @@ class ResultsPage(QWidget):
         group_pattern_layout.addWidget(self.group_pattern_apply)
         group_pattern_layout.addStretch(1)
         self.group_pattern_controls.setVisible(False)
+
+        self.group_interaction_sig_cutoff = QDoubleSpinBox()
+        self.group_interaction_sig_cutoff.setRange(0.0, 5.0)
+        self.group_interaction_sig_cutoff.setSingleStep(0.01)
+        self.group_interaction_sig_cutoff.setDecimals(3)
+        self.group_interaction_sig_cutoff.setValue(0.10)
+        self.group_interaction_sig_cutoff.setMinimumWidth(88)
+        self.group_interaction_delta_cutoff = QDoubleSpinBox()
+        self.group_interaction_delta_cutoff.setRange(0.0, 5.0)
+        self.group_interaction_delta_cutoff.setSingleStep(0.01)
+        self.group_interaction_delta_cutoff.setDecimals(3)
+        self.group_interaction_delta_cutoff.setValue(0.10)
+        self.group_interaction_delta_cutoff.setMinimumWidth(88)
+        self.group_interaction_min_reads = QSpinBox()
+        self.group_interaction_min_reads.setRange(0, 100000)
+        self.group_interaction_min_reads.setValue(20)
+        self.group_interaction_min_reads.setMinimumWidth(88)
+        self.group_interaction_view = QComboBox()
+        self.group_interaction_view.addItem("Shared interaction-tested events", "shared_interaction")
+        self.group_interaction_view.addItem("Opposite direction events", "opposite_direction")
+        self.group_interaction_view.addItem("Same direction, large delta", "large_delta")
+        self.group_interaction_view.addItem("Exclusive significant support", "exclusive")
+        self.group_interaction_view.addItem("Delta dPSI benchmark", "benchmark")
+        self.group_interaction_view.addItem("Diagnostics", "diagnostics")
+        self.group_interaction_view.addItem("All-pair batch summary", "batch_summary")
+        self.group_interaction_view.addItem("All-pair top interactions", "batch_top_interactions")
+        self.group_interaction_view.addItem("All-pair exclusive support", "batch_exclusive")
+        self.group_interaction_view.addItem("All-pair delta benchmark", "batch_benchmark")
+        self.group_interaction_view.addItem("All-pair diagnostics", "batch_diagnostics")
+        self.group_interaction_view.currentIndexChanged.connect(self.refresh)
+        self.group_interaction_apply = QPushButton("Apply / Recalculate")
+        self.group_interaction_apply.clicked.connect(self._apply_group_interaction_recalculate)
+        self.group_interaction_controls = QWidget()
+        group_interaction_layout = QHBoxLayout(self.group_interaction_controls)
+        group_interaction_layout.setContentsMargins(0, 0, 0, 0)
+        group_interaction_layout.addWidget(QLabel("abs dPSI cutoff"))
+        group_interaction_layout.addWidget(self.group_interaction_sig_cutoff)
+        group_interaction_layout.addWidget(QLabel("large delta cutoff"))
+        group_interaction_layout.addWidget(self.group_interaction_delta_cutoff)
+        group_interaction_layout.addWidget(QLabel("min reads"))
+        group_interaction_layout.addWidget(self.group_interaction_min_reads)
+        group_interaction_layout.addWidget(QLabel("View"))
+        group_interaction_layout.addWidget(self.group_interaction_view)
+        group_interaction_layout.addWidget(self.group_interaction_apply)
+        group_interaction_layout.addStretch(1)
+        self.group_interaction_controls.setVisible(False)
 
         for widget in (
             self.tabs,
@@ -367,6 +414,7 @@ class ResultsPage(QWidget):
         self._preview_output_dir: Path | None = None
         self._preview_name = ""
         self._preview_max_rows = 500
+        self._detail_dialog_text = ""
         self._layout_options: dict[str, object] = {"rotate_x": False, "bottom": None, "left": 0.12, "right": 0.76, "top": 0.84}
         self._candidate_card_selected_gene_key: str | None = None
         self._candidate_card_payload: dict[str, object] = {}
@@ -453,6 +501,7 @@ class ResultsPage(QWidget):
         layout.addWidget(self.candidate_controls)
         layout.addWidget(self.candidate_card_controls)
         layout.addWidget(self.group_pattern_controls)
+        layout.addWidget(self.group_interaction_controls)
         layout.addWidget(self.toolbar)
         layout.addWidget(content_splitter, 1)
         layout.addLayout(preview_actions)
@@ -533,6 +582,7 @@ class ResultsPage(QWidget):
         self._navigation_subbranch = None
 
     def refresh(self) -> None:
+        self._detail_dialog_text = ""
         if self.fixed_branch is not None:
             self._navigation_branch = self.fixed_branch
             self._navigation_subbranch = self.fixed_subbranch
@@ -629,7 +679,13 @@ class ResultsPage(QWidget):
         landscape_subbranch = self.fixed_subbranch if standalone and branch == "landscape" else self._current_landscape_subbranch()
         self.landscape_compare_tabs.setVisible(bool(landscape_active and landscape_subbranch == "pie"))
         self.landscape_tabs.setVisible((not standalone and branch in (None, "landscape") and subbranch is None) or (standalone and branch == "landscape" and subbranch is None))
-        self.group_tabs.setVisible((not standalone and branch in (None, "group")) or (standalone and branch == "group"))
+        group_active = (not standalone and branch in (None, "group")) or (standalone and branch == "group")
+        group_subbranch_for_visibility = subbranch or self._current_group_subbranch()
+        interaction_view_key = str(self.group_interaction_view.currentData() or "")
+        group_needs_pair_tabs = group_subbranch_for_visibility in {"matrix", "shared", "pattern"} or (
+            group_subbranch_for_visibility == "interaction" and not interaction_view_key.startswith("batch_")
+        )
+        self.group_tabs.setVisible(bool(group_active and (group_needs_pair_tabs or (not standalone and subbranch is None))))
         self.group_mode_tabs.setVisible((not standalone and branch in (None, "group") and subbranch is None) or (standalone and branch == "group" and subbranch is None))
         self.tx_tabs.setVisible((not standalone and branch in (None, "tx")) or (standalone and branch == "tx"))
         self.mechanism_compare_tabs.setVisible((not standalone and branch in (None, "mechanism")) or (standalone and branch == "mechanism"))
@@ -639,6 +695,7 @@ class ResultsPage(QWidget):
         self.candidate_controls.setVisible(branch == "candidate")
         self.candidate_card_controls.setVisible(branch == "candidate" and (subbranch == "cards" or (subbranch is None and self._current_candidate_subbranch() == "cards")))
         self.group_pattern_controls.setVisible(branch == "group" and subbranch == "pattern")
+        self.group_interaction_controls.setVisible(branch == "group" and subbranch == "interaction")
 
         if branch is None and not standalone:
             self.label.setText("Analysis workbench")
@@ -685,13 +742,14 @@ class ResultsPage(QWidget):
             self.run_current_button.setText(labels.get(active_subbranch, "Run Landscape"))
         elif branch_key == "group":
             labels = {
-                "matrix": "Build Candidate Matrix",
-                "shared": "Build Shared / Specific View",
                 "reversal": "Build Direction Reversal View",
                 "comparison": "Run Group Comparison",
                 "heatmap": "Run Program Heatmap",
                 "direction": "Run Direction vs Strength",
-                "pattern": "Apply / Recalculate 5.4.6",
+                "matrix": "Build Pairwise Candidate Matrix",
+                "shared": "Build Pairwise Gene Patterns",
+                "pattern": "Apply / Recalculate 5.4.3",
+                "interaction": "Apply / Recalculate 5.4.4",
             }
             active_subbranch = subbranch_key or self._current_group_subbranch()
             self.run_current_button.setText(labels.get(active_subbranch, "Run Group Comparison"))
@@ -741,6 +799,8 @@ class ResultsPage(QWidget):
                 self.refresh()
             elif group_subbranch == "pattern":
                 self._apply_group_pattern_recalculate()
+            elif group_subbranch == "interaction":
+                self._apply_group_interaction_recalculate()
             else:
                 self.project_service.set_selected_analysis_modules(["program_comparison"])
                 if callable(self.on_run_modules):
@@ -787,6 +847,268 @@ class ResultsPage(QWidget):
         pair_name = self._pair_name_from_id(pair_id)
         mode = self.fixed_subbranch or self._navigation_subbranch or self._current_group_subbranch()
         cross_modes = {"matrix", "shared", "reversal"}
+        if mode == "interaction":
+            abs_cutoff = float(self.group_interaction_sig_cutoff.value())
+            delta_cutoff = float(self.group_interaction_delta_cutoff.value())
+            min_reads = int(self.group_interaction_min_reads.value())
+            selected_key = str(self.group_interaction_view.currentData() or "shared_interaction")
+            is_batch_view = selected_key.startswith("batch_")
+            if is_batch_view:
+                batch_tables = self.project_service.preview_cross_comparison_as_interaction_batch(
+                    abs_dpsi_cutoff=abs_cutoff,
+                    large_delta_dpsi_cutoff=delta_cutoff,
+                    min_total_reads=min_reads,
+                    allow_generate=False,
+                )
+                state = self.project_service.module_state("cross_comparison_as_interactions")
+                self.context_header.setText(
+                    "5.4.4 all-pair batch summary | Runs the AS interaction model across every selected comparison pair."
+                )
+                self._set_explanation(
+                    "All-pair 5.4.4 batch summary applies the same replicate-aware AS interaction model to every configured or auto-derived comparison pair. "
+                    "It summarizes shared significant AS interactions, opposite-direction events, same-direction large-delta events, and exclusive read-support classes."
+                )
+                if state.get("status") == "not_run":
+                    self._draw_placeholder("Not run.\nNo cached all-pair 5.4.4 batch summary is loaded.")
+                    self.details.setPlainText(state.get("message", "All-pair 5.4.4 batch summary has not been run yet."))
+                    self._sync_footer_info()
+                    self._reset_plot_view()
+                    return
+                selected_table = batch_tables.get(selected_key, pd.DataFrame())
+                self._draw_cross_as_interaction_batch_summary(batch_tables, abs_cutoff, delta_cutoff, min_reads)
+                batch_files = self._cross_interaction_batch_file_map()
+                preferred_columns = [
+                    "batch_pair_order",
+                    "pair_id",
+                    "pair_name",
+                    "comparison_A",
+                    "comparison_B",
+                    "n_shared_significant",
+                    "n_high_confidence_interaction",
+                    "n_moderate_interaction",
+                    "n_opposite_direction",
+                    "n_same_direction_large_delta",
+                    "n_exclusive",
+                    "n_exclusive_supported",
+                    "n_exclusive_low_power",
+                    "n_exclusive_counterpart_not_found",
+                    "delta_top20_model_top20_overlap",
+                    "delta_vs_model_spearman_rank_correlation",
+                    "gene",
+                    "event_type",
+                    "event_id",
+                    "event_matching_key",
+                    "dPSI_A",
+                    "dPSI_B",
+                    "FDR_A",
+                    "FDR_B",
+                    "abs_delta_dPSI",
+                    "interaction_priority_score",
+                    "interaction_class",
+                    "exclusive_side",
+                    "counterpart_event_found",
+                    "non_significant_side_mean_total_reads",
+                    "non_significant_side_read_support",
+                    "top_gene",
+                    "top_event_type",
+                    "top_abs_delta_dPSI",
+                    "top_interaction_priority_score",
+                    "simple_delta_score",
+                    "simple_delta_priority_score",
+                    "delta_dPSI_rank",
+                    "interaction_model_rank",
+                    "delta_vs_model_rank_shift",
+                    "benchmark_class",
+                    "benchmark_score_delta",
+                    "quasi_binomial_dispersion",
+                    "beta_binomial_rho_estimate",
+                    "beta_binomial_interaction_log_odds",
+                    "beta_binomial_likelihood_ratio",
+                    "beta_binomial_pvalue",
+                    "beta_binomial_FDR",
+                    "beta_binomial_rho",
+                    "beta_binomial_model_status",
+                    "model_diagnostic_class",
+                    "model_warning",
+                    "abs_dPSI_significance_cutoff_used",
+                    "large_delta_dPSI_cutoff_used",
+                    "min_total_reads_used",
+                ]
+                self._populate_table(
+                    selected_table,
+                    preferred_columns,
+                    file_path=batch_files.get(selected_key),
+                    output_dir=self.project_service.cross_comparison_interaction_batch_output_dir(),
+                    preview_name=f"5.4.4 {self.group_interaction_view.currentText()}",
+                )
+                self._set_detail_text(
+                    "5.4.4 all-pair batch summary.\n"
+                    "Scope: every user-defined comparison pair plus any missing pairwise combinations among selected comparisons.\n"
+                    f"Shared-event filter: rMATS_FDR <= 0.05 and abs(dPSI) >= {abs_cutoff:.3f} in both comparisons.\n"
+                    f"Large delta cutoff: {delta_cutoff:.3f}; min mean total junction reads: {min_reads}.\n"
+                    "Batch summary = one row per pair with counts and the top-ranked interaction event.\n"
+                    "All-pair top interactions = top 100 interaction-priority events per pair.\n"
+                    "All-pair exclusive support = events significant in one comparison only, with counterpart read-support classification.\n"
+                    "Delta benchmark compares simple abs(delta dPSI) ranking against the replicate-aware interaction model ranking, so you can see which events are only obvious by effect size versus model-supported."
+                    " The model-supported view includes quasi-binomial diagnostics and a formal beta-binomial likelihood-ratio interaction test where replicate IJC/SJC counts are available.\n"
+                    "exclusive support definitions:\n"
+                    "- supported_non_significant: the same event is found in the other comparison and has enough mean IJC+SJC read support, but does not pass FDR/dPSI significance there.\n"
+                    "- low_power_or_absent: the counterpart side has low mean junction read support, so absence of significance should be interpreted cautiously.\n"
+                    "- counterpart_event_not_found: the same event key is not found in the other comparison's rMATS event list.\n"
+                    "read support = mean total junction reads from replicate IJC+SJC values on the non-significant/counterpart side.",
+                    "5.4.4 batch result loaded. Open Detail for exclusive support, model and benchmark definitions.",
+                )
+                return
+            interaction_tables = self.project_service.preview_cross_comparison_as_interactions(
+                pair_id,
+                abs_dpsi_cutoff=abs_cutoff,
+                large_delta_dpsi_cutoff=delta_cutoff,
+                min_total_reads=min_reads,
+                allow_generate=False,
+            )
+            state = self.project_service.module_state("cross_comparison_as_interactions")
+            self.context_header.setText(
+                f"Comparison set: {pair_name or 'selected pair'} | 5.4.4 models shared significant AS-event dPSI differences with replicate-level rMATS counts."
+            )
+            self._set_explanation(
+                "5.4.4 is cross-comparison AS interaction modeling. It uses rMATS significant events and replicate-level IJC/SJC counts in a binomial GLM: inclusion ~ comparison + group + comparison:group. "
+                "The interaction term tests whether the AS effect differs between comparison A and B; Pearson overdispersion is used as a quasi-binomial-style correction. "
+                "The final ranking adds empirical-Bayes shrinkage and a priority score combining effect-size divergence, shrunken confidence, replicate consistency and read support."
+            )
+            if state.get("status") == "not_run":
+                self._draw_placeholder("Not run.\nNo cached 5.4.4 interaction modeling result is loaded.")
+                self.details.setPlainText(state.get("message", "5.4.4 has not been run yet."))
+                self._sync_footer_info()
+                self._reset_plot_view()
+                return
+            selected_table = interaction_tables.get(selected_key, pd.DataFrame())
+            self._draw_cross_as_interaction_summary(interaction_tables, pair_name, abs_cutoff, delta_cutoff, min_reads)
+            interaction_files = self._cross_interaction_file_map(pair_id)
+            preferred_columns = [
+                "gene",
+                "event_type",
+                "event_id",
+                "event_matching_key",
+                "comparison_A",
+                "comparison_B",
+                "experiment_A_display_name",
+                "experiment_B_display_name",
+                "dPSI_A",
+                "dPSI_B",
+                "FDR_A",
+                "FDR_B",
+                "delta_dPSI",
+                "abs_delta_dPSI",
+                "same_direction",
+                "opposite_direction",
+                "same_direction_strength_delta",
+                "interaction_log_odds",
+                "interaction_se",
+                "interaction_z",
+                "interaction_pvalue",
+                "interaction_FDR",
+                "interaction_model",
+                "interaction_model_status",
+                "interaction_overdispersion_scale",
+                "interaction_model_n_observations",
+                "interaction_model_df_resid",
+                "interaction_model_pearson_chi2",
+                "interaction_model_deviance",
+                "interaction_model_total_reads",
+                "quasi_binomial_dispersion",
+                "quasi_binomial_overdispersed",
+                "beta_binomial_rho_estimate",
+                "beta_binomial_interaction_log_odds",
+                "beta_binomial_likelihood_ratio",
+                "beta_binomial_pvalue",
+                "beta_binomial_FDR",
+                "beta_binomial_rho",
+                "beta_binomial_full_loglik",
+                "beta_binomial_null_loglik",
+                "beta_binomial_model_status",
+                "beta_binomial_warning",
+                "model_valid",
+                "model_diagnostic_class",
+                "model_warning",
+                "eb_prior_variance",
+                "shrinkage_weight",
+                "shrunken_interaction_log_odds",
+                "shrunken_interaction_z",
+                "shrunken_interaction_pvalue",
+                "shrunken_interaction_FDR",
+                "interaction_priority_score",
+                "simple_delta_score",
+                "simple_delta_priority_score",
+                "delta_dPSI_rank",
+                "interaction_model_rank",
+                "delta_vs_model_rank_shift",
+                "simple_delta_top20",
+                "model_top20",
+                "benchmark_class",
+                "benchmark_score_delta",
+                "interaction_class",
+                "read_support_class",
+                "replicate_consistency_score",
+                "mean_total_reads_A",
+                "mean_total_reads_B",
+                "replicate_count_A",
+                "replicate_count_B",
+                "exclusive_side",
+                "counterpart_event_found",
+                "significant_side_mean_total_reads",
+                "non_significant_side_mean_total_reads",
+                "significant_side_replicate_count",
+                "non_significant_side_replicate_count",
+                "non_significant_side_dPSI",
+                "non_significant_side_FDR",
+                "non_significant_side_read_support",
+                "event_class",
+                "abs_dPSI_significance_cutoff_used",
+                "large_delta_dPSI_cutoff_used",
+                "min_total_reads_used",
+                "pair_id",
+                "pair_name",
+                "n_events_A",
+                "n_events_B",
+                "n_shared_significant",
+                "n_opposite_direction",
+                "n_large_delta",
+                "n_exclusive_supported",
+                "n_exclusive_low_power",
+                "n_exclusive_counterpart_not_found",
+                "n_exclusive_not_shared_significant",
+            ]
+            self._populate_table(
+                selected_table,
+                preferred_columns,
+                file_path=interaction_files.get(selected_key),
+                output_dir=self.project_service.cross_comparison_interaction_output_dir(pair_id),
+                preview_name=f"5.4.4 {self.group_interaction_view.currentText()}",
+            )
+            self._set_detail_text(
+                f"5.4.4 AS interaction modeling for {pair_name or 'selected pair'}.\n"
+                f"Shared-event filter: rMATS_FDR <= 0.05 and abs(dPSI) >= {abs_cutoff:.3f} in both comparisons.\n"
+                f"Large delta cutoff: {delta_cutoff:.3f}; min mean total junction reads: {min_reads}.\n"
+                "Event matching key = normalized gene + event_type + event_id, so multiple events from the same gene stay separate.\n"
+                "Model: binomial GLM on replicate-level IJC/SJC counts, inclusion ~ comparison + group + comparison:group.\n"
+                "interaction_log_odds is reported as comparison A group effect minus comparison B group effect, so its sign follows delta_dPSI.\n"
+                "Diagnostics include Pearson quasi-binomial dispersion, overdispersion flag and model validity. "
+                "Beta-binomial output is a separate likelihood-ratio interaction fit with beta_binomial_pvalue/FDR and beta_binomial_rho; beta_binomial_rho_estimate is kept only as the quick overdispersion-derived diagnostic estimate.\n"
+                "Empirical-Bayes shrinkage pulls unstable log-odds toward zero based on sampling SE, and interaction_priority_score ranks events by delta dPSI, shrunken statistical confidence, replicate consistency and read support.\n"
+                "Delta benchmark compares simple abs(delta dPSI) ranking with model ranking; benchmark_class marks events that are top-ranked by delta only, model only, or both.\n"
+                "Exclusive table is not an interaction test; it flags events significant in one comparison but not shared-significant in the other. "
+                "For each exclusive event, Katana checks the counterpart event in the other comparison and classifies it as supported_non_significant, low_power_or_absent, or counterpart_event_not_found using mean IJC+SJC read support.\n"
+                "exclusive support definitions:\n"
+                "- supported_non_significant: counterpart event exists and has enough read support but fails FDR/dPSI significance.\n"
+                "- low_power_or_absent: counterpart event has low read support, so this is not strong absence evidence.\n"
+                "- counterpart_event_not_found: same event key was not detected in the other comparison table.\n"
+                "replicate_consistency_score = how consistently replicate-level PSI shifts agree with the comparison-level direction; higher is more reproducible.\n"
+                "\nDifference from 5.4.3:\n"
+                "- 5.4.3 is a simple event-level dPSI pattern table using already significant rMATS event dPSI values. It does not model replicate counts.\n"
+                "- 5.4.4 uses replicate-level rMATS IJC/SJC counts to estimate whether the AS effect differs between comparison A and B, then reports model diagnostics, FDR, read support, benchmark, and ranking.",
+                "5.4.4 result loaded. Open Detail for model, read support and 5.4.3-vs-5.4.4 definitions.",
+            )
+            return
         if mode == "pattern":
             abs_cutoff = float(self.group_pattern_sig_cutoff.value())
             delta_cutoff = float(self.group_pattern_large_delta.value())
@@ -798,15 +1120,15 @@ class ResultsPage(QWidget):
             )
             state = self.project_service.module_state("cross_comparison_as_patterns")
             self.context_header.setText(
-                f"Comparison set: {pair_name or 'selected pair'} | 5.4.6 compares shared significant AS events between the two comparisons using standardized dPSI only."
+                f"Comparison set: {pair_name or 'selected pair'} | 5.4.3 compares shared significant AS events between the two comparisons using standardized dPSI only."
             )
             self._set_explanation(
                 "Cross-comparison significant AS event dPSI pattern analysis is a pattern-prioritization/follow-up section, not an interaction significance test. "
                 "Default practical AS filters are rMATS_FDR <= 0.05 and abs(dPSI) >= 0.10, and both dPSI cutoffs below are user-adjustable."
             )
             if state.get("status") == "not_run":
-                self._draw_placeholder("Not run.\nNo cached 5.4.6 result is loaded.")
-                self.details.setPlainText(state.get("message", "5.4.6 has not been run yet."))
+                self._draw_placeholder("Not run.\nNo cached 5.4.3 result is loaded.")
+                self.details.setPlainText(state.get("message", "5.4.3 has not been run yet."))
                 self._sync_footer_info()
                 self._reset_plot_view()
                 return
@@ -845,28 +1167,46 @@ class ResultsPage(QWidget):
                 preferred_columns,
                 file_path=cross_files.get(selected_key),
                 output_dir=self.project_service.cross_comparison_pattern_output_dir(pair_id),
-                preview_name=f"5.4.6 {self.group_pattern_view.currentText()}",
+                preview_name=f"5.4.3 {self.group_pattern_view.currentText()}",
             )
-            self.details.setPlainText(
-                f"5.4.6 pattern prioritization for {pair_name or 'selected pair'}.\n"
+            self._set_detail_text(
+                f"5.4.3 pattern prioritization for {pair_name or 'selected pair'}.\n"
                 f"abs(dPSI) significance cutoff: {abs_cutoff:.3f}\n"
                 f"large cross-comparison delta cutoff: {delta_cutoff:.3f}\n"
                 "Event matching key = normalized gene + event_type + event_id (coordinates fallback when event_id is missing).\n"
-                "If no rows pass the current filters, the table will show 'No events found'."
+                "If no rows pass the current filters, the table will show 'No events found'.\n"
+                "\nDifference from 5.4.4:\n"
+                "- 5.4.3 compares standardized dPSI values for shared significant rMATS AS events. It is fast pattern prioritization, not a replicate-aware interaction test.\n"
+                "- 5.4.4 uses replicate-level IJC/SJC read counts and statistical modeling to test/support cross-comparison AS effect differences.",
+                "5.4.3 result loaded. Open Detail for cutoff, event matching and 5.4.3-vs-5.4.4 definitions.",
             )
             return
         if mode in cross_modes:
-            cross_matrix = self.project_service.preview_cross_comparison_candidate_matrix(allow_generate=False)
+            cross_matrix_all = self.project_service.preview_cross_comparison_candidate_matrix(allow_generate=False)
+            cross_matrix = self._pairwise_candidate_matrix(cross_matrix_all, pair_id)
             self.context_header.setText(
-                f"Comparison set: {pair_name or 'selected pair'} | Cross-comparison candidate views are built only from cached 5.3.1 candidate results."
+                f"Comparison pair: {pair_name or 'selected pair'} | Gene-level candidate views compare comparison A vs comparison B only."
             )
-            if cross_matrix is None or cross_matrix.empty:
+            if cross_matrix_all is None or cross_matrix_all.empty:
                 state = self.project_service.module_state("cross_comparison_candidates")
                 self._set_explanation(
-                    "These cross-comparison candidate pages do not run program comparison. They only read cached 5.3.1 candidate results and build candidate-pattern summaries when you click 'Run Current Branch'."
+                    "These cross-comparison candidate pages do not run program comparison. They only read cached 5.3.1 candidate results and build pairwise candidate-pattern summaries for the selected comparison pair."
                 )
                 self._draw_placeholder("Not run.\nNo cached cross-comparison candidate matrix is loaded.")
                 self.details.setPlainText(state.get("message", "Cross-comparison candidate matrix not available yet."))
+                self._sync_footer_info()
+                self._reset_plot_view()
+                return
+            if cross_matrix.empty:
+                self._set_explanation(
+                    "No candidate genes are present in either comparison of the selected pair. Switch pair tabs or run 5.3.1 for those comparisons first."
+                )
+                self._draw_placeholder(f"No pairwise candidate rows found for {pair_name or 'selected pair'}.")
+                self.details.setPlainText(
+                    "5.4.1/5.4.2 are now pairwise views.\n"
+                    "They need a selected comparison pair with comparison A and comparison B, plus cached 5.3.1 candidate results for at least one side.\n"
+                    "They no longer show the all-comparison global matrix as the main page."
+                )
                 self._sync_footer_info()
                 self._reset_plot_view()
                 return
@@ -891,24 +1231,69 @@ class ResultsPage(QWidget):
             cross_files = self._cross_file_map()
             self._draw_cross_candidate_membership_summary(
                 cross_matrix,
-                f"Candidate matrix: {pair_name}",
-                "Candidate matrix summarises how many comparisons each candidate gene appears in.",
+                f"Candidate matrix: {pair_name or 'selected pair'}",
+                "Pairwise candidate matrix summarises which genes are candidates in comparison A, comparison B, or both.",
             )
-            self._populate_table(cross_matrix, [column for column in cross_matrix.columns if column in [
-                "gene_id", "gene_symbol", "candidate_pattern", "pattern_reason", "candidate_comparisons", "n_comparisons_candidate", "best_overall_tier", "best_overall_rank", "has_direction_reversal", "has_tier_change", "has_evidence_class_change"
-            ] or column.startswith("is_candidate_") or column.startswith("tier_")], file_path=cross_files.get("matrix"), output_dir=self.project_service.cross_comparison_output_dir(), preview_name="Cross-comparison candidate matrix")
-            self.details.setPlainText(
-                "Cross-comparison candidate matrix built only from per-comparison candidate screening results.\n"
-                "Function: this is the base membership matrix. One row = one unique gene across the selected comparisons.\n"
+            preferred_columns = [
+                "pair_name",
+                "comparison_A_display_name",
+                "comparison_B_display_name",
+                "gene_id",
+                "gene_symbol",
+                "candidate_pattern",
+                "pattern_reason",
+                "candidate_comparisons",
+                "pair_membership_label",
+                "pair_membership_count",
+                "is_candidate_A",
+                "is_candidate_B",
+                "tier_A",
+                "tier_B",
+                "rank_A",
+                "rank_B",
+                "evidence_class_A",
+                "evidence_class_B",
+                "direction_class_A",
+                "direction_class_B",
+                "standardized_log2FC_A",
+                "standardized_log2FC_B",
+                "dPSI_A",
+                "dPSI_B",
+                "DE_FDR_A",
+                "DE_FDR_B",
+                "rMATS_FDR_A",
+                "rMATS_FDR_B",
+                "event_type_A",
+                "event_type_B",
+                "pair_direction_reversed",
+                "pair_tier_changed",
+                "pair_evidence_class_changed",
+                "best_pair_rank",
+            ]
+            self._populate_table(
+                cross_matrix,
+                preferred_columns,
+                file_path=cross_files.get("matrix"),
+                output_dir=self.project_service.cross_comparison_output_dir(),
+                preview_name=f"Pairwise candidate matrix - {pair_name or 'selected pair'}",
+            )
+            self._set_detail_text(
+                "Pairwise candidate matrix built only from per-comparison candidate screening results.\n"
+                "Level: gene-level candidate membership, not event-level AS interaction modeling.\n"
+                f"Scope: selected comparison pair only: {pair_name or 'comparison A vs comparison B'}.\n"
+                "Function: this is the base A-vs-B membership matrix. One row = one unique gene that is a candidate in comparison A and/or comparison B.\n"
                 "What 5.4.1 shows:\n"
-                "- whether the gene is a candidate in each comparison\n"
-                "- its per-comparison tier, rank, evidence class and direction state\n"
-                "- how many comparisons contain that gene as a candidate\n"
-                "This page is not the shared/specific pattern-classification page; it is the source matrix used by later 5.4 sections.\n"
+                "- is_candidate_A / is_candidate_B: whether the gene is a candidate in each side of the selected pair\n"
+                "- tier_A / tier_B, rank_A / rank_B, evidence_class_A / evidence_class_B and direction_class_A / direction_class_B\n"
+                "- pair_membership_label: A only, B only, or shared A+B\n"
+                "- pair_membership_count: 1 means A-only/B-only; 2 means shared by both sides of this pair. This replaces the confusing '1 comparison / 2 comparison' chart wording.\n"
+                "This page is not global anymore. Change the pair tab to inspect a different KO-effect / DP-effect style comparison.\n"
+                "This page is also not an event-level AS test; use 5.4.3/5.4.4 for pair-specific AS-event differences.\n"
                 "Rank meaning:\n"
-                "- rank_<comparison_id> = that gene's original within-comparison numeric rank from 5.3.1\n"
-                "- best_overall_rank = the smallest numeric rank observed across comparisons where the gene is a candidate\n"
-                "In other words, rank here is inherited from 5.3.1 and is not a new cross-comparison rank."
+                "- rank_A / rank_B = the original within-comparison numeric rank from 5.3.1\n"
+                "- best_pair_rank = the best (lowest) rank observed across comparison A and B\n"
+                "In other words, rank here is inherited from 5.3.1 and is not a new global rank.",
+                "5.4.1 pairwise candidate matrix loaded. Open Detail for membership and rank definitions.",
             )
         elif mode == "comparison":
             self._draw_program_summary(filtered_summary, pair_name)
@@ -939,42 +1324,72 @@ class ResultsPage(QWidget):
             shared = cross_matrix.loc[
                 cross_matrix["candidate_pattern"].astype(str).isin(
                     [
-                        "shared_all",
-                        "shared_subset",
-                        "comparison_specific",
-                        "gained",
-                        "lost",
-                        "tier_changed",
-                        "evidence_class_changed",
-                        "DEG_only_in_one_condition",
-                        "splicing_only_in_one_condition",
+                        "shared_pair",
+                        "shared_direction_reversed",
+                        "shared_tier_changed",
+                        "shared_evidence_class_changed",
+                        "comparison_A_specific_lost_in_B",
+                        "comparison_B_specific_gained_in_B",
                     ]
                 )
             ].copy() if cross_matrix is not None and not cross_matrix.empty else pd.DataFrame()
             self._draw_cross_candidate_pattern_breakdown(
                 shared,
-                f"Shared / Specific / Gained / Lost: {pair_name}",
-                "Pattern breakdown derived from the cross-comparison candidate matrix.",
+                f"Shared / Specific / Gained / Lost: {pair_name or 'selected pair'}",
+                "Pairwise pattern breakdown derived from the selected A-vs-B candidate matrix.",
             )
             cross_files = self._cross_file_map()
-            self._populate_table(shared, [column for column in shared.columns if column in [
-                "gene_id", "gene_symbol", "candidate_pattern", "pattern_reason", "candidate_comparisons", "n_comparisons_candidate", "best_overall_tier", "best_overall_rank", "has_tier_change", "has_evidence_class_change"
-            ]], file_path=cross_files.get("matrix"), output_dir=self.project_service.cross_comparison_output_dir(), preview_name="Cross-comparison pattern view")
-            self.details.setPlainText(
-                "Shared / specific / gained / lost candidate view derived from the cross-comparison candidate matrix.\n"
-                "Function: 5.4.2 is the pattern-interpretation page. Unlike 5.4.1, it does not ask only 'where is this gene present?'; it asks 'what cross-comparison pattern does this gene belong to?'\n"
+            preferred_columns = [
+                "pair_name",
+                "comparison_A_display_name",
+                "comparison_B_display_name",
+                "gene_id",
+                "gene_symbol",
+                "candidate_pattern",
+                "pattern_reason",
+                "candidate_comparisons",
+                "pair_membership_label",
+                "pair_membership_count",
+                "is_candidate_A",
+                "is_candidate_B",
+                "tier_A",
+                "tier_B",
+                "rank_A",
+                "rank_B",
+                "evidence_class_A",
+                "evidence_class_B",
+                "direction_class_A",
+                "direction_class_B",
+                "dPSI_A",
+                "dPSI_B",
+                "pair_direction_reversed",
+                "pair_tier_changed",
+                "pair_evidence_class_changed",
+                "best_pair_rank",
+            ]
+            self._populate_table(
+                shared,
+                preferred_columns,
+                file_path=cross_files.get("matrix"),
+                output_dir=self.project_service.cross_comparison_output_dir(),
+                preview_name=f"Pairwise gene pattern view - {pair_name or 'selected pair'}",
+            )
+            self._set_detail_text(
+                "Shared / specific / gained / lost candidate view derived from the selected pairwise candidate matrix.\n"
+                "Level: gene-level candidate-pattern interpretation, not event-level AS interaction modeling.\n"
+                f"Scope: selected comparison pair only: {pair_name or 'comparison A vs comparison B'}.\n"
+                "Function: 5.4.2 is the pairwise pattern-interpretation page. It asks whether a gene is shared by A/B, A-specific, B-specific, or changed in direction/tier/evidence class between A and B.\n"
                 "Definitions:\n"
-                "- shared_all: candidate in every selected comparison\n"
-                "- shared_subset: candidate in more than one comparison, but not all selected comparisons\n"
-                "- comparison_specific: candidate in exactly one comparison\n"
-                "- gained: absent earlier and present later according to the configured comparison order\n"
-                "- lost: present earlier and absent later according to the configured comparison order\n"
-                "- tier_changed: present in multiple comparisons, but candidate tier differs\n"
-                "- evidence_class_changed: present in multiple comparisons, but support/evidence class differs\n"
-                "- DEG_only_in_one_condition / splicing_only_in_one_condition: one evidence side appears only in one condition-specific context\n"
-                "Why 5.4.1 and 5.4.2 can look similar: both read the same underlying matrix, but 5.4.1 shows the raw per-gene membership table, while 5.4.2 groups genes into interpretable candidate-pattern classes.\n"
+                "- shared_pair: candidate in both comparison A and comparison B\n"
+                "- comparison_A_specific_lost_in_B: candidate in A only; 'lost' is relative to the selected A -> B pair order, not automatically a time-course claim\n"
+                "- comparison_B_specific_gained_in_B: candidate in B only; 'gained' is relative to the selected A -> B pair order\n"
+                "- shared_direction_reversed: candidate in both A and B, but standardized DEG or dominant AS direction changes sign\n"
+                "- shared_tier_changed: candidate in both A and B, but candidate tier differs\n"
+                "- shared_evidence_class_changed: candidate in both A and B, but evidence class differs\n"
+                "Why 5.4.1 and 5.4.2 can look similar: both use the same selected-pair source genes, but 5.4.1 is raw A/B membership while 5.4.2 groups genes into interpretable pairwise classes.\n"
                 "Rank still means the original within-comparison numeric rank from 5.3.1.\n"
-                "best_overall_rank is not a new cross-comparison effect size; it is simply the best (lowest) within-comparison candidate rank."
+                "best_pair_rank is not a new effect size; it is simply the best (lowest) within-comparison candidate rank across A and B.",
+                "5.4.2 pairwise pattern view loaded. Open Detail for shared/specific/gained/lost definitions.",
             )
         elif mode == "reversal":
             reversed_only = cross_matrix.loc[cross_matrix["candidate_pattern"].astype(str) == "direction_reversed"].copy() if cross_matrix is not None and not cross_matrix.empty else pd.DataFrame()
@@ -989,7 +1404,10 @@ class ResultsPage(QWidget):
             ] or column.startswith("direction_class_")], file_path=cross_files.get("matrix"), output_dir=self.project_service.cross_comparison_output_dir(), preview_name="Direction reversal candidates")
             self.details.setPlainText(
                 "Direction reversal means cross-comparison biological reversal only.\n"
-                "It does not refer to Pairing/config flip. It means the standardized transcript or dominant splicing direction changes sign between comparisons."
+                "Level: gene-level candidate direction summary. It is not a replicate-level interaction test.\n"
+                "It does not refer to Pairing/config flip. It means the standardized transcript direction and/or dominant rMATS splicing direction changes sign between comparisons.\n"
+                "The direction is inherited from the standardized 5.3 candidate table: DEG uses standardized_log2FC and AS uses standardized/dominant dPSI. "
+                "Use 5.4.4 when you need event-level AS interaction modeling with replicate read support."
             )
         elif mode == "heatmap":
             self._draw_program_heatmap(filtered_events, pair_name)
@@ -1049,20 +1467,32 @@ class ResultsPage(QWidget):
             self.canvas.draw_idle()
             return
         working = frame.copy()
-        membership = pd.to_numeric(
-            working.get("n_comparisons_candidate", pd.Series(dtype="float")),
-            errors="coerce",
-        ).dropna()
-        if membership.empty:
+        if "pair_membership_label" in working.columns:
+            summary = working["pair_membership_label"].fillna("unclassified").astype(str).value_counts()
+            order = [label for label in ["A only", "B only", "shared A+B"] if label in summary.index]
+            order.extend(label for label in summary.index.tolist() if label not in order)
+            summary = summary.loc[order]
+            labels = summary.index.tolist()
+        else:
+            membership = pd.to_numeric(
+                working.get("n_comparisons_candidate", pd.Series(dtype="float")),
+                errors="coerce",
+            ).dropna()
+            if membership.empty:
+                axis.axis("off")
+                axis.text(0.5, 0.5, "No comparison-membership counts available.", ha="center", va="center")
+                self.canvas.draw_idle()
+                return
+            summary = membership.astype(int).value_counts().sort_index()
+            labels = [f"{count} comparison{'s' if count != 1 else ''}" for count in summary.index.tolist()]
+        if summary.empty:
             axis.axis("off")
             axis.text(0.5, 0.5, "No comparison-membership counts available.", ha="center", va="center")
             self.canvas.draw_idle()
             return
-        summary = membership.astype(int).value_counts().sort_index()
-        labels = [f"{count} comparison{'s' if count != 1 else ''}" for count in summary.index.tolist()]
         bars = axis.bar(labels, summary.values.tolist(), color="#4C78A8")
         axis.set_ylabel("Genes")
-        axis.set_xlabel("Candidate membership breadth")
+        axis.set_xlabel("Pairwise candidate membership")
         self._bar_patches = [
             (patch, f"{label}\nGenes: {value}")
             for patch, label, value in zip(bars, labels, summary.values.tolist(), strict=False)
@@ -1089,6 +1519,12 @@ class ResultsPage(QWidget):
             return
         working = frame.copy()
         pattern_order = [
+            "shared_pair",
+            "shared_direction_reversed",
+            "shared_tier_changed",
+            "shared_evidence_class_changed",
+            "comparison_A_specific_lost_in_B",
+            "comparison_B_specific_gained_in_B",
             "shared_all",
             "shared_subset",
             "comparison_specific",
@@ -1100,6 +1536,12 @@ class ResultsPage(QWidget):
             "splicing_only_in_one_condition",
         ]
         pattern_colors = {
+            "shared_pair": "#4C78A8",
+            "shared_direction_reversed": "#E45756",
+            "shared_tier_changed": "#B279A2",
+            "shared_evidence_class_changed": "#FF9DA6",
+            "comparison_A_specific_lost_in_B": "#F58518",
+            "comparison_B_specific_gained_in_B": "#54A24B",
             "shared_all": "#4C78A8",
             "shared_subset": "#72B7B2",
             "comparison_specific": "#F58518",
@@ -1151,7 +1593,7 @@ class ResultsPage(QWidget):
         self._bar_patches = []
         self.figure.clear()
         axis = self.figure.add_subplot(111)
-        self._set_axis_title(axis, f"5.4.6 significant AS dPSI patterns: {pair_name or 'selected pair'}")
+        self._set_axis_title(axis, f"5.4.3 significant AS dPSI patterns: {pair_name or 'selected pair'}")
         counts = {
             "Same dir + large delta": len(tables.get("same_direction_large_delta", pd.DataFrame())),
             "Opposite direction": len(tables.get("opposite_direction", pd.DataFrame())),
@@ -1175,6 +1617,105 @@ class ResultsPage(QWidget):
             for patch, (label, value) in zip(bars, counts.items(), strict=False)
         ]
         self._finalize_axes_layout(rotate_x=True, bottom=0.28)
+        self.canvas.draw_idle()
+
+    def _draw_cross_as_interaction_summary(
+        self,
+        tables: dict[str, pd.DataFrame],
+        pair_name: str | None,
+        abs_cutoff: float,
+        delta_cutoff: float,
+        min_reads: int,
+    ) -> None:
+        self._scatter_collection = None
+        self._scatter_frame = pd.DataFrame()
+        self._pie_patches = []
+        self._heatmap_image = None
+        self._heatmap_rows = []
+        self._heatmap_cols = []
+        self._heatmap_values = None
+        self._bar_patches = []
+        self.figure.clear()
+        axis = self.figure.add_subplot(111)
+        self._set_axis_title(axis, f"5.4.4 AS interaction modeling: {pair_name or 'selected pair'}")
+        counts = {
+            "Shared tested": len(tables.get("shared_interaction", pd.DataFrame())),
+            "Opposite direction": len(tables.get("opposite_direction", pd.DataFrame())),
+            "Same dir + large delta": len(tables.get("large_delta", pd.DataFrame())),
+            "Exclusive support": len(tables.get("exclusive", pd.DataFrame())),
+        }
+        if not any(counts.values()):
+            axis.axis("off")
+            axis.text(0.5, 0.5, "No events found", ha="center", va="center")
+            self.canvas.draw_idle()
+            return
+        bars = axis.bar(
+            list(counts.keys()),
+            list(counts.values()),
+            color=["#0F766E", "#7C3AED", "#2563EB", "#D97706"],
+        )
+        axis.set_ylabel("Events")
+        self._bar_patches = [
+            (
+                patch,
+                f"{label}\nEvents: {value}\nabs(dPSI): {abs_cutoff:.3f}\nlarge delta: {delta_cutoff:.3f}\nmin reads: {min_reads}",
+            )
+            for patch, (label, value) in zip(bars, counts.items(), strict=False)
+        ]
+        self._finalize_axes_layout(rotate_x=True, bottom=0.28)
+        self.canvas.draw_idle()
+
+    def _draw_cross_as_interaction_batch_summary(
+        self,
+        tables: dict[str, pd.DataFrame],
+        abs_cutoff: float,
+        delta_cutoff: float,
+        min_reads: int,
+    ) -> None:
+        self._scatter_collection = None
+        self._scatter_frame = pd.DataFrame()
+        self._pie_patches = []
+        self._heatmap_image = None
+        self._heatmap_rows = []
+        self._heatmap_cols = []
+        self._heatmap_values = None
+        self._bar_patches = []
+        self.figure.clear()
+        axis = self.figure.add_subplot(111)
+        self._set_axis_title(axis, "5.4.4 all-pair AS interaction batch summary")
+        summary = tables.get("batch_summary", pd.DataFrame()).copy()
+        if summary.empty:
+            axis.axis("off")
+            axis.text(0.5, 0.5, "No all-pair summary available", ha="center", va="center")
+            self.canvas.draw_idle()
+            return
+        labels = summary.get("pair_name", pd.Series(dtype="object")).fillna(summary.get("pair_id", "")).astype(str).tolist()
+        x = np.arange(len(summary))
+        width = 0.22
+        high = pd.to_numeric(summary.get("n_high_confidence_interaction"), errors="coerce").fillna(0).to_numpy()
+        opposite = pd.to_numeric(summary.get("n_opposite_direction"), errors="coerce").fillna(0).to_numpy()
+        exclusive_supported = pd.to_numeric(summary.get("n_exclusive_supported"), errors="coerce").fillna(0).to_numpy()
+        bars_high = axis.bar(x - width, high, width, label="High-confidence interaction", color="#0F766E")
+        bars_opposite = axis.bar(x, opposite, width, label="Opposite direction", color="#7C3AED")
+        bars_exclusive = axis.bar(x + width, exclusive_supported, width, label="Supported exclusive", color="#D97706")
+        axis.set_ylabel("Events")
+        axis.set_xticks(x)
+        axis.set_xticklabels(labels)
+        axis.legend(loc="upper right", frameon=False)
+        self._bar_patches = []
+        for patches, metric, values in (
+            (bars_high, "High-confidence interaction", high),
+            (bars_opposite, "Opposite direction", opposite),
+            (bars_exclusive, "Supported exclusive", exclusive_supported),
+        ):
+            self._bar_patches.extend(
+                (
+                    patch,
+                    f"{label}\n{metric}: {int(value)}\nabs(dPSI): {abs_cutoff:.3f}\nlarge delta: {delta_cutoff:.3f}\nmin reads: {min_reads}",
+                )
+                for patch, label, value in zip(patches, labels, values, strict=False)
+            )
+        self._finalize_axes_layout(rotate_x=True, bottom=0.32)
         self.canvas.draw_idle()
 
     def _render_tx_splicing_branch(self) -> None:
@@ -1832,13 +2373,13 @@ class ResultsPage(QWidget):
             deg_series = frame.get("DEG_significant")
         if deg_series is None:
             deg_series = pd.Series(False, index=frame.index)
-        frame["deg_sig"] = deg_series.fillna(False).astype(bool)
+        frame["deg_sig"] = deg_series.map(self._safe_bool)
         splicing_series = frame.get("splicing_sig")
         if splicing_series is None:
             splicing_series = frame.get("rMATS_significant")
         if splicing_series is None:
             splicing_series = pd.Series(False, index=frame.index)
-        frame["splicing_sig"] = splicing_series.fillna(False).astype(bool)
+        frame["splicing_sig"] = splicing_series.map(self._safe_bool)
         frame = frame.dropna(subset=["standardized_log2FC", "standardized_dPSI"]).reset_index(drop=True)
         if frame.empty:
             return frame
@@ -1846,9 +2387,42 @@ class ResultsPage(QWidget):
         return frame.loc[frame["plot_class"].astype(str) != "Not significant"].copy()
 
     @staticmethod
+    def _safe_bool(value) -> bool:
+        if value is None:
+            return False
+        try:
+            if pd.isna(value):
+                return False
+        except (TypeError, ValueError):
+            pass
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "y", "t"}
+        return bool(value)
+
+    @staticmethod
+    def _safe_text(value, default: str = "") -> str:
+        if value is None:
+            return default
+        try:
+            if pd.isna(value):
+                return default
+        except (TypeError, ValueError):
+            pass
+        text = str(value).strip()
+        return text if text else default
+
+    @classmethod
+    def _first_text(cls, *values: object, default: str = "") -> str:
+        for value in values:
+            text = cls._safe_text(value)
+            if text:
+                return text
+        return default
+
+    @staticmethod
     def _integration_plot_class(row: pd.Series) -> str:
-        deg_sig = bool(row.get("deg_sig"))
-        splicing_sig = bool(row.get("splicing_sig"))
+        deg_sig = ResultsPage._safe_bool(row.get("deg_sig"))
+        splicing_sig = ResultsPage._safe_bool(row.get("splicing_sig"))
         agreement = str(row.get("agreement_class", ""))
         if deg_sig and splicing_sig:
             return "DEG + DAS same direction" if agreement == "concordant" else "DEG + DAS opposite direction"
@@ -2378,6 +2952,9 @@ class ResultsPage(QWidget):
         comparison_expression = payload.get("comparison_expression")
         if not isinstance(comparison_expression, pd.DataFrame):
             comparison_expression = pd.DataFrame()
+        comparison_dpsi = payload.get("comparison_dpsi")
+        if not isinstance(comparison_dpsi, pd.DataFrame):
+            comparison_dpsi = pd.DataFrame()
         candidate_row = payload.get("candidate_row", {})
         if not isinstance(candidate_row, dict):
             candidate_row = {}
@@ -2390,8 +2967,8 @@ class ResultsPage(QWidget):
         comparison_context = payload.get("comparison_context", {})
         if not isinstance(comparison_context, dict):
             comparison_context = {}
-        gene_symbol = str(payload.get("gene_symbol") or candidate_row.get("gene_symbol") or dominant_event.get("gene_symbol") or "")
-        gene_id = str(payload.get("gene_id") or candidate_row.get("gene_id") or dominant_event.get("gene_id") or "")
+        gene_symbol = self._first_text(payload.get("gene_symbol"), candidate_row.get("gene_symbol"), dominant_event.get("gene_symbol"))
+        gene_id = self._first_text(payload.get("gene_id"), candidate_row.get("gene_id"), dominant_event.get("gene_id"))
         if not gene_symbol and not gene_id:
             axis = self.figure.add_subplot(111)
             self._set_axis_title(axis, title)
@@ -2402,11 +2979,11 @@ class ResultsPage(QWidget):
             self.details.setPlainText("No gene-centered candidate card is available yet. Load candidate selection first, then choose a gene.")
             self.canvas.draw_idle()
             return
-        comparison_name = str(comparison_context.get("display_name") or meta.get("comparison_id") or "")
-        dominant_rule = str(payload.get("dominant_rule") or "Dominant event rule unavailable.")
+        comparison_name = self._first_text(comparison_context.get("display_name"), meta.get("comparison_id"))
+        dominant_rule = self._safe_text(payload.get("dominant_rule"), "Dominant event rule unavailable.")
         self.card_open_sashimi_button.setEnabled(not event_frame.empty)
-        as_direction_short = str(comparison_context.get("rmats_canonical_direction") or "NA").replace("rMATS canonical direction: ", "")
-        deg_direction_short = str(comparison_context.get("deg_final_direction") or "NA").replace("DEG selected/final direction: ", "")
+        as_direction_short = self._safe_text(comparison_context.get("rmats_canonical_direction"), "NA").replace("rMATS canonical direction: ", "")
+        deg_direction_short = self._safe_text(comparison_context.get("deg_final_direction"), "NA").replace("DEG selected/final direction: ", "")
 
         def _float(value: object) -> float | None:
             series = pd.to_numeric(pd.Series([value]), errors="coerce")
@@ -2423,238 +3000,235 @@ class ResultsPage(QWidget):
             return f"{number:+.{digits}f}" if number is not None else "NA"
 
         def _fmt_bool(value: object) -> str:
-            if pd.isna(value):
-                return "no"
-            return "yes" if bool(value) else "no"
+            return "yes" if self._safe_bool(value) else "no"
 
         def _short_text(value: object, limit: int = 42) -> str:
-            text = str(value or "")
+            text = self._safe_text(value)
             return text if len(text) <= limit else f"{text[: limit - 3]}..."
 
         def _short_event_label(row: pd.Series) -> str:
-            event_type = str(row.get("event_type", "") or "")
-            event_id = str(row.get("event_id", "") or "")
+            event_type = self._safe_text(row.get("event_type", ""))
+            event_id = self._safe_text(row.get("event_id", ""))
             if len(event_id) > 32:
                 event_id = f"{event_id[:29]}..."
             return f"{event_type} | {event_id}" if event_type or event_id else "event"
 
         event_display_frame = event_frame.loc[event_frame["significant_event"].fillna(False)].copy() if "significant_event" in event_frame.columns else event_frame.copy()
-        summary_axis, events_axis, expression_axis = self.figure.subplots(
+        expression_axis, dpsi_axis = self.figure.subplots(
             1,
-            3,
-            gridspec_kw={"width_ratios": [1.28, 1.72, 1.28], "wspace": 0.72},
+            2,
+            gridspec_kw={"width_ratios": [1.08, 1.0], "wspace": 0.26},
         )
-        self.figure.suptitle(f"{title}: {gene_symbol or gene_id}", fontsize=15, fontweight="bold", y=0.96)
+        self.figure.suptitle(f"Gene card: {gene_symbol or gene_id}", fontsize=16, fontweight="bold", y=0.96)
+        self._bar_patches = []
 
-        # Left panel: gene-centered summary card.
-        summary_axis.axis("off")
-        summary_axis.add_patch(
-            Rectangle(
-                (0.02, 0.02),
-                0.96,
-                0.96,
-                transform=summary_axis.transAxes,
-                facecolor="#23262F",
-                edgecolor="#4B5563",
-                linewidth=1.2,
-            )
-        )
-        summary_axis.text(0.06, 0.95, gene_symbol or gene_id or "gene", transform=summary_axis.transAxes, ha="left", va="top", fontsize=16, fontweight="bold", color="#F9FAFB")
-        summary_axis.text(0.06, 0.89, gene_id or "gene_id unavailable", transform=summary_axis.transAxes, ha="left", va="top", fontsize=10, color="#D1D5DB")
-        summary_axis.text(0.06, 0.83, comparison_name, transform=summary_axis.transAxes, ha="left", va="top", fontsize=10.5, color="#F9FAFB")
+        def _plot_label(*parts: object, limit: int = 18) -> str:
+            cleaned = []
+            for part in parts:
+                text = str(part or "").strip()
+                if not text:
+                    continue
+                cleaned.append(text if len(text) <= limit else f"{text[: limit - 3]}...")
+            return "\n".join(cleaned) if cleaned else "NA"
 
-        summary_lines = [
-            f"AS canonical: {as_direction_short}",
-            f"DEG final: {deg_direction_short}",
-            f"Candidate tier: {candidate_row.get('candidate_tier', 'NA')}",
-            f"Evidence class: {candidate_row.get('evidence_class', 'NA')}",
-            f"Direction class: {candidate_row.get('direction_class', 'NA')}",
-            f"Significant AS events: {candidate_row.get('n_rMATS_significant_events', 'NA')}",
-            f"AS types: {candidate_row.get('significant_as_event_types', 'NA')}",
-            f"AS events: {_short_text(candidate_row.get('significant_as_event_list', 'NA'), limit=72)}",
-            "",
-            f"DEG significant: {_fmt_bool(candidate_row.get('DEG_significant', deg_row.get('DEG_significant')))}",
-            f"DE_FDR: {_fmt_num(candidate_row.get('DE_FDR', deg_row.get('DE_FDR')))}",
-            f"standardized log2FC: {_fmt_signed(candidate_row.get('standardized_log2FC', deg_row.get('standardized_log2FC')))}",
-            "",
-        ]
-        if dominant_event:
-            summary_lines.extend(
-                [
-                    f"Dominant event: {dominant_event.get('event_type', 'NA')} | {_short_text(dominant_event.get('event_id', 'NA'))}",
-                    f"rMATS FDR: {_fmt_num(dominant_event.get('FDR'))}",
-                    f"standardized dPSI: {_fmt_signed(dominant_event.get('dPSI'))}",
-                    f"PSI ({dominant_event.get('psi_experiment_group', 'experiment')}): {_fmt_num(dominant_event.get('psi_experiment'))}",
-                    f"PSI ({dominant_event.get('psi_control_group', 'control')}): {_fmt_num(dominant_event.get('psi_control'))}",
-                    f"Inclusion direction: {dominant_event.get('inclusion_direction', 'NA')}",
-                ]
-            )
-        else:
-            summary_lines.extend(
-                [
-                    "Dominant event: no AS event available for this gene in the current comparison.",
-                    "rMATS FDR: NA",
-                    "standardized dPSI: NA",
-                    "PSI: NA",
-                    "Inclusion direction: NA",
-                ]
-            )
-        summary_axis.text(
-            0.06,
-            0.79,
-            "\n".join(str(line) for line in summary_lines),
-            transform=summary_axis.transAxes,
-            ha="left",
-            va="top",
-            fontsize=8.7,
-            color="#E5E7EB",
-            linespacing=1.32,
-            wrap=True,
-        )
-        summary_axis.text(
-            0.06,
-            0.08,
-            dominant_rule,
-            transform=summary_axis.transAxes,
-            ha="left",
-            va="bottom",
-            fontsize=9,
-            color="#A7F3D0",
-            wrap=True,
-        )
-
-        # Middle panel: full event list for this gene/current comparison.
-        if event_display_frame.empty:
-            events_axis.axis("off")
-            events_axis.text(0.5, 0.5, "No significant AS events found for this gene in the current comparison.", ha="center", va="center", transform=events_axis.transAxes)
-        else:
-            event_plot = event_display_frame.copy()
-            event_plot["plot_label"] = event_plot.apply(_short_event_label, axis=1)
-            y_positions = list(range(len(event_plot)))[::-1]
-            colors = ["#10B981" if (_float(value) or 0.0) >= 0 else "#8B5CF6" for value in event_plot["dPSI"]]
-            edge_colors = ["#F9FAFB" if bool(value) else "#374151" for value in event_plot["is_dominant"].fillna(False)]
-            line_widths = [1.6 if bool(value) else 0.8 for value in event_plot["is_dominant"].fillna(False)]
-            bars = events_axis.barh(
-                y_positions,
-                pd.to_numeric(event_plot["dPSI"], errors="coerce").fillna(0.0).tolist(),
-                color=colors,
-                edgecolor=edge_colors,
-                linewidth=line_widths,
-                alpha=0.9,
-            )
-            self._bar_patches = []
-            for patch, (_, row) in zip(bars, event_plot.iterrows(), strict=False):
-                psi_text = f"PSI {row.get('psi_experiment_group', 'exp')}={_fmt_num(row.get('psi_experiment'))}, {row.get('psi_control_group', 'ctrl')}={_fmt_num(row.get('psi_control'))}"
-                tooltip = (
-                    f"{row.get('event_type', '')} | {row.get('event_id', '')}\n"
-                    f"dPSI: {_fmt_signed(row.get('dPSI'))}\n"
-                    f"FDR: {_fmt_num(row.get('FDR'))}\n"
-                    f"{psi_text}\n"
-                    f"{row.get('inclusion_direction', '')}"
-                )
-                self._bar_patches.append((patch, tooltip))
-            events_axis.axvline(0, color="#6B7280", linewidth=1)
-            events_axis.set_yticks(y_positions)
-            events_axis.set_yticklabels(event_plot["plot_label"].tolist(), fontsize=8.6)
-            for tick_label in events_axis.get_yticklabels():
-                tick_label.set_horizontalalignment("left")
-            events_axis.tick_params(axis="y", pad=2)
-            events_axis.set_xlabel("standardized dPSI", fontweight="bold")
-            self._set_axis_title(events_axis, "AS event list")
-            max_abs_dpsi = max(float(pd.to_numeric(event_plot["dPSI"], errors="coerce").abs().max()), 0.10)
-            events_axis.set_xlim(-max_abs_dpsi * 1.30, max_abs_dpsi * 1.50)
-            for y, (_, row) in zip(y_positions, event_plot.iterrows(), strict=False):
-                text_x = (_float(row.get("dPSI")) or 0.0) + (0.03 * max_abs_dpsi if (_float(row.get("dPSI")) or 0.0) >= 0 else -0.03 * max_abs_dpsi)
-                ha = "left" if (_float(row.get("dPSI")) or 0.0) >= 0 else "right"
-                events_axis.text(
-                    text_x,
-                    y,
-                    f"FDR {_fmt_num(row.get('FDR'))}\nPSI {_fmt_num(row.get('psi_experiment'))}/{_fmt_num(row.get('psi_control'))}",
-                    va="center",
-                    ha=ha,
-                    fontsize=7.6,
-                )
-
-        # Right panel: transcriptome / DEG expression support.
+        # Left panel: expression bars for the selected gene in each experiment/control group.
         expr_frame = comparison_expression.copy()
-        if not expr_frame.empty and {"comparison_display_name", "comparison_mean_expr"}.issubset(expr_frame.columns):
+        if not expr_frame.empty and {"comparison_display_name", "group", "expr"}.issubset(expr_frame.columns):
             expr_plot = expr_frame.copy()
-            expr_plot["comparison_mean_expr"] = pd.to_numeric(expr_plot["comparison_mean_expr"], errors="coerce")
-            expr_plot = expr_plot.dropna(subset=["comparison_display_name", "comparison_mean_expr"]).copy()
-            if expr_plot.empty:
+            expr_plot["expr"] = pd.to_numeric(expr_plot["expr"], errors="coerce")
+            expr_plot = expr_plot.dropna(subset=["expr"]).reset_index(drop=True)
+            expr_plot["group_key"] = expr_plot["group"].fillna("").astype(str).str.strip()
+            expr_plot["_current_priority"] = expr_plot.get("current_comparison", pd.Series(False, index=expr_plot.index)).map(lambda value: 0 if self._safe_bool(value) else 1)
+            expr_plot = (
+                expr_plot.sort_values(["group_key", "_current_priority", "comparison_display_name"], ascending=[True, True, True], na_position="last")
+                .drop_duplicates(subset=["group_key"], keep="first")
+                .drop(columns=["_current_priority"], errors="ignore")
+                .reset_index(drop=True)
+            )
+        else:
+            expr_plot = pd.DataFrame()
+        if expr_plot.empty:
+            base_mean = _float(deg_row.get("baseMean"))
+            if base_mean is None:
                 expression_axis.axis("off")
-            else:
-                bar_labels = expr_plot["comparison_display_name"].astype(str).tolist()
-                bar_colors = [
-                    "#F59E0B" if bool(value) else "#577590"
-                    for value in expr_plot.get("current_comparison", pd.Series(False, index=expr_plot.index)).tolist()
-                ]
-                expression_axis.bar(
-                    bar_labels,
-                    expr_plot["comparison_mean_expr"].tolist(),
-                    color=bar_colors,
-                    alpha=0.88,
+                expression_axis.text(
+                    0.5,
+                    0.5,
+                    "No transcriptome expression values were found for this gene.",
+                    ha="center",
+                    va="center",
+                    transform=expression_axis.transAxes,
+                    wrap=True,
                 )
-                expression_axis.tick_params(axis="x", rotation=28)
+            else:
+                bars = expression_axis.bar(["DEG baseMean"], [base_mean], color="#64748B", alpha=0.90)
+                self._bar_patches.extend([(bars[0], f"DEG baseMean\nExpression: {_fmt_num(base_mean, digits=2)}")])
                 expression_axis.set_ylabel("Expression", fontweight="bold")
-                self._set_axis_title(expression_axis, "Transcriptome / DEG expression across comparisons")
-                deg_sig = _fmt_bool(candidate_row.get("DEG_significant", deg_row.get("DEG_significant")))
-                sample_notes = [
-                    f"{row.get('comparison_display_name')}: {row.get('groups_note')}"
-                    for _, row in expr_plot.iterrows()
-                ]
+                expression_axis.tick_params(axis="x", rotation=18)
+                self._set_axis_title(expression_axis, "Expression")
                 expression_axis.text(
                     0.02,
-                    0.98,
-                    "\n".join(
-                        [
-                            "Mean normalized expression per comparison.",
-                            "Current comparison is highlighted in orange.",
-                            *sample_notes,
-                            "",
-                            f"DEG significant: {deg_sig}",
-                            f"DE_FDR: {_fmt_num(candidate_row.get('DE_FDR', deg_row.get('DE_FDR')))}",
-                            f"standardized log2FC: {_fmt_signed(candidate_row.get('standardized_log2FC', deg_row.get('standardized_log2FC')))}",
-                            f"baseMean: {_fmt_num(deg_row.get('baseMean'), digits=2)}",
-                        ]
-                    ),
+                    0.96,
+                    "Group means unavailable; showing DEG baseMean fallback.",
                     transform=expression_axis.transAxes,
                     ha="left",
                     va="top",
-                    fontsize=8.3,
-                    bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "#CBD5E1", "alpha": 0.88},
+                    fontsize=8.5,
+                    color="#475569",
                 )
         else:
-            expression_axis.clear()
-            self._set_axis_title(expression_axis, "Transcriptome / DEG expression")
-            base_mean = _float(deg_row.get("baseMean"))
-            if base_mean is not None:
-                expression_axis.bar(["DEG baseMean"], [base_mean], color="#577590", alpha=0.82)
-                expression_axis.set_ylabel("Expression", fontweight="bold")
-                expression_axis.tick_params(axis="x", rotation=18)
-            else:
-                expression_axis.axis("off")
-            expression_axis.text(
-                0.02,
-                0.98,
-                "\n".join(
-                        [
-                            "No comparison-level expression means could be recovered from the counts file.",
-                            "Showing DEG expression summary only.",
-                        "",
-                        f"DEG significant: {_fmt_bool(candidate_row.get('DEG_significant', deg_row.get('DEG_significant')))}",
-                        f"DE_FDR: {_fmt_num(candidate_row.get('DE_FDR', deg_row.get('DE_FDR')))}",
-                        f"standardized log2FC: {_fmt_signed(candidate_row.get('standardized_log2FC', deg_row.get('standardized_log2FC')))}",
-                        f"baseMean: {_fmt_num(deg_row.get('baseMean'), digits=2)}",
-                    ]
-                ),
-                transform=expression_axis.transAxes,
-                ha="left",
-                va="top",
-                fontsize=8.5,
-                bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "#CBD5E1", "alpha": 0.92},
-                wrap=True,
+            x_values = np.arange(len(expr_plot))
+            expr_plot["plot_label"] = expr_plot.apply(
+                lambda row: _plot_label(row.get("group"), limit=16),
+                axis=1,
             )
+            role_colors = {"experiment": "#2563EB", "control": "#94A3B8"}
+            bar_colors = [role_colors.get(str(role).lower(), "#64748B") for role in expr_plot.get("group_role", pd.Series("", index=expr_plot.index))]
+            edge_colors = ["#F59E0B" if bool(value) else "#E2E8F0" for value in expr_plot.get("current_comparison", pd.Series(False, index=expr_plot.index))]
+            line_widths = [2.2 if bool(value) else 0.7 for value in expr_plot.get("current_comparison", pd.Series(False, index=expr_plot.index))]
+            bars = expression_axis.bar(
+                x_values,
+                expr_plot["expr"].tolist(),
+                color=bar_colors,
+                edgecolor=edge_colors,
+                linewidth=line_widths,
+                alpha=0.92,
+            )
+            expression_axis.set_xticks(x_values)
+            expression_axis.set_xticklabels(expr_plot["plot_label"].tolist(), rotation=35, ha="right", fontsize=8.5)
+            expression_axis.set_ylabel("Mean expression", fontweight="bold")
+            self._set_axis_title(expression_axis, "Gene expression across included conditions")
+            expression_axis.legend(
+                handles=[
+                    Patch(facecolor="#2563EB", label="experiment/final DEG side"),
+                    Patch(facecolor="#94A3B8", label="control/reference side"),
+                    Patch(facecolor="white", edgecolor="#F59E0B", label="current comparison"),
+                ],
+                loc="upper right",
+                fontsize=8,
+                frameon=False,
+            )
+            max_expr = max(float(expr_plot["expr"].max()), 1.0)
+            expression_axis.set_ylim(0, max_expr * 1.20)
+            for patch, (_, row) in zip(bars, expr_plot.iterrows(), strict=False):
+                value = _float(row.get("expr"))
+                expression_axis.text(
+                    patch.get_x() + patch.get_width() / 2,
+                    patch.get_height() + max_expr * 0.02,
+                    _fmt_num(value, digits=1),
+                    ha="center",
+                    va="bottom",
+                    fontsize=7.8,
+                    rotation=0,
+                )
+                self._bar_patches.append(
+                    (
+                        patch,
+                        "\n".join(
+                            [
+                                str(row.get("comparison_display_name", "")),
+                                f"group: {row.get('group', '')}",
+                                f"mean expression: {_fmt_num(value, digits=3)}",
+                                f"samples: {row.get('sample_count', 'NA')}",
+                            ]
+                        ),
+                    )
+                )
+
+        # Right panel: dominant significant AS dPSI per comparison.
+        dpsi_plot = comparison_dpsi.copy()
+        if not dpsi_plot.empty and {"comparison_display_name", "dominant_dPSI"}.issubset(dpsi_plot.columns):
+            dpsi_plot["dominant_dPSI"] = pd.to_numeric(dpsi_plot["dominant_dPSI"], errors="coerce")
+            dpsi_plot["dominant_FDR"] = pd.to_numeric(dpsi_plot.get("dominant_FDR"), errors="coerce")
+            dpsi_plot = dpsi_plot.reset_index(drop=True)
+        else:
+            dpsi_plot = pd.DataFrame()
+        if dpsi_plot.empty:
+            dpsi_axis.axis("off")
+            dpsi_axis.text(0.5, 0.5, "No significant AS dPSI summary is available for this gene.", ha="center", va="center", transform=dpsi_axis.transAxes, wrap=True)
+        else:
+            x_values = np.arange(len(dpsi_plot))
+            dpsi_values = dpsi_plot["dominant_dPSI"].fillna(0.0).tolist()
+            has_event = dpsi_plot["dominant_dPSI"].notna()
+            dpsi_colors = [
+                "#0F766E" if pd.notna(value) and float(value) >= 0 else "#B91C1C" if pd.notna(value) else "#CBD5E1"
+                for value in dpsi_plot["dominant_dPSI"].tolist()
+            ]
+            edge_colors = ["#F59E0B" if bool(value) else "#E2E8F0" for value in dpsi_plot.get("current_comparison", pd.Series(False, index=dpsi_plot.index))]
+            line_widths = [2.2 if bool(value) else 0.7 for value in dpsi_plot.get("current_comparison", pd.Series(False, index=dpsi_plot.index))]
+            bars = dpsi_axis.bar(
+                x_values,
+                dpsi_values,
+                color=dpsi_colors,
+                edgecolor=edge_colors,
+                linewidth=line_widths,
+                alpha=0.92,
+            )
+            dpsi_axis.axhline(0, color="#475569", linewidth=1)
+            dpsi_axis.set_xticks(x_values)
+            dpsi_axis.set_xticklabels(
+                [
+                    _plot_label(row.get("comparison_display_name"), row.get("dominant_event_type") or "no sig AS", limit=18)
+                    for _, row in dpsi_plot.iterrows()
+                ],
+                rotation=35,
+                ha="right",
+                fontsize=8.5,
+            )
+            dpsi_axis.set_ylabel("standardized dPSI", fontweight="bold")
+            self._set_axis_title(dpsi_axis, "Dominant significant AS dPSI")
+            finite_abs = pd.to_numeric(dpsi_plot["dominant_dPSI"], errors="coerce").abs().dropna()
+            max_abs = max(float(finite_abs.max()) if not finite_abs.empty else 0.10, 0.10)
+            dpsi_axis.set_ylim(-max_abs * 1.35, max_abs * 1.35)
+            dpsi_axis.legend(
+                handles=[
+                    Patch(facecolor="#0F766E", label="positive dPSI"),
+                    Patch(facecolor="#B91C1C", label="negative dPSI"),
+                    Patch(facecolor="#CBD5E1", label="no significant AS"),
+                ],
+                loc="upper right",
+                fontsize=8,
+                frameon=False,
+            )
+            for patch, (_, row), event_exists in zip(bars, dpsi_plot.iterrows(), has_event.tolist(), strict=False):
+                value = _float(row.get("dominant_dPSI"))
+                label = _fmt_signed(value) if event_exists else "no sig"
+                y_offset = max_abs * 0.06
+                y_text = (value or 0.0) + (y_offset if (value or 0.0) >= 0 else -y_offset)
+                dpsi_axis.text(
+                    patch.get_x() + patch.get_width() / 2,
+                    y_text,
+                    label,
+                    ha="center",
+                    va="bottom" if (value or 0.0) >= 0 else "top",
+                    fontsize=8,
+                    fontweight="bold" if event_exists else "normal",
+                )
+                if event_exists:
+                    dpsi_axis.text(
+                        patch.get_x() + patch.get_width() / 2,
+                        -max_abs * 1.20,
+                        f"n={row.get('n_significant_as_events', 0)}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=7.8,
+                        color="#475569",
+                    )
+                self._bar_patches.append(
+                    (
+                        patch,
+                        "\n".join(
+                            [
+                                str(row.get("comparison_display_name", "")),
+                                f"dominant dPSI: {_fmt_signed(value)}",
+                                f"FDR: {_fmt_num(row.get('dominant_FDR'))}",
+                                f"event: {row.get('dominant_event_type', '')} | {row.get('dominant_event_id', '')}",
+                                f"significant AS events: {row.get('n_significant_as_events', 0)}",
+                                str(row.get("dominant_inclusion_direction", "")),
+                            ]
+                        ),
+                    )
+                )
 
         preview = event_display_frame[
             [
@@ -2692,12 +3266,17 @@ class ResultsPage(QWidget):
             list(preview.columns),
             preview_name="Gene-centered AS event list",
         )
-        self._finalize_axes_layout(left=0.06, right=0.98, top=0.84, bottom=0.10)
+        self._finalize_axes_layout(left=0.06, right=0.99, top=0.86, bottom=0.28)
         self.details.setPlainText(
             f"Gene-centered candidate card for {gene_symbol or gene_id} in {comparison_name}.\n"
             f"Gene selection rule: {meta.get('selection_rule', '')}\n"
             f"Dominant event rule: {dominant_rule}\n"
-            "The current comparison tab shows one gene card. The event table below lists only significant AS events for this gene in the current comparison.\n"
+            f"AS canonical direction: {as_direction_short}\n"
+            f"DEG final direction: {deg_direction_short}\n"
+            f"Candidate tier: {candidate_row.get('candidate_tier', 'NA')} | evidence: {candidate_row.get('evidence_class', 'NA')} | direction class: {candidate_row.get('direction_class', 'NA')}\n"
+            f"DEG: significant={_fmt_bool(candidate_row.get('DEG_significant', deg_row.get('DEG_significant')))}, DE_FDR={_fmt_num(candidate_row.get('DE_FDR', deg_row.get('DE_FDR')))}, standardized_log2FC={_fmt_signed(candidate_row.get('standardized_log2FC', deg_row.get('standardized_log2FC')))}, baseMean={_fmt_num(deg_row.get('baseMean'), digits=2)}\n"
+            "Left plot: unique included experiment/condition mean expression values, deduplicated by condition name. Right plot: dominant significant AS-event dPSI across selected comparisons.\n"
+            "The table below lists only significant AS events for the current comparison, so multi-event genes are visible instead of hidden behind one selected event.\n"
             "Select a specific event row and click 'Open selected event in Sashimi' to jump to Sashimi without auto-running it."
         )
         self.canvas.draw_idle()
@@ -2926,6 +3505,11 @@ class ResultsPage(QWidget):
     def _set_explanation(self, text: str) -> None:
         self.explanation.setText(text)
 
+    def _set_detail_text(self, text: str, inline_summary: str | None = None) -> None:
+        cleaned = str(text or "").strip()
+        self._detail_dialog_text = cleaned
+        self.details.setPlainText(inline_summary or ("Open Detail for full definitions and interpretation." if cleaned else ""))
+
     def _sync_footer_info(self) -> None:
         blocks: list[str] = []
         context = self.context_header.text().strip()
@@ -2937,7 +3521,17 @@ class ResultsPage(QWidget):
         self.footer_info.setPlainText("\n\n".join(blocks))
 
     def _show_detail_dialog(self) -> None:
-        text = self.footer_info.toPlainText().strip()
+        blocks = []
+        footer_text = self.footer_info.toPlainText().strip()
+        detail_text = self._detail_dialog_text.strip()
+        inline_text = self.details.toPlainText().strip()
+        if footer_text:
+            blocks.append(footer_text)
+        if detail_text:
+            blocks.append(detail_text)
+        elif inline_text and inline_text != footer_text:
+            blocks.append(inline_text)
+        text = "\n\n".join(blocks).strip()
         if not text:
             return
         dialog = QDialog(self)
@@ -2954,6 +3548,28 @@ class ResultsPage(QWidget):
         layout.addWidget(close_button)
         QTimer.singleShot(0, dialog.showMaximized)
         dialog.exec()
+
+    @staticmethod
+    def _table_item_for_value(frame: pd.DataFrame, column: str, value: object) -> QTableWidgetItem:
+        item = QTableWidgetItem()
+        if pd.isna(value):
+            item.setText("")
+        elif column in frame.columns and pd.api.types.is_bool_dtype(frame[column]):
+            item.setData(Qt.ItemDataRole.EditRole, bool(value))
+        elif column in frame.columns and pd.api.types.is_numeric_dtype(frame[column]):
+            numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+            if pd.notna(numeric):
+                item.setData(Qt.ItemDataRole.EditRole, float(numeric) if not float(numeric).is_integer() else int(numeric))
+            else:
+                item.setText(str(value))
+        else:
+            numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+            if pd.notna(numeric) and str(value).strip() not in {"", "nan", "None"}:
+                item.setData(Qt.ItemDataRole.EditRole, float(numeric) if not float(numeric).is_integer() else int(numeric))
+            else:
+                item.setText(str(value))
+        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        return item
 
     def _show_preview_dialog(self) -> None:
         frame = self._preview_filtered_frame.copy() if not self._preview_filtered_frame.empty else self._preview_source_frame.copy()
@@ -3019,9 +3635,7 @@ class ResultsPage(QWidget):
             table.setRowCount(len(display))
             for row_idx, (_, row) in enumerate(display.iterrows()):
                 for col_idx, column in enumerate(display.columns):
-                    item = QTableWidgetItem("" if pd.isna(row[column]) else str(row[column]))
-                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                    table.setItem(row_idx, col_idx, item)
+                    table.setItem(row_idx, col_idx, self._table_item_for_value(display, column, row[column]))
                 info.setText(
                     f"{self._preview_name}: {len(frame)} filtered row(s)"
                     + (f"; preview limited to first {self._preview_max_rows} rows" if truncated else "")
@@ -3114,9 +3728,7 @@ class ResultsPage(QWidget):
         self.preview_table.setRowCount(len(display))
         for row_idx, (_, row) in enumerate(display.iterrows()):
             for col_idx, column in enumerate(display.columns):
-                item = QTableWidgetItem("" if pd.isna(row[column]) else str(row[column]))
-                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.preview_table.setItem(row_idx, col_idx, item)
+                self.preview_table.setItem(row_idx, col_idx, self._table_item_for_value(display, column, row[column]))
         file_status = "in-memory result"
         if self._preview_file_path is not None:
             file_status = f"file: {self._preview_file_path}"
@@ -3165,6 +3777,138 @@ class ResultsPage(QWidget):
         pair = next((item for item in project.comparison_pairs if item.pair_id == pair_id), None)
         return pair.resolved_name if pair is not None else None
 
+    def _pair_definition_from_id(self, pair_id: str | None):
+        project = self.project_service.current_project
+        if project is None or not pair_id:
+            return None
+        return next((item for item in project.comparison_pairs if item.pair_id == pair_id), None)
+
+    def _pairwise_candidate_matrix(self, matrix: pd.DataFrame | None, pair_id: str | None) -> pd.DataFrame:
+        pair = self._pair_definition_from_id(pair_id)
+        if matrix is None or matrix.empty or pair is None or not pair.comparison_a or not pair.comparison_b:
+            return pd.DataFrame()
+        comp_a = str(pair.comparison_a)
+        comp_b = str(pair.comparison_b)
+        name_a = self._comparison_name_from_id(comp_a) or comp_a
+        name_b = self._comparison_name_from_id(comp_b) or comp_b
+
+        def value(row: pd.Series, prefix: str, comparison_id: str, default=""):
+            column = f"{prefix}_{comparison_id}"
+            if column in row.index:
+                return row.get(column, default)
+            return default
+
+        def truthy(value_obj) -> bool:
+            if value_obj is None:
+                return False
+            try:
+                if pd.isna(value_obj):
+                    return False
+            except (TypeError, ValueError):
+                pass
+            text = str(value_obj).strip().lower()
+            return text in {"1", "true", "yes", "y"} or value_obj is True
+
+        def sign(value_obj) -> int:
+            numeric = pd.to_numeric(value_obj, errors="coerce")
+            if pd.isna(numeric) or float(numeric) == 0:
+                return 0
+            return 1 if float(numeric) > 0 else -1
+
+        rows: list[dict[str, object]] = []
+        for _, row in matrix.iterrows():
+            candidate_a = truthy(value(row, "is_candidate", comp_a, False))
+            candidate_b = truthy(value(row, "is_candidate", comp_b, False))
+            if not (candidate_a or candidate_b):
+                continue
+            direction_a = str(value(row, "direction_class", comp_a, "") or "")
+            direction_b = str(value(row, "direction_class", comp_b, "") or "")
+            tier_a = str(value(row, "tier", comp_a, "") or "")
+            tier_b = str(value(row, "tier", comp_b, "") or "")
+            evidence_a = str(value(row, "evidence_class", comp_a, "") or "")
+            evidence_b = str(value(row, "evidence_class", comp_b, "") or "")
+            dpsi_a = pd.to_numeric(value(row, "dominant_rMATS_standardized_dPSI", comp_a, pd.NA), errors="coerce")
+            dpsi_b = pd.to_numeric(value(row, "dominant_rMATS_standardized_dPSI", comp_b, pd.NA), errors="coerce")
+            logfc_a = pd.to_numeric(value(row, "standardized_log2FC", comp_a, pd.NA), errors="coerce")
+            logfc_b = pd.to_numeric(value(row, "standardized_log2FC", comp_b, pd.NA), errors="coerce")
+            pair_direction_reversed = candidate_a and candidate_b and (
+                (sign(dpsi_a) != 0 and sign(dpsi_b) != 0 and sign(dpsi_a) != sign(dpsi_b))
+                or (sign(logfc_a) != 0 and sign(logfc_b) != 0 and sign(logfc_a) != sign(logfc_b))
+            )
+            tier_changed = candidate_a and candidate_b and tier_a and tier_b and tier_a != tier_b
+            evidence_changed = candidate_a and candidate_b and evidence_a and evidence_b and evidence_a != evidence_b
+            if candidate_a and candidate_b and pair_direction_reversed:
+                pattern = "shared_direction_reversed"
+                reason = "Candidate is present in both comparisons, but standardized DEG or dominant AS direction changes sign between A and B."
+            elif candidate_a and candidate_b and tier_changed:
+                pattern = "shared_tier_changed"
+                reason = "Candidate is present in both comparisons, but candidate tier differs between A and B."
+            elif candidate_a and candidate_b and evidence_changed:
+                pattern = "shared_evidence_class_changed"
+                reason = "Candidate is present in both comparisons, but evidence class differs between A and B."
+            elif candidate_a and candidate_b:
+                pattern = "shared_pair"
+                reason = "Candidate is present in both sides of the selected comparison pair."
+            elif candidate_a:
+                pattern = "comparison_A_specific_lost_in_B"
+                reason = "Candidate is present in comparison A but absent in comparison B for this selected pair."
+            else:
+                pattern = "comparison_B_specific_gained_in_B"
+                reason = "Candidate is absent in comparison A but present in comparison B for this selected pair."
+            pair_membership_count = int(candidate_a) + int(candidate_b)
+            if candidate_a and candidate_b:
+                pair_membership_label = "shared A+B"
+            elif candidate_a:
+                pair_membership_label = "A only"
+            else:
+                pair_membership_label = "B only"
+            rows.append(
+                {
+                    "pair_id": pair.pair_id,
+                    "pair_name": pair.resolved_name,
+                    "comparison_A": comp_a,
+                    "comparison_B": comp_b,
+                    "comparison_A_display_name": name_a,
+                    "comparison_B_display_name": name_b,
+                    "gene_id": row.get("gene_id", ""),
+                    "gene_symbol": row.get("gene_symbol", ""),
+                    "candidate_pattern": pattern,
+                    "pattern_reason": reason,
+                    "candidate_comparisons": ";".join([name for name, present in [(name_a, candidate_a), (name_b, candidate_b)] if present]),
+                    "pair_membership_label": pair_membership_label,
+                    "pair_membership_count": pair_membership_count,
+                    "n_comparisons_candidate": pair_membership_count,
+                    "is_candidate_A": candidate_a,
+                    "is_candidate_B": candidate_b,
+                    "tier_A": tier_a,
+                    "tier_B": tier_b,
+                    "rank_A": value(row, "rank", comp_a, pd.NA),
+                    "rank_B": value(row, "rank", comp_b, pd.NA),
+                    "evidence_class_A": evidence_a,
+                    "evidence_class_B": evidence_b,
+                    "direction_class_A": direction_a,
+                    "direction_class_B": direction_b,
+                    "standardized_log2FC_A": logfc_a,
+                    "standardized_log2FC_B": logfc_b,
+                    "dPSI_A": dpsi_a,
+                    "dPSI_B": dpsi_b,
+                    "DE_FDR_A": value(row, "DE_FDR", comp_a, pd.NA),
+                    "DE_FDR_B": value(row, "DE_FDR", comp_b, pd.NA),
+                    "rMATS_FDR_A": value(row, "best_rMATS_FDR", comp_a, pd.NA),
+                    "rMATS_FDR_B": value(row, "best_rMATS_FDR", comp_b, pd.NA),
+                    "event_type_A": value(row, "dominant_rMATS_event_type", comp_a, ""),
+                    "event_type_B": value(row, "dominant_rMATS_event_type", comp_b, ""),
+                    "pair_direction_reversed": pair_direction_reversed,
+                    "pair_tier_changed": tier_changed,
+                    "pair_evidence_class_changed": evidence_changed,
+                    "best_pair_rank": pd.to_numeric(pd.Series([value(row, "rank", comp_a, pd.NA), value(row, "rank", comp_b, pd.NA)]), errors="coerce").min(),
+                }
+            )
+        if not rows:
+            return pd.DataFrame()
+        result = pd.DataFrame(rows)
+        return result.sort_values(["candidate_pattern", "best_pair_rank", "gene_symbol"], na_position="last").reset_index(drop=True)
+
     def _comparison_name_from_id(self, comparison_id: str | None) -> str | None:
         project = self.project_service.current_project
         if project is None or not comparison_id:
@@ -3189,6 +3933,12 @@ class ResultsPage(QWidget):
     def _cross_pattern_file_map(self, pair_id: str | None) -> dict[str, Path]:
         return self.project_service.cross_comparison_pattern_file_map(pair_id)
 
+    def _cross_interaction_file_map(self, pair_id: str | None) -> dict[str, Path]:
+        return self.project_service.cross_comparison_interaction_file_map(pair_id)
+
+    def _cross_interaction_batch_file_map(self) -> dict[str, Path]:
+        return self.project_service.cross_comparison_interaction_batch_file_map()
+
     def _apply_group_pattern_recalculate(self) -> None:
         pair_id = self._current_tab_key(self.group_tabs)
         self.project_service.preview_cross_comparison_significant_as_patterns(
@@ -3198,6 +3948,28 @@ class ResultsPage(QWidget):
             allow_generate=True,
             force_rebuild=True,
         )
+        self.refresh()
+
+    def _apply_group_interaction_recalculate(self) -> None:
+        pair_id = self._current_tab_key(self.group_tabs)
+        selected_key = str(self.group_interaction_view.currentData() or "shared_interaction")
+        if selected_key.startswith("batch_"):
+            self.project_service.preview_cross_comparison_as_interaction_batch(
+                abs_dpsi_cutoff=float(self.group_interaction_sig_cutoff.value()),
+                large_delta_dpsi_cutoff=float(self.group_interaction_delta_cutoff.value()),
+                min_total_reads=int(self.group_interaction_min_reads.value()),
+                allow_generate=True,
+                force_rebuild=True,
+            )
+        else:
+            self.project_service.preview_cross_comparison_as_interactions(
+                pair_id,
+                abs_dpsi_cutoff=float(self.group_interaction_sig_cutoff.value()),
+                large_delta_dpsi_cutoff=float(self.group_interaction_delta_cutoff.value()),
+                min_total_reads=int(self.group_interaction_min_reads.value()),
+                allow_generate=True,
+                force_rebuild=True,
+            )
         self.refresh()
 
     def _candidate_custom_gene_tokens(self) -> list[str]:

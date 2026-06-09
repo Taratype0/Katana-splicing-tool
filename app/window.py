@@ -31,8 +31,10 @@ from app.pages.cards_page import CardsPage
 from app.pages.blacklist_page import BlacklistPage
 from app.pages.input_check_page import InputCheckPage
 from app.pages.input_paths_dialog import InputPathsDialog
+from app.pages.isoform_page import IsoformPage
 from app.pages.jutils_page import JutilsPage
 from app.pages.project_page import ProjectPage
+from app.pages.rbp_page import RbpPage
 from app.pages.results_page import ResultsPage
 from app.pages.section_navigation_page import SectionNavigationPage
 from app.pages.sashimi_page import SashimiPage
@@ -177,25 +179,22 @@ class MainWindow(QMainWindow):
         )
         self.cross_comparison_page = SectionNavigationPage(
             "Cross-comparison Candidate Comparison",
-            "Compare candidate genes only after per-comparison screening. Use this layer to inspect shared/specific/gained/lost candidates and direction reversal across comparisons.",
+            "Cross-comparison is split by level: 5.4.1/5.4.2 are pairwise gene-level candidate A-vs-B views, 5.4.3 is event-level dPSI pattern follow-up, and 5.4.4 is replicate-aware AS interaction modeling.",
             [
-                ("Candidate Matrix", "Matrix of candidate membership across comparisons.", "5.4.1 Candidate Matrix"),
-                ("Shared / Specific / Gained / Lost", "Pattern summary across candidate sets.", "5.4.2 Shared / Specific / Gained / Lost"),
-                ("Direction Reversal", "Inspect genes whose standardized directions reverse across comparisons.", "5.4.3 Direction Reversal"),
-                ("Group Comparison", "Program-level comparison between selected candidate groups.", "5.4.4 Group Comparison"),
-                ("Direction vs Strength", "Summarize reversal vs effect-size shifts across comparisons.", "5.4.5 Direction vs Strength"),
-                ("Cross-comparison significant AS event dPSI pattern analysis", "Compare shared significant AS events across comparisons using standardized dPSI differences only.", "5.4.6 Cross-comparison significant AS event dPSI pattern analysis"),
+                ("Candidate Matrix", "Pairwise A-vs-B matrix of candidate membership for the selected comparison pair.", "5.4.1 Candidate Matrix"),
+                ("Gene Pattern Explanation", "Pairwise shared / A-specific / B-specific / gained / lost explanation for gene-level candidate patterns.", "5.4.2 Shared / Specific / Gained / Lost"),
+                ("AS dPSI Pattern", "Event-level dPSI pattern follow-up for shared significant AS events.", "5.4.3 Cross-comparison AS dPSI Pattern"),
+                ("Cross-comparison AS interaction modeling", "Replicate-aware AS interaction follow-up for shared significant events, exclusive event support and effect-size patterns.", "5.4.4 Cross-comparison AS interaction modeling"),
             ],
             self._open_named_page,
         )
         self.sashimi_hub_page = SectionNavigationPage(
             "Sashimi",
-            "Sashimi is the candidate-event validation layer after shortlist/blacklist. Start with input checks, then run and review preview or failed jobs.",
+            "Sashimi is the candidate-event validation layer after shortlist/blacklist. Start with input checks, run selected rMATS events, then preview generated PNGs.",
             [
                 ("Input Check", "Confirm candidate events, BAM lists and manifest inputs.", "5.5.1 Input Check"),
                 ("Run Sashimi", "Open the sashimi runner and launch rmats2sashimi.", "5.5.2 Run Sashimi"),
-                ("Sashimi Preview", "Preview shortlisted candidate events before/after running.", "5.5.3 Sashimi Preview"),
-                ("Failed Sashimi Jobs", "Review failed sashimi runs and diagnostics.", "5.5.4 Failed Sashimi Jobs"),
+                ("Sashimi Preview", "Preview generated rMATS event PNGs.", "5.5.3 Sashimi Preview"),
             ],
             self._open_named_page,
         )
@@ -221,6 +220,7 @@ class MainWindow(QMainWindow):
         self.group_comparison_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="comparison")
         self.group_direction_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="direction")
         self.group_pattern_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="pattern")
+        self.group_interaction_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="interaction")
         self.tx_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="tx")
         self.tx_direction_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="tx", fixed_subbranch="direction")
         self.tx_deg_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="tx", fixed_subbranch="deg")
@@ -247,9 +247,10 @@ class MainWindow(QMainWindow):
         self.cards_page = CardsPage(self.project_service)
         self.sashimi_page = SashimiPage(self.project_service, view_mode="run")
         self.sashimi_preview_page = SashimiPage(self.project_service, view_mode="preview")
-        self.sashimi_failed_page = SashimiPage(self.project_service, view_mode="failed")
         self.samples_page = SamplesPage(self.project_service)
         self.input_check_page = InputCheckPage(self.project_service)
+        self.rbp_page = RbpPage(self.project_service)
+        self.isoform_page = IsoformPage(self.project_service)
         self.jutils_heatmap_page = JutilsPage(self.project_service, view_mode="heatmap")
         self.jutils_pca_page = JutilsPage(self.project_service, view_mode="pca")
         self.jutils_page = JutilsPage(self.project_service, view_mode="browser")
@@ -281,22 +282,21 @@ class MainWindow(QMainWindow):
         self._add_page("5.4 Cross-comparison Candidate Comparison", self.cross_comparison_page)
         self._add_page("5.4.1 Candidate Matrix", self.group_matrix_page)
         self._add_page("5.4.2 Shared / Specific / Gained / Lost", self.group_shared_page)
-        self._add_page("5.4.3 Direction Reversal", self.group_reversal_page)
-        self._add_page("5.4.4 Group Comparison", self.group_comparison_page)
-        self._add_page("5.4.5 Direction vs Strength", self.group_direction_page)
-        self._add_page("5.4.6 Cross-comparison significant AS event dPSI pattern analysis", self.group_pattern_page)
+        self._add_page("5.4.3 Cross-comparison AS dPSI Pattern", self.group_pattern_page)
+        self._add_page("5.4.4 Cross-comparison AS interaction modeling", self.group_interaction_page)
         self._add_page("5.5 Sashimi", self.sashimi_hub_page)
         self._add_page("5.5.1 Input Check", self.input_check_page)
         self._add_page("5.5.2 Run Sashimi", self.sashimi_page)
         self._add_page("5.5.3 Sashimi Preview", self.sashimi_preview_page)
-        self._add_page("5.5.4 Failed Sashimi Jobs", self.sashimi_failed_page)
         self._add_page("5.6 Jutils", self.jutils_hub_page)
         self._add_page("5.6.1 Jutils Heatmap", self.jutils_heatmap_page)
         self._add_page("5.6.2 Jutils PCA", self.jutils_pca_page)
         self._add_page("5.6.3 Jutils Output Browser", self.jutils_page)
         self._add_page("6. Samples", self.samples_page)
-        self._add_page("7. Input Check", self.input_check_page)
-        self._add_page("8. Settings", self.settings_page)
+        self._add_page("7. RBP", self.rbp_page)
+        self._add_page("8. Isoform", self.isoform_page)
+        self._add_page("9. Input Check", self.input_check_page)
+        self._add_page("10. Settings", self.settings_page)
         self.nav.setCurrentRow(0)
 
         left_panel = QWidget()
@@ -326,9 +326,13 @@ class MainWindow(QMainWindow):
         self.open_action.clicked.connect(self.open_project)
         toolbar.addWidget(self.open_action)
 
-        self.run_action = QPushButton("Run Selected")
+        self.run_action = QPushButton("Run current page analysis")
         self.run_action.clicked.connect(self.run_analysis)
+        self.run_action.setToolTip(
+            "Hidden legacy global runner. Use the Run / Apply / Generate button inside each analysis page instead."
+        )
         toolbar.addWidget(self.run_action)
+        self.run_action.setVisible(False)
 
         self.setStatusBar(QStatusBar(self))
         self.progress_bar = QProgressBar(self)
@@ -525,7 +529,7 @@ class MainWindow(QMainWindow):
         if self._analysis_thread is not None:
             QMessageBox.information(self, "Analysis running", "Analysis is already running.")
             return
-        self.statusBar().showMessage("Running selected analysis modules...")
+        self.statusBar().showMessage("Running current analysis request...")
         self.open_action.setEnabled(False)
         self.run_action.setEnabled(False)
         self.progress_bar.setVisible(True)
