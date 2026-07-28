@@ -4659,7 +4659,7 @@ class ResultsPage(QWidget):
         bottom: float | None = None,
         left: float = 0.10,
         right: float = 0.80,
-        top: float = 0.92,
+        top: float = 0.78,
         remember: bool = True,
     ) -> None:
         axes = list(self.figure.axes)
@@ -4708,7 +4708,7 @@ class ResultsPage(QWidget):
         return [item.display_resolved_name for item in self.project_service.selected_comparisons_for_display()]
 
     @staticmethod
-    def _wrapped_title(text: str, width: int = 58) -> str:
+    def _wrapped_title(text: str, width: int = 46) -> str:
         clean = str(text or "").strip()
         return textwrap.fill(clean, width=width) if clean else ""
 
@@ -4750,6 +4750,12 @@ class ResultsPage(QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle("Comparison details")
         dialog.resize(760, 420)
+        dialog.setWindowFlags(
+            dialog.windowFlags()
+            | Qt.WindowType.Window
+            | Qt.WindowType.WindowMaximizeButtonHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+        )
         layout = QVBoxLayout(dialog)
         viewer = QTextEdit(dialog)
         viewer.setReadOnly(True)

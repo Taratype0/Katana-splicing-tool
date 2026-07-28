@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 
@@ -25,6 +26,14 @@ class CrossComparisonService:
 
     def base_dir(self) -> Path:
         return self.output_root / "03_cross_comparison_candidate_comparison"
+
+    @staticmethod
+    def _safe_bool(value: object) -> bool:
+        if pd.isna(value):
+            return False
+        if isinstance(value, str):
+            return value.strip().casefold() in {"1", "true", "yes", "y"}
+        return bool(value)
 
     def candidate_files(self) -> dict[str, Path]:
         base = self.base_dir()
@@ -213,3 +222,139 @@ class CrossComparisonService:
         )
         generated.append(file_map["parameters"])
         return generated
+
+    @staticmethod
+    def empty_pattern_tables() -> dict[str, pd.DataFrame]:
+        columns = [
+            "gene",
+            "event_type",
+            "event_id",
+            "event_matching_key",
+            "comparison_A",
+            "comparison_B",
+            "experiment_A_display_name",
+            "experiment_B_display_name",
+            "dPSI_A",
+            "dPSI_B",
+            "FDR_A",
+            "FDR_B",
+            "significant_A",
+            "significant_B",
+            "direction_A",
+            "direction_B",
+            "delta_dPSI",
+            "abs_delta_dPSI",
+            "same_direction",
+            "opposite_direction",
+            "same_direction_strength_delta",
+            "event_class",
+            "abs_dPSI_significance_cutoff_used",
+            "large_delta_dPSI_cutoff_used",
+        ]
+        empty = pd.DataFrame(columns=columns)
+        return {
+            "same_direction_large_delta": empty.copy(),
+            "opposite_direction": empty.copy(),
+            "all_shared": empty.copy(),
+            "condition_specific": empty.copy(),
+        }
+
+    def build_pattern_tables(
+        self,
+        *,
+        pair: Any,
+        comparison_a: pd.DataFrame,
+        comparison_b: pd.DataFrame,
+        abs_dpsi_cutoff: float,
+        large_delta_dpsi_cutoff: float,
+    ) -> dict[str, pd.DataFrame]:
+        if comparison_a.empty and comparison_b.empty:
+            return self.empty_pattern_tables()
+
+        merged = comparison_a.merge(
+            comparison_b,
+            on="event_matching_key",
+            how="outer",
+            suffixes=("_A", "_B"),
+        )
+        if merged.empty:
+            return self.empty_pattern_tables()
+
+        def combined_text(column: str) -> pd.Series:
+            return (
+                merged.get(f"{column}_A", pd.Series(pd.NA, index=merged.index))
+                .combine_first(merged.get(f"{column}_B", pd.Series(pd.NA, index=merged.index)))
+                .fillna("")
+                .astype(str)
+            )
+
+        merged["gene"] = combined_text("gene")
+        merged["event_type"] = combined_text("event_type")
+        merged["event_id"] = combined_text("event_id")
+        merged["comparison_A"] = pair.comparison_a or ""
+        merged["comparison_B"] = pair.comparison_b or ""
+        merged["experiment_A_display_name"] = (
+            comparison_a["comparison_display_name"].iloc[0]
+            if not comparison_a.empty and "comparison_display_name" in comparison_a.columns
+            else str(pair.comparison_a or "")
+        )
+        merged["experiment_B_display_name"] = (
+            comparison_b["comparison_display_name"].iloc[0]
+            if not comparison_b.empty and "comparison_display_name" in comparison_b.columns
+            else str(pair.comparison_b or "")
+        )
+        for column in ("dPSI_A", "dPSI_B", "FDR_A", "FDR_B"):
+            merged[column] = pd.to_numeric(merged.get(column), errors="coerce")
+        for column in ("significant_A", "significant_B"):
+            merged[column] = (
+                merged.get(column, pd.Series(False, index=merged.index, dtype=bool))
+                .map(self._safe_bool)
+            )
+        for column in ("direction_A", "direction_B"):
+            merged[column] = merged.get(column, pd.Series("", index=merged.index)).fillna("").astype(str)
+
+        merged["delta_dPSI"] = merged["dPSI_A"] - merged["dPSI_B"]
+        merged["abs_delta_dPSI"] = merged["delta_dPSI"].abs()
+        sign_a = np.sign(merged["dPSI_A"].fillna(0))
+        sign_b = np.sign(merged["dPSI_B"].fillna(0))
+        merged["same_direction"] = (sign_a == sign_b) & sign_a.ne(0) & sign_b.ne(0)
+        merged["opposite_direction"] = sign_a.ne(sign_b) & sign_a.ne(0) & sign_b.ne(0)
+        merged["same_direction_strength_delta"] = (
+            merged["dPSI_A"].abs() - merged["dPSI_B"].abs()
+        ).abs()
+        merged["abs_dPSI_significance_cutoff_used"] = float(abs_dpsi_cutoff)
+        merged["large_delta_dPSI_cutoff_used"] = float(large_delta_dpsi_cutoff)
+
+        shared = merged.loc[merged["significant_A"] & merged["significant_B"]].copy()
+        shared["event_class"] = "shared_significant"
+        same_direction_large_delta = shared.loc[
+            shared["same_direction"]
+            & shared["same_direction_strength_delta"].ge(large_delta_dpsi_cutoff)
+        ].copy()
+        same_direction_large_delta["event_class"] = "same_direction_large_delta"
+        opposite_direction = shared.loc[shared["opposite_direction"]].copy()
+        opposite_direction["event_class"] = "opposite_direction"
+
+        condition_specific = merged.loc[
+            (merged["significant_A"] & ~merged["significant_B"])
+            | (~merged["significant_A"] & merged["significant_B"])
+        ].copy()
+        condition_specific["event_class"] = np.where(
+            condition_specific["significant_A"],
+            "comparison_A_only",
+            "comparison_B_only",
+        )
+
+        output_columns = self.empty_pattern_tables()["all_shared"].columns
+        return {
+            "same_direction_large_delta": same_direction_large_delta.reindex(
+                columns=output_columns
+            ).reset_index(drop=True),
+            "opposite_direction": opposite_direction.reindex(columns=output_columns).reset_index(
+                drop=True
+            ),
+            "all_shared": shared.reindex(columns=output_columns).reset_index(drop=True),
+            "condition_specific": condition_specific.reindex(columns=output_columns).reset_index(
+                drop=True
+            ),
+        }
