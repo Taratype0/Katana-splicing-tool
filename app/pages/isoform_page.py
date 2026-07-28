@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QDialog,
     QFileDialog,
     QAbstractScrollArea,
     QHBoxLayout,
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
+from app.pages.module_details import module_detail
 from src.services.project_service import ProjectService
 
 
@@ -80,13 +82,13 @@ class IsoformCrossSupportWorker(QObject):
 
 
 class IsoformPage(QWidget):
-    def __init__(self, project_service: ProjectService) -> None:
+    def __init__(self, project_service: ProjectService, initial_tab: int = 0) -> None:
         super().__init__()
         self.project_service = project_service
-        self.label = QLabel("IsoformSwitchAnalyzeR sample design")
+        self.label = QLabel("8. Isoform / transcript usage support")
         self.explanation = QLabel(
-            "Isoform is the follow-up validation layer after DEG/splicing candidate selection. "
-            "Use this page to confirm sample conditions and to inspect whether the selected samples support isoform-level follow-up analysis."
+            "8 focuses on transcript/isoform evidence from quant.sf, GTF and optional DTU results. "
+            "This is separate from 7 RBP support: it asks whether candidate genes have isoform usage or transcript-abundance support."
         )
         self.explanation.setWordWrap(True)
         self.import_button = QPushButton("Import Metadata")
@@ -115,8 +117,8 @@ class IsoformPage(QWidget):
         self.support_title = QLabel("Candidate isoform support")
         self.support_title.setStyleSheet("font-size: 16px; font-weight: 700;")
         self.support_context = QLabel(
-            "This support table uses selected candidate genes plus quant.sf, GTF transcript annotation and optional DTU q values. "
-            "It is a follow-up support layer; DEG+rMATS remain the core candidate definition."
+            "8.1 uses selected candidate genes plus quant.sf, GTF transcript annotation and optional DTU q values. "
+            "It is transcript/isoform support; DEG+rMATS remain the core candidate definition."
         )
         self.support_context.setWordWrap(True)
         self.support_comparison_tabs = QTabWidget()
@@ -132,6 +134,8 @@ class IsoformPage(QWidget):
         self.support_top_n.setValue(50)
         self.run_support_button = QPushButton("Run Isoform support")
         self.run_support_button.clicked.connect(self._run_isoform_support)
+        self.support_detail_button = QPushButton("Detail")
+        self.support_detail_button.clicked.connect(lambda: self._show_detail_dialog("8.isoform"))
         self.open_support_button = QPushButton("Open output folder")
         self.open_support_button.clicked.connect(self._open_isoform_support_folder)
         self.export_support_button = QPushButton("Export current table")
@@ -155,8 +159,8 @@ class IsoformPage(QWidget):
         self.cross_title = QLabel("Cross-comparison isoform support")
         self.cross_title.setStyleSheet("font-size: 16px; font-weight: 700;")
         self.cross_context = QLabel(
-            "This view compares isoform-support patterns across selected comparisons using per-comparison quant.sf + GTF + optional DTU support. "
-            "It is a follow-up support comparison, not a causal isoform-switch model."
+            "8.2 compares transcript/isoform support patterns across selected comparisons using per-comparison quant.sf + GTF + optional DTU support. "
+            "It is a support-prioritization comparison, not an IsoformSwitchAnalyzeR causal model."
         )
         self.cross_context.setWordWrap(True)
         self.cross_search = QLineEdit()
@@ -167,6 +171,8 @@ class IsoformPage(QWidget):
         self.cross_top_n.setValue(50)
         self.run_cross_button = QPushButton("Run Cross-comparison Isoform support")
         self.run_cross_button.clicked.connect(self._run_isoform_cross_support)
+        self.cross_detail_button = QPushButton("Detail")
+        self.cross_detail_button.clicked.connect(lambda: self._show_detail_dialog("8.isoform"))
         self.open_cross_button = QPushButton("Open output folder")
         self.open_cross_button.clicked.connect(self._open_isoform_cross_folder)
         self.export_cross_button = QPushButton("Export current table")
@@ -238,6 +244,7 @@ class IsoformPage(QWidget):
         support_controls.addWidget(self.support_top_n)
         support_controls.addWidget(self.support_search, 1)
         support_controls.addWidget(self.run_support_button)
+        support_controls.addWidget(self.support_detail_button)
         support_controls.addWidget(self.support_progress)
         support_controls.addWidget(self.open_support_button)
         support_controls.addWidget(self.export_support_button)
@@ -255,6 +262,7 @@ class IsoformPage(QWidget):
         cross_controls.addWidget(self.cross_top_n)
         cross_controls.addWidget(self.cross_search, 1)
         cross_controls.addWidget(self.run_cross_button)
+        cross_controls.addWidget(self.cross_detail_button)
         cross_controls.addWidget(self.cross_progress)
         cross_controls.addWidget(self.open_cross_button)
         cross_controls.addWidget(self.export_cross_button)
@@ -268,9 +276,36 @@ class IsoformPage(QWidget):
         self.main_tabs.addTab(sample_tab, "Sample design")
         self.main_tabs.addTab(support_tab, "8.1 Per-comparison isoform support")
         self.main_tabs.addTab(cross_tab, "8.2 Cross-comparison isoform support")
+        self.main_tabs.setCurrentIndex(max(0, min(initial_tab, self.main_tabs.count() - 1)))
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.main_tabs)
+
+    def navigate_to(self, _branch: str | None = None, subbranch: str | None = None) -> None:
+        if subbranch == "per":
+            self.main_tabs.setCurrentIndex(1)
+        elif subbranch == "cross":
+            self.main_tabs.setCurrentIndex(2)
+        elif subbranch == "design":
+            self.main_tabs.setCurrentIndex(0)
+
+    def _show_detail_dialog(self, key: str) -> None:
+        text = module_detail(key)
+        if not text:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Module details")
+        dialog.resize(760, 420)
+        layout = QVBoxLayout(dialog)
+        viewer = QTextEdit(dialog)
+        viewer.setReadOnly(True)
+        viewer.setPlainText(text)
+        close_button = QPushButton("Close", dialog)
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(viewer, 1)
+        layout.addWidget(close_button)
+        QTimer.singleShot(0, dialog.showMaximized)
+        dialog.exec()
 
     def refresh(self) -> None:
         project = self.project_service.current_project

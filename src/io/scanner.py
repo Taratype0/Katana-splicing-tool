@@ -101,7 +101,9 @@ class ProjectScanner:
             project_name=root.name,
             project_root=root,
             config_path=root / ".katana_project.yaml",
-            output_root=root / "katana_output",
+            # Output is intentionally user-selected. Never infer an analysis
+            # destination from the project or application working directory.
+            output_root=None,
             input_paths=merged_input_paths,
         )
 
@@ -385,7 +387,6 @@ class ProjectScanner:
             return
 
         forward_vs = f"{treatment}_vs_{control}"
-        reverse_vs = f"{control}_vs_{treatment}"
         dashed = f"{treatment}-{control}"
 
         if comparison.rmats_name is None:
@@ -540,6 +541,46 @@ class ProjectScanner:
             if not comparison_id:
                 continue
             comparison = comparisons_by_id.get(comparison_id)
+            if comparison is None:
+                saved_aliases = {
+                    str(value)
+                    for key in (
+                        "comparison_id",
+                        "display_name",
+                        "rmats_name",
+                        "deg_name",
+                        "suppa_name",
+                        "dexseq_name",
+                        "dtu_name",
+                        "quant_name",
+                        "sashimi_name",
+                        "bam_group_name",
+                    )
+                    if (value := item.get(key))
+                }
+                experiment = item.get("experiment_group") or item.get("source_experiment_group")
+                control = item.get("control_group") or item.get("source_control_group")
+                if experiment and control:
+                    saved_aliases.update(
+                        {
+                            f"{experiment}_vs_{control}",
+                            f"{control}_vs_{experiment}",
+                            f"{experiment}-{control}",
+                            f"{control}-{experiment}",
+                            f"{experiment} vs {control}",
+                        }
+                    )
+                alias_matches = [
+                    candidate
+                    for candidate in project.available_comparisons
+                    if saved_aliases.intersection(self._comparison_aliases(candidate))
+                ]
+                if alias_matches:
+                    comparison = max(alias_matches, key=self._comparison_priority)
+                    old_id = comparison.comparison_id
+                    comparison.comparison_id = comparison_id
+                    comparisons_by_id.pop(old_id, None)
+                    comparisons_by_id[comparison_id] = comparison
             if comparison is None:
                 has_meaningful_saved_state = any(
                     item.get(field)

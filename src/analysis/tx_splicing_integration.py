@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.analysis.common import EVENT_TYPES, clean_text, event_uid_from_row, normalize_gene_id, read_table
+from src.analysis.stable_as import apply_stable_as_filter
 from src.domain.models.analysis import AnalysisRequest
 from src.domain.models.project import ProjectConfig
 
@@ -107,6 +108,12 @@ class TxSplicingIntegrator:
                 "geneSymbol",
                 "FDR",
                 "IncLevelDifference",
+                "IncLevel1",
+                "IncLevel2",
+                "IJC_SAMPLE_1",
+                "IJC_SAMPLE_2",
+                "SJC_SAMPLE_1",
+                "SJC_SAMPLE_2",
                 *self._event_uid_columns(),
             }
             df = pd.read_csv(
@@ -126,9 +133,16 @@ class TxSplicingIntegrator:
             if comparison.reverse_splicing:
                 df["dPSI"] = -df["dPSI"]
             df["abs_dPSI"] = df["dPSI"].abs()
-            df["splicing_sig"] = (df["event_FDR"] < request.thresholds.splicing_fdr) & (
-                df["abs_dPSI"] > request.thresholds.splicing_dpsi
+            evaluated = apply_stable_as_filter(
+                df,
+                fdr=df["event_FDR"],
+                standardized_dpsi=df["dPSI"],
+                reverse_splicing=comparison.reverse_splicing,
+                thresholds=request.thresholds,
             )
+            for column in evaluated.columns:
+                df[column] = evaluated[column]
+            df["splicing_sig"] = df["stable_as_event"]
             df["event_uid"] = pd.NA
             sig_mask = df["splicing_sig"].fillna(False)
             if sig_mask.any():
@@ -144,6 +158,16 @@ class TxSplicingIntegrator:
                         "event_FDR",
                         "dPSI",
                         "abs_dPSI",
+                        "rmats_sig_before_stability",
+                        "stable_as_event",
+                        "mean_junction_reads_group1",
+                        "mean_junction_reads_group2",
+                        "replicate_count_group1",
+                        "replicate_count_group2",
+                        "supported_replicate_count_group1",
+                        "supported_replicate_count_group2",
+                        "replicate_direction_consistency",
+                        "stable_support_status",
                         "splicing_sig",
                     ]
                 ].copy()
@@ -210,6 +234,14 @@ class TxSplicingIntegrator:
                             "event_type": "representative_event_type",
                             "dPSI": "representative_dPSI",
                             "event_FDR": "representative_event_FDR",
+                            "mean_junction_reads_group1": "representative_mean_junction_reads_group1",
+                            "mean_junction_reads_group2": "representative_mean_junction_reads_group2",
+                            "replicate_count_group1": "representative_replicate_count_group1",
+                            "replicate_count_group2": "representative_replicate_count_group2",
+                            "supported_replicate_count_group1": "representative_supported_replicate_count_group1",
+                            "supported_replicate_count_group2": "representative_supported_replicate_count_group2",
+                            "replicate_direction_consistency": "representative_replicate_direction_consistency",
+                            "stable_support_status": "representative_stable_support_status",
                         }
                     )
                 )
@@ -223,6 +255,14 @@ class TxSplicingIntegrator:
                             "representative_event_type",
                             "representative_dPSI",
                             "representative_event_FDR",
+                            "representative_mean_junction_reads_group1",
+                            "representative_mean_junction_reads_group2",
+                            "representative_replicate_count_group1",
+                            "representative_replicate_count_group2",
+                            "representative_supported_replicate_count_group1",
+                            "representative_supported_replicate_count_group2",
+                            "representative_replicate_direction_consistency",
+                            "representative_stable_support_status",
                         ]
                     ],
                     on="gene_id",
@@ -235,6 +275,14 @@ class TxSplicingIntegrator:
                 result["representative_event_type"] = pd.NA
                 result["representative_dPSI"] = math.nan
                 result["representative_event_FDR"] = math.nan
+                result["representative_mean_junction_reads_group1"] = math.nan
+                result["representative_mean_junction_reads_group2"] = math.nan
+                result["representative_replicate_count_group1"] = math.nan
+                result["representative_replicate_count_group2"] = math.nan
+                result["representative_supported_replicate_count_group1"] = math.nan
+                result["representative_supported_replicate_count_group2"] = math.nan
+                result["representative_replicate_direction_consistency"] = math.nan
+                result["representative_stable_support_status"] = pd.NA
         else:
             result["geneSymbol"] = result["gene_id"]
             result["n_sig_events_all"] = 0
@@ -243,6 +291,14 @@ class TxSplicingIntegrator:
             result["representative_event_type"] = pd.NA
             result["representative_dPSI"] = math.nan
             result["representative_event_FDR"] = math.nan
+            result["representative_mean_junction_reads_group1"] = math.nan
+            result["representative_mean_junction_reads_group2"] = math.nan
+            result["representative_replicate_count_group1"] = math.nan
+            result["representative_replicate_count_group2"] = math.nan
+            result["representative_supported_replicate_count_group1"] = math.nan
+            result["representative_supported_replicate_count_group2"] = math.nan
+            result["representative_replicate_direction_consistency"] = math.nan
+            result["representative_stable_support_status"] = pd.NA
 
         for column in ("n_sig_events_all",):
             result[column] = pd.to_numeric(result.get(column), errors="coerce").fillna(0).astype(int)
@@ -276,6 +332,14 @@ class TxSplicingIntegrator:
                 "representative_event_type",
                 "representative_dPSI",
                 "representative_event_FDR",
+                "representative_mean_junction_reads_group1",
+                "representative_mean_junction_reads_group2",
+                "representative_replicate_count_group1",
+                "representative_replicate_count_group2",
+                "representative_supported_replicate_count_group1",
+                "representative_supported_replicate_count_group2",
+                "representative_replicate_direction_consistency",
+                "representative_stable_support_status",
                 "splicing_sig",
                 "combined_class",
                 "direction_class",
@@ -389,7 +453,19 @@ class TxSplicingIntegrator:
         if frame is None or frame.empty:
             return pd.DataFrame()
         working = frame.copy()
-        for column in ("log2FC", "deg_padj", "representative_dPSI", "representative_event_FDR"):
+        for column in (
+            "log2FC",
+            "deg_padj",
+            "representative_dPSI",
+            "representative_event_FDR",
+            "representative_mean_junction_reads_group1",
+            "representative_mean_junction_reads_group2",
+            "representative_replicate_count_group1",
+            "representative_replicate_count_group2",
+            "representative_supported_replicate_count_group1",
+            "representative_supported_replicate_count_group2",
+            "representative_replicate_direction_consistency",
+        ):
             if column in working.columns:
                 working[column] = pd.to_numeric(working[column], errors="coerce")
         for column in ("deg_sig", "splicing_sig"):

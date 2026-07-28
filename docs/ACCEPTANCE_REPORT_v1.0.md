@@ -52,9 +52,10 @@ Validated behaviors:
   - `5.3.2 Candidate Gene Selection`
   - `5.5.2 Run Sashimi`
   - `5.5.3 Sashimi Preview`
-  - `5.6.1 Jutils Heatmap`
-  - `5.6.2 Jutils PCA`
-  - `5.6.3 Jutils Output Browser`
+  - `5.6.1 Sample PSI Heatmaps`
+  - `5.6.2 PCA & Replicate QC`
+  - `5.6.3 Similarity & Overlap`
+  - `5.6.4 Native Output Browser`
 - main window initialization succeeded
 - `7. RBP` and `8. Isoform` open as independent downstream support modules
 
@@ -87,7 +88,7 @@ Using those real upstream outputs, the following downstream modules were exercis
 - `5.4 Cross-comparison candidate matrix`
 - `5.4.3 Cross-comparison significant AS event dPSI pattern analysis`
 - `5.5 Sashimi event listing and selected-event manifest generation`
-- `5.6 Jutils output browser`
+- `5.6 Native Splicing Pattern Explorer`
 - `7 RBP support`
 - `8 Isoform candidate support`
 
@@ -98,13 +99,13 @@ Observed regression results on the validation project:
 - cross-comparison candidate matrix rows: `3385`
 - sashimi available events (selected comparison): `78894`
 - selected-event sashimi manifest rows (2 selected events): `2`
-- Jutils output browser rows: `52`
+- Native output browser lists cached TSV/PNG/JSON results
 
 Interpretation:
 
 - downstream modules can read real cached upstream outputs and continue independently
 - downstream page opening does not require project-load-time chained execution
-- sashimi and Jutils paths are live on the validation project
+- sashimi and Native Splicing Pattern Explorer paths are live on the validation project
 - RBP and isoform support pages read cached state on open and require explicit Run buttons for new outputs
 - this is a valid downstream regression pass, but it is **cache-assisted**, not a full uncached rerun from raw inputs
 

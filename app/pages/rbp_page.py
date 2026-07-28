@@ -8,6 +8,7 @@ from pandas.api.types import is_bool_dtype, is_numeric_dtype
 from PySide6.QtCore import QObject, QThread, QTimer, Signal, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -19,10 +20,12 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
+from app.pages.module_details import module_detail
 from src.services.project_service import ProjectService
 
 
@@ -92,14 +95,14 @@ class RbpCrossSupportWorker(QObject):
 
 
 class RbpPage(QWidget):
-    def __init__(self, project_service: ProjectService) -> None:
+    def __init__(self, project_service: ProjectService, initial_tab: int = 0) -> None:
         super().__init__()
         self.project_service = project_service
-        self.title = QLabel("RBP support / enrichment")
+        self.title = QLabel("7. RBP / splicing-factor candidate support")
         self.title.setStyleSheet("font-size: 16px; font-weight: 700;")
         self.context = QLabel(
-            "RBP support is a prioritization layer: it checks whether current candidate genes overlap known or custom RBP/splicing-factor gene sets. "
-            "It does not claim causal RBP regulation."
+            "7.1 asks whether candidate genes from one comparison overlap known or custom RBP/splicing-factor gene sets. "
+            "This is gene-set support/prioritization only, not causal RBP regulation and not isoform usage."
         )
         self.context.setWordWrap(True)
         self.comparison_tabs = QTabWidget()
@@ -121,6 +124,8 @@ class RbpPage(QWidget):
         self.choose_button.clicked.connect(self._choose_gene_set)
         self.run_button = QPushButton("Run RBP support")
         self.run_button.clicked.connect(self._run)
+        self.detail_button = QPushButton("Detail")
+        self.detail_button.clicked.connect(lambda: self._show_detail_dialog("7.rbp"))
         self.open_button = QPushButton("Open output folder")
         self.open_button.clicked.connect(self._open_output_folder)
         self.export_button = QPushButton("Export current table")
@@ -155,6 +160,8 @@ class RbpPage(QWidget):
         self.cross_choose_button.clicked.connect(self._choose_cross_gene_set)
         self.cross_run_button = QPushButton("Run Cross-comparison RBP support")
         self.cross_run_button.clicked.connect(self._run_cross)
+        self.cross_detail_button = QPushButton("Detail")
+        self.cross_detail_button.clicked.connect(lambda: self._show_detail_dialog("7.rbp"))
         self.cross_open_button = QPushButton("Open output folder")
         self.cross_open_button.clicked.connect(self._open_cross_output_folder)
         self.cross_export_button = QPushButton("Export current table")
@@ -212,6 +219,7 @@ class RbpPage(QWidget):
         controls.addWidget(self.search, 1)
         controls.addWidget(self.choose_button)
         controls.addWidget(self.run_button)
+        controls.addWidget(self.detail_button)
         controls.addWidget(self.progress)
         controls.addWidget(self.open_button)
         controls.addWidget(self.export_button)
@@ -230,8 +238,8 @@ class RbpPage(QWidget):
         per_layout.addWidget(self.status)
 
         cross_context = QLabel(
-            "Cross-comparison RBP support compares per-comparison RBP/splicing-factor overlap and enrichment patterns. "
-            "It is a support-prioritization view, not causal RBP regulation."
+            "7.2 compares the RBP/splicing-factor candidate-support pattern across comparisons. "
+            "It answers whether RBP-related candidate genes are shared or comparison-specific; it is not an isoform/DTU analysis and not causal RBP inference."
         )
         cross_context.setWordWrap(True)
         cross_path_row = QHBoxLayout()
@@ -243,6 +251,7 @@ class RbpPage(QWidget):
         cross_controls.addWidget(self.cross_search, 1)
         cross_controls.addWidget(self.cross_choose_button)
         cross_controls.addWidget(self.cross_run_button)
+        cross_controls.addWidget(self.cross_detail_button)
         cross_controls.addWidget(self.cross_progress)
         cross_controls.addWidget(self.cross_open_button)
         cross_controls.addWidget(self.cross_export_button)
@@ -257,10 +266,35 @@ class RbpPage(QWidget):
         self.main_tabs = QTabWidget()
         self.main_tabs.addTab(per_tab, "7.1 Per-comparison RBP support")
         self.main_tabs.addTab(cross_tab, "7.2 Cross-comparison RBP support")
+        self.main_tabs.setCurrentIndex(max(0, min(initial_tab, self.main_tabs.count() - 1)))
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.title)
         layout.addWidget(self.main_tabs)
+
+    def navigate_to(self, _branch: str | None = None, subbranch: str | None = None) -> None:
+        if subbranch == "cross":
+            self.main_tabs.setCurrentIndex(1)
+        elif subbranch == "per":
+            self.main_tabs.setCurrentIndex(0)
+
+    def _show_detail_dialog(self, key: str) -> None:
+        text = module_detail(key)
+        if not text:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Module details")
+        dialog.resize(760, 420)
+        layout = QVBoxLayout(dialog)
+        viewer = QTextEdit(dialog)
+        viewer.setReadOnly(True)
+        viewer.setPlainText(text)
+        close_button = QPushButton("Close", dialog)
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(viewer, 1)
+        layout.addWidget(close_button)
+        QTimer.singleShot(0, dialog.showMaximized)
+        dialog.exec()
 
     def refresh(self) -> None:
         project = self.project_service.current_project

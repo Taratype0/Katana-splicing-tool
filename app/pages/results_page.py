@@ -8,16 +8,16 @@ import textwrap
 
 import numpy as np
 import pandas as pd
-from matplotlib import image as mpimg
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
-from matplotlib.patches import Patch, Rectangle
+from matplotlib.patches import Circle, Ellipse, Patch
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
     QComboBox,
+    QCheckBox,
     QDialog,
     QDoubleSpinBox,
     QFileDialog,
@@ -37,6 +37,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.pages.module_details import module_detail
+from app.pages.cross_comparison_controller import CrossComparisonController
+from app.widgets.flow_layout import FlowLayout
 from src.services.project_service import ProjectService
 
 
@@ -58,7 +61,7 @@ class AnalysisHomePage(QWidget):
         grid.setVerticalSpacing(14)
 
         sections = [
-            ("Landscape", "Single-comparison splicing views: bar, pie, Jutils heatmap and PCA.", "landscape"),
+            ("Landscape", "Single-comparison splicing views and upstream stable-AS filtering.", "landscape"),
             ("Group Comparison", "Comparison-vs-comparison results: Excel preview, program heatmap and direction/strength split.", "group"),
             ("Transcript + Splicing", "Interactive DEG-vs-splicing scatter per comparison with gene drilldown.", "tx"),
             ("Mechanism Support", "DEXSeq / DTU / SUPPA / transcript-level support summary with readable gene symbols.", "mechanism"),
@@ -118,8 +121,6 @@ class ResultsPage(QWidget):
         self.landscape_tabs.addTab(QWidget(), "Landscape")
         self.landscape_tabs.addTab(QWidget(), "Bar")
         self.landscape_tabs.addTab(QWidget(), "Pie")
-        self.landscape_tabs.addTab(QWidget(), "Jutils Heatmap")
-        self.landscape_tabs.addTab(QWidget(), "Jutils PCA")
         self.landscape_container = QWidget()
         landscape_layout = QVBoxLayout(self.landscape_container)
         landscape_layout.setContentsMargins(0, 0, 0, 0)
@@ -200,6 +201,37 @@ class ResultsPage(QWidget):
         candidate_card_layout.addWidget(self.card_open_sashimi_button)
         self.candidate_card_controls.setVisible(False)
 
+        thresholds = self.project_service.current_thresholds
+        self.landscape_stable_min_reads = QSpinBox()
+        self.landscape_stable_min_reads.setRange(0, 100000)
+        self.landscape_stable_min_reads.setValue(int(getattr(thresholds, "stable_min_junction_reads", 20)))
+        self.landscape_stable_min_reads.setMinimumWidth(88)
+        self.landscape_stable_min_reads.setToolTip("Minimum mean IJC+SJC reads per group for a stable AS event")
+        self.landscape_stable_min_reps = QSpinBox()
+        self.landscape_stable_min_reps.setRange(1, 20)
+        self.landscape_stable_min_reps.setValue(int(getattr(thresholds, "stable_min_replicates_per_group", 2)))
+        self.landscape_stable_min_reps.setMinimumWidth(88)
+        self.landscape_stable_min_reps.setToolTip("Minimum PSI/read replicates required in each group")
+        self.landscape_stable_consistency = QDoubleSpinBox()
+        self.landscape_stable_consistency.setRange(0.0, 1.0)
+        self.landscape_stable_consistency.setSingleStep(0.01)
+        self.landscape_stable_consistency.setDecimals(2)
+        self.landscape_stable_consistency.setValue(float(getattr(thresholds, "stable_min_pairwise_consistency", 0.67)))
+        self.landscape_stable_consistency.setMinimumWidth(88)
+        self.landscape_stable_consistency.setToolTip("Minimum pairwise replicate PSI direction consistency")
+        self.landscape_stable_controls = QWidget()
+        landscape_stable_layout = QHBoxLayout(self.landscape_stable_controls)
+        landscape_stable_layout.setContentsMargins(0, 0, 0, 0)
+        landscape_stable_layout.addWidget(QLabel("Stable AS filter: mean IJC+SJC reads >="))
+        landscape_stable_layout.addWidget(self.landscape_stable_min_reads)
+        landscape_stable_layout.addWidget(QLabel("min reps/group"))
+        landscape_stable_layout.addWidget(self.landscape_stable_min_reps)
+        landscape_stable_layout.addWidget(QLabel("direction consistency >="))
+        landscape_stable_layout.addWidget(self.landscape_stable_consistency)
+        landscape_stable_layout.addWidget(QLabel("Applied when 5.1 is rerun; downstream 5.2/5.3 inherit stable AS events."))
+        landscape_stable_layout.addStretch(1)
+        self.landscape_stable_controls.setVisible(False)
+
         self.group_pattern_sig_cutoff = QDoubleSpinBox()
         self.group_pattern_sig_cutoff.setRange(0.0, 5.0)
         self.group_pattern_sig_cutoff.setSingleStep(0.01)
@@ -215,10 +247,12 @@ class ResultsPage(QWidget):
         self.group_pattern_large_delta.setMinimumWidth(88)
         self.group_pattern_large_delta.setToolTip("large cross-comparison delta dPSI cutoff")
         self.group_pattern_view = QComboBox()
-        self.group_pattern_view.addItem("Same direction, large delta", "same_direction_large_delta")
-        self.group_pattern_view.addItem("Opposite direction", "opposite_direction")
-        self.group_pattern_view.addItem("All shared significant events", "all_shared")
-        self.group_pattern_view.addItem("Condition-specific (optional)", "condition_specific")
+        self.group_pattern_view.addItem("Table: same-direction large dPSI delta", "same_direction_large_delta")
+        self.group_pattern_view.addItem("Table: opposite-direction shared AS events", "opposite_direction")
+        self.group_pattern_view.addItem("Table: all shared significant AS events", "all_shared")
+        self.group_pattern_view.addItem("Legacy table: A-only / B-only significant AS events", "condition_specific")
+        self.group_pattern_view.setMinimumWidth(360)
+        self.group_pattern_view.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.group_pattern_view.currentIndexChanged.connect(self.refresh)
         self.group_pattern_apply = QPushButton("Apply / Recalculate")
         self.group_pattern_apply.clicked.connect(self._apply_group_pattern_recalculate)
@@ -229,7 +263,7 @@ class ResultsPage(QWidget):
         group_pattern_layout.addWidget(self.group_pattern_sig_cutoff)
         group_pattern_layout.addWidget(QLabel("large delta cutoff"))
         group_pattern_layout.addWidget(self.group_pattern_large_delta)
-        group_pattern_layout.addWidget(QLabel("View"))
+        group_pattern_layout.addWidget(QLabel("Result table"))
         group_pattern_layout.addWidget(self.group_pattern_view)
         group_pattern_layout.addWidget(self.group_pattern_apply)
         group_pattern_layout.addStretch(1)
@@ -252,17 +286,10 @@ class ResultsPage(QWidget):
         self.group_interaction_min_reads.setValue(20)
         self.group_interaction_min_reads.setMinimumWidth(88)
         self.group_interaction_view = QComboBox()
-        self.group_interaction_view.addItem("Shared interaction-tested events", "shared_interaction")
-        self.group_interaction_view.addItem("Opposite direction events", "opposite_direction")
-        self.group_interaction_view.addItem("Same direction, large delta", "large_delta")
-        self.group_interaction_view.addItem("Exclusive significant support", "exclusive")
-        self.group_interaction_view.addItem("Delta dPSI benchmark", "benchmark")
-        self.group_interaction_view.addItem("Diagnostics", "diagnostics")
-        self.group_interaction_view.addItem("All-pair batch summary", "batch_summary")
-        self.group_interaction_view.addItem("All-pair top interactions", "batch_top_interactions")
-        self.group_interaction_view.addItem("All-pair exclusive support", "batch_exclusive")
-        self.group_interaction_view.addItem("All-pair delta benchmark", "batch_benchmark")
-        self.group_interaction_view.addItem("All-pair diagnostics", "batch_diagnostics")
+        self.group_interaction_view.addItem("Unified event result table", "unified_event_table")
+        self.group_interaction_view.addItem("All-pair summary table", "batch_summary")
+        self.group_interaction_view.setMinimumWidth(260)
+        self.group_interaction_view.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.group_interaction_view.currentIndexChanged.connect(self.refresh)
         self.group_interaction_apply = QPushButton("Apply / Recalculate")
         self.group_interaction_apply.clicked.connect(self._apply_group_interaction_recalculate)
@@ -275,11 +302,85 @@ class ResultsPage(QWidget):
         group_interaction_layout.addWidget(self.group_interaction_delta_cutoff)
         group_interaction_layout.addWidget(QLabel("min reads"))
         group_interaction_layout.addWidget(self.group_interaction_min_reads)
-        group_interaction_layout.addWidget(QLabel("View"))
+        group_interaction_layout.addWidget(QLabel("Result table"))
         group_interaction_layout.addWidget(self.group_interaction_view)
         group_interaction_layout.addWidget(self.group_interaction_apply)
         group_interaction_layout.addStretch(1)
         self.group_interaction_controls.setVisible(False)
+
+        self.group_venn_sig_cutoff = QDoubleSpinBox()
+        self.group_venn_sig_cutoff.setRange(0.0, 1.0)
+        self.group_venn_sig_cutoff.setSingleStep(0.01)
+        self.group_venn_sig_cutoff.setDecimals(3)
+        self.group_venn_sig_cutoff.setValue(0.10)
+        self.group_venn_sig_cutoff.setMinimumWidth(88)
+        self.group_venn_sig_cutoff.valueChanged.connect(self.refresh)
+        self.group_venn_min_reads = QSpinBox()
+        self.group_venn_min_reads.setRange(0, 100000)
+        self.group_venn_min_reads.setValue(20)
+        self.group_venn_min_reads.setMinimumWidth(88)
+        self.group_venn_min_reads.valueChanged.connect(self.refresh)
+        self.group_venn_filter = QComboBox()
+        self.group_venn_filter.addItem("All significant AS events (A-only / shared / B-only)", "all_significant")
+        self.group_venn_filter.addItem("A-only/B-only: counterpart has >= min reads", "supported_only")
+        self.group_venn_filter.addItem("A-only/B-only: counterpart low/absent reads", "low_power_only")
+        self.group_venn_filter.addItem("A-only/B-only: counterpart event not found", "counterpart_not_found_only")
+        self.group_venn_filter.setMinimumWidth(520)
+        self.group_venn_filter.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.group_venn_filter.currentIndexChanged.connect(self.refresh)
+        self.group_venn_controls = QWidget()
+        group_venn_layout = QHBoxLayout(self.group_venn_controls)
+        group_venn_layout.setContentsMargins(0, 0, 0, 0)
+        group_venn_layout.addWidget(QLabel("Significant AS: FDR <= 0.05, |dPSI| >="))
+        group_venn_layout.addWidget(self.group_venn_sig_cutoff)
+        group_venn_layout.addWidget(QLabel("counterpart min reads"))
+        group_venn_layout.addWidget(self.group_venn_min_reads)
+        group_venn_layout.addWidget(QLabel("Exclusive-side filter"))
+        group_venn_layout.addWidget(self.group_venn_filter)
+        group_venn_layout.addStretch(1)
+        self.group_venn_controls.setVisible(False)
+        self._group_venn_cache: dict[str, object] = {}
+
+        self.group_venn_multi_sig_cutoff = QDoubleSpinBox()
+        self.group_venn_multi_sig_cutoff.setRange(0.0, 1.0)
+        self.group_venn_multi_sig_cutoff.setSingleStep(0.01)
+        self.group_venn_multi_sig_cutoff.setDecimals(3)
+        self.group_venn_multi_sig_cutoff.setValue(0.10)
+        self.group_venn_multi_sig_cutoff.setMinimumWidth(88)
+        self.group_venn_multi_min_reads = QSpinBox()
+        self.group_venn_multi_min_reads.setRange(0, 100000)
+        self.group_venn_multi_min_reads.setValue(20)
+        self.group_venn_multi_min_reads.setMinimumWidth(88)
+        self._syncing_group_venn_multi_checks = False
+        self.group_venn_multi_checkboxes: dict[str, QCheckBox] = {}
+        self.group_venn_multi_comparison_panel = QWidget()
+        self.group_venn_multi_comparison_grid = QGridLayout(self.group_venn_multi_comparison_panel)
+        self.group_venn_multi_comparison_grid.setContentsMargins(0, 0, 0, 0)
+        self.group_venn_multi_comparison_grid.setHorizontalSpacing(12)
+        self.group_venn_multi_comparison_grid.setVerticalSpacing(6)
+        self.group_venn_multi_select_all = QPushButton("Select all Pairing comparisons")
+        self.group_venn_multi_select_all.clicked.connect(lambda: self._set_group_venn_multi_all_checked(True))
+        self.group_venn_multi_clear = QPushButton("Clear")
+        self.group_venn_multi_clear.clicked.connect(lambda: self._set_group_venn_multi_all_checked(False))
+        self.group_venn_multi_apply = QPushButton("Run Direction-aware Venn")
+        self.group_venn_multi_apply.clicked.connect(self._apply_group_venn_multi_recalculate)
+        self.group_venn_multi_controls = QWidget()
+        group_venn_multi_layout = QVBoxLayout(self.group_venn_multi_controls)
+        group_venn_multi_layout.setContentsMargins(0, 0, 0, 0)
+        group_venn_multi_top = QHBoxLayout()
+        group_venn_multi_top.addWidget(QLabel("Significant AS: FDR <= 0.05, |dPSI| >="))
+        group_venn_multi_top.addWidget(self.group_venn_multi_sig_cutoff)
+        group_venn_multi_top.addWidget(QLabel("min reads"))
+        group_venn_multi_top.addWidget(self.group_venn_multi_min_reads)
+        group_venn_multi_top.addWidget(self.group_venn_multi_select_all)
+        group_venn_multi_top.addWidget(self.group_venn_multi_clear)
+        group_venn_multi_top.addWidget(self.group_venn_multi_apply)
+        group_venn_multi_top.addStretch(1)
+        group_venn_multi_layout.addLayout(group_venn_multi_top)
+        group_venn_multi_layout.addWidget(QLabel("Auto-loaded comparisons from Pairing / selected comparisons:"))
+        group_venn_multi_layout.addWidget(self.group_venn_multi_comparison_panel)
+        self.group_venn_multi_controls.setVisible(False)
+        self._group_venn_multi_cache: dict[str, object] = {}
 
         for widget in (
             self.tabs,
@@ -308,7 +409,7 @@ class ResultsPage(QWidget):
             self.candidate_tabs,
             self.candidate_mode_tabs,
         ):
-            selector.setMaximumHeight(36)
+            selector.setMaximumHeight(46)
 
         self.run_current_button = QPushButton("Run Current Branch")
         self.run_current_button.clicked.connect(self._run_current_branch)
@@ -346,13 +447,13 @@ class ResultsPage(QWidget):
         self.canvas_host_layout = QVBoxLayout(self.canvas_host)
         self.canvas_host_layout.setContentsMargins(0, 0, 0, 0)
         self.canvas_host_layout.setSpacing(0)
-        self.canvas_host_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-        self.canvas_host_layout.addWidget(self.canvas, 0, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        self.canvas_host_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.canvas_host_layout.addWidget(self.canvas, 0, Qt.AlignmentFlag.AlignCenter)
         self.canvas_scroll = QScrollArea()
-        self.canvas_scroll.setWidgetResizable(True)
+        self.canvas_scroll.setWidgetResizable(False)
         self.canvas_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.canvas_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.canvas_scroll.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        self.canvas_scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.canvas_scroll.setWidget(self.canvas_host)
         self.canvas_scroll.viewport().installEventFilter(self)
         self.preview_path = QLineEdit()
@@ -427,7 +528,7 @@ class ResultsPage(QWidget):
         self._relayout_pending = False
         self._relayout_generation = 0
 
-        button_row = QHBoxLayout()
+        button_row = FlowLayout(spacing=8)
         button_row.addWidget(self.run_current_button)
         button_row.addWidget(self.detail_button)
         button_row.addWidget(QLabel("Scale %"))
@@ -436,7 +537,6 @@ class ResultsPage(QWidget):
         button_row.addWidget(self.plot_width_scale)
         button_row.addWidget(QLabel("Height %"))
         button_row.addWidget(self.plot_height_scale)
-        button_row.addStretch(1)
         button_row.addWidget(self.export_png_button)
         button_row.addWidget(self.export_pdf_button)
         for widget in (
@@ -467,20 +567,20 @@ class ResultsPage(QWidget):
         ):
             button.setMinimumWidth(128)
 
-        preview_actions = QHBoxLayout()
+        preview_actions = FlowLayout(spacing=8)
         preview_actions.addWidget(self.preview_button)
         preview_actions.addWidget(self.open_folder_button)
         preview_actions.addWidget(self.download_button)
         preview_actions.addWidget(self.export_filtered_button)
 
-        preview_filters = QHBoxLayout()
+        preview_filters = FlowLayout(spacing=8)
         preview_filters.addWidget(QLabel("File"))
-        preview_filters.addWidget(self.preview_path, 3)
+        preview_filters.addWidget(self.preview_path)
         preview_filters.addWidget(QLabel("Filter column"))
         preview_filters.addWidget(self.preview_filter_column)
         preview_filters.addWidget(QLabel("Value"))
         preview_filters.addWidget(self.preview_filter_value)
-        preview_filters.addWidget(self.preview_search, 2)
+        preview_filters.addWidget(self.preview_search)
 
         content_splitter = QSplitter(Qt.Orientation.Vertical)
         content_splitter.addWidget(self.canvas_scroll)
@@ -498,10 +598,13 @@ class ResultsPage(QWidget):
         layout.addWidget(self.label)
         layout.addLayout(button_row)
         layout.addWidget(self.tabs)
+        layout.addWidget(self.landscape_stable_controls)
         layout.addWidget(self.candidate_controls)
         layout.addWidget(self.candidate_card_controls)
         layout.addWidget(self.group_pattern_controls)
         layout.addWidget(self.group_interaction_controls)
+        layout.addWidget(self.group_venn_controls)
+        layout.addWidget(self.group_venn_multi_controls)
         layout.addWidget(self.toolbar)
         layout.addWidget(content_splitter, 1)
         layout.addLayout(preview_actions)
@@ -558,7 +661,7 @@ class ResultsPage(QWidget):
             return
         self.tabs.setCurrentIndex(branch_map[branch])
         if branch == "landscape":
-            sub_map = {"overview": 0, "bar": 1, "pie": 2, "heatmap": 3, "pca": 4}
+            sub_map = {"overview": 0, "bar": 1, "pie": 2}
             if subbranch in sub_map:
                 self.landscape_tabs.setCurrentIndex(sub_map[subbranch])
         elif branch == "group":
@@ -588,6 +691,7 @@ class ResultsPage(QWidget):
             self._navigation_subbranch = self.fixed_subbranch
         project = self.project_service.current_project
         self._rebuild_dynamic_tabs()
+        self._sync_landscape_stable_controls_from_thresholds()
         if project is None:
             self.run_current_button.setEnabled(False)
             self._apply_navigation_visibility()
@@ -651,6 +755,7 @@ class ResultsPage(QWidget):
         self._sync_named_tabs(self.tx_tabs, self._tx_comparisons, fallback_label="No selected comparisons")
         self._sync_named_tabs(self.mechanism_compare_tabs, self._mechanism_comparisons, fallback_label="No selected comparisons")
         self._sync_named_tabs(self.candidate_tabs, self._candidate_comparisons, fallback_label="No selected comparisons")
+        self._sync_group_venn_multi_comparison_checks()
 
     def _apply_navigation_visibility(self) -> None:
         branch = self.fixed_branch if self.fixed_branch is not None else self._navigation_branch
@@ -681,9 +786,9 @@ class ResultsPage(QWidget):
         self.landscape_tabs.setVisible((not standalone and branch in (None, "landscape") and subbranch is None) or (standalone and branch == "landscape" and subbranch is None))
         group_active = (not standalone and branch in (None, "group")) or (standalone and branch == "group")
         group_subbranch_for_visibility = subbranch or self._current_group_subbranch()
-        interaction_view_key = str(self.group_interaction_view.currentData() or "")
-        group_needs_pair_tabs = group_subbranch_for_visibility in {"matrix", "shared", "pattern"} or (
-            group_subbranch_for_visibility == "interaction" and not interaction_view_key.startswith("batch_")
+        group_needs_pair_tabs = CrossComparisonController.needs_pair_tabs(
+            group_subbranch_for_visibility,
+            interaction_view=str(self.group_interaction_view.currentData() or ""),
         )
         self.group_tabs.setVisible(bool(group_active and (group_needs_pair_tabs or (not standalone and subbranch is None))))
         self.group_mode_tabs.setVisible((not standalone and branch in (None, "group") and subbranch is None) or (standalone and branch == "group" and subbranch is None))
@@ -692,10 +797,16 @@ class ResultsPage(QWidget):
         self.mechanism_tabs.setVisible((not standalone and branch in (None, "mechanism")) or (standalone and branch == "mechanism"))
         self.candidate_tabs.setVisible((not standalone and branch in (None, "candidate")) or (standalone and branch == "candidate"))
         self.candidate_mode_tabs.setVisible((not standalone and branch in (None, "candidate") and subbranch is None) or (standalone and branch == "candidate" and subbranch is None))
+        self.landscape_stable_controls.setVisible(branch == "landscape" and (subbranch in {"overview", "bar", "pie"} or subbranch is None))
         self.candidate_controls.setVisible(branch == "candidate")
         self.candidate_card_controls.setVisible(branch == "candidate" and (subbranch == "cards" or (subbranch is None and self._current_candidate_subbranch() == "cards")))
         self.group_pattern_controls.setVisible(branch == "group" and subbranch == "pattern")
         self.group_interaction_controls.setVisible(branch == "group" and subbranch == "interaction")
+        self.group_venn_controls.setVisible(branch == "group" and subbranch == "venn")
+        self.group_venn_multi_controls.setVisible(branch == "group" and subbranch in {"venn_multi", "venn_multi_similarity"})
+        if branch == "group" and subbranch in {"venn_multi", "venn_multi_similarity"}:
+            self.group_venn_multi_apply.setText("Run Direction-aware Similarity" if subbranch == "venn_multi_similarity" else "Run Direction-aware Venn")
+            self._sync_group_venn_multi_comparison_checks()
 
         if branch is None and not standalone:
             self.label.setText("Analysis workbench")
@@ -735,24 +846,12 @@ class ResultsPage(QWidget):
                 "overview": "Run Landscape Overview",
                 "bar": "Run Landscape Bar",
                 "pie": "Run Landscape Pie",
-                "heatmap": "Run Jutils Heatmap",
-                "pca": "Run Jutils PCA",
             }
             active_subbranch = subbranch_key or self._current_landscape_subbranch()
             self.run_current_button.setText(labels.get(active_subbranch, "Run Landscape"))
         elif branch_key == "group":
-            labels = {
-                "reversal": "Build Direction Reversal View",
-                "comparison": "Run Group Comparison",
-                "heatmap": "Run Program Heatmap",
-                "direction": "Run Direction vs Strength",
-                "matrix": "Build Pairwise Candidate Matrix",
-                "shared": "Build Pairwise Gene Patterns",
-                "pattern": "Apply / Recalculate 5.4.3",
-                "interaction": "Apply / Recalculate 5.4.4",
-            }
             active_subbranch = subbranch_key or self._current_group_subbranch()
-            self.run_current_button.setText(labels.get(active_subbranch, "Run Group Comparison"))
+            self.run_current_button.setText(CrossComparisonController.run_label(active_subbranch))
         elif branch_key == "tx":
             labels = {
                 "se": "Run SE Subanalysis",
@@ -782,24 +881,23 @@ class ResultsPage(QWidget):
         if branch_key == "landscape":
             landscape_subbranch = subbranch_key or self._current_landscape_subbranch()
             if landscape_subbranch in ("overview", "bar", "pie"):
+                self._apply_landscape_stable_threshold_controls()
                 self.project_service.set_selected_analysis_modules(["splicing_landscape"])
                 if callable(self.on_run_modules):
                     self.on_run_modules()
-            else:
-                try:
-                    output = self.project_service.run_jutils_pipeline()
-                    self.details.setPlainText(output or "Jutils pipeline finished.")
-                except Exception as exc:
-                    self.details.setPlainText(f"Jutils failed:\n{exc}")
-                self.refresh()
         elif branch_key == "group":
             group_subbranch = subbranch_key or self._current_group_subbranch()
-            if group_subbranch in {"matrix", "shared", "reversal"}:
+            action = CrossComparisonController.action(group_subbranch)
+            if action == "candidate_matrix":
                 self.project_service.preview_cross_comparison_candidate_matrix(allow_generate=True)
                 self.refresh()
-            elif group_subbranch == "pattern":
+            elif action == "venn":
+                self._apply_group_venn_recalculate()
+            elif action == "venn_multi":
+                self._apply_group_venn_multi_recalculate()
+            elif action == "pattern":
                 self._apply_group_pattern_recalculate()
-            elif group_subbranch == "interaction":
+            elif action == "interaction":
                 self._apply_group_interaction_recalculate()
             else:
                 self.project_service.set_selected_analysis_modules(["program_comparison"])
@@ -815,6 +913,25 @@ class ResultsPage(QWidget):
                 self.on_run_modules()
         else:
             self.refresh()
+
+    def _sync_landscape_stable_controls_from_thresholds(self) -> None:
+        thresholds = self.project_service.current_thresholds
+        self.landscape_stable_min_reads.blockSignals(True)
+        self.landscape_stable_min_reps.blockSignals(True)
+        self.landscape_stable_consistency.blockSignals(True)
+        self.landscape_stable_min_reads.setValue(int(getattr(thresholds, "stable_min_junction_reads", 20)))
+        self.landscape_stable_min_reps.setValue(int(getattr(thresholds, "stable_min_replicates_per_group", 2)))
+        self.landscape_stable_consistency.setValue(float(getattr(thresholds, "stable_min_pairwise_consistency", 0.67)))
+        self.landscape_stable_min_reads.blockSignals(False)
+        self.landscape_stable_min_reps.blockSignals(False)
+        self.landscape_stable_consistency.blockSignals(False)
+
+    def _apply_landscape_stable_threshold_controls(self) -> None:
+        self.project_service.update_thresholds(
+            stable_min_junction_reads=float(self.landscape_stable_min_reads.value()),
+            stable_min_replicates_per_group=int(self.landscape_stable_min_reps.value()),
+            stable_min_pairwise_consistency=float(self.landscape_stable_consistency.value()),
+        )
 
     def _render_landscape_branch(self) -> None:
         landscape = self.project_service.run_state.results.splicing_landscape
@@ -835,12 +952,9 @@ class ResultsPage(QWidget):
             self.context_header.setText(self.project_service.comparison_context_text(comparison_id))
             pie_frame = self._filter_frame_by_value(filtered, "comparison_id", comparison_id)
             self._draw_landscape_pie(pie_frame, comparison_id, self._comparison_name_from_id(comparison_id))
-        elif current == "heatmap":
-            self.context_header.clear()
-            self._draw_jutils_plot("heatmap", None, "Selected comparisons")
         else:
             self.context_header.clear()
-            self._draw_jutils_plot("pca", None, "Selected comparisons")
+            self._draw_placeholder("Landscape subpage not available.")
 
     def _render_group_comparison_branch(self) -> None:
         pair_id = self._current_tab_key(self.group_tabs)
@@ -851,8 +965,9 @@ class ResultsPage(QWidget):
             abs_cutoff = float(self.group_interaction_sig_cutoff.value())
             delta_cutoff = float(self.group_interaction_delta_cutoff.value())
             min_reads = int(self.group_interaction_min_reads.value())
-            selected_key = str(self.group_interaction_view.currentData() or "shared_interaction")
-            is_batch_view = selected_key.startswith("batch_")
+            selected_key = str(self.group_interaction_view.currentData() or "unified_event_table")
+            source_table_key = selected_key
+            is_batch_view = selected_key == "batch_summary"
             if is_batch_view:
                 batch_tables = self.project_service.preview_cross_comparison_as_interaction_batch(
                     abs_dpsi_cutoff=abs_cutoff,
@@ -862,19 +977,19 @@ class ResultsPage(QWidget):
                 )
                 state = self.project_service.module_state("cross_comparison_as_interactions")
                 self.context_header.setText(
-                    "5.4.4 all-pair batch summary | Runs the AS interaction model across every selected comparison pair."
+                    "5.4.3 all-pair batch summary | Runs the AS interaction/read-support model across every selected comparison pair."
                 )
                 self._set_explanation(
-                    "All-pair 5.4.4 batch summary applies the same replicate-aware AS interaction model to every configured or auto-derived comparison pair. "
-                    "It summarizes shared significant AS interactions, opposite-direction events, same-direction large-delta events, and exclusive read-support classes."
+                    "All-pair 5.4.3 batch summary applies the same replicate-aware AS interaction/read-support model to every configured or auto-derived comparison pair. "
+                    "It summarizes shared significant AS interactions, opposite-direction events, same-direction large-delta events, and A/B-specific read-support classes."
                 )
                 if state.get("status") == "not_run":
-                    self._draw_placeholder("Not run.\nNo cached all-pair 5.4.4 batch summary is loaded.")
-                    self.details.setPlainText(state.get("message", "All-pair 5.4.4 batch summary has not been run yet."))
+                    self._draw_placeholder("Not run.\nNo cached all-pair 5.4.3 batch summary is loaded.")
+                    self.details.setPlainText(state.get("message", "All-pair 5.4.3 batch summary has not been run yet."))
                     self._sync_footer_info()
                     self._reset_plot_view()
                     return
-                selected_table = batch_tables.get(selected_key, pd.DataFrame())
+                selected_table = batch_tables.get("batch_summary", pd.DataFrame())
                 self._draw_cross_as_interaction_batch_summary(batch_tables, abs_cutoff, delta_cutoff, min_reads)
                 batch_files = self._cross_interaction_batch_file_map()
                 preferred_columns = [
@@ -889,7 +1004,11 @@ class ResultsPage(QWidget):
                     "n_opposite_direction",
                     "n_same_direction_large_delta",
                     "n_exclusive",
+                    "n_exclusive_A",
+                    "n_exclusive_B",
                     "n_exclusive_supported",
+                    "n_exclusive_A_supported",
+                    "n_exclusive_B_supported",
                     "n_exclusive_low_power",
                     "n_exclusive_counterpart_not_found",
                     "delta_top20_model_top20_overlap",
@@ -937,26 +1056,30 @@ class ResultsPage(QWidget):
                 self._populate_table(
                     selected_table,
                     preferred_columns,
-                    file_path=batch_files.get(selected_key),
+                    file_path=batch_files.get("batch_summary"),
                     output_dir=self.project_service.cross_comparison_interaction_batch_output_dir(),
-                    preview_name=f"5.4.4 {self.group_interaction_view.currentText()}",
+                    preview_name="5.4.3 all-pair summary table",
                 )
                 self._set_detail_text(
-                    "5.4.4 all-pair batch summary.\n"
+                    module_detail("5.4.interaction")
+                    + "\n\n5.4.3 all-pair batch summary.\n"
                     "Scope: every user-defined comparison pair plus any missing pairwise combinations among selected comparisons.\n"
                     f"Shared-event filter: rMATS_FDR <= 0.05 and abs(dPSI) >= {abs_cutoff:.3f} in both comparisons.\n"
                     f"Large delta cutoff: {delta_cutoff:.3f}; min mean total junction reads: {min_reads}.\n"
                     "Batch summary = one row per pair with counts and the top-ranked interaction event.\n"
                     "All-pair top interactions = top 100 interaction-priority events per pair.\n"
-                    "All-pair exclusive support = events significant in one comparison only, with counterpart read-support classification.\n"
+                    "All-pair exclusive support is split explicitly into A-specific and B-specific counts.\n"
+                    "- n_exclusive_A: significant only in comparison A, then checked for counterpart read support in comparison B.\n"
+                    "- n_exclusive_B: significant only in comparison B, then checked for counterpart read support in comparison A.\n"
+                    "- n_exclusive_A_supported / n_exclusive_B_supported: subset where the counterpart event exists and has enough read support but is not significant.\n"
                     "Delta benchmark compares simple abs(delta dPSI) ranking against the replicate-aware interaction model ranking, so you can see which events are only obvious by effect size versus model-supported."
                     " The model-supported view includes quasi-binomial diagnostics and a formal beta-binomial likelihood-ratio interaction test where replicate IJC/SJC counts are available.\n"
-                    "exclusive support definitions:\n"
+                    "A/B-specific read-support definitions:\n"
                     "- supported_non_significant: the same event is found in the other comparison and has enough mean IJC+SJC read support, but does not pass FDR/dPSI significance there.\n"
                     "- low_power_or_absent: the counterpart side has low mean junction read support, so absence of significance should be interpreted cautiously.\n"
                     "- counterpart_event_not_found: the same event key is not found in the other comparison's rMATS event list.\n"
                     "read support = mean total junction reads from replicate IJC+SJC values on the non-significant/counterpart side.",
-                    "5.4.4 batch result loaded. Open Detail for exclusive support, model and benchmark definitions.",
+                    "5.4.3 batch result loaded. Open Detail for A/B-specific support, model and benchmark definitions.",
                 )
                 return
             interaction_tables = self.project_service.preview_cross_comparison_as_interactions(
@@ -968,20 +1091,20 @@ class ResultsPage(QWidget):
             )
             state = self.project_service.module_state("cross_comparison_as_interactions")
             self.context_header.setText(
-                f"Comparison set: {pair_name or 'selected pair'} | 5.4.4 models shared significant AS-event dPSI differences with replicate-level rMATS counts."
+                f"Comparison set: {pair_name or 'selected pair'} | 5.4.3 models AS-event differences with replicate-level rMATS counts and read support."
             )
             self._set_explanation(
-                "5.4.4 is cross-comparison AS interaction modeling. It uses rMATS significant events and replicate-level IJC/SJC counts in a binomial GLM: inclusion ~ comparison + group + comparison:group. "
+                "5.4.3 is the main cross-comparison AS event module. It uses rMATS significant events and replicate-level IJC/SJC counts in a binomial GLM: inclusion ~ comparison + group + comparison:group. "
                 "The interaction term tests whether the AS effect differs between comparison A and B; Pearson overdispersion is used as a quasi-binomial-style correction. "
-                "The final ranking adds empirical-Bayes shrinkage and a priority score combining effect-size divergence, shrunken confidence, replicate consistency and read support."
+                "A-specific and B-specific tables are split explicitly, so events significant only in A are not mixed with events significant only in B."
             )
             if state.get("status") == "not_run":
-                self._draw_placeholder("Not run.\nNo cached 5.4.4 interaction modeling result is loaded.")
-                self.details.setPlainText(state.get("message", "5.4.4 has not been run yet."))
+                self._draw_placeholder("Not run.\nNo cached 5.4.3 interaction/read-support result is loaded.")
+                self.details.setPlainText(state.get("message", "5.4.3 has not been run yet."))
                 self._sync_footer_info()
                 self._reset_plot_view()
                 return
-            selected_table = interaction_tables.get(selected_key, pd.DataFrame())
+            selected_table = interaction_tables.get(source_table_key, pd.DataFrame())
             self._draw_cross_as_interaction_summary(interaction_tables, pair_name, abs_cutoff, delta_cutoff, min_reads)
             interaction_files = self._cross_interaction_file_map(pair_id)
             preferred_columns = [
@@ -989,6 +1112,10 @@ class ResultsPage(QWidget):
                 "event_type",
                 "event_id",
                 "event_matching_key",
+                "unified_display_class",
+                "unified_result_type",
+                "support_class",
+                "event_class",
                 "comparison_A",
                 "comparison_B",
                 "experiment_A_display_name",
@@ -1062,7 +1189,6 @@ class ResultsPage(QWidget):
                 "non_significant_side_dPSI",
                 "non_significant_side_FDR",
                 "non_significant_side_read_support",
-                "event_class",
                 "abs_dPSI_significance_cutoff_used",
                 "large_delta_dPSI_cutoff_used",
                 "min_total_reads_used",
@@ -1081,12 +1207,13 @@ class ResultsPage(QWidget):
             self._populate_table(
                 selected_table,
                 preferred_columns,
-                file_path=interaction_files.get(selected_key),
+                file_path=interaction_files.get(source_table_key),
                 output_dir=self.project_service.cross_comparison_interaction_output_dir(pair_id),
-                preview_name=f"5.4.4 {self.group_interaction_view.currentText()}",
+                preview_name="5.4.3 unified AS interaction/read-support event table",
             )
             self._set_detail_text(
-                f"5.4.4 AS interaction modeling for {pair_name or 'selected pair'}.\n"
+                module_detail("5.4.interaction")
+                + f"\n\nCurrent selected pair: {pair_name or 'selected pair'}.\n"
                 f"Shared-event filter: rMATS_FDR <= 0.05 and abs(dPSI) >= {abs_cutoff:.3f} in both comparisons.\n"
                 f"Large delta cutoff: {delta_cutoff:.3f}; min mean total junction reads: {min_reads}.\n"
                 "Event matching key = normalized gene + event_type + event_id, so multiple events from the same gene stay separate.\n"
@@ -1096,17 +1223,19 @@ class ResultsPage(QWidget):
                 "Beta-binomial output is a separate likelihood-ratio interaction fit with beta_binomial_pvalue/FDR and beta_binomial_rho; beta_binomial_rho_estimate is kept only as the quick overdispersion-derived diagnostic estimate.\n"
                 "Empirical-Bayes shrinkage pulls unstable log-odds toward zero based on sampling SE, and interaction_priority_score ranks events by delta dPSI, shrunken statistical confidence, replicate consistency and read support.\n"
                 "Delta benchmark compares simple abs(delta dPSI) ranking with model ranking; benchmark_class marks events that are top-ranked by delta only, model only, or both.\n"
-                "Exclusive table is not an interaction test; it flags events significant in one comparison but not shared-significant in the other. "
+                "A-specific/B-specific tables are not interaction tests by themselves; they flag events significant in only one side of the selected A-vs-B comparison pair. "
                 "For each exclusive event, Katana checks the counterpart event in the other comparison and classifies it as supported_non_significant, low_power_or_absent, or counterpart_event_not_found using mean IJC+SJC read support.\n"
-                "exclusive support definitions:\n"
+                "A/B-specific support definitions:\n"
+                "- comparison_A_only: significant in comparison A, then checked for counterpart read support in comparison B.\n"
+                "- comparison_B_only: significant in comparison B, then checked for counterpart read support in comparison A.\n"
                 "- supported_non_significant: counterpart event exists and has enough read support but fails FDR/dPSI significance.\n"
                 "- low_power_or_absent: counterpart event has low read support, so this is not strong absence evidence.\n"
                 "- counterpart_event_not_found: same event key was not detected in the other comparison table.\n"
                 "replicate_consistency_score = how consistently replicate-level PSI shifts agree with the comparison-level direction; higher is more reproducible.\n"
-                "\nDifference from 5.4.3:\n"
-                "- 5.4.3 is a simple event-level dPSI pattern table using already significant rMATS event dPSI values. It does not model replicate counts.\n"
-                "- 5.4.4 uses replicate-level rMATS IJC/SJC counts to estimate whether the AS effect differs between comparison A and B, then reports model diagnostics, FDR, read support, benchmark, and ranking.",
-                "5.4.4 result loaded. Open Detail for model, read support and 5.4.3-vs-5.4.4 definitions.",
+                "\nLegacy note:\n"
+                "- The old summary-only dPSI pattern page has been removed from the main navigation because this read-count-aware module is the stronger default path.\n"
+                "- Setting min reads very low can emulate weak read-support filtering, but the model still uses replicate IJC/SJC structure when available.",
+                "5.4.3 result loaded. Open Detail for model and A/B-specific read-support definitions.",
             )
             return
         if mode == "pattern":
@@ -1120,15 +1249,14 @@ class ResultsPage(QWidget):
             )
             state = self.project_service.module_state("cross_comparison_as_patterns")
             self.context_header.setText(
-                f"Comparison set: {pair_name or 'selected pair'} | 5.4.3 compares shared significant AS events between the two comparisons using standardized dPSI only."
+                f"Legacy summary-only dPSI pattern: {pair_name or 'selected pair'} | Hidden from main workflow; use 5.4.3 for read-count-aware AS interaction."
             )
             self._set_explanation(
-                "Cross-comparison significant AS event dPSI pattern analysis is a pattern-prioritization/follow-up section, not an interaction significance test. "
-                "Default practical AS filters are rMATS_FDR <= 0.05 and abs(dPSI) >= 0.10, and both dPSI cutoffs below are user-adjustable."
+                "Legacy dPSI-only pattern analysis is kept only for backward cache compatibility. It does not use replicate read counts, so it has been removed from the main 5.4 navigation."
             )
             if state.get("status") == "not_run":
-                self._draw_placeholder("Not run.\nNo cached 5.4.3 result is loaded.")
-                self.details.setPlainText(state.get("message", "5.4.3 has not been run yet."))
+                self._draw_placeholder("Legacy module not run.\nUse 5.4.3 Cross-comparison AS interaction modeling instead.")
+                self.details.setPlainText(state.get("message", "Legacy summary-only dPSI pattern has not been run."))
                 self._sync_footer_info()
                 self._reset_plot_view()
                 return
@@ -1170,18 +1298,23 @@ class ResultsPage(QWidget):
                 preview_name=f"5.4.3 {self.group_pattern_view.currentText()}",
             )
             self._set_detail_text(
-                f"5.4.3 pattern prioritization for {pair_name or 'selected pair'}.\n"
+                module_detail("5.4.dpsi")
+                + f"\n\nCurrent selected pair: {pair_name or 'selected pair'}.\n"
                 f"abs(dPSI) significance cutoff: {abs_cutoff:.3f}\n"
                 f"large cross-comparison delta cutoff: {delta_cutoff:.3f}\n"
                 "Event matching key = normalized gene + event_type + event_id (coordinates fallback when event_id is missing).\n"
                 "If no rows pass the current filters, the table will show 'No events found'.\n"
-                "\nDifference from 5.4.4:\n"
-                "- 5.4.3 compares standardized dPSI values for shared significant rMATS AS events. It is fast pattern prioritization, not a replicate-aware interaction test.\n"
-                "- 5.4.4 uses replicate-level IJC/SJC read counts and statistical modeling to test/support cross-comparison AS effect differences.",
-                "5.4.3 result loaded. Open Detail for cutoff, event matching and 5.4.3-vs-5.4.4 definitions.",
+                "\nLegacy status:\n"
+                "- This summary-only dPSI page was removed from main navigation because it is mostly a weaker version of the read-count-aware 5.4.3 module.\n"
+                "- Use 5.4.3 for the main AS-event comparison because it keeps A/B-specific read support and replicate-level IJC/SJC modeling.",
+                "Legacy dPSI pattern result loaded. Prefer 5.4.3 for main interpretation.",
             )
             return
-        if mode in cross_modes:
+        if mode in {"venn", "venn_multi", "venn_multi_similarity"}:
+            cross_matrix = pd.DataFrame()
+            filtered_summary = pd.DataFrame()
+            filtered_events = pd.DataFrame()
+        elif mode in cross_modes:
             cross_matrix_all = self.project_service.preview_cross_comparison_candidate_matrix(allow_generate=False)
             cross_matrix = self._pairwise_candidate_matrix(cross_matrix_all, pair_id)
             self.context_header.setText(
@@ -1265,7 +1398,9 @@ class ResultsPage(QWidget):
                 "rMATS_FDR_B",
                 "event_type_A",
                 "event_type_B",
-                "pair_direction_reversed",
+                "pair_gene_level_direction_changed",
+                "pair_DEG_direction_reversed",
+                "pair_dominant_AS_direction_reversed",
                 "pair_tier_changed",
                 "pair_evidence_class_changed",
                 "best_pair_rank",
@@ -1278,7 +1413,8 @@ class ResultsPage(QWidget):
                 preview_name=f"Pairwise candidate matrix - {pair_name or 'selected pair'}",
             )
             self._set_detail_text(
-                "Pairwise candidate matrix built only from per-comparison candidate screening results.\n"
+                module_detail("5.4.matrix")
+                + "\n\nPair-specific notes:\n"
                 "Level: gene-level candidate membership, not event-level AS interaction modeling.\n"
                 f"Scope: selected comparison pair only: {pair_name or 'comparison A vs comparison B'}.\n"
                 "Function: this is the base A-vs-B membership matrix. One row = one unique gene that is a candidate in comparison A and/or comparison B.\n"
@@ -1287,8 +1423,11 @@ class ResultsPage(QWidget):
                 "- tier_A / tier_B, rank_A / rank_B, evidence_class_A / evidence_class_B and direction_class_A / direction_class_B\n"
                 "- pair_membership_label: A only, B only, or shared A+B\n"
                 "- pair_membership_count: 1 means A-only/B-only; 2 means shared by both sides of this pair. This replaces the confusing '1 comparison / 2 comparison' chart wording.\n"
+                "- pair_gene_level_direction_changed: gene-level DEG and/or dominant AS direction changed between A and B. This is not strict same-event AS reversal.\n"
+                "- pair_DEG_direction_reversed: standardized_log2FC changes sign between A and B.\n"
+                "- pair_dominant_AS_direction_reversed: dominant_rMATS_standardized_dPSI changes sign between A and B. The dominant event may differ by comparison, so use 5.4.3/5.4.4 for strict same-event AS reversal.\n"
                 "This page is not global anymore. Change the pair tab to inspect a different KO-effect / DP-effect style comparison.\n"
-                "This page is also not an event-level AS test; use 5.4.3/5.4.4 for pair-specific AS-event differences.\n"
+                "This page is also not an event-level AS test; use 5.4.3 for pair-specific AS-event differences with replicate read support.\n"
                 "Rank meaning:\n"
                 "- rank_A / rank_B = the original within-comparison numeric rank from 5.3.1\n"
                 "- best_pair_rank = the best (lowest) rank observed across comparison A and B\n"
@@ -1325,7 +1464,9 @@ class ResultsPage(QWidget):
                 cross_matrix["candidate_pattern"].astype(str).isin(
                     [
                         "shared_pair",
-                        "shared_direction_reversed",
+                        "shared_DEG_direction_reversed",
+                        "shared_dominant_AS_direction_reversed",
+                        "shared_mixed_direction_changed",
                         "shared_tier_changed",
                         "shared_evidence_class_changed",
                         "comparison_A_specific_lost_in_B",
@@ -1360,9 +1501,19 @@ class ResultsPage(QWidget):
                 "evidence_class_B",
                 "direction_class_A",
                 "direction_class_B",
+                "standardized_log2FC_A",
+                "standardized_log2FC_B",
                 "dPSI_A",
                 "dPSI_B",
-                "pair_direction_reversed",
+                "DE_FDR_A",
+                "DE_FDR_B",
+                "rMATS_FDR_A",
+                "rMATS_FDR_B",
+                "event_type_A",
+                "event_type_B",
+                "pair_gene_level_direction_changed",
+                "pair_DEG_direction_reversed",
+                "pair_dominant_AS_direction_reversed",
                 "pair_tier_changed",
                 "pair_evidence_class_changed",
                 "best_pair_rank",
@@ -1375,7 +1526,8 @@ class ResultsPage(QWidget):
                 preview_name=f"Pairwise gene pattern view - {pair_name or 'selected pair'}",
             )
             self._set_detail_text(
-                "Shared / specific / gained / lost candidate view derived from the selected pairwise candidate matrix.\n"
+                module_detail("5.4.pattern")
+                + "\n\nPair-specific notes:\n"
                 "Level: gene-level candidate-pattern interpretation, not event-level AS interaction modeling.\n"
                 f"Scope: selected comparison pair only: {pair_name or 'comparison A vs comparison B'}.\n"
                 "Function: 5.4.2 is the pairwise pattern-interpretation page. It asks whether a gene is shared by A/B, A-specific, B-specific, or changed in direction/tier/evidence class between A and B.\n"
@@ -1383,14 +1535,161 @@ class ResultsPage(QWidget):
                 "- shared_pair: candidate in both comparison A and comparison B\n"
                 "- comparison_A_specific_lost_in_B: candidate in A only; 'lost' is relative to the selected A -> B pair order, not automatically a time-course claim\n"
                 "- comparison_B_specific_gained_in_B: candidate in B only; 'gained' is relative to the selected A -> B pair order\n"
-                "- shared_direction_reversed: candidate in both A and B, but standardized DEG or dominant AS direction changes sign\n"
+                "- shared_DEG_direction_reversed: candidate in both A and B, and standardized_log2FC changes sign between A and B\n"
+                "- shared_dominant_AS_direction_reversed: candidate in both A and B, and dominant_rMATS_standardized_dPSI changes sign between A and B\n"
+                "- shared_mixed_direction_changed: candidate in both A and B, and both DEG and dominant AS directions change sign. This is gene-level direction change, not strict same-event AS reversal\n"
                 "- shared_tier_changed: candidate in both A and B, but candidate tier differs\n"
                 "- shared_evidence_class_changed: candidate in both A and B, but evidence class differs\n"
+                "Important: 5.4.2 direction classes are gene-level candidate interpretation. For strict same AS-event reversal, use 5.4.3/5.4.4 where event_matching_key is fixed.\n"
                 "Why 5.4.1 and 5.4.2 can look similar: both use the same selected-pair source genes, but 5.4.1 is raw A/B membership while 5.4.2 groups genes into interpretable pairwise classes.\n"
                 "Rank still means the original within-comparison numeric rank from 5.3.1.\n"
                 "best_pair_rank is not a new effect size; it is simply the best (lowest) within-comparison candidate rank across A and B.",
                 "5.4.2 pairwise pattern view loaded. Open Detail for shared/specific/gained/lost definitions.",
             )
+        elif mode == "venn":
+            abs_cutoff = float(self.group_venn_sig_cutoff.value())
+            min_reads = int(self.group_venn_min_reads.value())
+            signature = self._group_venn_signature()
+            cached = self._group_venn_cache.get(signature, {})
+            summary = cached.get("summary", pd.DataFrame())
+            events = cached.get("events", pd.DataFrame())
+            self.context_header.setText(
+                f"Comparison pair: {pair_name or 'selected pair'} | Event-level Venn for significant AS events."
+            )
+            self._set_explanation(
+                "5.4.4 shows event-level Venn overlap only: A-specific significant AS events, shared significant AS events, and B-specific significant AS events. "
+                "The read filter applies only to the A-only/B-only sides by checking the counterpart comparison's junction read support."
+            )
+            self._draw_cross_venn_summary(summary, pair_name)
+            event_columns = [
+                "event_matching_key",
+                "gene",
+                "gene_symbol",
+                "gene_id",
+                "event_type",
+                "event_id",
+                "coordinates",
+                "event_class",
+                "comparison_A_display_name",
+                "comparison_B_display_name",
+                "dPSI_A",
+                "FDR_A",
+                "dPSI_B",
+                "FDR_B",
+                "direction_A",
+                "direction_B",
+                "mean_total_reads_A",
+                "mean_total_reads_B",
+                "counterpart_read_support",
+            ]
+            summary_columns = [
+                "level",
+                "comparison_A_display_name",
+                "comparison_B_display_name",
+                "exclusive_filter_mode",
+                "A_only",
+                "shared_A_and_B",
+                "B_only",
+                "total_union",
+                "intersection_fraction",
+                "abs_dPSI_cutoff_used",
+                "min_counterpart_reads_used",
+                "source_cache",
+                "notes",
+            ]
+            preview_frame = events if isinstance(events, pd.DataFrame) and not events.empty else summary
+            preview_columns = event_columns if isinstance(events, pd.DataFrame) and not events.empty else summary_columns
+            self._populate_table(
+                preview_frame if isinstance(preview_frame, pd.DataFrame) else pd.DataFrame(),
+                [column for column in preview_columns if isinstance(preview_frame, pd.DataFrame) and column in preview_frame.columns],
+                output_dir=self.project_service.cross_comparison_output_dir(),
+                preview_name=f"5.4.4 Venn / overlap - {pair_name or 'selected pair'}",
+            )
+            cache_note = ""
+            if not cached:
+                cache_note = (
+                    "\n\nNo cached 5.4.4 event-overlap result is loaded for this pair. "
+                    "Click Run 5.4.4 Event Venn to build only this current pair's event-level overlap."
+                )
+            self._set_detail_text(
+                module_detail("5.4.venn")
+                + f"\n\nCurrent pair: {pair_name or 'selected pair'}.\n"
+                f"Significant AS definition: rMATS_FDR <= 0.05 and abs(standardized dPSI) >= {abs_cutoff:.3f}.\n"
+                f"Counterpart read support threshold: mean IJC+SJC reads >= {min_reads}.\n"
+                "This page is event-level only. It no longer mixes 5.4.1 gene candidates into the Venn counts.\n"
+                "Shared = significant in both comparisons and therefore modeled in 5.4.3.\n"
+                "A only = significant only in comparison A.\n"
+                "B only = significant only in comparison B.\n"
+                f"Exclusive-side filter = {self.group_venn_filter.currentText()}.\n"
+                "When the filter is read-supported / low-power / counterpart-not-found, it only subsets the A-only and B-only sides using counterpart read-support classification; the shared-significant center remains unchanged.\n"
+                "The Venn counts are descriptive overlap counts. They are not statistical tests and they do not replace 5.4.3 interaction modeling."
+                + cache_note,
+                "5.4.4 event-level Venn loaded. Open Detail for significant-event and read-support interpretation.",
+            )
+        elif mode in {"venn_multi", "venn_multi_similarity"}:
+            signature = self._group_venn_multi_signature()
+            cached = self._group_venn_multi_cache if self._group_venn_multi_cache.get("signature") == signature else {}
+            summary = cached.get("summary", pd.DataFrame())
+            events = cached.get("events", pd.DataFrame())
+            selected_names = cached.get("selected_names", [])
+            is_similarity_page = mode == "venn_multi_similarity"
+            self.context_header.setText(
+                "5.4.6 selected-comparison direction-aware AS-event similarity heatmap."
+                if is_similarity_page
+                else "5.4.5 selected-comparison direction-aware AS-event Venn."
+            )
+            self._set_explanation(
+                ("5.4.6 compares" if is_similarity_page else "5.4.5 compares")
+                + " strict rMATS-significant AS events across user-selected comparisons. "
+                "Venn and similarity are direction-aware: shared requires the same event_matching_key and the same standardized dPSI sign. Opposite-direction shared identities are flagged in the table."
+            )
+            self._draw_group_venn_multi(
+                summary if isinstance(summary, pd.DataFrame) else pd.DataFrame(),
+                selected_names if isinstance(selected_names, list) else [],
+                events if isinstance(events, pd.DataFrame) else pd.DataFrame(),
+            )
+            event_columns = [
+                "event_matching_key",
+                "gene",
+                "gene_symbol",
+                "event_type",
+                "event_id",
+                "coordinates",
+                "n_comparisons_significant",
+                "comparison_membership",
+                "membership_pattern",
+                "direction_pattern",
+                "has_opposite_direction",
+            ]
+            if isinstance(events, pd.DataFrame) and not events.empty:
+                for name in selected_names if isinstance(selected_names, list) else []:
+                    safe = self._safe_column_label(str(name))
+                    event_columns.extend([f"present_{safe}", f"direction_{safe}", f"dPSI_{safe}", f"FDR_{safe}"])
+            self._populate_table(
+                events if isinstance(events, pd.DataFrame) else pd.DataFrame(),
+                [column for column in event_columns if isinstance(events, pd.DataFrame) and column in events.columns],
+                output_dir=self.project_service.cross_comparison_output_dir(),
+                preview_name="5.4.6 selected-comparison direction-aware AS-event similarity" if is_similarity_page else "5.4.5 selected-comparison direction-aware AS-event Venn",
+            )
+            if not cached:
+                self._set_detail_text(
+                    module_detail("5.4.venn_multi")
+                    + (
+                        "\n\nNo cached 5.4.6 similarity result is loaded. Comparisons are auto-loaded from Pairing / selected comparisons; tick the comparisons you want, then click Run Direction-aware Similarity. Opening this page does not auto-scan rMATS files."
+                        if is_similarity_page
+                        else "\n\nNo cached 5.4.5 Venn result is loaded. Comparisons are auto-loaded from Pairing / selected comparisons; tick the comparisons you want, then click Run Direction-aware Venn. Opening this page does not auto-scan rMATS files."
+                    ),
+                    "5.4.6 not run. Click Run Direction-aware Similarity." if is_similarity_page else "5.4.5 not run. Click Run Direction-aware Venn.",
+                )
+            else:
+                self._set_detail_text(
+                    module_detail("5.4.venn_multi")
+                    + f"\n\nSelected comparisons: {', '.join(str(x) for x in selected_names)}\n"
+                    f"Significant AS definition: rMATS_FDR <= 0.05 and abs(standardized dPSI) >= {self.group_venn_multi_sig_cutoff.value():.3f}.\n"
+                    f"Minimum mean IJC+SJC reads loaded for event support context: {self.group_venn_multi_min_reads.value()}.\n"
+                    "This is direction-aware event-level overlap only. It is descriptive and does not run the 5.4.3 interaction model.",
+                    "5.4.6 selected-comparison similarity loaded." if is_similarity_page else "5.4.5 selected-comparison event Venn loaded.",
+                )
         elif mode == "reversal":
             reversed_only = cross_matrix.loc[cross_matrix["candidate_pattern"].astype(str) == "direction_reversed"].copy() if cross_matrix is not None and not cross_matrix.empty else pd.DataFrame()
             self._draw_cross_candidate_summary(
@@ -1407,7 +1706,7 @@ class ResultsPage(QWidget):
                 "Level: gene-level candidate direction summary. It is not a replicate-level interaction test.\n"
                 "It does not refer to Pairing/config flip. It means the standardized transcript direction and/or dominant rMATS splicing direction changes sign between comparisons.\n"
                 "The direction is inherited from the standardized 5.3 candidate table: DEG uses standardized_log2FC and AS uses standardized/dominant dPSI. "
-                "Use 5.4.4 when you need event-level AS interaction modeling with replicate read support."
+                "Use 5.4.3 when you need event-level AS interaction modeling with replicate read support."
             )
         elif mode == "heatmap":
             self._draw_program_heatmap(filtered_events, pair_name)
@@ -1520,7 +1819,9 @@ class ResultsPage(QWidget):
         working = frame.copy()
         pattern_order = [
             "shared_pair",
-            "shared_direction_reversed",
+            "shared_DEG_direction_reversed",
+            "shared_dominant_AS_direction_reversed",
+            "shared_mixed_direction_changed",
             "shared_tier_changed",
             "shared_evidence_class_changed",
             "comparison_A_specific_lost_in_B",
@@ -1537,7 +1838,9 @@ class ResultsPage(QWidget):
         ]
         pattern_colors = {
             "shared_pair": "#4C78A8",
-            "shared_direction_reversed": "#E45756",
+            "shared_DEG_direction_reversed": "#E45756",
+            "shared_dominant_AS_direction_reversed": "#B279A2",
+            "shared_mixed_direction_changed": "#D62728",
             "shared_tier_changed": "#B279A2",
             "shared_evidence_class_changed": "#FF9DA6",
             "comparison_A_specific_lost_in_B": "#F58518",
@@ -1593,12 +1896,12 @@ class ResultsPage(QWidget):
         self._bar_patches = []
         self.figure.clear()
         axis = self.figure.add_subplot(111)
-        self._set_axis_title(axis, f"5.4.3 significant AS dPSI patterns: {pair_name or 'selected pair'}")
+        self._set_axis_title(axis, f"Legacy summary-only dPSI patterns: {pair_name or 'selected pair'}")
         counts = {
             "Same dir + large delta": len(tables.get("same_direction_large_delta", pd.DataFrame())),
             "Opposite direction": len(tables.get("opposite_direction", pd.DataFrame())),
             "All shared significant": len(tables.get("all_shared", pd.DataFrame())),
-            "Condition-specific": len(tables.get("condition_specific", pd.DataFrame())),
+            "A-only / B-only": len(tables.get("condition_specific", pd.DataFrame())),
         }
         if not any(counts.values()):
             axis.axis("off")
@@ -1619,6 +1922,837 @@ class ResultsPage(QWidget):
         self._finalize_axes_layout(rotate_x=True, bottom=0.28)
         self.canvas.draw_idle()
 
+    def _group_venn_signature(self) -> tuple[str | None, float, int, str]:
+        return (
+            self._current_tab_key(self.group_tabs),
+            round(float(self.group_venn_sig_cutoff.value()), 6),
+            int(self.group_venn_min_reads.value()),
+            str(self.group_venn_filter.currentData() or "all_significant"),
+        )
+
+    def _build_pair_venn_tables(self, pair_id: str | None) -> tuple[pd.DataFrame, pd.DataFrame]:
+        pair = self._pair_definition_from_id(pair_id)
+        abs_cutoff = float(self.group_venn_sig_cutoff.value())
+        min_reads = int(self.group_venn_min_reads.value())
+        venn_filter = str(self.group_venn_filter.currentData() or "all_significant")
+        if pair is None or not pair.comparison_a or not pair.comparison_b:
+            return pd.DataFrame(), pd.DataFrame()
+
+        comp_a = str(pair.comparison_a)
+        comp_b = str(pair.comparison_b)
+        name_a = self._comparison_name_from_id(comp_a) or comp_a
+        name_b = self._comparison_name_from_id(comp_b) or comp_b
+        frame_a = self.project_service._cross_as_interaction_source_frame(comp_a, abs_cutoff, min_reads, significant_only=True)
+        frame_b = self.project_service._cross_as_interaction_source_frame(comp_b, abs_cutoff, min_reads, significant_only=True)
+        keys_a = set(frame_a.get("event_matching_key", pd.Series(dtype="object")).dropna().astype(str).tolist())
+        keys_b = set(frame_b.get("event_matching_key", pd.Series(dtype="object")).dropna().astype(str).tolist())
+        shared_keys = keys_a & keys_b
+        a_only_keys = keys_a - keys_b
+        b_only_keys = keys_b - keys_a
+        counterpart_b = (
+            self.project_service._cross_as_interaction_source_frame(comp_b, abs_cutoff, min_reads, significant_only=False, candidate_keys=a_only_keys)
+            if a_only_keys
+            else pd.DataFrame()
+        )
+        counterpart_a = (
+            self.project_service._cross_as_interaction_source_frame(comp_a, abs_cutoff, min_reads, significant_only=False, candidate_keys=b_only_keys)
+            if b_only_keys
+            else pd.DataFrame()
+        )
+
+        def by_key(frame: pd.DataFrame) -> dict[str, pd.Series]:
+            if frame.empty or "event_matching_key" not in frame.columns:
+                return {}
+            result: dict[str, pd.Series] = {}
+            for _, row in frame.iterrows():
+                key = str(row.get("event_matching_key", ""))
+                if key and key not in result:
+                    result[key] = row
+            return result
+
+        lookup_a = by_key(frame_a)
+        lookup_b = by_key(frame_b)
+        lookup_counterpart_a = by_key(counterpart_a)
+        lookup_counterpart_b = by_key(counterpart_b)
+
+        def support_label(row: pd.Series | None) -> str:
+            if row is None:
+                return "counterpart_event_not_found"
+            mean_reads = pd.to_numeric(row.get("mean_total_reads"), errors="coerce")
+            replicate_count = pd.to_numeric(row.get("replicate_count"), errors="coerce")
+            if pd.notna(mean_reads) and float(mean_reads) >= min_reads and pd.notna(replicate_count) and int(replicate_count) >= 2:
+                return "supported_non_significant"
+            return "low_power_or_absent"
+
+        def should_keep_exclusive(label: str) -> bool:
+            if venn_filter == "supported_only":
+                return label == "supported_non_significant"
+            if venn_filter == "low_power_only":
+                return label == "low_power_or_absent"
+            if venn_filter == "counterpart_not_found_only":
+                return label == "counterpart_event_not_found"
+            return True
+
+        def base_fields(primary: pd.Series | None, counterpart: pd.Series | None, key: str) -> dict[str, object]:
+            source = primary if primary is not None else counterpart
+            source = source if source is not None else pd.Series(dtype="object")
+            return {
+                "event_matching_key": key,
+                "gene": source.get("gene", ""),
+                "gene_symbol": source.get("gene_symbol", ""),
+                "gene_id": source.get("gene_id", ""),
+                "event_type": source.get("event_type", ""),
+                "event_id": source.get("event_id", ""),
+                "coordinates": source.get("coordinates", ""),
+            }
+
+        rows: list[dict[str, object]] = []
+
+        def append_row(key: str, event_class: str, row_a: pd.Series | None, row_b: pd.Series | None, counterpart_support: str) -> None:
+            event_row = base_fields(row_a, row_b, key)
+            event_row.update(
+                {
+                    "event_class": event_class,
+                    "comparison_A": comp_a,
+                    "comparison_B": comp_b,
+                    "comparison_A_display_name": name_a,
+                    "comparison_B_display_name": name_b,
+                    "dPSI_A": row_a.get("dPSI", pd.NA) if row_a is not None else pd.NA,
+                    "FDR_A": row_a.get("FDR", pd.NA) if row_a is not None else pd.NA,
+                    "dPSI_B": row_b.get("dPSI", pd.NA) if row_b is not None else pd.NA,
+                    "FDR_B": row_b.get("FDR", pd.NA) if row_b is not None else pd.NA,
+                    "direction_A": row_a.get("direction", "") if row_a is not None else "",
+                    "direction_B": row_b.get("direction", "") if row_b is not None else "",
+                    "mean_total_reads_A": row_a.get("mean_total_reads", pd.NA) if row_a is not None else pd.NA,
+                    "mean_total_reads_B": row_b.get("mean_total_reads", pd.NA) if row_b is not None else pd.NA,
+                    "counterpart_read_support": counterpart_support,
+                }
+            )
+            rows.append(event_row)
+
+        for key in sorted(shared_keys):
+            append_row(key, "shared_significant", lookup_a.get(key), lookup_b.get(key), "shared_significant")
+        for key in sorted(a_only_keys):
+            label = support_label(lookup_counterpart_b.get(key))
+            if should_keep_exclusive(label):
+                append_row(key, "comparison_A_specific", lookup_a.get(key), lookup_counterpart_b.get(key), label)
+        for key in sorted(b_only_keys):
+            label = support_label(lookup_counterpart_a.get(key))
+            if should_keep_exclusive(label):
+                append_row(key, "comparison_B_specific", lookup_counterpart_a.get(key), lookup_b.get(key), label)
+
+        events = pd.DataFrame(rows)
+        if not events.empty:
+            events = events.sort_values(["event_class", "gene", "event_type", "FDR_A", "FDR_B"], na_position="last").reset_index(drop=True)
+        a_only_count = int(events["event_class"].eq("comparison_A_specific").sum()) if "event_class" in events.columns else 0
+        b_only_count = int(events["event_class"].eq("comparison_B_specific").sum()) if "event_class" in events.columns else 0
+        shared_count = int(events["event_class"].eq("shared_significant").sum()) if "event_class" in events.columns else 0
+        total_events = a_only_count + shared_count + b_only_count
+        filter_note = {
+            "all_significant": "All significant AS events; A-only and B-only are not filtered by counterpart reads",
+            "supported_only": f"A-only/B-only filtered to counterpart events with mean IJC+SJC reads >= {min_reads}",
+            "low_power_only": f"A-only/B-only filtered to counterpart events with mean IJC+SJC reads < {min_reads} or absent reads",
+            "counterpart_not_found_only": "A-only/B-only filtered to events not found in the counterpart comparison",
+        }.get(venn_filter, "All significant AS events")
+        summary = pd.DataFrame(
+            [
+                {
+                    "level": "Significant AS events",
+                    "pair_id": pair_id or "",
+                    "pair_name": pair.resolved_name,
+                    "comparison_A": comp_a,
+                    "comparison_B": comp_b,
+                    "comparison_A_display_name": name_a,
+                    "comparison_B_display_name": name_b,
+                    "exclusive_filter_mode": filter_note,
+                    "A_only": a_only_count,
+                    "shared_A_and_B": shared_count,
+                    "B_only": b_only_count,
+                    "total_union": total_events,
+                    "intersection_fraction": (shared_count / total_events) if total_events else 0.0,
+                    "abs_dPSI_cutoff_used": abs_cutoff,
+                    "min_counterpart_reads_used": min_reads,
+                    "source_cache": "5.4.4 direct rMATS strict significant AS-event overlap",
+                    "notes": "Event-level Venn only. Shared = same event key significant in both comparisons. A only and B only are kept separate.",
+                }
+            ]
+        )
+        output_dir = self.project_service.cross_comparison_output_dir()
+        if output_dir is not None:
+            pair_folder = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(pair_id or "selected_pair")).strip("_") or "selected_pair"
+            target_dir = output_dir / "event_venn" / pair_folder
+            target_dir.mkdir(parents=True, exist_ok=True)
+            summary.to_csv(target_dir / "event_venn_summary.tsv", sep="\t", index=False)
+            events.to_csv(target_dir / "event_venn_events.tsv", sep="\t", index=False)
+        return summary, events
+
+    def _build_cross_venn_summary(
+        self,
+        interaction_tables: dict[str, pd.DataFrame] | None,
+        pair_name: str | None,
+        venn_filter: str,
+        min_reads: int,
+    ) -> pd.DataFrame:
+        pair_id = self._current_tab_key(self.group_tabs)
+        pair = self._pair_definition_from_id(pair_id)
+        name_a = self._comparison_name_from_id(pair.comparison_a) if pair is not None else None
+        name_b = self._comparison_name_from_id(pair.comparison_b) if pair is not None else None
+        name_a = name_a or (pair.comparison_a if pair is not None else "comparison A")
+        name_b = name_b or (pair.comparison_b if pair is not None else "comparison B")
+
+        rows: list[dict[str, object]] = []
+
+        interaction_tables = interaction_tables or {}
+        shared_events = interaction_tables.get("shared_interaction", pd.DataFrame())
+        exclusive = interaction_tables.get("exclusive", pd.DataFrame()).copy()
+        filter_note = "All significant AS events; A-only and B-only are not filtered by counterpart reads"
+        if not exclusive.empty and "non_significant_side_read_support" in exclusive.columns:
+            support = exclusive["non_significant_side_read_support"].fillna("").astype(str)
+            if venn_filter == "supported_only":
+                exclusive = exclusive.loc[support.str.startswith("supported_")].copy()
+                filter_note = f"A-only/B-only filtered to counterpart events with mean IJC+SJC reads >= {min_reads}"
+            elif venn_filter == "low_power_only":
+                exclusive = exclusive.loc[support.str.startswith("low_power")].copy()
+                filter_note = f"A-only/B-only filtered to counterpart events with mean IJC+SJC reads < {min_reads} or absent reads"
+            elif venn_filter == "counterpart_not_found_only":
+                exclusive = exclusive.loc[support.str.startswith("counterpart_event_not_found")].copy()
+                filter_note = "A-only/B-only filtered to events not found in the counterpart comparison"
+        a_only_events = 0
+        b_only_events = 0
+        if not exclusive.empty and "exclusive_side" in exclusive.columns:
+            side = exclusive["exclusive_side"].fillna("").astype(str)
+            a_only_events = int(side.eq("comparison_A_only").sum())
+            b_only_events = int(side.eq("comparison_B_only").sum())
+        shared_count = len(shared_events)
+        total_events = a_only_events + shared_count + b_only_events
+        rows.append(
+            {
+                "level": "Significant AS events",
+                "pair_id": pair_id or "",
+                "pair_name": pair_name or "",
+                "comparison_A_display_name": name_a,
+                "comparison_B_display_name": name_b,
+                "exclusive_filter_mode": filter_note,
+                "A_only": a_only_events,
+                "shared_A_and_B": shared_count,
+                "B_only": b_only_events,
+                "total_union": total_events,
+                "intersection_fraction": (shared_count / total_events) if total_events else 0.0,
+                "abs_dPSI_cutoff_used": float(self.group_venn_sig_cutoff.value()),
+                "min_counterpart_reads_used": min_reads,
+                "source_cache": "5.4.3 AS interaction/read-support cache" if total_events else "No events found in current cache/result",
+                "notes": "Event-level Venn only. Shared = significant in both comparisons. A only = significant in comparison A only. B only = significant in comparison B only. Optional filter uses counterpart read-support class.",
+            }
+        )
+        return pd.DataFrame(rows)
+
+    def _draw_single_venn_axis(
+        self,
+        axis,
+        title: str,
+        name_a: str,
+        name_b: str,
+        a_only: int,
+        shared: int,
+        b_only: int,
+        note: str,
+    ) -> None:
+        axis.set_xlim(0, 1)
+        axis.set_ylim(0, 1)
+        axis.axis("off")
+        left_color = "#2563EB"
+        right_color = "#D97706"
+        axis.add_patch(Circle((0.39, 0.52), 0.29, color=left_color, alpha=0.33, ec=left_color, lw=2))
+        axis.add_patch(Circle((0.61, 0.52), 0.29, color=right_color, alpha=0.33, ec=right_color, lw=2))
+        axis.text(0.5, 0.92, title, ha="center", va="center", fontsize=13, fontweight="bold")
+        axis.text(0.27, 0.79, textwrap.shorten(str(name_a), width=30, placeholder="..."), ha="center", va="center", fontsize=9, color=left_color, fontweight="bold")
+        axis.text(0.73, 0.79, textwrap.shorten(str(name_b), width=30, placeholder="..."), ha="center", va="center", fontsize=9, color=right_color, fontweight="bold")
+        axis.text(0.24, 0.52, f"A only\n{a_only}", ha="center", va="center", fontsize=13, fontweight="bold")
+        axis.text(0.50, 0.52, f"shared\n{shared}", ha="center", va="center", fontsize=13, fontweight="bold")
+        axis.text(0.76, 0.52, f"B only\n{b_only}", ha="center", va="center", fontsize=13, fontweight="bold")
+        total = a_only + shared + b_only
+        fraction = shared / total if total else 0
+        axis.text(0.5, 0.16, f"Union = {total} | Intersection fraction = {fraction:.2%}", ha="center", va="center", fontsize=10)
+        axis.text(0.5, 0.07, note, ha="center", va="center", fontsize=8, color="#4B5563")
+
+    def _draw_compact_venn_axis(
+        self,
+        axis,
+        name_a: str,
+        name_b: str,
+        a_only: int,
+        shared: int,
+        b_only: int,
+    ) -> None:
+        axis.set_xlim(0, 1)
+        axis.set_ylim(0, 1)
+        axis.axis("off")
+        left_color = "#2563EB"
+        right_color = "#D97706"
+        axis.add_patch(Circle((0.42, 0.54), 0.30, color=left_color, alpha=0.30, ec=left_color, lw=1.4))
+        axis.add_patch(Circle((0.58, 0.54), 0.30, color=right_color, alpha=0.30, ec=right_color, lw=1.4))
+        axis.text(0.5, 0.96, f"{name_a}\nvs\n{name_b}", ha="center", va="top", fontsize=7.5, fontweight="bold")
+        axis.text(0.30, 0.54, f"A\n{a_only}", ha="center", va="center", fontsize=10, fontweight="bold")
+        axis.text(0.50, 0.54, f"shared\n{shared}", ha="center", va="center", fontsize=10, fontweight="bold")
+        axis.text(0.70, 0.54, f"B\n{b_only}", ha="center", va="center", fontsize=10, fontweight="bold")
+        total = a_only + shared + b_only
+        jaccard = shared / total if total else 0.0
+        axis.text(0.5, 0.08, f"Jaccard {jaccard:.2f}", ha="center", va="center", fontsize=8, color="#374151")
+
+    def _exact_venn_membership_counts(self, events: pd.DataFrame, selected_names: list[str]) -> dict[tuple[bool, ...], int]:
+        if not isinstance(events, pd.DataFrame) or events.empty or not selected_names:
+            return {}
+        columns = [f"present_{self._safe_column_label(str(name))}" for name in selected_names]
+        if any(column not in events.columns for column in columns):
+            return {}
+        counts: dict[tuple[bool, ...], int] = {}
+        for mask_value in range(1, 2 ** len(columns)):
+            mask = tuple(bool(mask_value & (1 << index)) for index in range(len(columns)))
+            row_mask = pd.Series(True, index=events.index)
+            for column, present in zip(columns, mask, strict=False):
+                values = events[column].fillna(False).astype(bool)
+                row_mask &= values if present else ~values
+            counts[mask] = int(row_mask.sum())
+        return counts
+
+    def _direction_aware_venn_events(self, events: pd.DataFrame, selected_names: list[str]) -> pd.DataFrame:
+        if not isinstance(events, pd.DataFrame) or events.empty or not selected_names:
+            return pd.DataFrame()
+        rows: list[dict[str, object]] = []
+        for _, event_row in events.iterrows():
+            key = str(event_row.get("event_matching_key", ""))
+            if not key:
+                continue
+            direction_to_names: dict[str, list[str]] = {"positive": [], "negative": []}
+            for name in selected_names:
+                safe = self._safe_column_label(str(name))
+                if not bool(event_row.get(f"present_{safe}", False)):
+                    continue
+                direction = str(event_row.get(f"direction_{safe}", self._dpsi_sign_label(event_row.get(f"dPSI_{safe}", pd.NA))))
+                if direction in direction_to_names:
+                    direction_to_names[direction].append(str(name))
+            for direction, names in direction_to_names.items():
+                if not names:
+                    continue
+                signed_row: dict[str, object] = {
+                    "signed_event_matching_key": f"{key}::{direction}",
+                    "event_matching_key": key,
+                    "direction": direction,
+                }
+                for name in selected_names:
+                    safe = self._safe_column_label(str(name))
+                    signed_row[f"present_{safe}"] = str(name) in names
+                rows.append(signed_row)
+        return pd.DataFrame(rows)
+
+    def _draw_three_set_venn_axis(self, axis, names: list[str], counts: dict[tuple[bool, ...], int]) -> None:
+        axis.set_xlim(0, 1)
+        axis.set_ylim(0, 1)
+        axis.axis("off")
+        colors = ["#2563EB", "#D97706", "#16A34A"]
+        circles = [
+            (0.40, 0.56, colors[0]),
+            (0.60, 0.56, colors[1]),
+            (0.50, 0.38, colors[2]),
+        ]
+        for x, y, color in circles:
+            axis.add_patch(Circle((x, y), 0.28, color=color, alpha=0.28, ec=color, lw=2))
+        axis.text(0.5, 0.94, "Direction-aware exact Venn across selected comparisons", ha="center", va="center", fontsize=13, fontweight="bold")
+        axis.text(0.25, 0.83, textwrap.shorten(str(names[0]), width=24, placeholder="..."), ha="center", va="center", fontsize=9, color=colors[0], fontweight="bold")
+        axis.text(0.75, 0.83, textwrap.shorten(str(names[1]), width=24, placeholder="..."), ha="center", va="center", fontsize=9, color=colors[1], fontweight="bold")
+        axis.text(0.50, 0.08, textwrap.shorten(str(names[2]), width=28, placeholder="..."), ha="center", va="center", fontsize=9, color=colors[2], fontweight="bold")
+        labels = {
+            (True, False, False): ("A only", 0.25, 0.56),
+            (False, True, False): ("B only", 0.75, 0.56),
+            (False, False, True): ("C only", 0.50, 0.22),
+            (True, True, False): ("A+B", 0.50, 0.66),
+            (True, False, True): ("A+C", 0.38, 0.42),
+            (False, True, True): ("B+C", 0.62, 0.42),
+            (True, True, True): ("A+B+C", 0.50, 0.50),
+        }
+        for mask, (label, x, y) in labels.items():
+            axis.text(x, y, f"{label}\n{counts.get(mask, 0)}", ha="center", va="center", fontsize=10.5, fontweight="bold")
+        total = sum(counts.values())
+        axis.text(0.5, 0.015, f"Union = {total}. Each signed event response is counted once.", ha="center", va="bottom", fontsize=8, color="#4B5563")
+
+    def _draw_four_set_venn_axis(self, axis, names: list[str], counts: dict[tuple[bool, ...], int]) -> None:
+        axis.set_xlim(0, 1)
+        axis.set_ylim(0, 1)
+        axis.axis("off")
+        colors = ["#2563EB", "#D97706", "#16A34A", "#9333EA"]
+        ellipses = [
+            (0.42, 0.58, 0.62, 0.36, 28, colors[0]),
+            (0.58, 0.58, 0.62, 0.36, -28, colors[1]),
+            (0.42, 0.42, 0.62, 0.36, -28, colors[2]),
+            (0.58, 0.42, 0.62, 0.36, 28, colors[3]),
+        ]
+        for x, y, width, height, angle, color in ellipses:
+            axis.add_patch(Ellipse((x, y), width, height, angle=angle, color=color, alpha=0.22, ec=color, lw=2))
+        axis.text(0.5, 0.97, "Direction-aware exact Venn across selected comparisons", ha="center", va="top", fontsize=13, fontweight="bold")
+        legend_y = [0.90, 0.86, 0.82, 0.78]
+        for index, name in enumerate(names[:4]):
+            axis.text(
+                0.04,
+                legend_y[index],
+                f"{chr(65 + index)} = {textwrap.shorten(str(name), width=32, placeholder='...')}",
+                ha="left",
+                va="center",
+                fontsize=8.2,
+                color=colors[index],
+                fontweight="bold",
+            )
+        positions = {
+            (True, False, False, False): ("A", 0.18, 0.65),
+            (False, True, False, False): ("B", 0.82, 0.65),
+            (False, False, True, False): ("C", 0.18, 0.35),
+            (False, False, False, True): ("D", 0.82, 0.35),
+            (True, True, False, False): ("AB", 0.50, 0.72),
+            (True, False, True, False): ("AC", 0.30, 0.50),
+            (True, False, False, True): ("AD", 0.43, 0.61),
+            (False, True, True, False): ("BC", 0.57, 0.61),
+            (False, True, False, True): ("BD", 0.70, 0.50),
+            (False, False, True, True): ("CD", 0.50, 0.28),
+            (True, True, True, False): ("ABC", 0.40, 0.54),
+            (True, True, False, True): ("ABD", 0.60, 0.54),
+            (True, False, True, True): ("ACD", 0.40, 0.46),
+            (False, True, True, True): ("BCD", 0.60, 0.46),
+            (True, True, True, True): ("ABCD", 0.50, 0.50),
+        }
+        for mask, (label, x, y) in positions.items():
+            axis.text(x, y, f"{label}\n{counts.get(mask, 0)}", ha="center", va="center", fontsize=7.8, fontweight="bold")
+        total = sum(counts.values())
+        axis.text(0.5, 0.015, f"Union = {total}. Exact 4-set signed-response membership counts.", ha="center", va="bottom", fontsize=8, color="#4B5563")
+
+    def _draw_cross_venn_summary(self, summary: pd.DataFrame, pair_name: str | None) -> None:
+        self._scatter_collection = None
+        self._scatter_frame = pd.DataFrame()
+        self._pie_patches = []
+        self._heatmap_image = None
+        self._heatmap_rows = []
+        self._heatmap_cols = []
+        self._heatmap_values = None
+        self._bar_patches = []
+        self.figure.clear()
+        if summary.empty:
+            axis = self.figure.add_subplot(111)
+            axis.axis("off")
+            axis.text(
+                0.5,
+                0.5,
+                "No Venn / overlap cache available.\nClick Run 5.4.4 Event Venn to build this pair's AS-event overlap cache.",
+                ha="center",
+                va="center",
+            )
+            self.canvas.draw_idle()
+            return
+
+        plot_rows = summary.loc[summary["level"].isin(["Gene candidates", "Significant AS events"])].copy()
+        if plot_rows.empty:
+            plot_rows = summary.head(1).copy()
+        axes = self.figure.subplots(1, len(plot_rows), squeeze=False)[0]
+        for axis, (_, row) in zip(axes, plot_rows.iterrows(), strict=False):
+            def _count_value(column: str) -> int:
+                value = pd.to_numeric(row.get(column, 0), errors="coerce")
+                return 0 if pd.isna(value) else int(value)
+
+            self._draw_single_venn_axis(
+                axis,
+                str(row.get("level", "Overlap")),
+                str(row.get("comparison_A_display_name", "comparison A")),
+                str(row.get("comparison_B_display_name", "comparison B")),
+                _count_value("A_only"),
+                _count_value("shared_A_and_B"),
+                _count_value("B_only"),
+                str(row.get("source_cache", "")),
+            )
+        self.figure.suptitle(f"5.4.4 Venn / overlap: {pair_name or 'selected pair'}", fontsize=16, fontweight="bold")
+        self.figure.subplots_adjust(left=0.05, right=0.97, top=0.86, bottom=0.08, wspace=0.18)
+        self.canvas.draw_idle()
+
+    def _sync_group_venn_multi_comparison_checks(self) -> None:
+        project = self.project_service.current_project
+        comparisons = list(self.project_service.selected_comparisons_for_display()) if project is not None else []
+        checked_ids: set[str] = set()
+        existing_ids = set(self.group_venn_multi_checkboxes.keys())
+        for comparison_id, checkbox in self.group_venn_multi_checkboxes.items():
+            if checkbox.isChecked():
+                checked_ids.add(comparison_id)
+
+        self._syncing_group_venn_multi_checks = True
+        while self.group_venn_multi_comparison_grid.count():
+            item = self.group_venn_multi_comparison_grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+        self.group_venn_multi_checkboxes = {}
+        max_columns = 3
+        for index, comparison in enumerate(comparisons):
+            checkbox = QCheckBox(comparison.display_resolved_name)
+            checkbox.setMinimumWidth(240)
+            checkbox.setToolTip(
+                f"{comparison.display_resolved_name}\n"
+                f"comparison_id: {comparison.comparison_id}\n"
+                f"resolved name: {comparison.resolved_name}"
+            )
+            should_check = True if not existing_ids else comparison.comparison_id in checked_ids
+            checkbox.setChecked(should_check)
+            checkbox.stateChanged.connect(self._on_group_venn_multi_selection_changed)
+            self.group_venn_multi_checkboxes[comparison.comparison_id] = checkbox
+            self.group_venn_multi_comparison_grid.addWidget(checkbox, index // max_columns, index % max_columns)
+        self._syncing_group_venn_multi_checks = False
+
+    def _checked_group_venn_multi_comparison_ids(self) -> list[str]:
+        ids: list[str] = []
+        for comparison_id, checkbox in self.group_venn_multi_checkboxes.items():
+            if checkbox.isChecked():
+                ids.append(comparison_id)
+        return ids
+
+    def _set_group_venn_multi_all_checked(self, checked: bool) -> None:
+        self._sync_group_venn_multi_comparison_checks()
+        self._syncing_group_venn_multi_checks = True
+        for checkbox in self.group_venn_multi_checkboxes.values():
+            checkbox.setChecked(checked)
+        self._syncing_group_venn_multi_checks = False
+        self._group_venn_multi_cache = {}
+        self.refresh()
+
+    def _on_group_venn_multi_selection_changed(self, _state: int | None = None) -> None:
+        if self._syncing_group_venn_multi_checks:
+            return
+        self._group_venn_multi_cache = {}
+        self.refresh()
+
+    def _group_venn_multi_signature(self) -> tuple[float, int, str]:
+        checked_ids = ",".join(self._checked_group_venn_multi_comparison_ids())
+        return (
+            round(float(self.group_venn_multi_sig_cutoff.value()), 6),
+            int(self.group_venn_multi_min_reads.value()),
+            checked_ids,
+        )
+
+    def _sync_group_venn_multi_pair_selector(self, summary: pd.DataFrame) -> None:
+        previous_key = str(self.group_venn_multi_pair_selector.currentData() or "")
+        self.group_venn_multi_pair_selector.blockSignals(True)
+        self.group_venn_multi_pair_selector.clear()
+        if isinstance(summary, pd.DataFrame) and not summary.empty:
+            for _, row in summary.iterrows():
+                comparison_a = str(row.get("comparison_A", ""))
+                comparison_b = str(row.get("comparison_B", ""))
+                name_a = str(row.get("comparison_A_display_name", comparison_a))
+                name_b = str(row.get("comparison_B_display_name", comparison_b))
+                pair_key = f"{comparison_a}||{comparison_b}"
+                self.group_venn_multi_pair_selector.addItem(f"{name_a} vs {name_b}", pair_key)
+            if previous_key:
+                index = self.group_venn_multi_pair_selector.findData(previous_key)
+                if index >= 0:
+                    self.group_venn_multi_pair_selector.setCurrentIndex(index)
+        self.group_venn_multi_pair_selector.setEnabled(self.group_venn_multi_pair_selector.count() > 1)
+        self.group_venn_multi_pair_selector.blockSignals(False)
+
+    def _selected_group_venn_multi_pair_row(self, summary: pd.DataFrame) -> pd.Series | None:
+        if not isinstance(summary, pd.DataFrame) or summary.empty:
+            return None
+        pair_key = str(self.group_venn_multi_pair_selector.currentData() or "")
+        if pair_key:
+            keys = summary["comparison_A"].astype(str) + "||" + summary["comparison_B"].astype(str)
+            matched = summary.loc[keys == pair_key]
+            if not matched.empty:
+                return matched.iloc[0]
+        return summary.iloc[0]
+
+    @staticmethod
+    def _safe_column_label(value: str) -> str:
+        label = re.sub(r"[^A-Za-z0-9]+", "_", str(value).strip()).strip("_")
+        return label or "comparison"
+
+    @staticmethod
+    def _dpsi_sign_label(value: object) -> str:
+        number = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+        if pd.isna(number):
+            return "not_significant"
+        if float(number) > 0:
+            return "positive"
+        if float(number) < 0:
+            return "negative"
+        return "zero"
+
+    def _selected_venn_multi_comparisons(self) -> list:
+        project = self.project_service.current_project
+        if project is None:
+            return []
+        self._sync_group_venn_multi_comparison_checks()
+        selected = list(self.project_service.selected_comparisons_for_display())
+        checked_ids = set(self._checked_group_venn_multi_comparison_ids())
+        if not checked_ids:
+            return []
+        chosen = []
+        for comparison in selected:
+            if comparison.comparison_id in checked_ids:
+                chosen.append(comparison)
+        return chosen
+
+    def _build_group_venn_multi_tables(self) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+        comparisons = self._selected_venn_multi_comparisons()
+        abs_cutoff = float(self.group_venn_multi_sig_cutoff.value())
+        min_reads = int(self.group_venn_multi_min_reads.value())
+        if not comparisons:
+            return pd.DataFrame(), pd.DataFrame(), []
+        event_frames: dict[str, pd.DataFrame] = {}
+        display_names: list[str] = []
+        for comparison in comparisons:
+            display_name = comparison.display_resolved_name
+            display_names.append(display_name)
+            frame = self.project_service._cross_as_interaction_source_frame(
+                comparison.comparison_id,
+                abs_cutoff,
+                min_reads,
+                significant_only=True,
+            )
+            event_frames[comparison.comparison_id] = frame.copy()
+        all_keys: list[str] = []
+        seen_keys: set[str] = set()
+        for frame in event_frames.values():
+            if frame.empty or "event_matching_key" not in frame.columns:
+                continue
+            for key in frame["event_matching_key"].dropna().astype(str).tolist():
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_keys.append(key)
+        rows: list[dict[str, object]] = []
+        for key in all_keys:
+            present_names: list[str] = []
+            positive_names: list[str] = []
+            negative_names: list[str] = []
+            base: dict[str, object] = {"event_matching_key": key}
+            for comparison in comparisons:
+                frame = event_frames.get(comparison.comparison_id, pd.DataFrame())
+                display_name = comparison.display_resolved_name
+                safe = self._safe_column_label(display_name)
+                match = frame.loc[frame["event_matching_key"].astype(str) == key].head(1) if not frame.empty and "event_matching_key" in frame.columns else pd.DataFrame()
+                present = not match.empty
+                base[f"present_{safe}"] = bool(present)
+                base[f"dPSI_{safe}"] = match.iloc[0].get("dPSI", pd.NA) if present else pd.NA
+                base[f"FDR_{safe}"] = match.iloc[0].get("FDR", pd.NA) if present else pd.NA
+                direction_label = self._dpsi_sign_label(base[f"dPSI_{safe}"]) if present else "not_significant"
+                base[f"direction_{safe}"] = direction_label
+                if present:
+                    present_names.append(display_name)
+                    if direction_label == "positive":
+                        positive_names.append(display_name)
+                    elif direction_label == "negative":
+                        negative_names.append(display_name)
+                    for column in ("gene", "gene_symbol", "gene_id", "event_type", "event_id", "coordinates"):
+                        if column not in base or pd.isna(base.get(column)):
+                            base[column] = match.iloc[0].get(column, pd.NA)
+            base["n_comparisons_significant"] = len(present_names)
+            base["comparison_membership"] = ";".join(present_names)
+            base["membership_pattern"] = "shared_all" if len(present_names) == len(comparisons) else "comparison_specific" if len(present_names) == 1 else "shared_subset"
+            direction_groups: list[str] = []
+            if positive_names:
+                direction_groups.append("positive:" + ";".join(positive_names))
+            if negative_names:
+                direction_groups.append("negative:" + ";".join(negative_names))
+            base["direction_pattern"] = " | ".join(direction_groups) if direction_groups else "not_significant"
+            base["has_opposite_direction"] = bool(positive_names and negative_names)
+            rows.append(base)
+        events = pd.DataFrame(rows)
+        if not events.empty:
+            events = events.sort_values(["n_comparisons_significant", "gene", "event_type"], ascending=[False, True, True], na_position="last").reset_index(drop=True)
+
+        summary_rows: list[dict[str, object]] = []
+        sets = {
+            comparison.comparison_id: set(event_frames.get(comparison.comparison_id, pd.DataFrame()).get("event_matching_key", pd.Series(dtype="object")).dropna().astype(str).tolist())
+            for comparison in comparisons
+        }
+        signed_sets: dict[str, set[str]] = {}
+        direction_maps: dict[str, dict[str, str]] = {}
+        for comparison in comparisons:
+            frame = event_frames.get(comparison.comparison_id, pd.DataFrame())
+            signed: set[str] = set()
+            directions: dict[str, str] = {}
+            if not frame.empty and "event_matching_key" in frame.columns:
+                for _, row in frame.iterrows():
+                    key = str(row.get("event_matching_key", ""))
+                    if not key:
+                        continue
+                    direction = self._dpsi_sign_label(row.get("dPSI", pd.NA))
+                    if direction not in {"positive", "negative"}:
+                        continue
+                    directions[key] = direction
+                    signed.add(f"{key}::{direction}")
+            signed_sets[comparison.comparison_id] = signed
+            direction_maps[comparison.comparison_id] = directions
+        for i, comp_a in enumerate(comparisons):
+            set_a = sets.get(comp_a.comparison_id, set())
+            signed_a = signed_sets.get(comp_a.comparison_id, set())
+            direction_a = direction_maps.get(comp_a.comparison_id, {})
+            for comp_b in comparisons[i + 1:]:
+                set_b = sets.get(comp_b.comparison_id, set())
+                signed_b = signed_sets.get(comp_b.comparison_id, set())
+                direction_b = direction_maps.get(comp_b.comparison_id, {})
+                identity_shared_keys = set_a & set_b
+                identity_union = len(set_a | set_b)
+                same_direction_shared = len(signed_a & signed_b)
+                signed_union = len(signed_a | signed_b)
+                opposite_direction_shared = sum(
+                    1
+                    for key in identity_shared_keys
+                    if direction_a.get(key) in {"positive", "negative"}
+                    and direction_b.get(key) in {"positive", "negative"}
+                    and direction_a.get(key) != direction_b.get(key)
+                )
+                summary_rows.append(
+                    {
+                        "comparison_A": comp_a.comparison_id,
+                        "comparison_B": comp_b.comparison_id,
+                        "comparison_A_display_name": comp_a.display_resolved_name,
+                        "comparison_B_display_name": comp_b.display_resolved_name,
+                        "A_only": len(signed_a - signed_b),
+                        "shared_A_and_B": same_direction_shared,
+                        "B_only": len(signed_b - signed_a),
+                        "same_direction_shared": same_direction_shared,
+                        "opposite_direction_shared": opposite_direction_shared,
+                        "identity_shared": len(identity_shared_keys),
+                        "total_union": signed_union,
+                        "identity_union": identity_union,
+                        "jaccard": same_direction_shared / signed_union if signed_union else 0.0,
+                        "identity_jaccard": len(identity_shared_keys) / identity_union if identity_union else 0.0,
+                        "abs_dPSI_cutoff_used": abs_cutoff,
+                        "min_reads_loaded": min_reads,
+                    }
+                )
+        summary = pd.DataFrame(summary_rows)
+        output_dir = self.project_service.cross_comparison_output_dir()
+        if output_dir is not None:
+            target_dir = output_dir / "selected_comparison_event_venn"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            events.to_csv(target_dir / "selected_comparison_event_venn_events.tsv", sep="\t", index=False)
+            summary.to_csv(target_dir / "selected_comparison_event_venn_pairwise_summary.tsv", sep="\t", index=False)
+        return summary, events, display_names
+
+    def _group_venn_multi_view_key(self) -> str:
+        if self.fixed_subbranch == "venn_multi_similarity":
+            return "similarity"
+        return "venn"
+
+    def _group_venn_multi_similarity_matrix(self, summary: pd.DataFrame, selected_names: list[str]) -> pd.DataFrame:
+        matrix = pd.DataFrame(0.0, index=selected_names, columns=selected_names)
+        for name in selected_names:
+            matrix.loc[name, name] = 1.0
+        if summary.empty:
+            return matrix
+        for _, row in summary.iterrows():
+            name_a = str(row.get("comparison_A_display_name", ""))
+            name_b = str(row.get("comparison_B_display_name", ""))
+            value = float(pd.to_numeric(pd.Series([row.get("jaccard", 0.0)]), errors="coerce").fillna(0.0).iloc[0])
+            if name_a in matrix.index and name_b in matrix.columns:
+                matrix.loc[name_a, name_b] = value
+                matrix.loc[name_b, name_a] = value
+        return matrix
+
+    def _draw_group_venn_multi_similarity(self, summary: pd.DataFrame, selected_names: list[str]) -> None:
+        axis = self.figure.add_subplot(111)
+        matrix = self._group_venn_multi_similarity_matrix(summary, selected_names)
+        if len(selected_names) < 2:
+            axis.axis("off")
+            axis.text(
+                0.5,
+                0.5,
+                "Need at least two selected comparisons for AS-event similarity.",
+                ha="center",
+                va="center",
+            )
+            self.canvas.draw_idle()
+            return
+        image = axis.imshow(matrix.values, vmin=0, vmax=1, cmap="YlGnBu", aspect="auto")
+        axis.set_xticks(range(len(matrix.columns)))
+        axis.set_xticklabels([str(x) for x in matrix.columns], rotation=90, ha="center", va="top", fontsize=8)
+        axis.set_yticks(range(len(matrix.index)))
+        axis.set_yticklabels([str(x) for x in matrix.index], fontsize=8)
+        for y in range(matrix.shape[0]):
+            for x in range(matrix.shape[1]):
+                axis.text(x, y, f"{matrix.iat[y, x]:.2f}", ha="center", va="center", fontsize=8)
+        self.figure.colorbar(image, ax=axis, fraction=0.036, pad=0.03, label="Direction-aware Jaccard")
+        self._set_axis_title(axis, "5.4.6 AS-event response similarity heatmap")
+        axis.set_xlabel("Selected comparisons")
+        axis.set_ylabel("Selected comparisons")
+        self.figure.suptitle("Similarity of strict significant AS-event responses", fontsize=15, fontweight="bold")
+        self.figure.subplots_adjust(left=0.24, right=0.88, top=0.86, bottom=0.40)
+        self.canvas.draw_idle()
+
+    def _draw_group_venn_multi(self, summary: pd.DataFrame, selected_names: list[str], events: pd.DataFrame) -> None:
+        self._scatter_collection = None
+        self._scatter_frame = pd.DataFrame()
+        self._pie_patches = []
+        self._heatmap_image = None
+        self._heatmap_rows = []
+        self._heatmap_cols = []
+        self._heatmap_values = None
+        self._bar_patches = []
+        self.figure.clear()
+        if summary.empty or not selected_names:
+            axis = self.figure.add_subplot(111)
+            axis.axis("off")
+            axis.text(
+                0.5,
+                0.5,
+                "No cached 5.4.5 selected-comparison Venn result.\nClick Run Selected Venn to build strict AS-event overlap.",
+                ha="center",
+                va="center",
+            )
+            self.canvas.draw_idle()
+            return
+        if self._group_venn_multi_view_key() == "similarity":
+            self._draw_group_venn_multi_similarity(summary, selected_names)
+            return
+        axis_venn = self.figure.add_subplot(111)
+        direction_events = self._direction_aware_venn_events(events, selected_names)
+        exact_counts = self._exact_venn_membership_counts(direction_events, selected_names)
+        if len(selected_names) == 1:
+            axis_venn.set_xlim(0, 1)
+            axis_venn.set_ylim(0, 1)
+            axis_venn.axis("off")
+            axis_venn.add_patch(Circle((0.5, 0.5), 0.30, color="#2563EB", alpha=0.30, ec="#2563EB", lw=2))
+            axis_venn.text(0.5, 0.5, f"{selected_names[0]}\n{sum(exact_counts.values())}", ha="center", va="center", fontsize=13, fontweight="bold")
+            self._set_axis_title(axis_venn, "Direction-aware significant AS responses")
+        elif len(selected_names) == 2:
+            row = summary.iloc[0]
+            self._draw_single_venn_axis(
+                axis_venn,
+                "Direction-aware exact Venn across selected comparisons",
+                str(row.get("comparison_A_display_name", selected_names[0])),
+                str(row.get("comparison_B_display_name", selected_names[1])),
+                int(exact_counts.get((True, False), row.get("A_only", 0))),
+                int(exact_counts.get((True, True), row.get("shared_A_and_B", 0))),
+                int(exact_counts.get((False, True), row.get("B_only", 0))),
+                "Shared requires same event identity and same dPSI sign.",
+            )
+        elif len(selected_names) == 3:
+            self._draw_three_set_venn_axis(axis_venn, selected_names, exact_counts)
+        elif len(selected_names) == 4:
+            self._draw_four_set_venn_axis(axis_venn, selected_names, exact_counts)
+        else:
+            axis_venn.axis("off")
+            top_patterns = sorted(exact_counts.items(), key=lambda item: item[1], reverse=True)[:14]
+            axis_venn.text(0.5, 0.96, "Direction-aware exact intersections across selected comparisons", ha="center", va="top", fontsize=13, fontweight="bold")
+            axis_venn.text(
+                0.5,
+                0.90,
+                "More than 4 selected sets cannot be shown as a readable true Venn; signed event-response membership counts are shown below.",
+                ha="center",
+                va="top",
+                fontsize=9,
+                color="#4B5563",
+            )
+            for index, (mask, count) in enumerate(top_patterns):
+                membership = " + ".join(name for name, present in zip(selected_names, mask, strict=False) if present)
+                axis_venn.text(0.05, 0.80 - index * 0.052, textwrap.shorten(membership, width=58, placeholder="..."), ha="left", va="center", fontsize=8.5)
+                axis_venn.text(0.95, 0.80 - index * 0.052, str(count), ha="right", va="center", fontsize=8.5, fontweight="bold")
+        self.figure.suptitle("5.4.5 Direction-aware intersections across selected AS-event sets", fontsize=15, fontweight="bold")
+        self.figure.subplots_adjust(left=0.05, right=0.97, top=0.86, bottom=0.12)
+        self.canvas.draw_idle()
+
     def _draw_cross_as_interaction_summary(
         self,
         tables: dict[str, pd.DataFrame],
@@ -1637,13 +2771,20 @@ class ResultsPage(QWidget):
         self._bar_patches = []
         self.figure.clear()
         axis = self.figure.add_subplot(111)
-        self._set_axis_title(axis, f"5.4.4 AS interaction modeling: {pair_name or 'selected pair'}")
+        self._set_axis_title(axis, f"5.4.3 AS interaction modeling: {pair_name or 'selected pair'}")
         counts = {
             "Shared tested": len(tables.get("shared_interaction", pd.DataFrame())),
             "Opposite direction": len(tables.get("opposite_direction", pd.DataFrame())),
             "Same dir + large delta": len(tables.get("large_delta", pd.DataFrame())),
-            "Exclusive support": len(tables.get("exclusive", pd.DataFrame())),
         }
+        exclusive = tables.get("exclusive", pd.DataFrame()).copy()
+        if not exclusive.empty and "exclusive_side" in exclusive.columns:
+            side = exclusive["exclusive_side"].fillna("").astype(str)
+            counts["A-specific only"] = int(side.eq("comparison_A_only").sum())
+            counts["B-specific only"] = int(side.eq("comparison_B_only").sum())
+        else:
+            counts["A-specific only"] = 0
+            counts["B-specific only"] = 0
         if not any(counts.values()):
             axis.axis("off")
             axis.text(0.5, 0.5, "No events found", ha="center", va="center")
@@ -1652,13 +2793,30 @@ class ResultsPage(QWidget):
         bars = axis.bar(
             list(counts.keys()),
             list(counts.values()),
-            color=["#0F766E", "#7C3AED", "#2563EB", "#D97706"],
+            color=["#0F766E", "#7C3AED", "#2563EB", "#2563EB", "#D97706"],
         )
         axis.set_ylabel("Events")
+        supported_a = 0
+        supported_b = 0
+        if not exclusive.empty:
+            support_side = exclusive.get("non_significant_side_read_support", pd.Series(dtype="object")).astype(str).str.startswith("supported_")
+            side = exclusive.get("exclusive_side", pd.Series(dtype="object")).astype(str)
+            supported_a = int((side.eq("comparison_A_only") & support_side).sum())
+            supported_b = int((side.eq("comparison_B_only") & support_side).sum())
         self._bar_patches = [
             (
                 patch,
-                f"{label}\nEvents: {value}\nabs(dPSI): {abs_cutoff:.3f}\nlarge delta: {delta_cutoff:.3f}\nmin reads: {min_reads}",
+                (
+                    f"{label}\nEvents: {value}\n"
+                    + (
+                        f"Supported non-significant counterparts: {supported_a}\n"
+                        if label == "A-specific only"
+                        else f"Supported non-significant counterparts: {supported_b}\n"
+                        if label == "B-specific only"
+                        else ""
+                    )
+                    + f"abs(dPSI): {abs_cutoff:.3f}\nlarge delta: {delta_cutoff:.3f}\nmin reads: {min_reads}"
+                ),
             )
             for patch, (label, value) in zip(bars, counts.items(), strict=False)
         ]
@@ -1682,7 +2840,7 @@ class ResultsPage(QWidget):
         self._bar_patches = []
         self.figure.clear()
         axis = self.figure.add_subplot(111)
-        self._set_axis_title(axis, "5.4.4 all-pair AS interaction batch summary")
+        self._set_axis_title(axis, "5.4.3 all-pair AS interaction batch summary")
         summary = tables.get("batch_summary", pd.DataFrame()).copy()
         if summary.empty:
             axis.axis("off")
@@ -1691,13 +2849,15 @@ class ResultsPage(QWidget):
             return
         labels = summary.get("pair_name", pd.Series(dtype="object")).fillna(summary.get("pair_id", "")).astype(str).tolist()
         x = np.arange(len(summary))
-        width = 0.22
+        width = 0.18
         high = pd.to_numeric(summary.get("n_high_confidence_interaction"), errors="coerce").fillna(0).to_numpy()
         opposite = pd.to_numeric(summary.get("n_opposite_direction"), errors="coerce").fillna(0).to_numpy()
-        exclusive_supported = pd.to_numeric(summary.get("n_exclusive_supported"), errors="coerce").fillna(0).to_numpy()
-        bars_high = axis.bar(x - width, high, width, label="High-confidence interaction", color="#0F766E")
-        bars_opposite = axis.bar(x, opposite, width, label="Opposite direction", color="#7C3AED")
-        bars_exclusive = axis.bar(x + width, exclusive_supported, width, label="Supported exclusive", color="#D97706")
+        exclusive_a = pd.to_numeric(summary.get("n_exclusive_A_supported"), errors="coerce").fillna(0).to_numpy()
+        exclusive_b = pd.to_numeric(summary.get("n_exclusive_B_supported"), errors="coerce").fillna(0).to_numpy()
+        bars_high = axis.bar(x - (1.5 * width), high, width, label="High-confidence interaction", color="#0F766E")
+        bars_opposite = axis.bar(x - (0.5 * width), opposite, width, label="Opposite direction", color="#7C3AED")
+        bars_exclusive_a = axis.bar(x + (0.5 * width), exclusive_a, width, label="A-specific supported", color="#2563EB")
+        bars_exclusive_b = axis.bar(x + (1.5 * width), exclusive_b, width, label="B-specific supported", color="#D97706")
         axis.set_ylabel("Events")
         axis.set_xticks(x)
         axis.set_xticklabels(labels)
@@ -1706,7 +2866,8 @@ class ResultsPage(QWidget):
         for patches, metric, values in (
             (bars_high, "High-confidence interaction", high),
             (bars_opposite, "Opposite direction", opposite),
-            (bars_exclusive, "Supported exclusive", exclusive_supported),
+            (bars_exclusive_a, "A-specific supported", exclusive_a),
+            (bars_exclusive_b, "B-specific supported", exclusive_b),
         ):
             self._bar_patches.extend(
                 (
@@ -1727,6 +2888,10 @@ class ResultsPage(QWidget):
         if self.project_service.run_state.results.tx_splicing_gene_table.empty:
             self._set_explanation("Transcript + splicing integration has not been run yet. Click 'Run Current Branch' to compute this analysis for the current project.")
             self._draw_placeholder("Not run.\nNo cached transcript + splicing integration result is loaded.")
+            self._set_detail_text(
+                module_detail("5.2.integration"),
+                "Not run. Open Detail for 5.2 purpose, inputs and direction rules.",
+            )
             self._sync_footer_info()
             self._reset_plot_view()
             return
@@ -1789,10 +2954,9 @@ class ResultsPage(QWidget):
                 "n_sig_events_all",
             ],
         )
-        self.details.setPlainText(
-            f"Interactive transcript-vs-splicing view for: {comparison_name or 'selected comparison'}\n"
-            "Hover or click points to inspect gene-level DEG and splicing values inherited from Pairing direction.\n"
-            "standardized_log2FC and standardized_dPSI are the flipped-or-not final values used downstream."
+        self._set_detail_text(
+            module_detail("5.2.integration"),
+            "5.2.1 Transcript + Splicing Integration loaded. Open Detail for DEG/DAS class and direction definitions.",
         )
 
     def _render_mechanism_branch(self) -> None:
@@ -1821,6 +2985,10 @@ class ResultsPage(QWidget):
         if self.project_service.run_state.results.candidate_gene_table.empty:
             self._set_explanation("Candidate screening has not been generated yet. Open 5.3.1 or 5.3.2 and explicitly generate/load candidate results first.")
             self._draw_placeholder("Not run.\nNo cached candidate-screening result is loaded.")
+            self._set_detail_text(
+                module_detail("5.3.ranking"),
+                "Not run. Open Detail for 5.3 candidate-ranking inputs and cache behavior.",
+            )
             self._sync_footer_info()
             self._reset_plot_view()
             return
@@ -1872,11 +3040,9 @@ class ResultsPage(QWidget):
                 output_dir=self.project_service.candidate_screening_output_dir(comparison_id),
                 preview_name="Candidate screening table",
             )
-            comparison_name = self._comparison_name_from_id(comparison_id)
-            self.details.setPlainText(
-                f"Candidate screening table for {comparison_name or comparison_id}.\n"
-                "This table shows the full per-comparison candidate ranking table.\n"
-                "All rows come from gene_level_integrated_candidates.tsv for the selected comparison."
+            self._set_detail_text(
+                module_detail("5.3.ranking"),
+                "5.3.1 Candidate ranking loaded. Open Detail for rank, evidence and uniqueness definitions.",
             )
         elif mode == "heatmap":
             self._draw_candidate_evidence_heatmap(frame, title, meta)
@@ -1910,7 +3076,7 @@ class ResultsPage(QWidget):
         return branch_map.get(self.tabs.currentIndex()), None
 
     def _current_landscape_subbranch(self) -> str:
-        return {0: "overview", 1: "bar", 2: "pie", 3: "heatmap", 4: "pca"}.get(self.landscape_tabs.currentIndex(), "overview")
+        return {0: "overview", 1: "bar", 2: "pie"}.get(self.landscape_tabs.currentIndex(), "overview")
 
     def _current_group_subbranch(self) -> str:
         return {0: "excel", 1: "heatmap", 2: "direction"}.get(self.group_mode_tabs.currentIndex(), "excel")
@@ -1931,7 +3097,7 @@ class ResultsPage(QWidget):
         self._heatmap_cols = []
         self._heatmap_values = None
         self._set_explanation(
-            "Landscape overview compares all selected pairings together using significant splicing events only."
+            "Landscape overview compares all selected pairings using stable AS events after rMATS significance, read-support and replicate-consistency filters."
         )
         self.figure.clear()
         axis = self.figure.add_subplot(111)
@@ -1948,16 +3114,20 @@ class ResultsPage(QWidget):
         if splicing_landscape is None or splicing_landscape.empty:
             axis.text(0.5, 0.5, "Landscape results are not available yet.", ha="center", va="center")
             self._populate_table(pd.DataFrame(), [])
-            self.details.setPlainText("Run the Landscape branch to generate comparison-level overview summaries.")
+            self._set_detail_text(
+                module_detail("5.1.landscape"),
+                "Not run. Open Detail for Landscape purpose, inputs and cache behavior.",
+            )
             self._finalize_axes_layout(bottom=0.12)
             self.canvas.draw_idle()
             return
 
         overview = splicing_landscape.copy()
-        overview["n_sig"] = pd.to_numeric(overview.get("n_sig"), errors="coerce").fillna(0)
-        overview = overview.loc[overview["n_sig"] > 0].copy()
+        count_column = "n_stable" if "n_stable" in overview.columns else "n_sig"
+        overview[count_column] = pd.to_numeric(overview.get(count_column), errors="coerce").fillna(0)
+        overview = overview.loc[overview[count_column] > 0].copy()
         if overview.empty:
-            axis.text(0.5, 0.5, "No significant events available for the selected pairings.", ha="center", va="center")
+            axis.text(0.5, 0.5, "No stable AS events available for the selected pairings.", ha="center", va="center")
             self._populate_table(pd.DataFrame(), [])
             self._finalize_axes_layout(bottom=0.12)
             self.canvas.draw_idle()
@@ -1967,7 +3137,7 @@ class ResultsPage(QWidget):
             overview.pivot_table(
                 index="comparison_name",
                 columns="event_type",
-                values="n_sig",
+                values=count_column,
                 aggfunc="sum",
                 fill_value=0,
             )
@@ -1988,11 +3158,11 @@ class ResultsPage(QWidget):
                 linewidth=0.6,
             )
             self._bar_patches.extend(
-                (patch, f"{comparison}\n{event_type}: {int(value)} significant events")
+                (patch, f"{comparison}\n{event_type}: {int(value)} stable AS events")
                 for patch, comparison, value in zip(bars, pivot.index.tolist(), values, strict=False)
             )
             bottom = bottom + values
-        axis.set_ylabel("Significant events", fontweight="bold")
+        axis.set_ylabel("Stable AS events", fontweight="bold")
         axis.legend(
             loc="upper left",
             bbox_to_anchor=(1.02, 1.00),
@@ -2002,7 +3172,22 @@ class ResultsPage(QWidget):
         )
 
         preview = overview[
-            [column for column in ["comparison_id", "comparison_name", "event_type", "n_sig"] if column in overview.columns]
+            [
+                column
+                for column in [
+                    "comparison_id",
+                    "comparison_name",
+                    "event_type",
+                    "n_total",
+                    "n_sig",
+                    "n_stable",
+                    "stable_fraction_of_sig",
+                    "stable_min_junction_reads",
+                    "stable_min_replicates_per_group",
+                    "stable_min_pairwise_consistency",
+                ]
+                if column in overview.columns
+            ]
         ].copy()
         self._populate_table(
             preview,
@@ -2011,7 +3196,10 @@ class ResultsPage(QWidget):
         )
         axis.set_xlabel("")
         self._finalize_axes_layout(rotate_x=True, bottom=0.28, left=0.12, right=0.76, top=0.82)
-        self.details.setPlainText("Landscape overview across all selected pairings.\nOnly significant event counts are included.")
+        self._set_detail_text(
+            module_detail("5.1.landscape"),
+            "5.1.1 Landscape loaded. Open Detail for purpose, inputs, outputs and interpretation.",
+        )
         self.canvas.draw_idle()
 
     def _draw_landscape_bar(self, splicing_landscape: pd.DataFrame | None) -> None:
@@ -2024,7 +3212,7 @@ class ResultsPage(QWidget):
         self._heatmap_cols = []
         self._heatmap_values = None
         self._set_explanation(
-            "Landscape bar plot compares significant event counts by event type across all selected pairings."
+            "Landscape bar plot compares stable AS-event counts by event type across all selected pairings."
         )
         self.figure.clear()
         axis = self.figure.add_subplot(111)
@@ -2041,15 +3229,19 @@ class ResultsPage(QWidget):
         if splicing_landscape is None or splicing_landscape.empty:
             axis.text(0.5, 0.5, "Landscape results are not available yet.", ha="center", va="center")
             self._populate_table(pd.DataFrame(), [])
-            self.details.setPlainText("Run the Landscape branch to generate splicing summaries.")
+            self._set_detail_text(
+                module_detail("5.1.bar"),
+                "Not run. Open Detail for Bar purpose, inputs and cache behavior.",
+            )
             self._finalize_axes_layout(bottom=0.12)
             self.canvas.draw_idle()
             return
         working = splicing_landscape.copy()
-        working["n_sig"] = pd.to_numeric(working["n_sig"], errors="coerce").fillna(0)
-        working = working.loc[working["n_sig"] > 0].copy()
+        count_column = "n_stable" if "n_stable" in working.columns else "n_sig"
+        working[count_column] = pd.to_numeric(working[count_column], errors="coerce").fillna(0)
+        working = working.loc[working[count_column] > 0].copy()
         if working.empty:
-            axis.text(0.5, 0.5, "No significant events available for the selected pairings.", ha="center", va="center")
+            axis.text(0.5, 0.5, "No stable AS events available for the selected pairings.", ha="center", va="center")
             self._populate_table(pd.DataFrame(), [])
             self._finalize_axes_layout(bottom=0.12)
             self.canvas.draw_idle()
@@ -2059,7 +3251,7 @@ class ResultsPage(QWidget):
             working.pivot_table(
                 index="event_type",
                 columns="comparison_name",
-                values="n_sig",
+                values=count_column,
                 aggfunc="sum",
                 fill_value=0,
             )
@@ -2083,12 +3275,12 @@ class ResultsPage(QWidget):
                 linewidth=0.6,
             )
             self._bar_patches.extend(
-                (patch, f"{comparison_label}\n{event_type}: {int(value)} significant events")
+                (patch, f"{comparison_label}\n{event_type}: {int(value)} stable AS events")
                 for patch, event_type, value in zip(bars, pivot.index.tolist(), values, strict=False)
             )
         axis.set_xticks(x)
         axis.set_xticklabels(pivot.index.tolist(), fontweight="bold")
-        axis.set_ylabel("Significant events", fontweight="bold")
+        axis.set_ylabel("Stable AS events", fontweight="bold")
         axis.set_xlabel("Event type", fontweight="bold")
         if comparison_labels:
             axis.legend(
@@ -2100,11 +3292,29 @@ class ResultsPage(QWidget):
             )
         self._populate_table(
             working,
-            [column for column in ["comparison_id", "comparison_name", "event_type", "n_sig", "n_total"] if column in working.columns],
+            [
+                column
+                for column in [
+                    "comparison_id",
+                    "comparison_name",
+                    "event_type",
+                    "n_stable",
+                    "n_sig",
+                    "n_total",
+                    "stable_fraction_of_sig",
+                    "stable_min_junction_reads",
+                    "stable_min_replicates_per_group",
+                    "stable_min_pairwise_consistency",
+                ]
+                if column in working.columns
+            ],
             preview_name="Landscape bar summary",
         )
         self._finalize_axes_layout(rotate_x=True, bottom=0.24, left=0.12, right=0.74, top=0.82)
-        self.details.setPlainText("Landscape bar summary across all selected pairings.")
+        self._set_detail_text(
+            module_detail("5.1.bar"),
+            "5.1.2 Bar loaded. Open Detail for purpose, inputs, outputs and interpretation.",
+        )
         self.canvas.draw_idle()
 
     def _draw_landscape_pie(
@@ -2121,7 +3331,7 @@ class ResultsPage(QWidget):
         self._heatmap_rows = []
         self._heatmap_cols = []
         self._heatmap_values = None
-        self._set_explanation("Landscape pie chart: event-type composition of significant splicing events for the selected comparison.")
+        self._set_explanation("Landscape pie chart: event-type composition of stable AS events for the selected comparison.")
         self.figure.clear()
         axis = self.figure.add_subplot(111)
         self._set_axis_title(axis, f"Landscape pie: {self._comparison_title_label(comparison_id)}")
@@ -2137,14 +3347,18 @@ class ResultsPage(QWidget):
         if splicing_landscape is None or splicing_landscape.empty:
             axis.text(0.5, 0.5, "Landscape results are not available yet.", ha="center", va="center")
             self._populate_table(pd.DataFrame(), [])
-            self.details.setPlainText("Run the Landscape branch to generate pie-chart inputs.")
+            self._set_detail_text(
+                module_detail("5.1.pie"),
+                "Not run. Open Detail for Pie purpose, inputs and cache behavior.",
+            )
             self._finalize_axes_layout(bottom=0.12)
             self.canvas.draw_idle()
             return
         event_order = ["SE", "RI", "A3SS", "A5SS", "MXE"]
+        count_column = "n_stable" if "n_stable" in splicing_landscape.columns else "n_sig"
         grouped = (
-            splicing_landscape.assign(n_sig=pd.to_numeric(splicing_landscape["n_sig"], errors="coerce").fillna(0))
-            .groupby("event_type", dropna=False)["n_sig"]
+            splicing_landscape.assign(**{count_column: pd.to_numeric(splicing_landscape[count_column], errors="coerce").fillna(0)})
+            .groupby("event_type", dropna=False)[count_column]
             .sum()
             .reindex(event_order, fill_value=0)
         )
@@ -2182,24 +3396,25 @@ class ResultsPage(QWidget):
             frameon=False,
         )
         self._pie_patches = [
-            (wedge, f"{label}\nSignificant events: {value}\nShare: {value / max(grouped.sum(), 1) * 100:.1f}%")
+            (wedge, f"{label}\nStable AS events: {value}\nShare: {value / max(grouped.sum(), 1) * 100:.1f}%")
             for wedge, label, value in zip(wedges, grouped.index.tolist(), grouped.values.tolist(), strict=False)
         ]
         axis.axis("equal")
         self._populate_table(
-            grouped.reset_index().rename(columns={"event_type": "Event Type", "n_sig": "Significant Events"}),
-            ["Event Type", "Significant Events"],
+            grouped.reset_index().rename(columns={"event_type": "Event Type", count_column: "Stable AS Events"}),
+            ["Event Type", "Stable AS Events"],
             preview_name="Landscape pie summary",
         )
         self._finalize_axes_layout(bottom=0.10, left=0.12, right=0.76, top=0.82)
-        self.details.setPlainText(
-            f"Landscape pie chart of significant event-type composition for {comparison_name or comparison_id or 'selected comparison'}."
+        self._set_detail_text(
+            module_detail("5.1.pie"),
+            "5.1.3 Pie loaded. Open Detail for purpose, inputs, outputs and interpretation.",
         )
         self.canvas.draw_idle()
 
     def _draw_program_summary(self, program_summary: pd.DataFrame | None, pair_name: str | None) -> None:
         self._set_explanation(
-            "Group comparison summary: this branch compares comparison A against comparison B. Use it to see whether splicing programs are shared, opposite, or condition-specific between the two comparisons."
+            "Group comparison summary: this branch compares comparison A against comparison B. Use it to see whether splicing programs are shared, opposite, A-specific, or B-specific between the two comparisons."
         )
         self.figure.clear()
         axis = self.figure.add_subplot(111)
@@ -2656,13 +3871,10 @@ class ResultsPage(QWidget):
         self._set_explanation(
             f"{event_type} event-type subanalysis: DEG + DAS integration restricted to representative {event_type} events."
         )
-        title_name = self._comparison_title_label(comparison_id)
         self._draw_integration_scatter(frame, comparison_name, event_type=event_type)
-        self.details.setPlainText(
-            f"{event_type} event-type subanalysis for {title_name}.\n"
-            "This view uses the same DEG + DAS significance and direction logic as the main transcript + splicing integration page, restricted to the selected event type.\n"
-            "If a gene has multiple significant splicing events, Katana currently chooses one representative event per gene: the event with the largest |standardized dPSI|, with lower FDR used as the tie-breaker.\n"
-            "The table includes direction labels and DEG/DAS flip flags so you can double-check the inherited Pairing direction."
+        self._set_detail_text(
+            module_detail("5.2.event"),
+            f"{event_type} event-type subanalysis loaded. Open Detail for representative-event and direction rules.",
         )
         self.canvas.draw_idle()
 
@@ -2705,49 +3917,6 @@ class ResultsPage(QWidget):
         self.details.setPlainText("Mechanism-support summary and loaded support table.")
         self.canvas.draw_idle()
 
-    def _draw_jutils_plot(self, plot_kind: str, comparison_id: str | None = None, comparison_name: str | None = None) -> None:
-        self._scatter_collection = None
-        self._scatter_frame = pd.DataFrame()
-        self._bar_patches = []
-        self._pie_patches = []
-        self._heatmap_image = None
-        self._heatmap_rows = []
-        self._heatmap_cols = []
-        self._heatmap_values = None
-        self._set_explanation(
-            "Jutils view: use Heatmap for event-pattern clustering across samples or conditions, and PCA for global sample-level separation based on splicing profiles."
-        )
-        self.figure.clear()
-        axis = self.figure.add_subplot(111)
-        title = f"{'Jutils Heatmap' if plot_kind == 'heatmap' else 'Jutils PCA'}: {self._comparison_title_label(comparison_id)}"
-        axis.set_title(title)
-        plot_path = self._locate_jutils_plot(plot_kind)
-        if plot_path is None:
-            axis.text(0.5, 0.5, f"No {title.lower()} image found under 08_jutils/plots.", ha="center", va="center")
-            self._populate_table(
-                self.project_service.run_state.results.jutils_manifest,
-                list(self.project_service.run_state.results.jutils_manifest.columns),
-                output_dir=(self.project_service.current_project.output_root / "08_jutils") if self.project_service.current_project and self.project_service.current_project.output_root else None,
-                preview_name=title,
-            )
-            self.details.setPlainText(
-                f"{title} preview will appear here after the Jutils pipeline has produced plot images."
-            )
-            self.canvas.draw_idle()
-            return
-        image = mpimg.imread(plot_path)
-        axis.imshow(image)
-        axis.axis("off")
-        self._populate_table(
-            self.project_service.run_state.results.jutils_manifest,
-            list(self.project_service.run_state.results.jutils_manifest.columns),
-            file_path=plot_path,
-            output_dir=plot_path.parent.parent,
-            preview_name=title,
-        )
-        self.details.setPlainText(f"Showing {title} from:\n{plot_path}")
-        self.canvas.draw_idle()
-
     def _draw_candidate_evidence_heatmap(self, frame: pd.DataFrame | None, title: str, meta: dict[str, object]) -> None:
         self._scatter_collection = None
         self._scatter_frame = pd.DataFrame()
@@ -2762,7 +3931,10 @@ class ResultsPage(QWidget):
         if frame is None or frame.empty:
             axis.text(0.5, 0.5, "No candidate rows available.", ha="center", va="center")
             self._populate_table(pd.DataFrame(), [])
-            self.details.setPlainText("No candidate evidence available yet.")
+            self._set_detail_text(
+                module_detail("5.3.heatmap"),
+                "No candidate evidence available. Open Detail for heatmap input rules.",
+            )
             self.canvas.draw_idle()
             return
         working = frame.copy()
@@ -2834,12 +4006,17 @@ class ResultsPage(QWidget):
             preview_name="Evidence heatmap source genes",
         )
         self._finalize_axes_layout(rotate_x=True, bottom=0.24)
-        self.details.setPlainText(
-            f"Candidate evidence heatmap for {meta.get('comparison_id', '')}.\n"
-            f"Gene selection rule: {meta.get('selection_rule', '')}\n"
-            f"Genes shown: {meta.get('gene_count', 0)}\n"
-            f"Output folder: {output_dir or 'not available'}\n"
-            "Rows are genes from gene_level_integrated_candidates.tsv and columns summarize DEG, rMATS, DEXSeq and DTU evidence."
+        self._set_detail_text(
+            "\n".join(
+                [
+                    module_detail("5.3.heatmap"),
+                    "",
+                    f"Active gene selection rule: {meta.get('selection_rule', '')}",
+                    f"Genes shown: {meta.get('gene_count', 0)}",
+                    f"Output folder: {output_dir or 'not available'}",
+                ]
+            ),
+            "5.3.3 Evidence heatmap loaded. Open Detail for gene source, blacklist and output rules.",
         )
         self.canvas.draw_idle()
 
@@ -2857,7 +4034,10 @@ class ResultsPage(QWidget):
         if frame is None or frame.empty:
             axis.text(0.5, 0.5, "No candidate rows available.", ha="center", va="center")
             self._populate_table(pd.DataFrame(), [])
-            self.details.setPlainText("No candidate program heatmap rows available yet.")
+            self._set_detail_text(
+                module_detail("5.3.heatmap"),
+                "No candidate program heatmap rows available. Open Detail for heatmap input rules.",
+            )
             self.canvas.draw_idle()
             return
         working = frame.copy()
@@ -2919,12 +4099,17 @@ class ResultsPage(QWidget):
             preview_name="Program heatmap source genes",
         )
         self._finalize_axes_layout(rotate_x=True, bottom=0.24)
-        self.details.setPlainText(
-            f"Candidate program heatmap for {meta.get('comparison_id', '')}.\n"
-            f"Gene selection rule: {meta.get('selection_rule', '')}\n"
-            f"Output folder: {output_dir or 'not available'}\n"
-            "This heatmap uses only candidate genes from the selected comparison and makes the gene source explicit.\n"
-            "log2FC and dPSI are normalized per column for display so their different numeric ranges do not collapse one another."
+        self._set_detail_text(
+            "\n".join(
+                [
+                    module_detail("5.3.heatmap"),
+                    "",
+                    f"Active gene selection rule: {meta.get('selection_rule', '')}",
+                    f"Output folder: {output_dir or 'not available'}",
+                    "Program heatmap note: log2FC and dPSI are normalized per column for display so their different numeric ranges do not collapse one another.",
+                ]
+            ),
+            "5.3.3 Program heatmap loaded. Open Detail for gene source, blacklist and normalization rules.",
         )
         self.canvas.draw_idle()
 
@@ -2976,7 +4161,10 @@ class ResultsPage(QWidget):
             axis.text(0.5, 0.5, "No selected candidate gene is available for card rendering.", ha="center", va="center")
             self._populate_table(pd.DataFrame(), [])
             self.card_open_sashimi_button.setEnabled(False)
-            self.details.setPlainText("No gene-centered candidate card is available yet. Load candidate selection first, then choose a gene.")
+            self._set_detail_text(
+                module_detail("5.3.cards"),
+                "No gene-centered candidate card is available yet. Open Detail for card inputs and behavior.",
+            )
             self.canvas.draw_idle()
             return
         comparison_name = self._first_text(comparison_context.get("display_name"), meta.get("comparison_id"))
@@ -3267,17 +4455,30 @@ class ResultsPage(QWidget):
             preview_name="Gene-centered AS event list",
         )
         self._finalize_axes_layout(left=0.06, right=0.99, top=0.86, bottom=0.28)
-        self.details.setPlainText(
-            f"Gene-centered candidate card for {gene_symbol or gene_id} in {comparison_name}.\n"
-            f"Gene selection rule: {meta.get('selection_rule', '')}\n"
-            f"Dominant event rule: {dominant_rule}\n"
-            f"AS canonical direction: {as_direction_short}\n"
-            f"DEG final direction: {deg_direction_short}\n"
-            f"Candidate tier: {candidate_row.get('candidate_tier', 'NA')} | evidence: {candidate_row.get('evidence_class', 'NA')} | direction class: {candidate_row.get('direction_class', 'NA')}\n"
-            f"DEG: significant={_fmt_bool(candidate_row.get('DEG_significant', deg_row.get('DEG_significant')))}, DE_FDR={_fmt_num(candidate_row.get('DE_FDR', deg_row.get('DE_FDR')))}, standardized_log2FC={_fmt_signed(candidate_row.get('standardized_log2FC', deg_row.get('standardized_log2FC')))}, baseMean={_fmt_num(deg_row.get('baseMean'), digits=2)}\n"
-            "Left plot: unique included experiment/condition mean expression values, deduplicated by condition name. Right plot: dominant significant AS-event dPSI across selected comparisons.\n"
-            "The table below lists only significant AS events for the current comparison, so multi-event genes are visible instead of hidden behind one selected event.\n"
-            "Select a specific event row and click 'Open selected event in Sashimi' to jump to Sashimi without auto-running it."
+        self._set_detail_text(
+            "\n".join(
+                [
+                    module_detail("5.3.cards"),
+                    "",
+                    f"Current gene: {gene_symbol or gene_id}",
+                    f"Current comparison: {comparison_name}",
+                    f"Gene selection rule: {meta.get('selection_rule', '')}",
+                    f"Dominant event rule: {dominant_rule}",
+                    f"AS canonical direction: {as_direction_short}",
+                    f"DEG final direction: {deg_direction_short}",
+                    f"Candidate tier: {candidate_row.get('candidate_tier', 'NA')}",
+                    f"Evidence class: {candidate_row.get('evidence_class', 'NA')}",
+                    f"Direction class: {candidate_row.get('direction_class', 'NA')}",
+                    f"DEG significant: {_fmt_bool(candidate_row.get('DEG_significant', deg_row.get('DEG_significant')))}",
+                    f"DE_FDR: {_fmt_num(candidate_row.get('DE_FDR', deg_row.get('DE_FDR')))}",
+                    f"standardized_log2FC: {_fmt_signed(candidate_row.get('standardized_log2FC', deg_row.get('standardized_log2FC')))}",
+                    f"DEG baseMean: {_fmt_num(deg_row.get('baseMean'), digits=2)}",
+                    "Left plot: unique included experiment/condition mean expression values.",
+                    "Right plot: dominant significant AS-event dPSI across selected comparisons.",
+                    "The table lists only significant AS events for the current comparison.",
+                ]
+            ),
+            "5.3.4 Gene card loaded. Open Detail for event-list, dominant-event and sashimi-link rules.",
         )
         self.canvas.draw_idle()
 
@@ -3379,21 +4580,33 @@ class ResultsPage(QWidget):
         width_scale = max(self.plot_width_scale.value(), 10) / 100.0
         height_scale = max(self.plot_height_scale.value(), 10) / 100.0
         viewport = self.canvas_scroll.viewport()
-        available_width = max(int(viewport.width() * 0.94), 980)
-        available_height = max(int(viewport.height() * 0.92), 740)
-        width_px = max(int(available_width * scale * width_scale), 900)
-        height_px = max(int(available_height * scale * height_scale), 680)
-        host_width = max(width_px, viewport.width())
-        host_height = max(height_px, viewport.height())
+        available_width = max(int(viewport.width()) - 20, 640)
+        available_height = max(int(viewport.height()) - 20, 480)
+        width_px = max(int(available_width * scale * width_scale), 640)
+        height_px = max(int(available_height * scale * height_scale), 480)
+        host_width = width_px
+        host_height = height_px
         self.figure.set_size_inches(width_px / self.figure.dpi, height_px / self.figure.dpi, forward=True)
         self.canvas.resize(width_px, height_px)
-        self.canvas_host.setMinimumSize(host_width, host_height)
+        self.canvas_host.setMinimumSize(0, 0)
         self.canvas_host.resize(host_width, host_height)
-        self.canvas_host.adjustSize()
 
     def _reset_plot_view(self) -> None:
-        self.canvas_scroll.horizontalScrollBar().setValue(0)
-        self.canvas_scroll.verticalScrollBar().setValue(0)
+        self._center_plot_view()
+        QTimer.singleShot(0, self._center_plot_view)
+        QTimer.singleShot(80, self._center_plot_view)
+
+    def _center_plot_view(self) -> None:
+        horizontal = self.canvas_scroll.horizontalScrollBar()
+        vertical = self.canvas_scroll.verticalScrollBar()
+        if self.plot_scale.value() <= 100 and self.plot_width_scale.value() <= 100:
+            horizontal.setValue(horizontal.minimum())
+        else:
+            horizontal.setValue((horizontal.minimum() + horizontal.maximum()) // 2)
+        if self.plot_scale.value() <= 100 and self.plot_height_scale.value() <= 100:
+            vertical.setValue(vertical.minimum())
+        else:
+            vertical.setValue((vertical.minimum() + vertical.maximum()) // 2)
 
     def _redraw_scaled_figure(self) -> None:
         self._post_render_layout()
@@ -3417,9 +4630,9 @@ class ResultsPage(QWidget):
         # The first show/tab-switch often reports an incomplete viewport size on the
         # immediate event loop tick. Run a few lightweight relayout passes after the
         # widget settles so the user does not need to touch width/height controls.
-        for delay in (0, 60, 180):
+        for delay in (0, 60, 180, 360, 650):
             QTimer.singleShot(delay, _run)
-        QTimer.singleShot(240, _finish)
+        QTimer.singleShot(760, _finish)
 
     def _post_render_layout(self) -> None:
         if not self.isVisible():
@@ -3831,15 +5044,40 @@ class ResultsPage(QWidget):
             dpsi_b = pd.to_numeric(value(row, "dominant_rMATS_standardized_dPSI", comp_b, pd.NA), errors="coerce")
             logfc_a = pd.to_numeric(value(row, "standardized_log2FC", comp_a, pd.NA), errors="coerce")
             logfc_b = pd.to_numeric(value(row, "standardized_log2FC", comp_b, pd.NA), errors="coerce")
-            pair_direction_reversed = candidate_a and candidate_b and (
-                (sign(dpsi_a) != 0 and sign(dpsi_b) != 0 and sign(dpsi_a) != sign(dpsi_b))
-                or (sign(logfc_a) != 0 and sign(logfc_b) != 0 and sign(logfc_a) != sign(logfc_b))
+            deg_direction_reversed = bool(
+                candidate_a
+                and candidate_b
+                and sign(logfc_a) != 0
+                and sign(logfc_b) != 0
+                and sign(logfc_a) != sign(logfc_b)
             )
+            dominant_as_direction_reversed = bool(
+                candidate_a
+                and candidate_b
+                and sign(dpsi_a) != 0
+                and sign(dpsi_b) != 0
+                and sign(dpsi_a) != sign(dpsi_b)
+            )
+            gene_level_direction_changed = deg_direction_reversed or dominant_as_direction_reversed
             tier_changed = candidate_a and candidate_b and tier_a and tier_b and tier_a != tier_b
             evidence_changed = candidate_a and candidate_b and evidence_a and evidence_b and evidence_a != evidence_b
-            if candidate_a and candidate_b and pair_direction_reversed:
-                pattern = "shared_direction_reversed"
-                reason = "Candidate is present in both comparisons, but standardized DEG or dominant AS direction changes sign between A and B."
+            if candidate_a and candidate_b and deg_direction_reversed and dominant_as_direction_reversed:
+                pattern = "shared_mixed_direction_changed"
+                reason = (
+                    "Candidate is present in both comparisons, and both gene-level DEG direction "
+                    "and dominant AS direction change sign between A and B. This is not strict same-event AS reversal."
+                )
+            elif candidate_a and candidate_b and deg_direction_reversed:
+                pattern = "shared_DEG_direction_reversed"
+                reason = (
+                    "Candidate is present in both comparisons, and standardized DEG log2FC changes sign between A and B."
+                )
+            elif candidate_a and candidate_b and dominant_as_direction_reversed:
+                pattern = "shared_dominant_AS_direction_reversed"
+                reason = (
+                    "Candidate is present in both comparisons, and dominant rMATS standardized dPSI changes sign between A and B. "
+                    "The dominant AS event may differ by comparison; use 5.4.3/5.4.4 for strict same-event reversal."
+                )
             elif candidate_a and candidate_b and tier_changed:
                 pattern = "shared_tier_changed"
                 reason = "Candidate is present in both comparisons, but candidate tier differs between A and B."
@@ -3898,7 +5136,9 @@ class ResultsPage(QWidget):
                     "rMATS_FDR_B": value(row, "best_rMATS_FDR", comp_b, pd.NA),
                     "event_type_A": value(row, "dominant_rMATS_event_type", comp_a, ""),
                     "event_type_B": value(row, "dominant_rMATS_event_type", comp_b, ""),
-                    "pair_direction_reversed": pair_direction_reversed,
+                    "pair_gene_level_direction_changed": gene_level_direction_changed,
+                    "pair_DEG_direction_reversed": deg_direction_reversed,
+                    "pair_dominant_AS_direction_reversed": dominant_as_direction_reversed,
                     "pair_tier_changed": tier_changed,
                     "pair_evidence_class_changed": evidence_changed,
                     "best_pair_rank": pd.to_numeric(pd.Series([value(row, "rank", comp_a, pd.NA), value(row, "rank", comp_b, pd.NA)]), errors="coerce").min(),
@@ -3952,8 +5192,8 @@ class ResultsPage(QWidget):
 
     def _apply_group_interaction_recalculate(self) -> None:
         pair_id = self._current_tab_key(self.group_tabs)
-        selected_key = str(self.group_interaction_view.currentData() or "shared_interaction")
-        if selected_key.startswith("batch_"):
+        selected_key = str(self.group_interaction_view.currentData() or "unified_event_table")
+        if selected_key == "batch_summary":
             self.project_service.preview_cross_comparison_as_interaction_batch(
                 abs_dpsi_cutoff=float(self.group_interaction_sig_cutoff.value()),
                 large_delta_dpsi_cutoff=float(self.group_interaction_delta_cutoff.value()),
@@ -3970,6 +5210,26 @@ class ResultsPage(QWidget):
                 allow_generate=True,
                 force_rebuild=True,
             )
+        self.refresh()
+
+    def _apply_group_venn_recalculate(self) -> None:
+        pair_id = self._current_tab_key(self.group_tabs)
+        summary, events = self._build_pair_venn_tables(pair_id)
+        signature = self._group_venn_signature()
+        self._group_venn_cache[signature] = {
+            "summary": summary,
+            "events": events,
+        }
+        self.refresh()
+
+    def _apply_group_venn_multi_recalculate(self) -> None:
+        summary, events, selected_names = self._build_group_venn_multi_tables()
+        self._group_venn_multi_cache = {
+            "signature": self._group_venn_multi_signature(),
+            "summary": summary,
+            "events": events,
+            "selected_names": selected_names,
+        }
         self.refresh()
 
     def _candidate_custom_gene_tokens(self) -> list[str]:
@@ -4052,20 +5312,6 @@ class ResultsPage(QWidget):
             f"Selected event_id: {event_id}\n"
             "Gene cards do not auto-run Sashimi; use the Sashimi page to review and generate the plot for this event."
         )
-
-    def _locate_jutils_plot(self, plot_kind: str) -> Path | None:
-        project = self.project_service.current_project
-        if project is None or project.output_root is None:
-            return None
-        plots_root = project.output_root / "08_jutils" / "plots"
-        if not plots_root.exists():
-            return None
-        candidates: list[Path] = []
-        for extension in ("*.png", "*.jpg", "*.jpeg"):
-            candidates.extend(sorted(plots_root.rglob(extension)))
-        keyword = "heatmap" if plot_kind == "heatmap" else "pca"
-        filtered = [path for path in candidates if keyword in path.name.lower()]
-        return filtered[0] if filtered else None
 
     def _on_motion(self, event) -> None:
         if self._pan_active and self._pan_axes is not None and event.inaxes == self._pan_axes and event.xdata is not None and event.ydata is not None and self._pan_origin is not None and self._pan_xlim is not None and self._pan_ylim is not None:
@@ -4197,7 +5443,7 @@ class ResultsPage(QWidget):
         output_path, _ = QFileDialog.getSaveFileName(
             self,
             f"Export Analysis as {fmt.upper()}",
-            str(Path.cwd() / f"analysis_export.{fmt}"),
+            str(self.project_service.default_export_path(f"analysis_export.{fmt}")),
             f"{fmt.upper()} Files (*.{fmt})",
         )
         if not output_path:
@@ -4217,7 +5463,7 @@ class ResultsPage(QWidget):
         output_path, _ = QFileDialog.getSaveFileName(
             self,
             "Download Preview File",
-            str(Path.cwd() / f"preview_export{suffix}"),
+            str(self.project_service.default_export_path(f"preview_export{suffix}")),
             "All Files (*.*)",
         )
         if not output_path:
@@ -4237,7 +5483,7 @@ class ResultsPage(QWidget):
         output_path, _ = QFileDialog.getSaveFileName(
             self,
             "Export Current Filtered Table",
-            str(Path.cwd() / "filtered_preview.tsv"),
+            str(self.project_service.default_export_path("filtered_preview.tsv")),
             "TSV Files (*.tsv)",
         )
         if not output_path:

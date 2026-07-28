@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "katana-splicing-tool"
-version = "0.1.0"
+version = "1.0.1"
 description = "Interactive local RNA splicing and transcriptome integration tool."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,11 +17,18 @@ dependencies = [
   "PyYAML>=6.0",
   "seaborn>=0.13",
   "scipy>=1.11,<1.13",
+  "scikit-learn>=1.4",
+  "networkx>=3.2",
+  "igraph>=1.0",
+  "leidenalg>=0.12",
   "statsmodels>=0.14",
 ]
 
+[project.scripts]
+katana-cosplice = "katana_cosplice.cli:main"
+
 [tool.setuptools]
-packages = ["app", "app.pages", "app.widgets", "src", "src.analysis", "src.adapters", "src.domain", "src.domain.models", "src.domain.rules", "src.io", "src.io.loaders", "src.services", "src.visualization"]
+packages = ["app", "app.pages", "app.widgets", "katana_cosplice", "src", "src.analysis", "src.adapters", "src.domain", "src.domain.models", "src.domain.rules", "src.io", "src.io.loaders", "src.services", "src.visualization"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

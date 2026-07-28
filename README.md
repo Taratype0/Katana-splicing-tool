@@ -7,7 +7,7 @@ It is designed to work across projects, not only one specific dataset. Each proj
 ## Core design principles
 
 - **Comparison-first**: each comparison keeps its own pages, outputs, cache, and logs
-- **Direction-aware**: splicing-side direction is inherited from Pairing; DEG final direction can be set manually
+- **Direction-aware**: canonical splicing and DEG directions are detected from project inputs/configuration, shown read-only in Pairing, and inherited downstream
 - **Gene-centered candidate screening**: candidate ranking, selection, cards, and follow-up all start from per-comparison candidate genes
 - **Independent module execution**: opening a page reads status/cache only; analysis runs only after the user clicks `Run`, `Generate`, `Apply`, or `Recalculate`
 - **Project-specific annotation**: gene symbol mapping is loaded from the current project's own annotation TSV when available
@@ -22,6 +22,7 @@ Katana currently supports:
 - Pairing / comparison direction setup
 - Cross-comparison ordering and visualization group setup
 - Overview plots for significant splicing events
+- One shared stable-AS filter using rMATS FDR/dPSI, per-replicate IJC+SJC support, and replicate direction consistency
 - Transcript + splicing integration
 - Per-comparison candidate gene ranking and selection
 - Candidate cards + event follow-up
@@ -30,6 +31,20 @@ Katana currently supports:
 - Jutils output browsing
 - RBP support/enrichment over candidate genes
 - Isoform candidate support from quant.sf / GTF / DTU
+- Comparison-first DEG exploration with Volcano/MA plots
+- GO:BP / GO:MF / GO:CC / KEGG enrichment from DEG, candidate-selection, or custom genes
+- Standalone and embedded **Katana-CoSplice** network discovery for replicate-supported sample-level PSI programs across multi-condition cohorts
+
+### Katana-CoSplice network discovery
+
+`katana-cosplice` is also installed as a command-line program. It builds exact sample-level PSI/IJC/SJC matrices from rMATS, audits source/sample identity, applies condition-coverage and PSI-range QC plus read/replicate safeguards, and includes every passing event in a signed sparse co-splicing network by default. Its stability-first defaults combine multi-k topology, complete sample bootstrap, rejection of low-support edges, and repeated community consensus; runtime is deliberately secondary to reproducibility. Sparse shared-neighbor weighted-overlap smoothing strengthens local topology without constructing a dense TOM matrix. WGCNA-style module-program merging plus bounded, sample-size-aware kME refinement keeps weak events in `grey` while preventing relaxed thresholds from freely bridging modules. A hybrid stage now retains both tight sparse programs and diffuse WGCNA-style soft-adjacency/TOM programs, with separate bootstrap co-assignment, replicate-consistency and optional external-preservation confidence. A dedicated outer bootstrap stage builds event-event co-assignment probabilities, searches sparse Leiden graph thresholds/resolutions, and selects a constrained final partition using resampling agreement, coverage, balance, separation and modularity. Stable graph members are labelled `core`; confidently attached events are retained as `peripheral` rather than automatically discarded as `grey`. It calculates module program scores, performs condition/covariate association, and validates modules through condition-stratified bootstrap recovery, graph-parameter sensitivity, and observed/residual preservation. Module interpretation can scan official ATtRACT or compatible PWM motifs against indexed genome FASTA, correlate RBP expression, query local GMT or g:Profiler GO/KEGG, quantify dominant isoform switches from Salmon/GTF, and separate descriptive from DTU-supported switch enrichment. Replicate-aware beta-binomial models support an optional donor/block random intercept and are benchmarked against simple delta PSI. Annotation-aware cross-cohort projection, conservative multi-cohort preservation/rewiring states, and random-effects effect-size meta-analysis are available for independent cohorts. An optional predeclared factor-contrast stage tests target/reference, perturbation and difference-in-differences effects on stable PSI and cached program scores; it reports phenocopy/occlusion support without treating RNA similarity as proof of LOF/GOF. A cached HTML/PDF report and self-contained module browser support review without recomputation. An independent same-input benchmark compares Katana-CoSplice with Pearson hierarchical, shrinkage graphical-lasso and exact R WGCNA. Every UI action and `stage --name` command runs exactly one stage; unchanged inputs return a parameter-fingerprinted cache hit. The same stages are available in `9. CoSplice Network`. See [docs/COSPLICE_NETWORK.md](docs/COSPLICE_NETWORK.md) and [docs/COSPLICE_METHODS_3_5.md](docs/COSPLICE_METHODS_3_5.md).
+
+For the exact WGCNA comparator, create/update the Conda environment and install the official R package once:
+
+```powershell
+conda env update -n katana-splicing-tool -f configs/environment.yml
+conda run -n katana-splicing-tool Rscript scripts/install_wgcna.R
+```
 
 Optional / project-dependent:
 
@@ -163,6 +178,10 @@ Katana is built to scan a project root and discover usable inputs from that proj
 - **Annotation is not hard-linked to one dataset**
 - Katana will use the **current project's own annotation TSV**
 - If a new project has a different annotation TSV, Katana should use that one instead
+- Gene, AS-event and CoSplice-module selections are published through a project-local `AnalysisArtifactRegistry`
+- Downstream modules read the selected artifact and its comparison scope; they do not silently rerun an upstream module
+- Cached artifacts retain module ID, scope, comparison IDs, parameters, source artifact IDs and output paths
+- The Workflow Dashboard can build a cache-only project report with an artifact inventory, module status and provenance JSON
 
 ---
 
@@ -182,7 +201,7 @@ Detects:
 Defines:
 
 - canonical splicing-side direction
-- manual DEG final direction
+- canonical DEG direction
 - comparison naming
 - comparison order
 
@@ -190,7 +209,8 @@ Important:
 
 - AS / rMATS direction is treated as canonical splicing direction
 - DEXSeq / DTU inherit this splicing-side direction
-- DEG direction can be chosen manually when DESeq2 file naming is unreliable
+- Pairing displays both canonical directions as a read-only audit
+- legacy `reverse_splicing` / `reverse_deg` values remain readable for old projects and cached results, but are not editable in the Pairing UI
 
 ### 3. Comparison Sets
 
@@ -202,6 +222,17 @@ Defines which comparisons are grouped together in downstream comparison views.
 
 ### 5. Per-comparison Analysis
 
+#### 5.0 Analysis Thresholds
+
+Threshold controls are kept on a dedicated page instead of occupying every analysis screen. Katana provides exactly three presets plus one manual mode:
+
+- `Default practical`
+- `Exploratory`
+- `Stringent`
+- `Custom`
+
+Changing a preset or custom value invalidates parameter-mismatched caches. It never starts an analysis. The new values are used only after the user explicitly reruns the relevant module.
+
 #### 5.1 Overview
 
 - `5.1.1 Landscape`
@@ -209,6 +240,16 @@ Defines which comparisons are grouped together in downstream comparison views.
 - `5.1.3 Pie`
 
 These focus on significant splicing event composition and counts.
+
+The downstream stable-AS gate is computed identically across overview, integration, candidate, and cross-comparison modules:
+
+- event passes the active rMATS FDR and absolute standardized dPSI cutoff
+- each group has the configured number of individually read-supported replicates
+- each supported replicate uses `IJC + SJC` against the configured per-replicate minimum
+- all cross-group replicate PSI pairs are used for direction-consistency scoring
+- missing PSI or read support is reported as unavailable, not converted into false support
+
+Every stable-AS event remains auditable in downstream tables through the group-wise total replicate counts, read-supported replicate counts, mean `IJC + SJC`, direction-consistency score, and support-availability status. Candidate ranking also records a per-gene stability summary for every retained significant AS event and the full stability metrics for its dominant event.
 
 #### 5.2 Transcript + Splicing Integration
 
@@ -223,6 +264,7 @@ These views combine DEG and AS information using standardized directions.
 - `5.3.2 Candidate Gene Selection`
 - `5.3.3 Evidence Heatmap`
 - `5.3.4 Candidate Cards + Event Follow-up`
+- `5.3.5 Candidate Gene AS Heatmap`
 
 Key behavior:
 
@@ -236,8 +278,10 @@ Key behavior:
 
 - `5.4.1 Candidate Matrix`: pairwise gene-level candidate membership for comparison A vs comparison B
 - `5.4.2 Shared / Specific / Gained / Lost`: pairwise gene-level pattern explanation
-- `5.4.3 Cross-comparison AS dPSI Pattern`: event-level shared significant AS dPSI pattern prioritization
-- `5.4.4 Cross-comparison AS interaction modeling`: replicate-aware AS interaction/effect follow-up
+- `5.4.3 Cross-comparison AS interaction modeling`: replicate-aware AS interaction/read-support follow-up
+- `5.4.4 Venn / Overlap`: Venn-style intersection counts for gene candidates and AS events from cached 5.4.1/5.4.3 results
+- `5.4.5 Selected-comparison Event Venn`: one direction-aware event Venn across user-selected comparisons
+- `5.4.6 Selected-comparison Event Similarity`: a separate direction-aware event-similarity heatmap for the same selected comparisons
 
 #### 5.5 Sashimi
 
@@ -246,13 +290,47 @@ Key behavior:
 
 Sashimi does **not** auto-run on page open.
 
-#### 5.6 Jutils
+#### 5.6 Native Splicing Pattern Explorer
 
-- `5.6.1 Jutils Heatmap`
-- `5.6.2 Jutils PCA`
-- `5.6.3 Jutils Output Browser`
+- `5.6.1 Sample PSI Heatmaps`: absolute PSI, row-Z-score PSI and hierarchical event/sample pattern views
+- `5.6.2 PCA & Replicate QC`: per-comparison sample PSI PCA and within-group versus between-group replicate similarity
+- `5.6.3 Similarity & Overlap`: sample PSI Spearman similarity with the shared measured-event denominator, plus significant-event overlap and direction agreement
+- `5.6.4 Native Output Browser`: cached TSV, PNG and `parameters.json` preview/export
 
-If preview is not embedded (for example PDF output), Katana shows the output path and provides open/download actions.
+This is Katana's native replacement for the external Jutils workflow. It preserves the useful Jutils concepts of sample-level PSI heatmaps, hierarchical clustering, PCA and event overlap, while adding explicit measured-event denominators, replicate QC, comparison-aware direction, independent module execution and reproducible cache parameters. Pattern clusters are derived from row-Z-scored sample/replicate PSI trajectories using weighted-linkage hierarchical clustering with city-block distance; they are not clusters of one or two comparison-level dPSI values. White heatmap cells mean PSI was unavailable for that event/sample, not zero.
+
+Each run also writes `native_pattern_summary.tsv`, which records the event/sample/comparison denominators, pair count, median direction and weighted-cosine similarity, low-confidence pair count, active cutoffs and scientific scope. The UI reads this lightweight summary on reopen rather than scanning every large result table.
+
+`5.3.5` is deliberately separate: it restricts the PSI heatmap to genes selected in `5.3.2`, whereas `5.6` is a global selected-experiment pattern/QC module. Opening a `5.6` page reads cache only. Rebuilding requires the explicit Native Run action and does not trigger candidate ranking, sashimi, RBP or isoform analysis. The native overview owns the Run controls; `5.6.1`-`5.6.4` are cache-only result views.
+
+#### 5.7 DEG Explorer
+
+Runs independently for one comparison and uses the read-only canonical DEG direction audited in Pairing.
+
+Outputs per comparison:
+
+- `deg_all.tsv`
+- `deg_significant.tsv`
+- `deg_up.tsv`
+- `deg_down.tsv`
+- `summary.tsv`
+- `parameters.json`
+- `volcano.png`
+- `ma_plot.png`
+
+Opening the page reads a matching cache only. `Run DEG Explorer` rebuilds only this module.
+
+#### 5.8 GO / KEGG Enrichment
+
+Runs g:Profiler over-representation analysis for one comparison using one of these explicit gene sources:
+
+- significant DEG
+- upregulated DEG
+- downregulated DEG
+- saved candidate gene selection
+- custom gene list
+
+It queries `GO:BP`, `GO:MF`, `GO:CC`, and `KEGG`, then writes the exact input gene list, enrichment TSV, PNG, and `parameters.json`. DEG/candidate inputs must already exist; this module never runs an upstream analysis automatically. Internet access is required for the g:Profiler request. Enrichment is support/prioritization evidence, not a causal claim.
 
 ### 6. Samples
 
@@ -309,11 +387,21 @@ Allows path-level runtime configuration.
 
 ## Expected outputs
 
-Katana writes output under a project-specific output root, typically:
+Katana requires an explicit project output directory. New projects prompt for
+this directory during loading, and it can be changed later in `Settings`.
+Katana rejects output locations inside the Katana source checkout so analysis
+artifacts cannot pollute the tool repository. A typical selected output
+directory is:
 
 ```text
 katana_output/
 ```
+
+For legacy projects that already store `katana_output` inside the source
+checkout, use `Settings > Migrate Existing Outputs`. Katana copies the
+recognized output tree to the selected external directory, updates the project
+configuration only after the copy succeeds, and then removes the old output
+tree. Unrecognized input/project folders are refused rather than moved.
 
 Typical sections include:
 
@@ -324,7 +412,10 @@ katana_output/
   02_candidate_gene_screening/
   03_cross_comparison_candidate_comparison/
   04_program_heatmap/
-  05_jutils/
+  04a_candidate_gene_screening/
+  05_deg_explorer/
+  05b_functional_enrichment/
+  06_native_splicing_patterns/
   06_sashimi/
   07_rbp_support/
   08_isoform_candidate_support/
@@ -337,7 +428,7 @@ Examples of important files:
 - `cross_comparison_candidate_matrix.tsv`
 - `heatmap_gene_list.tsv`
 - generated sashimi event files / manifests / plot folders
-- Jutils output files
+- Native sample-PSI matrices, PCA/QC, similarity, overlap and pattern-cluster outputs
 - RBP support/enrichment tables
 - isoform candidate support tables
 
@@ -347,7 +438,7 @@ Examples of important files:
 
 ### Splicing-side canonical direction
 
-Defined in `Pairing`, then inherited by:
+Detected from the project input/configuration, displayed read-only in `Pairing`, then inherited by:
 
 - rMATS
 - DEXSeq
@@ -355,11 +446,11 @@ Defined in `Pairing`, then inherited by:
 - event-level dPSI interpretation
 - sashimi-side comparison labels
 
-### DEG final direction
+### DEG canonical direction
 
-Set manually in `Pairing` when needed.
+Detected from the project input/configuration and displayed read-only in `Pairing`.
 
-Katana does **not** blindly trust DESeq2 file naming if the user overrides the final direction.
+Downstream tables use `standardized_log2FC`; legacy projects keep their saved direction transforms for reproducibility.
 
 ---
 
@@ -407,16 +498,23 @@ python scripts\katana_native_sashimi.py --manifest selected_manifest.tsv --outpu
 
 ## Jutils behavior
 
-Katana can:
+Katana keeps two complementary paths:
 
-- run Jutils
-- browse generated outputs
-- preview tables/images/HTML
-- guide the user to PDF outputs via open/download
+- `5.6 Native Splicing Pattern Explorer` provides sample-level PSI heatmaps,
+  PCA, replicate QC, pattern clustering, measured-event denominators and
+  quantitative comparison similarity.
+- The legacy compatibility page can still run bundled Jutils, browse generated
+  outputs, preview tables/images/HTML and expose PDF files through open/download.
+- Direction-aware event Venn analysis is provided in `5.4.5`; selected-event
+  Native Sashimi is provided in `5.5`.
 
 Note:
 
-- many Jutils heatmap/PCA outputs are PDFs
+- Native 5.6 is functionally equivalent or stronger for pattern exploration,
+  but it is not a pixel-identical reimplementation of every Jutils CLI option.
+- A strict same-input Setd2 benchmark is documented in
+  [docs/JUTILS_HEAD_TO_HEAD_VALIDATION_v1.0.1.md](docs/JUTILS_HEAD_TO_HEAD_VALIDATION_v1.0.1.md).
+- many legacy Jutils heatmap/PCA outputs are PDFs
 - embedded preview may not always be available
 - Katana should still expose file paths and open/download actions clearly
 
@@ -431,7 +529,10 @@ python -m py_compile app\window.py
 python -m py_compile app\pages\results_page.py
 python -m py_compile app\pages\sashimi_page.py
 python -m py_compile app\pages\jutils_page.py
+python -m py_compile app\pages\deg_page.py
+python -m py_compile app\pages\enrichment_page.py
 python -m py_compile src\services\project_service.py
+pytest -q
 ```
 
 ### GUI smoke testing
@@ -446,7 +547,12 @@ Recommended manual checks:
    - `5.3.1 Candidate Ranking Table`
    - `5.3.2 Candidate Gene Selection`
    - `5.5.2 Run Sashimi`
-   - `5.6.1 Jutils Heatmap`
+   - `5.6.1 Sample PSI Heatmaps`
+   - `5.6.2 PCA & Replicate QC`
+   - `5.6.3 Similarity & Overlap`
+   - `5.6.4 Native Output Browser`
+   - `5.7 DEG Explorer`
+   - `5.8 GO / KEGG Enrichment`
 4. Confirm:
    - project load does not auto-run heavy downstream modules
    - each page only runs when its own button is clicked
@@ -461,12 +567,12 @@ Recommended manual checks:
 - candidate ranking loads
 - candidate selection persists per comparison
 - sashimi event selection works
-- Jutils output browser can list generated files
+- Native Splicing Pattern Explorer lists and previews cached TSV/PNG outputs
 - optional pages are hidden when required inputs are absent
 
-### Validation summary for the current 1.0 candidate
+### Validation summary for the current development version
 
-The current repository was smoke-tested on `2026-05-07` against a real local project root.
+The current repository was smoke-tested on `2026-07-13` against a real local project root.
 
 Validated behaviors:
 
@@ -477,9 +583,15 @@ Validated behaviors:
 - `5.3.1` candidate ranking page opens
 - `5.3.2` candidate gene selection page opens
 - `5.5.2 / 5.5.3` sashimi pages open in distinct modes
-- `5.6.1 / 5.6.2 / 5.6.3` Jutils pages open and detect available output files
+- `5.6.1 / 5.6.2 / 5.6.3 / 5.6.4` Native Splicing Pattern Explorer pages open and detect cached PSI/PCA/QC/similarity outputs
 - `7 RBP` and `8 Isoform` open as explicit downstream support modules
 - `7.2` and `8.2` cross-comparison support modules generate TSV + PNG outputs and reload cached preview files without rerunning analysis
+- project confirmation flags survive reload
+- saved comparison IDs remain canonical when scanner aliases differ
+- stable-AS calculations are shared across analysis layers and covered by regression tests
+- candidate caches reject missing or mismatched parameter fingerprints
+- `5.7` generates comparison-specific DEG TSV/PNG outputs and reloads them from cache without triggering another module
+- `5.8` generates GO/KEGG TSV/PNG outputs from an existing gene list without triggering an upstream module
 
 Genericity checks:
 
@@ -498,6 +610,7 @@ Known runtime caveat:
 - Some previews (especially PDF outputs) are not embedded and must be opened externally
 - Sashimi execution requires the runtime dependencies expected by `rmats2sashimiplot`
 - Some optional modules depend on project-specific resource availability
+- GO/KEGG enrichment requires internet access to the g:Profiler API
 - Large projects can still require manual module-by-module execution time
 
 ---
@@ -508,7 +621,7 @@ This version is intended as a **modular 1.0-style desktop workflow**, with:
 
 - independent module execution
 - comparison-aware outputs
-- manual direction control where needed
+- read-only canonical direction auditing with standardized downstream effects
 - project-specific annotation loading
 - event-driven sashimi follow-up
 

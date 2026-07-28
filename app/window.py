@@ -3,28 +3,31 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QThread, Signal, Qt
+from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QFrame,
-    QListWidget,
-    QListWidgetItem,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QPushButton,
     QSplitter,
-    QStackedWidget,
     QStatusBar,
     QToolBar,
     QVBoxLayout,
     QWidget,
     QProgressBar,
+    QSizePolicy,
 )
 
 from app.pages.comparison_page import ComparisonPage
 from app.pages.comparison_sets_page import ComparisonSetsPage
+from app.pages.cosplice_page import CoSplicePage
+from app.pages.cross_comparison_page import CrossComparisonResultsPage
+from app.pages.deg_page import DegPage
+from app.pages.enrichment_page import EnrichmentPage
 from app.pages.candidate_gene_page import CandidateGenePage
 from app.pages.candidate_selection_page import CandidateSelectionPage
 from app.pages.cards_page import CardsPage
@@ -43,6 +46,10 @@ from app.pages.samples_page import SamplesPage
 from app.pages.settings_page import SettingsPage
 from app.pages.thresholds_page import ThresholdsPage
 from app.pages.visualization_groups_page import VisualizationGroupsPage
+from app.pages.workflow_dashboard_page import WorkflowDashboardPage
+from app.theme import KATANA_STYLESHEET
+from app.widgets.navigation_tree import WorkflowNavigation
+from app.widgets.responsive_stack import ResponsiveStackedWidget
 from src.runtime_paths import bundled_assets_root
 from src.services.project_service import ProjectService
 
@@ -109,31 +116,20 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(icon_path)))
 
         self.project_service = ProjectService()
-        self.pages = QStackedWidget()
-        self.nav = QListWidget()
-        self.nav.setMinimumWidth(320)
-        self.nav.setMaximumWidth(320)
+        self.pages = ResponsiveStackedWidget()
+        self.nav = WorkflowNavigation()
+        self.nav.setMinimumWidth(252)
+        self.nav.setMaximumWidth(360)
         self.nav.currentRowChanged.connect(self._switch_page)
         self._page_routes: list[tuple[int, QWidget, tuple[str, str | None] | None]] = []
         self._named_nav_rows: dict[str, int] = {}
+        self.toolbar_title: QLabel | None = None
 
         self.project_page = ProjectPage(self.project_service, self._advance_after_project_confirmation)
         self.comparison_page = ComparisonPage(self.project_service, self._advance_after_pairing_confirmation)
         self.comparison_sets_page = ComparisonSetsPage(self.project_service, self._advance_after_comparison_sets_confirmation)
         self.visualization_groups_page = VisualizationGroupsPage(self.project_service, self._advance_after_visual_groups_confirmation)
-        self.per_comparison_page = SectionNavigationPage(
-            "Per-comparison Analysis",
-            "Run analysis inside each comparison first. Start with overview and transcript+splicing integration, then move into candidate screening, cross-comparison candidate comparison, sashimi and Jutils follow-up.",
-            [
-                ("Overview", "Comparison-level overview plots before candidate calling.", "5.1 Overview"),
-                ("Transcript + Splicing Integration", "Direction-aware evidence layers inside each comparison.", "5.2 Transcript + Splicing Integration"),
-                ("Candidate Gene Screening", "Generate ranked gene-level candidates, then shortlist/blacklist them.", "5.3 Candidate Gene Screening"),
-                ("Cross-comparison Candidate Comparison", "Compare candidate genes only after per-comparison screening.", "5.4 Cross-comparison Candidate Comparison"),
-                ("Sashimi", "Validate shortlisted candidate events with sashimi plots.", "5.5 Sashimi"),
-                ("Jutils", "Heatmap/PCA/output browser for jutils follow-up.", "5.6 Jutils"),
-            ],
-            self._open_named_page,
-        )
+        self.per_comparison_page = WorkflowDashboardPage(self.project_service, self._open_named_page)
         self.overview_page = SectionNavigationPage(
             "Overview",
             "Overview is the first per-comparison layer. Use Landscape for a comparison-level overview, Bar for significant event counts, and Pie for event-type composition.",
@@ -174,17 +170,20 @@ class MainWindow(QMainWindow):
                 ("Candidate Gene Selection", "Per-comparison candidate gene selection with default top 20, manual add/remove and per-comparison blacklist.", "5.3.2 Candidate Gene Selection"),
                 ("Evidence Heatmap", "Heatmap of multi-layer evidence across candidate genes.", "5.3.3 Evidence Heatmap"),
                 ("Candidate Cards + Event Follow-up", "Candidate cards driven from the selected genes; event-level follow-up continues into sashimi.", "5.3.4 Candidate Cards + Event Follow-up"),
+                ("Candidate Gene AS Heatmap", "Sample-level PSI and dPSI heatmaps restricted to the genes selected in 5.3.2.", "5.3.5 Candidate Gene AS Heatmap"),
             ],
             self._open_named_page,
         )
         self.cross_comparison_page = SectionNavigationPage(
             "Cross-comparison Candidate Comparison",
-            "Cross-comparison is split by level: 5.4.1/5.4.2 are pairwise gene-level candidate A-vs-B views, 5.4.3 is event-level dPSI pattern follow-up, and 5.4.4 is replicate-aware AS interaction modeling.",
+            "Cross-comparison is split by level: 5.4.1/5.4.2 are pairwise gene-level candidate A-vs-B views, and 5.4.3/5.4.4/5.4.5/5.4.6 are strict AS event-level views.",
             [
                 ("Candidate Matrix", "Pairwise A-vs-B matrix of candidate membership for the selected comparison pair.", "5.4.1 Candidate Matrix"),
                 ("Gene Pattern Explanation", "Pairwise shared / A-specific / B-specific / gained / lost explanation for gene-level candidate patterns.", "5.4.2 Shared / Specific / Gained / Lost"),
-                ("AS dPSI Pattern", "Event-level dPSI pattern follow-up for shared significant AS events.", "5.4.3 Cross-comparison AS dPSI Pattern"),
-                ("Cross-comparison AS interaction modeling", "Replicate-aware AS interaction follow-up for shared significant events, exclusive event support and effect-size patterns.", "5.4.4 Cross-comparison AS interaction modeling"),
+                ("AS interaction / read support", "Replicate-aware AS interaction follow-up for shared significant events, A/B-specific event support and effect-size patterns.", "5.4.3 Cross-comparison AS interaction modeling"),
+                ("Strict-event Venn / overlap", "Strict rMATS event-level A-specific / shared / B-specific overlap.", "5.4.4 Venn / Overlap"),
+                ("Selected-comparison Venn", "Choose multiple comparisons and show one large direction-aware AS-event Venn.", "5.4.5 Selected-comparison Event Venn"),
+                ("Selected-comparison Similarity Heatmap", "Choose multiple comparisons and show one direction-aware AS-event similarity heatmap.", "5.4.6 Selected-comparison Event Similarity"),
             ],
             self._open_named_page,
         )
@@ -198,29 +197,24 @@ class MainWindow(QMainWindow):
             ],
             self._open_named_page,
         )
-        self.jutils_hub_page = SectionNavigationPage(
-            "Jutils",
-            "Jutils follow-up is grouped in one place. Open heatmap, PCA or the output browser from here.",
-            [
-                ("Jutils Heatmap", "Preview or run heatmap-oriented jutils output.", "5.6.1 Jutils Heatmap"),
-                ("Jutils PCA", "Preview or run PCA-oriented jutils output.", "5.6.2 Jutils PCA"),
-                ("Jutils Output Browser", "Inspect generated files, paths and logs.", "5.6.3 Jutils Output Browser"),
-            ],
-            self._open_named_page,
-        )
         self.landscape_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="landscape", fixed_subbranch="overview")
         self.landscape_bar_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="landscape", fixed_subbranch="bar")
         self.landscape_pie_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="landscape", fixed_subbranch="pie")
-        self.landscape_heatmap_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="landscape", fixed_subbranch="heatmap")
-        self.landscape_pca_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="landscape", fixed_subbranch="pca")
         self.group_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group")
-        self.group_matrix_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="matrix")
-        self.group_shared_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="shared")
+        self.group_matrix_page = CrossComparisonResultsPage(self.project_service, self.run_analysis, subbranch="matrix")
+        self.group_shared_page = CrossComparisonResultsPage(self.project_service, self.run_analysis, subbranch="shared")
         self.group_reversal_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="reversal")
         self.group_comparison_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="comparison")
         self.group_direction_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="direction")
-        self.group_pattern_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="pattern")
-        self.group_interaction_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="group", fixed_subbranch="interaction")
+        self.group_pattern_page = CrossComparisonResultsPage(self.project_service, self.run_analysis, subbranch="pattern")
+        self.group_interaction_page = CrossComparisonResultsPage(self.project_service, self.run_analysis, subbranch="interaction")
+        self.group_venn_page = CrossComparisonResultsPage(self.project_service, self.run_analysis, subbranch="venn")
+        self.group_venn_multi_page = CrossComparisonResultsPage(self.project_service, self.run_analysis, subbranch="venn_multi")
+        self.group_venn_similarity_page = CrossComparisonResultsPage(
+            self.project_service,
+            self.run_analysis,
+            subbranch="venn_multi_similarity",
+        )
         self.tx_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="tx")
         self.tx_direction_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="tx", fixed_subbranch="direction")
         self.tx_deg_page = ResultsPage(self.project_service, self.run_analysis, fixed_branch="tx", fixed_subbranch="deg")
@@ -250,11 +244,21 @@ class MainWindow(QMainWindow):
         self.samples_page = SamplesPage(self.project_service)
         self.input_check_page = InputCheckPage(self.project_service)
         self.rbp_page = RbpPage(self.project_service)
+        self.rbp_per_page = RbpPage(self.project_service, initial_tab=0)
+        self.rbp_cross_page = RbpPage(self.project_service, initial_tab=1)
         self.isoform_page = IsoformPage(self.project_service)
-        self.jutils_heatmap_page = JutilsPage(self.project_service, view_mode="heatmap")
-        self.jutils_pca_page = JutilsPage(self.project_service, view_mode="pca")
-        self.jutils_page = JutilsPage(self.project_service, view_mode="browser")
+        self.isoform_per_page = IsoformPage(self.project_service, initial_tab=1)
+        self.isoform_cross_page = IsoformPage(self.project_service, initial_tab=2)
+        self.candidate_as_heatmap_page = JutilsPage(self.project_service, view_mode="candidate_heatmap")
+        self.native_pattern_overview_page = JutilsPage(self.project_service, view_mode="native_pattern")
+        self.native_psi_heatmap_page = JutilsPage(self.project_service, view_mode="native_heatmap")
+        self.native_psi_pca_page = JutilsPage(self.project_service, view_mode="native_pca")
+        self.native_similarity_page = JutilsPage(self.project_service, view_mode="native_similarity")
+        self.native_output_browser_page = JutilsPage(self.project_service, view_mode="native_browser")
         self.thresholds_page = ThresholdsPage(self.project_service)
+        self.deg_page = DegPage(self.project_service)
+        self.enrichment_page = EnrichmentPage(self.project_service)
+        self.cosplice_page = CoSplicePage(self.project_service)
         self.settings_page = SettingsPage(self.project_service, self.reload_current_project)
 
         self._add_page("1. Project", self.project_page)
@@ -262,6 +266,7 @@ class MainWindow(QMainWindow):
         self._add_page("3. Comparison Sets", self.comparison_sets_page)
         self._add_page("4. Visual Groups", self.visualization_groups_page)
         self._add_page("5. Per-comparison Analysis", self.per_comparison_page)
+        self._add_page("5.0 Analysis Thresholds", self.thresholds_page)
         self._add_page("5.1 Overview", self.overview_page)
         self._add_page("5.1.1 Landscape", self.landscape_page, ("landscape", "overview"))
         self._add_page("5.1.2 Bar", self.landscape_bar_page, ("landscape", "bar"))
@@ -279,50 +284,93 @@ class MainWindow(QMainWindow):
         self._add_page("5.3.2 Candidate Gene Selection", self.candidate_selection_page)
         self._add_page("5.3.3 Evidence Heatmap", self.candidate_hook_heatmap_page, ("candidate", "heatmap"))
         self._add_page("5.3.4 Candidate Cards + Event Follow-up", self.candidate_hook_cards_page, ("candidate", "cards"))
+        self._add_page("5.3.5 Candidate Gene AS Heatmap", self.candidate_as_heatmap_page)
         self._add_page("5.4 Cross-comparison Candidate Comparison", self.cross_comparison_page)
         self._add_page("5.4.1 Candidate Matrix", self.group_matrix_page)
         self._add_page("5.4.2 Shared / Specific / Gained / Lost", self.group_shared_page)
-        self._add_page("5.4.3 Cross-comparison AS dPSI Pattern", self.group_pattern_page)
-        self._add_page("5.4.4 Cross-comparison AS interaction modeling", self.group_interaction_page)
+        self._add_page("5.4.3 Cross-comparison AS interaction modeling", self.group_interaction_page)
+        self._add_page("5.4.4 Venn / Overlap", self.group_venn_page)
+        self._add_page("5.4.5 Selected-comparison Event Venn", self.group_venn_multi_page)
+        self._add_page("5.4.6 Selected-comparison Event Similarity", self.group_venn_similarity_page)
         self._add_page("5.5 Sashimi", self.sashimi_hub_page)
         self._add_page("5.5.1 Input Check", self.input_check_page)
         self._add_page("5.5.2 Run Sashimi", self.sashimi_page)
         self._add_page("5.5.3 Sashimi Preview", self.sashimi_preview_page)
-        self._add_page("5.6 Jutils", self.jutils_hub_page)
-        self._add_page("5.6.1 Jutils Heatmap", self.jutils_heatmap_page)
-        self._add_page("5.6.2 Jutils PCA", self.jutils_pca_page)
-        self._add_page("5.6.3 Jutils Output Browser", self.jutils_page)
+        self._add_page("5.6 Native Splicing Pattern Explorer", self.native_pattern_overview_page)
+        self._add_page("5.6.1 Sample PSI Heatmaps", self.native_psi_heatmap_page)
+        self._add_page("5.6.2 PCA & Replicate QC", self.native_psi_pca_page)
+        self._add_page("5.6.3 Similarity & Overlap", self.native_similarity_page)
+        self._add_page("5.6.4 Native Output Browser", self.native_output_browser_page)
+        self._add_page("5.7 DEG Explorer", self.deg_page)
+        self._add_page("5.8 GO / KEGG Enrichment", self.enrichment_page)
         self._add_page("6. Samples", self.samples_page)
         self._add_page("7. RBP", self.rbp_page)
+        self._add_page("7.1 Per-comparison RBP support", self.rbp_per_page, ("rbp", "per"))
+        self._add_page("7.2 Cross-comparison RBP support", self.rbp_cross_page, ("rbp", "cross"))
         self._add_page("8. Isoform", self.isoform_page)
-        self._add_page("9. Input Check", self.input_check_page)
-        self._add_page("10. Settings", self.settings_page)
+        self._add_page("8.1 Per-comparison isoform support", self.isoform_per_page, ("isoform", "per"))
+        self._add_page("8.2 Cross-comparison isoform support", self.isoform_cross_page, ("isoform", "cross"))
+        self._add_page("9. CoSplice Network", self.cosplice_page)
+        self._add_page("10. Input Check", self.input_check_page)
+        self._add_page("11. Settings", self.settings_page)
+        self.nav.expand_primary_workflow()
         self.nav.setCurrentRow(0)
 
-        left_panel = QWidget()
-        left_panel.setMinimumWidth(320)
-        left_panel.setMaximumWidth(340)
+        left_panel = QFrame()
+        left_panel.setObjectName("sidebar")
+        left_panel.setMinimumWidth(252)
+        left_panel.setMaximumWidth(360)
         left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setContentsMargins(16, 18, 12, 14)
+        left_layout.setSpacing(12)
+
+        brand = QLabel("KATANA")
+        brand.setObjectName("brandTitle")
+        brand_subtitle = QLabel("RNA splicing workspace")
+        brand_subtitle.setObjectName("brandSubtitle")
+        self.project_badge = QLabel("No project loaded")
+        self.project_badge.setObjectName("projectBadge")
+        self.project_badge.setWordWrap(True)
+        workflow_label = QLabel("WORKFLOW")
+        workflow_label.setObjectName("sidebarOverline")
+
+        left_layout.addWidget(brand)
+        left_layout.addWidget(brand_subtitle)
+        left_layout.addWidget(self.project_badge)
+        left_layout.addSpacing(6)
+        left_layout.addWidget(workflow_label)
         left_layout.addWidget(self.nav, 1)
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.HLine)
-        divider.setFrameShadow(QFrame.Shadow.Sunken)
-        left_layout.addWidget(divider)
-        left_layout.addWidget(self.thresholds_page, 0)
+
+        content_surface = QFrame()
+        content_surface.setObjectName("contentSurface")
+        content_layout = QVBoxLayout(content_surface)
+        content_layout.setContentsMargins(14, 14, 14, 14)
+        content_layout.addWidget(self.pages, 1)
 
         splitter = QSplitter()
+        splitter.setObjectName("workspaceSplitter")
         splitter.addWidget(left_panel)
-        splitter.addWidget(self.pages)
+        splitter.addWidget(content_surface)
         splitter.setStretchFactor(1, 1)
         splitter.setChildrenCollapsible(False)
-        splitter.setSizes([360, 1000])
+        splitter.setHandleWidth(1)
+        splitter.setSizes([300, 1060])
         self.setCentralWidget(splitter)
 
         toolbar = QToolBar("Main")
+        toolbar.setObjectName("mainToolbar")
+        toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
+        self.toolbar_title = QLabel("1. Project")
+        self.toolbar_title.setObjectName("toolbarTitle")
+        toolbar.addWidget(self.toolbar_title)
+        toolbar_spacer = QWidget()
+        toolbar_spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        toolbar.addWidget(toolbar_spacer)
+
         self.open_action = QPushButton("Open Project")
+        self.open_action.setProperty("class", "primary")
         self.open_action.clicked.connect(self.open_project)
         toolbar.addWidget(self.open_action)
 
@@ -346,7 +394,6 @@ class MainWindow(QMainWindow):
         self._loader_worker: ProjectLoadWorker | None = None
         self._analysis_thread: QThread | None = None
         self._analysis_worker: AnalysisRunWorker | None = None
-        self._update_threshold_visibility(0)
 
     def _add_page(self, name: str, widget: QWidget, analysis_route: tuple[str, str | None] | None = None) -> None:
         page_index = self.pages.indexOf(widget)
@@ -354,16 +401,9 @@ class MainWindow(QMainWindow):
             self.pages.addWidget(widget)
             page_index = self.pages.indexOf(widget)
         self._page_routes.append((page_index, widget, analysis_route))
-        item = QListWidgetItem(self._nav_display_label(name), self.nav)
-        item.setData(Qt.ItemDataRole.UserRole, name)
-        self._named_nav_rows[name] = len(self._page_routes) - 1
-
-    def _nav_display_label(self, name: str) -> str:
-        prefix = name.split(" ", 1)[0]
-        depth = max(prefix.count(".") - 1, 0)
-        if prefix == "5.":
-            depth = 0
-        return f"{'    ' * depth}{name}"
+        route_index = len(self._page_routes) - 1
+        self.nav.add_route(route_index, name)
+        self._named_nav_rows[name] = route_index
 
     def _switch_page(self, index: int) -> None:
         if index > 0 and self.project_service.current_project is not None and not self.project_service.current_project.confirmed:
@@ -407,9 +447,14 @@ class MainWindow(QMainWindow):
             self.nav.blockSignals(False)
             index = 3
         if 0 <= index < len(self._page_routes):
+            if self.toolbar_title is not None:
+                current_name = next(
+                    (name for name, route_index in self._named_nav_rows.items() if route_index == index),
+                    "Workspace",
+                )
+                self.toolbar_title.setText(current_name)
             page_index, page, analysis_route = self._page_routes[index]
             self.pages.setCurrentIndex(page_index)
-            self._update_threshold_visibility(index)
             if analysis_route is not None:
                 branch, subbranch = analysis_route
                 navigate_to = getattr(page, "navigate_to", None)
@@ -418,15 +463,6 @@ class MainWindow(QMainWindow):
             refresh = getattr(page, "refresh", None)
             if callable(refresh):
                 refresh()
-
-    def _update_threshold_visibility(self, index: int) -> None:
-        if not (0 <= index < len(self._page_routes)):
-            self.thresholds_page.setVisible(False)
-            return
-        item = self.nav.item(index)
-        label = item.data(Qt.ItemDataRole.UserRole) if item is not None else ""
-        visible = label.startswith("5.")
-        self.thresholds_page.setVisible(visible)
 
     def open_project(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select Project Directory", str(Path.home()))
@@ -478,7 +514,37 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(True)
 
     def _on_project_loaded(self, _project) -> None:
+        output_error = self.project_service.output_root_validation_error()
+        if output_error:
+            selected_output = QFileDialog.getExistingDirectory(
+                self,
+                "Select Katana Output Directory",
+                str(Path(_project.project_root).parent),
+            )
+            if not selected_output:
+                self.project_service.current_project = None
+                self.statusBar().showMessage("Project load cancelled: output directory is required")
+                QMessageBox.warning(
+                    self,
+                    "Output Directory Required",
+                    "Katana will not write analysis results into the tool directory. "
+                    "Select a separate output directory to load this project.",
+                )
+                return
+            try:
+                if self.project_service.can_migrate_current_output_root():
+                    self.project_service.migrate_output_root(selected_output)
+                else:
+                    self.project_service.update_output_root(selected_output)
+            except RuntimeError as exc:
+                self.project_service.current_project = None
+                self.statusBar().showMessage("Project load cancelled: invalid output directory")
+                QMessageBox.critical(self, "Invalid Output Directory", str(exc))
+                return
         self.statusBar().showMessage("Project loaded")
+        project_name = getattr(_project, "project_name", None) or "Loaded project"
+        self.project_badge.setText(project_name)
+        self.per_comparison_page.refresh()
         self.pages.setCurrentIndex(0)
         self.project_page.refresh()
         self.comparison_page.refresh()
@@ -587,6 +653,7 @@ class MainWindow(QMainWindow):
 
 def launch() -> None:
     app = QApplication(sys.argv)
+    app.setStyleSheet(KATANA_STYLESHEET)
     icon_path = bundled_assets_root() / "katana_icon.png"
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))

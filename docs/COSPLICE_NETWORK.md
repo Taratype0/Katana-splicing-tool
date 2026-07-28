@@ -1,0 +1,372 @@
+# Katana-CoSplice
+
+Katana-CoSplice is a standalone Python workflow and an embedded Katana module for discovering **replicate-supported co-splicing programs** from sample-level rMATS outputs.
+
+Implementation boundaries, stage contracts, artifact provenance, and annotation extension points are documented in [COSPLICE_ARCHITECTURE.md](COSPLICE_ARCHITECTURE.md).
+
+It addresses a different question from differential splicing:
+
+- Differential AS asks which events change in one contrast.
+- CoSplice asks which AS events have coordinated PSI trajectories across a multi-condition cohort.
+
+## Position relative to published approaches
+
+Katana-CoSplice is not presented as an already proven replacement for every published co-splicing
+method. WGCNA provides the established weighted-network/module-eigengene framework, and published
+co-splicing studies have applied WGCNA with Mantel correlations or graphical-model selection to
+exon/splicing profiles. Katana's current practical advantages are rMATS-native sample PSI/IJC/SJC
+ingestion, explicit read/replicate Stable-AS QC, scalable signed sparse networks, observed/residual
+network separation, factorial metadata association, bootstrap/sensitivity validation, and
+parameter-fingerprinted standalone/UI stages. Katana now provides an internal same-input recovery
+benchmark, but general statistical superiority still requires independent-cohort preservation;
+feature completeness or one discovery cohort alone is not that proof.
+
+Primary references: [WGCNA](https://pubmed.ncbi.nlm.nih.gov/19114008/),
+[WGCNA/Mantel cosplicing](https://pmc.ncbi.nlm.nih.gov/articles/PMC4429622/),
+[graphical-model splicing networks](https://pubmed.ncbi.nlm.nih.gov/26449793/), and
+[cross-species coregulated splicing networks](https://genome.cshlp.org/content/27/10/1759).
+The outer consensus implementation additionally follows the resampling/co-association rationale of
+[consensus clustering](https://link.springer.com/article/10.1023/A:1023949509487), uses
+[Leiden](https://www.nature.com/articles/s41598-019-41695-z) for connected graph communities, and
+borrows the sparse multiscale-network motivation of
+[MEGENA](https://pmc.ncbi.nlm.nih.gov/articles/PMC4664553/). This combination is a Katana workflow;
+those references do not by themselves validate it as a new universally superior method.
+
+The network is therefore fit across all selected samples, not independently inside an `n=3` comparison. A separate residual network can remove explicitly configured covariates before calculating event-event similarity.
+
+## Scientific workflow
+
+1. **Input audit** resolves sample identity, conditions, rMATS bamlists, quant coverage and references.
+2. **Sample-level matrix** extracts PSI, IJC and SJC for exact event identities from rMATS.
+3. **Stable-AS QC** filters events using condition coverage, junction-read support, informative PSI range and replicate repeatability.
+4. **Observed network** finds a sparse graph of robust signed PSI relationships across the full cohort, merges redundant module programs, and assigns weak or ambiguous events to `grey` using auditable module-membership criteria.
+5. **Residual network** optionally removes configured covariates and repeats network discovery.
+6. **Bootstrap co-assignment consensus** resamples samples within conditions, searches sparse Leiden co-assignment graphs, and defines final core/peripheral modules from how often event pairs return to the same non-grey module.
+7. **Hybrid tight/diffuse programs** retain both sparse CoSplice modules and diffuse WGCNA-style soft-adjacency/TOM modules. Confidence combines bootstrap co-assignment, absolute program membership and replicate repeatability; configured independent cohorts add external preservation evidence.
+8. **Program scores** summarize each module by the first principal component of standardized event PSI.
+9. **Association** relates program scores to configured metadata factors and can fit a balanced factorial model with interaction terms and an optional batch covariate.
+10. **Module validation** evaluates baseline-module bootstrap recovery, graph-parameter sensitivity and observed/residual preservation.
+11. **External preservation** projects final consensus modules into explicitly configured independent cohorts and measures density, connectivity, membership and program preservation.
+12. **Module evidence annotation** overlays cached DEG, rMATS, DEXSeq, DTU and RBP gene-set support without changing PSI-defined modules.
+13. **Method benchmark** compares methods on the same predeclared stable-event universe and records unavailable or degenerate methods explicitly.
+14. **Configured factor contrasts** optionally test a predeclared target-reference effect, reference and target perturbation effects, and their difference-in-differences on stable PSI and cached program scores.
+15. **Report** summarizes cached outputs, warnings and provenance.
+
+The default engine is a signed robust-correlation k-nearest-neighbor graph with sparse weighted-topological-overlap smoothing, followed by Louvain community discovery. A WGCNA-style refinement layer then merges highly correlated module programs and rejects events with weak kME-style membership. It deliberately reuses established weighted-network principles, but it is not the exact R WGCNA or graphical-lasso implementation.
+
+## Stable-AS rationale
+
+An rMATS FDR alone does not establish that an event is suitable for a sample-level network. CoSplice also requires that an event:
+
+- is measured in a sufficient fraction of samples;
+- has sufficient IJC+SJC support;
+- has at least two read-supported replicates in at least 80% of conditions under the default preset;
+- has a condition-mean PSI range of at least 0.25 and either an informative intermediate PSI fraction or a sample PSI range of at least 0.50;
+- is more consistent between biological replicates than within-condition noise would predict.
+
+The condition-coverage and PSI-range criteria adapt the unsupervised event selection used in the published tissue co-splicing atlas ([Genome Research 2017](https://genome.cshlp.org/content/27/10/1759)). Katana adds rMATS IJC+SJC and replicate-repeatability safeguards because its input is replicate-level rMATS rather than VastDB. Presets (`lenient`, `default`, `strict`) remain user-adjustable and are not universal biological laws.
+
+## Network stability
+
+- Every event passing stable-AS QC enters the default network; there is no fixed Top-N truncation.
+- `max_events` is optional and only applies when the user explicitly requests an engineering cap.
+- A robust biweight-style correlation is used by default.
+- The scalable default builds a signed soft-thresholded k-nearest-neighbor graph. Sparse shared-neighbor smoothing uses weighted topological overlap only among local graph candidates; it does not materialize a dense TOM matrix.
+- Multiple neighborhood scales are combined into a consensus edge set. Candidate edges are weighted by PSI-column bootstrap support, edges below `consensus_bootstrap_min_support` are rejected, and repeated Louvain runs downweight unstable community bridges.
+- Stability-first mode uses the complete declared `consensus_bootstrap_iterations`; there is no event-count shortcut. Both configured and effective iteration counts are exported, and downstream validation bootstrap remains a separate module-preservation test.
+- Module programs correlated at or above `module_merge_correlation` are merged before final assignment.
+- Adaptive membership uses a robust lower bound estimated inside each current module. The lower bound is constrained by `max(adaptive_membership_floor, 1/sqrt(n_samples))` and the fixed `min_module_membership` ceiling. This is a sample-size-aware heuristic, not a significance threshold.
+- Adaptive relaxation can retain an event in its current module. Assignment from `grey` or reassignment across modules still requires the original fixed `min_module_membership`, preventing weak bridge events from merging programs.
+- Events below the active membership cutoff, or below the optional membership margin, become `grey` instead of being forced into a community.
+- `event_module_assignments.tsv` records the original community, final module, membership values, `membership_cutoff_used`, margin and refinement action for every selected event.
+- `network_edges.tsv` records raw correlation, final adjacency, `shared_neighbor_overlap`, multi-k support and internal graph-bootstrap support; `network_diagnostics.tsv` records all smoothing and adaptive-cutoff settings.
+- Bootstrap resampling is performed **within condition**, preserving group structure while resampling replicates.
+- `bootstrap_support` reports how often each retained edge passes the configured network edge threshold.
+- `module_resolution_sensitivity.tsv` reports module count, grey events and largest-module fraction over multiple community resolutions.
+- A largest module containing at least 60% of selected events triggers a warning rather than being silently presented as a definitive program.
+
+## Installation
+
+From the repository root:
+
+```powershell
+python -m pip install -e .
+katana-cosplice --help
+```
+
+## CLI
+
+Initialize a configuration by discovering inputs:
+
+```powershell
+katana-cosplice init `
+  --project-root E:\path\to\project `
+  --output E:\path\to\katana_output\09_cosplice_network `
+  --config E:\path\to\cosplice_config.yaml
+```
+
+Run stages independently:
+
+```powershell
+katana-cosplice audit --config cosplice_config.yaml
+katana-cosplice build-matrix --config cosplice_config.yaml
+katana-cosplice qc --config cosplice_config.yaml
+katana-cosplice fit-network --config cosplice_config.yaml --network observed
+katana-cosplice consensus-modules --config cosplice_config.yaml
+katana-cosplice hybrid-programs --config cosplice_config.yaml
+katana-cosplice associate --config cosplice_config.yaml --network observed
+katana-cosplice validate-network --config cosplice_config.yaml
+katana-cosplice annotate-modules --config cosplice_config.yaml
+katana-cosplice benchmark-methods --config cosplice_config.yaml
+katana-cosplice preserve-modules --config cosplice_config.yaml
+katana-cosplice interpret-modules --config cosplice_config.yaml
+katana-cosplice fit-module-models --config cosplice_config.yaml
+katana-cosplice meta-analyze-modules --config cosplice_config.yaml
+katana-cosplice contrast-factors --config cosplice_config.yaml
+katana-cosplice report --config cosplice_config.yaml
+```
+
+`katana-cosplice run` is the only explicit chained command. Individual stage commands never run missing upstream stages automatically.
+
+## Required inputs
+
+- Sample metadata containing `sample` or `sample_id`, plus `condition`.
+- rMATS event tables (`SE`, `RI`, `A3SS`, `A5SS`, `MXE`) with replicate-level `IncLevel1/2`, IJC and SJC fields.
+- rMATS bamlist files or equivalent sample ordering information.
+
+Optional inputs include `quant.sf`, GTF, genome FASTA and transcript FASTA. They support downstream mechanism annotation but are not required to build the PSI network.
+
+For module evidence annotation, `support_root` may point to cached per-comparison
+`gene_level_integrated_candidates.tsv` files and `rbp_gene_set` may point to a custom TSV/CSV. The
+stage audits every loaded source. If support files are absent, the module network remains valid and
+the missing annotation is reported rather than replaced with zeros or guessed evidence.
+
+Additional metadata columns can be configured for association and residualization. For example, a balanced design can use:
+
+```yaml
+association_factors: [condition, genotype, DP_status, treatment, batch]
+factorial_factors: [genotype, DP_status, treatment]
+batch_column: batch
+residual_covariates: [treatment, batch]
+```
+
+This fits `genotype * DP_status * treatment + batch` using sum contrasts and Type III ANOVA. Outputs report FDR, partial eta-squared, coefficients and confidence intervals. A batch column must represent a defensible experimental batch; a replicate number used as a provisional batch is recorded as an explicit assumption rather than inferred by CoSplice. Unknown sex is excluded unless a valid sex metadata column is supplied.
+
+## Main outputs
+
+```text
+01_audit/input_audit.tsv
+02_matrix/sample_level_psi_matrix.tsv
+02_matrix/sample_level_ijc_matrix.tsv
+02_matrix/sample_level_sjc_matrix.tsv
+02_matrix/event_metadata.tsv
+02_matrix/sample_metadata_resolved.tsv
+02_matrix/rmats_source_selection.tsv
+02_matrix/matrix_integrity_summary.tsv
+03_stable_as_qc/stable_as_event_qc.tsv
+03_stable_as_qc/stable_as_condition_qc.tsv
+03_stable_as_qc/stable_as_qc_summary.tsv
+03_stable_as_qc/stable_psi_matrix.tsv
+04_network/<observed|residual>/event_module_assignments.tsv
+04_network/<observed|residual>/network_edges.tsv
+04_network/<observed|residual>/module_program_scores.tsv
+04_network/<observed|residual>/network_diagnostics.tsv
+04_network/<observed|residual>/module_resolution_sensitivity.tsv
+04c_consensus_modules/consensus_event_module_assignments.tsv
+04c_consensus_modules/consensus_module_summary.tsv
+04c_consensus_modules/consensus_module_program_scores.tsv
+04c_consensus_modules/coassignment_bootstrap_runs.tsv
+04c_consensus_modules/bootstrap_coassignment_edges.tsv
+04c_consensus_modules/bootstrap_coassignment_matrix.npz
+04c_consensus_modules/consensus_diagnostics.tsv
+04c_consensus_modules/consensus_parameter_search.tsv
+04d_hybrid_programs/hybrid_event_program_assignments.tsv
+04d_hybrid_programs/hybrid_program_summary.tsv
+04d_hybrid_programs/hybrid_program_scores.tsv
+04d_hybrid_programs/diffuse_bootstrap_coassignment_runs.tsv
+04d_hybrid_programs/tight_diffuse_program_overlap.tsv
+04d_hybrid_programs/diffuse_engine_audit.tsv
+04d_hybrid_programs/external_program_preservation.tsv
+04d_hybrid_programs/plots/*.png
+05_association/<observed|residual>/module_trait_association.tsv
+05_association/<observed|residual>/factorial_module_association.tsv
+05_association/<observed|residual>/factorial_module_coefficients.tsv
+05_association/<observed|residual>/module_program_score_group_summary.tsv
+05_association/<observed|residual>/association_design.tsv
+05_association/<observed|residual>/factorial_module_association.png
+06_module_validation/event_membership_stability.tsv
+06_module_validation/module_bootstrap_stability.tsv
+06_module_validation/bootstrap_partition_stability.tsv
+06_module_validation/network_parameter_sensitivity.tsv
+06_module_validation/observed_residual_preservation_pairs.tsv
+06_module_validation/observed_residual_preservation_summary.tsv
+06_module_validation/module_validation_report.html
+06b_module_annotation/event_module_annotation.tsv
+06b_module_annotation/module_gene_annotation.tsv
+06b_module_annotation/module_evidence_summary.tsv
+06b_module_annotation/module_rbp_enrichment.tsv
+06b_module_annotation/support_source_audit.tsv
+06b_module_annotation/plots/module_evidence_support_heatmap.png
+06c_method_benchmark/common_event_universe.tsv
+06c_method_benchmark/event_method_assignments.tsv
+06c_method_benchmark/method_benchmark_summary.tsv
+06c_method_benchmark/bootstrap_partition_stability.tsv
+06c_method_benchmark/module_matching.tsv
+06c_method_benchmark/method_availability.tsv
+06c_method_benchmark/method_benchmark_report.html
+06c_method_benchmark/plots/*.png
+06d_external_preservation/external_module_preservation.tsv
+06d_external_preservation/external_event_mapping.tsv
+06d_external_preservation/external_preservation_null_summary.tsv
+06d_external_preservation/external_preservation_target_audit.tsv
+06d_external_preservation/plots/*.png
+06e_module_interpretation/module_hub_events.tsv
+06e_module_interpretation/module_hub_genes.tsv
+06e_module_interpretation/event_rbp_motif_hits.tsv
+06e_module_interpretation/module_rbp_motif_enrichment.tsv
+06e_module_interpretation/module_go_kegg_enrichment.tsv
+06e_module_interpretation/dominant_isoform_switches.tsv
+06e_module_interpretation/module_isoform_switch_enrichment.tsv
+06e_module_interpretation/module_regulator_prioritization.tsv
+06e_module_interpretation/interpretation_source_audit.tsv
+06e_module_interpretation/motif_scan_parameters.json
+06e_module_interpretation/isoform_switch_parameters.json
+06f_module_statistics/event_beta_binomial_condition_effect.tsv
+06f_module_statistics/module_program_condition_effect.tsv
+06f_module_statistics/beta_binomial_vs_simple_delta_dpsi.tsv
+06f_module_statistics/beta_binomial_model_diagnostics.tsv
+06g_cross_cohort_meta/exact_event_alignment.tsv
+06g_cross_cohort_meta/cross_cohort_module_matching.tsv
+06g_cross_cohort_meta/cross_cohort_module_state.tsv
+06g_cross_cohort_meta/multi_cohort_module_consensus.tsv
+06g_cross_cohort_meta/random_effects_module_meta_analysis.tsv
+06g_cross_cohort_meta/meta_analysis_cohort_audit.tsv
+06h_factor_contrasts/event_factor_contrasts.tsv
+06h_factor_contrasts/module_factor_contrasts.tsv
+06h_factor_contrasts/phenocopy_occlusion_summary.tsv
+06h_factor_contrasts/factor_evidence_summary.tsv
+06h_factor_contrasts/presentation_notes.md
+06h_factor_contrasts/plots/*.png
+07_report/katana_cosplice_report.html
+07_report/katana_cosplice_validation_report.pdf
+07_report/module_browser.html
+state.json
+```
+
+Every computational directory includes `parameters.json`, including a parameter/input fingerprint and generated plot list.
+
+## Configured factor contrasts and functional-state hypotheses
+
+Stage `factor_contrasts` is optional and explicit. It never infers target/reference labels from filenames. The user predeclares a primary factor, target/reference levels, context factors, a perturbation factor, baseline and perturbation levels. Event-level effects are mean stable PSI differences with replicate-aware Welch tests. Program-level effects use the selected cached observed or residual CoSplice scores. The interaction is:
+
+```text
+(target perturbation - target baseline) - (reference perturbation - reference baseline)
+```
+
+Interactions are labelled as attenuated same-direction, enhanced same-direction, opposite response or undetermined. A statistically non-zero interaction is not automatically an occlusion result. Broad signature similarity, enriched significant-event overlap and same-direction agreement are phenocopy evidence only. They must not be reported as proof of loss of function, gain of function or causal pathway regulation without orthogonal molecular and rescue/complementation evidence.
+
+`stable_as_event_qc.tsv` retains one audit row for every input event. To keep large cohorts practical, `stable_as_condition_qc.tsv` contains condition-level replicate/read-support detail only for events that pass the final Stable-AS rules; this scope is recorded in `03_stable_as_qc/parameters.json`.
+
+## Module validation
+
+- Bootstrap iterations resample biological replicates within each condition and refit the complete event partition.
+- Event membership stability is the fraction of bootstrap networks in which an event returns to its optimally matched baseline module.
+- Module Jaccard measures event-set recovery; whole-network adjusted Rand index measures recovery of the complete partition.
+- Default labels are `robust` at validation score >=0.75, `moderate` at >=0.50 and `unstable` below 0.50. The score is the lower of mean matched-module Jaccard and mean event-membership stability.
+- Parameter sensitivity compares configured kNN and Louvain-resolution values without changing the active cached network.
+- Observed/residual preservation uses event-set Jaccard plus hypergeometric FDR. Low preservation can indicate covariate-dependent structure and is not automatically a software failure.
+- These are internal robustness checks. Independent cohorts are still required for external module preservation.
+
+## Bootstrap co-assignment consensus
+
+- Samples are resampled with replacement within each condition, preserving the cohort design and replicate count.
+- Each outer bootstrap performs one network partition; inner edge/community bootstraps are disabled to avoid nested resampling.
+- Pairwise co-assignment is the fraction of bootstraps in which two events occupy the same non-grey module.
+- A top-k sparse co-assignment graph is evaluated over configured edge thresholds and Leiden resolutions. The legacy average-linkage method remains available only through `clustering_method: hierarchical`.
+- Candidate partitions are scored using bootstrap ARI, module membership confidence, retained-event coverage, module-size balance, confidence margin and graph modularity. Explicit limits on grey fraction, largest-module fraction and module count are evaluated before selecting the highest-scoring feasible candidate.
+- Events strongly supported by their graph community are labelled `core`. Events with sufficient mean co-assignment and separation from the next-best module are labelled `peripheral`; ambiguous events remain `grey`.
+- Event confidence is mean co-assignment to the selected module; the confidence margin compares that value with the next-best module. `assignment_uncertainty` is one minus confidence.
+- `consensus_parameter_search.tsv` records every candidate and the selected row. No Setd2 labels, conditions or expected biological answer enter the selection score.
+- The complete matrix is stored as compressed NPZ (`event_keys`, `coassignment`); the TSV edge view is intentionally capped for preview.
+- This is internal consensus in the discovery cohort, not independent validation.
+
+## External module preservation
+
+Each `external_cohorts` entry supplies an independent sample-level PSI matrix and sample metadata.
+Events map by exact `event_key`; low overlap is reported rather than imputed. For each consensus module,
+Katana reports target density, reference-to-target connectivity correlation, event membership-profile
+correlation, PC1 variance similarity and a program-score preservation score. Random event sets of the
+same size calibrate `Zdensity` and `Zconnectivity`; their mean is exported as
+`Zsummary_wgcna_like`. The labels preserved (>=10), partially preserved (>=2), and not preserved (<2)
+follow familiar WGCNA interpretation bands, but this statistic is explicitly not the exact
+`WGCNA::modulePreservation` implementation.
+
+## Head-to-head benchmark
+
+The independent `benchmark_methods` stage compares Katana's sparse signed network with a fixed-cut
+Pearson hierarchical baseline, a Ledoit-Wolf shrinkage graphical-lasso partial-correlation baseline,
+and the exact R `WGCNA::blockwiseModules` implementation when Rscript and WGCNA are installed. If R
+or WGCNA is absent, the method is marked unavailable; no Python approximation is presented as WGCNA.
+
+Katana searches `KATANA_RSCRIPT`, `PATH`, the active Python/Conda prefix and sibling Conda
+environments for an R installation containing WGCNA. The benchmark also writes
+`method_metric_ranking.tsv`, `method_strengths_limitations.tsv` and
+`plots/head_to_head_scorecard.png`. The equal-weight composite in the interpretation table is a
+descriptive navigation score; scientific interpretation should retain the raw stability,
+separation, modularity, grey-event and runtime metrics.
+
+The default common universe contains the 150 highest cached Stable-AS `stability_score` events. This
+bounded universe is required for a fair comparison with cubic-complexity partial-correlation
+estimation and does not affect the full production network. The report includes condition-stratified
+bootstrap ARI, cosine silhouette, neutral KNN-graph modularity, within/between-module Pearson
+separation, descriptive condition-pattern R2, module matching, runtime, and method diagnostics.
+
+Zero-module and one-module partitions are classified as `degenerate`. Their bootstrap ARI is not
+interpreted because an unchanged all-grey partition would otherwise appear spuriously perfect. These
+metrics are internal; external module preservation is still required for a general superiority claim.
+
+### Consensus-network benchmark boundary
+
+On the repository's fixed benchmark universes, the stability-first default preserved perfect recovery
+of the three planted simulation modules. In a same-input 1,000-event GSE141633 comparison, Katana's
+mean/minimum condition-stratified bootstrap ARI was `0.842/0.780`, versus `0.825/0.616` for exact
+WGCNA. WGCNA still produced higher cosine silhouette (`0.221` versus `0.187`) and neutral graph
+modularity (`0.143` versus `0.069`). Katana therefore prioritizes resampling reproducibility over
+assigning more events or maximizing within-module compactness. On the full 6,853-event Setd2
+Stable-AS matrix, Katana retained three programs with 1,237 grey events, rejected 20,599 unstable
+candidate edges, and had mean internal graph-bootstrap edge support `0.955`; the fit took about
+200 seconds. On the independent GSE85908 single-cell PSI benchmark, Katana returned four modules
+but mean/minimum bootstrap ARI was only `0.201/0.124`; exact WGCNA returned an all-grey degenerate
+partition. Katana was more sensitive on that dataset, but neither result supports a stable biological
+module claim. These are regression observations, not proof of universal biological superiority;
+independent-cohort preservation remains required.
+
+### Public reciprocal external validation
+
+The reusable `scripts/benchmark_public_spliceseq.py` entry accepts any two event-by-sample PSI
+matrices with matching event keys. Event filtering and variance ranking are performed on the
+discovery cohort only. It compares bootstrap-consensus CoSplice with the exact R WGCNA package,
+then projects both partitions into the untouched external cohort. The command writes matched
+bootstrap tables, module assignments, permutation-calibrated preservation results, plots,
+`parameters.json`, and `PUBLIC_VALIDATION_REPORT.md`.
+
+In the fixed primary-tumor-only TCGA SpliceSeq regression (150 discovery-selected ES events,
+20 matched bootstraps, 1,000 preservation permutations per module), exact WGCNA was more internally
+stable but collapsed to one broad module in both directions. CoSplice retained two finer modules.
+For KIRC discovery to KIRP validation, its best external `Zsummary_wgcna_like` was 2.190
+(partially preserved); in the reciprocal direction it was 1.798 (not preserved by the configured
+2.0 boundary). These results support the intended granularity/stability trade-off, but do not show
+universal superiority. The public files are obtained from the official TCGA SpliceSeq download and
+the benchmark remains a validation workflow rather than a production-network stage.
+
+## Katana integration
+
+Open `9. CoSplice Network` and initialize or choose a config. Page refresh reads only `state.json` and cached PNG files. Every button starts exactly one stage in a worker thread. If upstream output is missing, the current stage reports what must be run first; it does not run it automatically.
+
+## Interpretation limits
+
+- A co-splicing module is not automatically an RBP regulon.
+- DEG, DTU and RBP enrichment are downstream support annotations; they do not redefine event membership.
+- Association p-values are calculated on the same cohort used for discovery and are prioritization statistics, not independent validation.
+- DEG, DTU, RBP and motif support can annotate plausible mechanisms but cannot establish causality from bulk RNA-seq alone.
+- Public cohorts or an independent experiment should be used for module preservation and external validation.

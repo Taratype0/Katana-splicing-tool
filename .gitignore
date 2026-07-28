@@ -27,6 +27,12 @@ dist/
 analysis_export.png
 tmp_manifest_check.py
 noDP_KOvsWT.tsv
+/setd2_*/
+/Sedt2*
+/Mutation Effect vs.*
+/mqc_compressed_plotdata.json.txt
+/multiqc_read_length_summary.tsv
+/old_rerun_multiqc_read_length_summary.tsv
 
 # Local outputs
 katana_output/

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.widgets.page_header import PageHeader
 from src.services.project_service import ProjectService
 
 
@@ -28,23 +29,25 @@ class VisualizationGroupsPage(QWidget):
         self._pending_hscroll = 0
         self._pending_vscroll = 0
 
+        self.header = PageHeader(
+            "Visual groups",
+            "Create reusable ordered comparison groups for cards, plots, and event follow-up views.",
+            "04 · Presentation groups",
+        )
         self.label = QLabel(
             "Create custom comparison groups for Cards and Sashimi. "
             "Each row can contain multiple comparisons, for example 1/2/3/4 as one group and 2/3 as another."
         )
         self.label.setWordWrap(True)
+        self.label.setObjectName("contextPanel")
         self.add_button = QPushButton("Add Group")
+        self.add_button.setProperty("class", "primary")
         self.add_button.clicked.connect(self._add_group)
         self.add_button.setMaximumWidth(140)
-        self.add_button.setStyleSheet(
-            "QPushButton { background-color: #2563EB; color: white; border-radius: 6px; padding: 6px 12px; font-weight: 600; }"
-        )
         self.confirm_button = QPushButton("Confirm")
+        self.confirm_button.setProperty("class", "primary")
         self.confirm_button.clicked.connect(self._confirm_groups)
         self.confirm_button.setMaximumWidth(120)
-        self.confirm_button.setStyleSheet(
-            "QPushButton { background-color: #2563EB; color: white; border-radius: 6px; padding: 6px 12px; font-weight: 600; }"
-        )
 
         self.table = QTableWidget(0, 8)
         self.table.setHorizontalHeaderLabels(
@@ -77,6 +80,9 @@ class VisualizationGroupsPage(QWidget):
         header.addStretch(1)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        layout.addWidget(self.header)
         layout.addWidget(self.label)
         layout.addLayout(header)
         layout.addWidget(self.table, 1)

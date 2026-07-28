@@ -1,0 +1,201 @@
+project_name: example_multi_condition_project
+rmats_root: E:/path/to/project/rmats
+sample_metadata: E:/path/to/project/pipeline_info/samplesheet.valid.csv
+output_dir: E:/path/to/project/katana_output/09_cosplice_network
+quant_root: E:/path/to/project/salmon
+gtf: E:/path/to/references/gencode.annotation.gtf
+genome_fasta: E:/path/to/references/genome.fa
+transcript_fasta: E:/path/to/references/transcripts.fa
+bam_root: null
+# Optional cached Katana candidate tables. Module annotation reads these files;
+# it never runs candidate screening automatically.
+support_root: E:/path/to/project/katana_output/02_candidate_gene_screening
+# Optional TSV/CSV with gene_symbol or gene_id and optional gene_set/source columns.
+rbp_gene_set: null
+rmats_mode: JCEC
+selected_conditions: []
+residual_covariates: []
+association_factors:
+  - condition
+factorial_factors: []
+batch_column: null
+stable_as:
+  preset: default
+  # Literature-inspired defaults: >=2 supported replicates in >=80% of
+  # conditions, condition mean PSI range >=0.25, and informative PSI range.
+  min_valid_fraction: null
+  min_read_supported_fraction: null
+  min_total_junction_reads: null
+  min_psi_variance: null
+  min_repeatability: null
+network:
+  engine: sparse_knn
+  method: bicor
+  signed: true
+  soft_power: 6
+  edge_threshold: 0.10
+  module_cut_height: 0.70
+  min_module_size: 20
+  # null means every event passing stable-AS QC enters the network.
+  max_events: null
+  knn_neighbors: 50
+  # Sparse weighted-TOM-like smoothing. Use none to reproduce the original graph.
+  edge_smoothing: shared_neighbor
+  shared_neighbor_weight: 0.50
+  shared_neighbor_top_k: 50
+  # Edges are retained across multiple neighborhood scales before community
+  # discovery. Set false to use only knn_neighbors.
+  multi_k_consensus: true
+  consensus_knn_neighbors: [25, 50, 75]
+  consensus_edge_min_fraction: 0.66
+  # Stability-first defaults: resample samples, reject low-support graph edges,
+  # then build a repeated community consensus. These are separate from the
+  # downstream validation bootstrap.
+  consensus_bootstrap_iterations: 50
+  consensus_bootstrap_weight: 0.75
+  consensus_bootstrap_min_support: 0.70
+  community_consensus_runs: 20
+  community_consensus_weight: 0.75
+  community_resolution: 1.0
+  # WGCNA-style post-community refinement. Weak or ambiguous events become grey.
+  module_refinement: true
+  min_module_membership: 0.45
+  min_module_membership_margin: 0.0
+  # Module-specific robust cutoff, bounded by adaptive_membership_floor and
+  # min_module_membership. Disable for the original fixed kME cutoff.
+  adaptive_membership: true
+  # The effective floor is max(this value, 1/sqrt(n_samples)); this is a
+  # sample-size-aware heuristic, not a statistical significance threshold.
+  adaptive_membership_floor: 0.08
+  adaptive_membership_mad_scale: 2.0
+  module_merge_correlation: 0.85
+  refinement_iterations: 2
+  max_output_edges: 100000
+  bootstrap_iterations: 50
+  bootstrap_edge_threshold: 0.70
+  random_seed: 17
+validation:
+  bootstrap_iterations: 20
+  robust_jaccard: 0.75
+  moderate_jaccard: 0.50
+  knn_neighbors: [25, 50, 75]
+  community_resolutions: [0.75, 1.0, 1.25]
+  random_seed: 29
+consensus:
+  # Outer sample-stratified bootstrap. Co-assignment, not aligned module names,
+  # defines the final C01/C02/... consensus modules.
+  bootstrap_iterations: 100
+  min_coassignment: 0.70
+  # Final partition uses a sparse co-assignment graph and Leiden parameter
+  # search. hierarchical retains the legacy fixed-threshold behavior.
+  clustering_method: leiden_graph
+  graph_edge_thresholds: [0.50, 0.60, 0.70, 0.80]
+  graph_resolutions: [0.50, 0.80, 1.10, 1.40]
+  graph_top_k: 50
+  min_candidate_modules: 2
+  max_candidate_modules: 30
+  # Stable graph members form module cores; confidently attached events are
+  # retained as peripheral members instead of being discarded as grey.
+  core_membership_min: 0.70
+  peripheral_membership_min: 0.45
+  peripheral_membership_margin: 0.05
+  max_grey_fraction: 0.25
+  max_largest_module_fraction: 0.60
+  # null inherits network.min_module_size.
+  min_module_size: null
+  # Explicit dense matrix memory cap; 8,000 events requires about 128 MB for
+  # uint16 counts plus about 256 MB while finalizing distances.
+  dense_max_events: 8000
+  output_edge_threshold: 0.50
+  max_output_edges: 200000
+  random_seed: 37
+external_cohorts: []
+# Example target:
+# - name: independent_mouse_cohort
+#   psi_matrix: E:/path/to/target/stable_psi_matrix.tsv
+#   sample_metadata: E:/path/to/target/sample_metadata_resolved.tsv
+#   # Optional independently discovered target modules. Required before
+#   # consensus/gained/lost/rewired structural labels are emitted.
+#   module_assignments: E:/path/to/target/consensus_event_module_assignments.tsv
+#   effect_table: null
+#   genome_build: GRCm39
+#   annotation_version: gencode.vM34
+preservation:
+  permutations: 100
+  min_shared_events: 20
+  dense_max_events: 8000
+  # WGCNA-style interpretation bands applied to Katana's explicitly labeled
+  # WGCNA-like permutation composite, not the exact WGCNA implementation.
+  preserved_zsummary: 10.0
+  partial_zsummary: 2.0
+  random_seed: 43
+hybrid_programs:
+  # auto uses the cached residual network when available, otherwise observed.
+  # No upstream analysis is started automatically.
+  matrix_source: auto
+  # auto prefers the exact R WGCNA implementation and records any Python
+  # signed soft-adjacency/TOM fallback in diffuse_engine_audit.tsv.
+  diffuse_engine: auto
+  bootstrap_iterations: 10
+  min_module_size: null
+  python_tom_cut_height: 0.95
+  python_max_events: 8000
+  robust_confidence: 0.75
+  moderate_confidence: 0.55
+  random_seed: 53
+benchmark:
+  # Every method receives this same predeclared event universe, selected by the
+  # cached Stable-AS stability_score before any benchmark method is fitted.
+  methods: [katana_sparse, pearson_hierarchical, graphical_lasso, wgcna_exact]
+  # The exact partial-correlation baseline is cubic in event count. This cap is
+  # a common benchmark universe only; it never truncates the production network.
+  max_events: 150
+  bootstrap_iterations: 5
+  graphical_lasso_alpha: 0.10
+  graphical_lasso_max_iter: 100
+  neutral_knn_neighbors: 15
+  wgcna_merge_cut_height: 0.25
+  random_seed: 41
+interpretation:
+  # Optional sample-level normalized RBP expression matrix: rows=gene symbols,
+  # columns=sample_id. No matrix means correlation is reported as not configured.
+  rbp_expression_matrix: null
+  # Optional validated event-level positional motif-hit table with event_key and
+  # RBP/rbp/motif/motif_id. It may be generated from ATtRACT, CisBP-RNA or a
+  # custom database using an rMAPS2-compatible positional workflow.
+  rbp_motif_hits: null
+  # Optional local GO/KEGG-style GMT file. Local input keeps enrichment fully
+  # reproducible and avoids silently changing online database versions.
+  gene_sets_gmt: null
+  min_module_genes: 3
+  fdr_cutoff: 0.05
+statistics:
+  condition_column: condition
+  min_total_reads: 10
+  min_samples_per_condition: 2
+  fdr_cutoff: 0.05
+  # null fits every stable event; set an explicit cap only for exploratory runs.
+  max_events: null
+  optimizer_max_iterations: 200
+meta_analysis:
+  min_shared_events: 10
+  min_cohorts: 2
+  fdr_cutoff: 0.05
+  # Exact canonical event identity is intentional. Katana does not merge nearby
+  # coordinates without a validated annotation-liftover table.
+  event_matching: exact
+factor_contrasts:
+  # Optional and never inferred from filenames. Replace these example labels
+  # with columns/levels that actually exist in sample_metadata.
+  enabled: false
+  primary_factor: genotype
+  target_level: target
+  reference_level: reference
+  context_factors: [context]
+  perturbation_factor: treatment
+  baseline_level: baseline
+  perturbation_levels: [perturbation_1]
+  network_source: residual
+  fdr_cutoff: 0.05
+  min_abs_delta_psi: 0.10
+  min_samples_per_group: 3

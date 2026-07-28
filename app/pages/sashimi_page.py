@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.pages.module_details import module_detail
 from src.services.project_service import ProjectService
 
 
@@ -69,13 +70,15 @@ class SashimiPage(QWidget):
         self.runner_mode.addItems(["Katana native", "rmats2sashimiplot legacy"])
         self.runner_mode.setMinimumWidth(170)
 
+        self.refresh_events_button = QPushButton("Refresh event\nlist")
+        self.refresh_events_button.clicked.connect(self._refresh_event_catalog)
         self.generate_manifest_button = QPushButton("Generate selected\nmanifest")
         self.generate_manifest_button.clicked.connect(self._generate_manifest)
         self.run_button = QPushButton("Run selected\nsashimi")
         self.run_button.clicked.connect(self._run_sashimi)
         self.open_output_button = QPushButton("Open output\nfolder")
         self.open_output_button.clicked.connect(self._open_output_folder)
-        for button in (self.generate_manifest_button, self.run_button, self.open_output_button):
+        for button in (self.refresh_events_button, self.generate_manifest_button, self.run_button, self.open_output_button):
             button.setMinimumHeight(40)
             button.setMinimumWidth(130)
 
@@ -185,6 +188,7 @@ class SashimiPage(QWidget):
         filters.addWidget(self.fdr_filter)
         filters.addWidget(self.dpsi_filter)
         filters.addWidget(self.runner_mode)
+        filters.addWidget(self.refresh_events_button)
         filters.addWidget(self.generate_manifest_button)
         filters.addWidget(self.run_button)
         filters.addWidget(self.open_output_button)
@@ -418,6 +422,7 @@ class SashimiPage(QWidget):
         self.fdr_filter.setVisible(run_mode)
         self.dpsi_filter.setVisible(run_mode)
         self.runner_mode.setVisible(run_mode)
+        self.refresh_events_button.setVisible(run_mode)
         self.generate_manifest_button.setVisible(run_mode)
         self.run_button.setVisible(run_mode)
         for widget in (
@@ -599,6 +604,22 @@ class SashimiPage(QWidget):
             f"Generated sashimi manifest rows: {len(manifest)}. Open 5.5.3 to inspect the manifest and output files."
         )
         self.refresh()
+
+    def _refresh_event_catalog(self) -> None:
+        comparison_id = self._current_comparison_id()
+        if not comparison_id:
+            self.status_label.setText("Select a comparison before refreshing the sashimi event list.")
+            return
+        try:
+            events = self.project_service.refresh_sashimi_event_catalog(comparison_id)
+        except Exception as exc:
+            self.status_label.setText(f"Sashimi event list refresh failed: {exc}")
+            self.details.setPlainText(f"Sashimi event list refresh failed:\n{exc}")
+            return
+        self.refresh()
+        self.status_label.setText(
+            f"Sashimi event list cache refreshed: {len(events)} event(s). This only refreshed the event catalog and did not run sashimi."
+        )
 
     def _run_sashimi(self) -> None:
         comparison_id = self._current_comparison_id()
@@ -816,14 +837,17 @@ class SashimiPage(QWidget):
 
         if self._events.empty:
             self.details.setPlainText(
-                "Open this page to inspect available candidate-event follow-up rows. "
-                "This page does not auto-generate sashimi plots; select events first, then click Generate or Run."
+                module_detail("5.5.sashimi")
+                + "\n\nNo event catalog rows are currently visible for this comparison. Use Refresh event list only when you need to rebuild the catalog."
             )
             return
         row = self.event_table.currentRow()
         source_row = self._source_row_for_table(self.event_table, row)
         if source_row is None or source_row < 0 or source_row >= len(self._events):
-            self.details.setPlainText("Select one or more events to inspect their details before generating sashimi.")
+            self.details.setPlainText(
+                module_detail("5.5.sashimi")
+                + "\n\nSelect one or more events to inspect event-level details before generating sashimi."
+            )
             return
         record = self._events.iloc[source_row]
         lines = [

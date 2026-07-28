@@ -9,6 +9,9 @@ import pandas as pd
 class ThresholdConfig:
     splicing_fdr: float = 0.05
     splicing_dpsi: float = 0.10
+    stable_min_junction_reads: float = 20.0
+    stable_min_replicates_per_group: int = 2
+    stable_min_pairwise_consistency: float = 0.67
     program_delta_dpsi: float = 0.10
     deg_padj: float = 0.05
     deg_log2fc: float = 1.0

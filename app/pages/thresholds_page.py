@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QLabel,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -20,9 +21,10 @@ class ThresholdsPage(QWidget):
         self._is_refreshing = False
         self.label = QLabel("Analysis thresholds")
         self.preset_labels = {
-            "default": "Literature standard",
+            "default": "Default practical",
             "relaxed": "Exploratory",
             "strict": "Stringent",
+            "custom": "Custom",
         }
         self.preset_keys_by_index: list[str] = []
         self.preset = QComboBox()
@@ -31,8 +33,9 @@ class ThresholdsPage(QWidget):
             self.preset_keys_by_index.append(key)
         self.preset.currentTextChanged.connect(self._apply_preset)
         self.note = QLabel(
-            "Literature standard preset: rMATS-style AS uses FDR 0.05 and |dPSI| 0.10; "
-            "cross-comparison program-shift uses |ΔdPSI| 0.10 as the default strength cutoff; "
+            "Default practical preset: rMATS-style AS uses FDR 0.05 and |dPSI| 0.10; "
+            "stable AS additionally requires read support and replicate direction consistency; "
+            "cross-comparison program-shift uses |delta dPSI| 0.10 as the default strength cutoff; "
             "DESeq2 keeps adjusted p 0.05 with a biologically meaningful |log2FC| 1.0 default; "
             "DEXSeq is shown at q 0.10; stageR/DTU remains at 0.05."
         )
@@ -45,6 +48,13 @@ class ThresholdsPage(QWidget):
 
         self.splicing_fdr = self._spin(0.0, 1.0, 0.01)
         self.splicing_dpsi = self._spin(0.0, 5.0, 0.01)
+        self.stable_min_junction_reads = QSpinBox()
+        self.stable_min_junction_reads.setRange(0, 100000)
+        self.stable_min_junction_reads.setSingleStep(5)
+        self.stable_min_replicates_per_group = QSpinBox()
+        self.stable_min_replicates_per_group.setRange(1, 20)
+        self.stable_min_replicates_per_group.setSingleStep(1)
+        self.stable_min_pairwise_consistency = self._spin(0.0, 1.0, 0.01)
         self.program_delta_dpsi = self._spin(0.0, 5.0, 0.01)
         self.deg_padj = self._spin(0.0, 1.0, 0.01)
         self.deg_log2fc = self._spin(0.0, 10.0, 0.1)
@@ -53,6 +63,9 @@ class ThresholdsPage(QWidget):
         for spin in (
             self.splicing_fdr,
             self.splicing_dpsi,
+            self.stable_min_junction_reads,
+            self.stable_min_replicates_per_group,
+            self.stable_min_pairwise_consistency,
             self.program_delta_dpsi,
             self.deg_padj,
             self.deg_log2fc,
@@ -65,7 +78,10 @@ class ThresholdsPage(QWidget):
         form.addRow("Preset", self.preset)
         form.addRow("Splicing FDR", self.splicing_fdr)
         form.addRow("|dPSI|", self.splicing_dpsi)
-        form.addRow("Program |ΔdPSI|", self.program_delta_dpsi)
+        form.addRow("Stable AS IJC+SJC per replicate >=", self.stable_min_junction_reads)
+        form.addRow("Stable AS min replicates per group >=", self.stable_min_replicates_per_group)
+        form.addRow("Stable AS direction consistency >=", self.stable_min_pairwise_consistency)
+        form.addRow("Program |delta dPSI|", self.program_delta_dpsi)
         form.addRow("DEG padj", self.deg_padj)
         form.addRow("|log2FC|", self.deg_log2fc)
         form.addRow("DEXSeq qvalue", self.dexseq_qvalue)
@@ -86,11 +102,17 @@ class ThresholdsPage(QWidget):
         self._is_refreshing = True
         self.splicing_fdr.setValue(thresholds.splicing_fdr)
         self.splicing_dpsi.setValue(thresholds.splicing_dpsi)
+        self.stable_min_junction_reads.setValue(int(thresholds.stable_min_junction_reads))
+        self.stable_min_replicates_per_group.setValue(int(thresholds.stable_min_replicates_per_group))
+        self.stable_min_pairwise_consistency.setValue(thresholds.stable_min_pairwise_consistency)
         self.program_delta_dpsi.setValue(thresholds.program_delta_dpsi)
         self.deg_padj.setValue(thresholds.deg_padj)
         self.deg_log2fc.setValue(thresholds.deg_log2fc)
         self.dexseq_qvalue.setValue(thresholds.dexseq_qvalue)
         self.dtu_qvalue.setValue(thresholds.dtu_qvalue)
+        self.preset.blockSignals(True)
+        self.preset.setCurrentIndex(self._matching_preset_index())
+        self.preset.blockSignals(False)
         self._update_note()
         self._is_refreshing = False
 
@@ -98,15 +120,26 @@ class ThresholdsPage(QWidget):
         if self.project_service.current_project is None:
             return
         preset_name = self.preset.currentData()
+        if preset_name == "custom":
+            self._update_note()
+            return
         self.project_service.apply_threshold_preset(preset_name)
         self.refresh()
 
     def _apply_custom_values(self) -> None:
         if self._is_refreshing or self.project_service.current_project is None:
             return
+        self.preset.blockSignals(True)
+        custom_index = self.preset.findData("custom")
+        if custom_index >= 0:
+            self.preset.setCurrentIndex(custom_index)
+        self.preset.blockSignals(False)
         self.project_service.update_thresholds(
             splicing_fdr=self.splicing_fdr.value(),
             splicing_dpsi=self.splicing_dpsi.value(),
+            stable_min_junction_reads=float(self.stable_min_junction_reads.value()),
+            stable_min_replicates_per_group=int(self.stable_min_replicates_per_group.value()),
+            stable_min_pairwise_consistency=self.stable_min_pairwise_consistency.value(),
             program_delta_dpsi=self.program_delta_dpsi.value(),
             deg_padj=self.deg_padj.value(),
             deg_log2fc=self.deg_log2fc.value(),
@@ -127,18 +160,46 @@ class ThresholdsPage(QWidget):
         key = self.preset.currentData() or "default"
         notes = {
             "default": (
-                "Literature standard: AS FDR 0.05 and |dPSI| 0.10; "
-                "program-strength cutoff |ΔdPSI| 0.10; "
+                "Default practical: AS FDR 0.05 and |dPSI| 0.10; "
+                "stable AS additionally requires read support and replicate direction consistency before downstream 5.2/5.3 use the event; "
+                "program-strength cutoff |delta dPSI| 0.10; "
                 "DEG adjusted p 0.05 with |log2FC| 1.0; "
                 "DEXSeq q 0.10; DTU/stageR q 0.05."
             ),
             "relaxed": (
                 "Exploratory: looser cutoffs for hypothesis generation "
-                "(AS/DEG q up to 0.10, smaller effect-size thresholds)."
+                "(AS/DEG q up to 0.10, smaller effect-size thresholds, relaxed stable-AS read/consistency gates)."
             ),
             "strict": (
-                "Stringent: tighter significance and larger effect-size cutoffs "
+                "Stringent: tighter significance, larger effect-size cutoffs, and stricter stable-AS support "
                 "for higher-confidence shortlist generation."
+            ),
+            "custom": (
+                "Custom: the values shown above are used only when the current analysis is explicitly rerun. "
+                "Changing them invalidates parameter-mismatched caches but never launches an analysis automatically."
             ),
         }
         self.note.setText(notes.get(key, notes["default"]))
+
+    def _matching_preset_index(self) -> int:
+        current = self.project_service.current_thresholds
+        keys = (
+            "splicing_fdr",
+            "splicing_dpsi",
+            "stable_min_junction_reads",
+            "stable_min_replicates_per_group",
+            "stable_min_pairwise_consistency",
+            "program_delta_dpsi",
+            "deg_padj",
+            "deg_log2fc",
+            "dexseq_qvalue",
+            "dtu_qvalue",
+        )
+        for preset_name in ("default", "relaxed", "strict"):
+            values = self.project_service.default_thresholds.get("presets", {}).get(preset_name, {})
+            if all(abs(float(getattr(current, key)) - float(values.get(key, getattr(current, key)))) < 1e-9 for key in keys):
+                index = self.preset.findData(preset_name)
+                if index >= 0:
+                    return index
+        custom_index = self.preset.findData("custom")
+        return custom_index if custom_index >= 0 else 0

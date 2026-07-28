@@ -55,10 +55,8 @@ class ComparisonDefinition:
         if self.display_name:
             return self.display_name
         if self.experiment_group and self.control_group:
-            if self.reverse_splicing or self.reverse_deg:
-                return f"{self.control_group} vs {self.experiment_group}"
             return f"{self.experiment_group} vs {self.control_group}"
-        return self._swap_comparison_name(self.comparison_id, self.reverse_splicing or self.reverse_deg)
+        return self.comparison_id
 
     @property
     def rmats_file_label(self) -> str:
@@ -96,12 +94,26 @@ class ComparisonDefinition:
         return self._split_comparison_name(self.display_source_name(source))
 
     def inferred_source_groups(self, source: str) -> tuple[str | None, str | None]:
-        left, right = self.source_groups(source)
-        if left and right:
-            return left, right
+        mapping = {
+            "rmats": self.rmats_name,
+            "deg": self.deg_name,
+            "suppa": self.suppa_name,
+            "dexseq": self.dexseq_name,
+            "dtu": self.dtu_name,
+            "quant": self.quant_name,
+            "sashimi": self.sashimi_name,
+            "bam": self.bam_group_name,
+        }
+        source_name = mapping.get(source)
+        if source_name:
+            left, right = self._split_comparison_name(source_name)
+            if left and right:
+                return left, right
         if self.source_experiment_group and self.source_control_group:
             return self.source_experiment_group, self.source_control_group
-        return self.experiment_group, self.control_group
+        if self.experiment_group and self.control_group:
+            return self.experiment_group, self.control_group
+        return self._split_comparison_name(self.comparison_id)
 
     def final_groups(self, source: str) -> tuple[str | None, str | None]:
         left, right = self.inferred_source_groups(source)

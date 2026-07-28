@@ -25,7 +25,8 @@ This release focuses on:
 
 - canonical splicing-side direction is configured in Pairing
 - rMATS, DEXSeq, and DTU inherit the canonical splicing-side direction
-- DEG final direction can be chosen manually when DESeq2 file naming is unreliable
+- Canonical AS and DEG directions are shown read-only in Pairing and inherited by downstream analyses
+- Legacy saved direction transforms remain supported for reproducibility
 
 ### Candidate screening
 

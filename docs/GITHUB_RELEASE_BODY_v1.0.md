@@ -18,7 +18,8 @@ This release establishes a modular GUI workflow for:
 
 - Comparison-first workflow with per-comparison pages, outputs, and state
 - Canonical splicing-side direction inherited by rMATS, DEXSeq, and DTU
-- Manually selectable DEG final direction when DESeq2 naming is unreliable
+- Read-only canonical AS and DEG direction audit in Pairing, with downstream standardized effects
+- Backward-compatible loading of legacy saved direction transforms
 - Independent module execution with no automatic chained downstream runs
 - Gene-centered candidate screening and follow-up
 - Event selection before sashimi generation

@@ -5,8 +5,9 @@ import shutil
 
 import pandas as pd
 from pandas.api.types import is_bool_dtype, is_numeric_dtype
-from PySide6.QtCore import QObject, QThread, Signal, Qt
+from PySide6.QtCore import QObject, QThread, QTimer, Signal, Qt
 from PySide6.QtWidgets import (
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -18,10 +19,12 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
+from app.pages.module_details import module_detail
 from src.services.project_service import ProjectService
 
 
@@ -55,7 +58,7 @@ class CandidateGenePage(QWidget):
         self.context_label.setWordWrap(True)
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search gene, comparison, class...")
-        self.search.textChanged.connect(self.refresh)
+        self.search.textChanged.connect(self._schedule_refresh)
         self.comparison_tabs = QTabWidget()
         self.comparison_tabs.currentChanged.connect(self.refresh)
         self.comparison_tabs.setDocumentMode(True)
@@ -118,6 +121,8 @@ class CandidateGenePage(QWidget):
         self.path_label.setPlaceholderText("Current source file path")
         self.generate_button = QPushButton("Generate / Load Candidate Results")
         self.generate_button.clicked.connect(self._generate_candidate_results)
+        self.detail_button = QPushButton("Detail")
+        self.detail_button.clicked.connect(self._show_detail_dialog)
         self.open_button = QPushButton("Open output folder")
         self.open_button.clicked.connect(self.open_output_folder)
         self.download_button = QPushButton("Download file")
@@ -134,6 +139,11 @@ class CandidateGenePage(QWidget):
         self._current_source_path = None
         self._candidate_thread: QThread | None = None
         self._candidate_worker: CandidateGenerationWorker | None = None
+        self._max_display_rows = 1000
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(300)
+        self._search_timer.timeout.connect(self.refresh)
 
         top = QHBoxLayout()
         top.addWidget(self.label)
@@ -146,6 +156,7 @@ class CandidateGenePage(QWidget):
         top.addWidget(self.min_abs_log2fc)
         top.addWidget(self.min_abs_dpsi)
         top.addWidget(self.generate_button)
+        top.addWidget(self.detail_button)
         top.addWidget(self.progress)
         top.addWidget(self.open_button)
         top.addWidget(self.download_button)
@@ -157,6 +168,24 @@ class CandidateGenePage(QWidget):
         layout.addWidget(self.comparison_tabs)
         layout.addWidget(self.path_label)
         layout.addWidget(self.table)
+
+    def _show_detail_dialog(self) -> None:
+        text = module_detail("5.3.ranking")
+        if self.mode == "tiers":
+            text += "\n\nTier view note:\nThis page uses the same unique gene-level ranking source, filtered by candidate_tier."
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Module details")
+        dialog.resize(760, 420)
+        layout = QVBoxLayout(dialog)
+        viewer = QTextEdit(dialog)
+        viewer.setReadOnly(True)
+        viewer.setPlainText(text)
+        close_button = QPushButton("Close", dialog)
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(viewer, 1)
+        layout.addWidget(close_button)
+        QTimer.singleShot(0, dialog.showMaximized)
+        dialog.exec()
 
     def refresh(self) -> None:
         project = self.project_service.current_project
@@ -266,8 +295,9 @@ class CandidateGenePage(QWidget):
         self.table.setSortingEnabled(False)
         self.table.setColumnCount(len(available_columns))
         self.table.setHorizontalHeaderLabels(available_columns)
-        self.table.setRowCount(len(filtered))
-        for row_idx, (_, row) in enumerate(filtered[available_columns].iterrows()):
+        display_frame = filtered.head(self._max_display_rows).copy()
+        self.table.setRowCount(len(display_frame))
+        for row_idx, (_, row) in enumerate(display_frame[available_columns].iterrows()):
             for col_idx, column in enumerate(available_columns):
                 value = row[column]
                 item = QTableWidgetItem()
@@ -290,7 +320,12 @@ class CandidateGenePage(QWidget):
                 self.table.setItem(row_idx, col_idx, item)
         self.table.setSortingEnabled(True)
         label_prefix = "Candidate auto ranking" if self.mode == "ranking" else "Tier 1-5 candidate table"
-        self.label.setText(f"{label_prefix} ({len(filtered)} rows)")
+        shown = len(display_frame)
+        suffix = f"showing first {shown} of {len(filtered)} rows" if len(filtered) > shown else f"{len(filtered)} rows"
+        self.label.setText(f"{label_prefix} ({suffix})")
+
+    def _schedule_refresh(self) -> None:
+        self._search_timer.start()
 
     def _generate_candidate_results(self) -> None:
         if self._candidate_thread is not None:

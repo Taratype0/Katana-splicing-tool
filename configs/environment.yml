@@ -9,7 +9,10 @@ dependencies:
   - scipy
   - matplotlib
   - seaborn
+  - networkx
   - pyyaml
+  - r-base=4.4
+  - r-biocmanager
   - pip
   - pip:
       - PySide6==6.11.0
@@ -17,3 +20,5 @@ dependencies:
       - statsmodels
       - scikit-learn
       - umap-learn
+      - igraph>=1.0
+      - leidenalg>=0.12

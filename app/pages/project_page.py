@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QAbstractScrollArea, QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
+from app.widgets.page_header import PageHeader
 from src.services.project_service import ProjectService
 
 
@@ -11,14 +12,18 @@ class ProjectPage(QWidget):
         super().__init__()
         self.project_service = project_service
         self.on_confirm = on_confirm
+        self.header = PageHeader(
+            "Project data sources",
+            "Review detected comparisons and map each analysis source before confirming the project.",
+            "01 · Data intake",
+        )
         self.summary = QLabel("Select a project directory to begin.")
+        self.summary.setObjectName("contextPanel")
+        self.summary.setWordWrap(True)
         self.confirm_button = QPushButton("Confirm")
+        self.confirm_button.setProperty("class", "primary")
         self.confirm_button.clicked.connect(self._confirm_project)
         self.confirm_button.setMaximumWidth(120)
-        self.confirm_button.setStyleSheet(
-            "QPushButton { background-color: #2563EB; color: white; border-radius: 6px; padding: 6px 12px; font-weight: 600; }"
-            "QPushButton:disabled { background-color: #64748B; color: #E2E8F0; }"
-        )
         self.table = QTableWidget(0, 12)
         self.table.setHorizontalHeaderLabels(
             [
@@ -46,6 +51,9 @@ class ProjectPage(QWidget):
         self._is_refreshing = False
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        layout.addWidget(self.header)
         layout.addWidget(self.summary)
         layout.addWidget(self.confirm_button)
         layout.addWidget(self.table, 1)
@@ -55,12 +63,14 @@ class ProjectPage(QWidget):
         if project is None:
             self.summary.setText("Select a project directory to begin.")
             self.confirm_button.setEnabled(False)
+            self.table.setVisible(False)
             self._is_refreshing = True
             self.table.setRowCount(0)
             self._is_refreshing = False
             return
 
         mode = "manual input mode" if project.input_paths else "auto scan mode"
+        self.table.setVisible(True)
         inputs = [
             f"rMATS={project.input_paths.get('rmats_root', project.rmats_root or 'auto')}",
             f"DEG={project.input_paths.get('deg_root', project.deg_root or 'auto')}",

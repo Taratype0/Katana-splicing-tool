@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtWidgets import (
     QComboBox,
@@ -31,6 +32,8 @@ class SettingsPage(QWidget):
         self.output_label = QLabel("Output directory: not set")
         self.output_button = QPushButton("Choose Output Directory")
         self.output_button.clicked.connect(self._choose_output_directory)
+        self.migrate_output_button = QPushButton("Migrate Existing Outputs")
+        self.migrate_output_button.clicked.connect(self._migrate_output_directory)
         self.input_rmats_label = QLabel("Input rMATS root: auto")
         self.input_rmats_button = QPushButton("Choose rMATS Root")
         self.input_rmats_button.clicked.connect(lambda: self._choose_input_directory("rmats_root", "Select rMATS Root"))
@@ -91,6 +94,7 @@ class SettingsPage(QWidget):
         row = QHBoxLayout()
         row.addWidget(self.output_label)
         row.addWidget(self.output_button)
+        row.addWidget(self.migrate_output_button)
         layout.addLayout(row)
         self._add_row(layout, self.input_rmats_label, self.input_rmats_button)
         self._add_row(layout, self.input_deg_label, self.input_deg_button)
@@ -149,6 +153,7 @@ class SettingsPage(QWidget):
             return
         self.rmats_mode.setCurrentText(project.selected_rmats_mode)
         self.output_label.setText(f"Output directory: {project.output_root}")
+        self.migrate_output_button.setEnabled(self.project_service.can_migrate_current_output_root())
         self.input_rmats_label.setText(f"Input rMATS root: {project.input_paths.get('rmats_root', 'auto')}")
         self.input_deg_label.setText(f"Input DEG root: {project.input_paths.get('deg_root', 'auto')}")
         self.input_suppa_label.setText(f"Input SUPPA root: {project.input_paths.get('suppa_root', 'auto')}")
@@ -223,7 +228,42 @@ class SettingsPage(QWidget):
         )
         if not folder:
             return
-        self.project_service.update_output_root(folder)
+        try:
+            self.project_service.update_output_root(folder)
+        except RuntimeError as exc:
+            QMessageBox.critical(self, "Invalid Output Directory", str(exc))
+            return
+        self.refresh()
+
+    def _migrate_output_directory(self) -> None:
+        project = self.project_service.current_project
+        if project is None:
+            return
+        if not self.project_service.can_migrate_current_output_root():
+            QMessageBox.information(
+                self,
+                "No Katana Outputs Detected",
+                "The current directory does not contain a recognizable Katana output tree. "
+                "Use Choose Output Directory to change the path without moving input files.",
+            )
+            return
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select New Output Directory",
+            str(Path(project.output_root).parent if project.output_root else project.project_root),
+        )
+        if not folder:
+            return
+        try:
+            result = self.project_service.migrate_output_root(folder)
+        except RuntimeError as exc:
+            QMessageBox.critical(self, "Output Migration Failed", str(exc))
+            return
+        QMessageBox.information(
+            self,
+            "Output Migration Finished",
+            f"Moved {result.moved_entries} top-level output entries to:\n{result.destination}",
+        )
         self.refresh()
 
     def _choose_rscript(self) -> None:

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from datetime import datetime
+from dataclasses import asdict
 import gzip
 import math
 import re
 import shutil
+import urllib.error
+import urllib.request
 from itertools import combinations
 
 import yaml
@@ -23,10 +27,22 @@ from src.adapters.sashimi_adapter import SashimiAdapter
 from src.adapters.native_sashimi_adapter import NativeSashimiAdapter, _parse_gtf_attrs
 from src.analysis.common import EVENT_TYPES, event_uid_from_row, load_annotation_gene_symbol_lookup, normalize_gene_id
 from src.analysis.mechanism_support import MechanismSupportAnalyzer
+from src.analysis.native_splicing_patterns import (
+    psi_pattern_clusters,
+    replicate_group_separation,
+    row_zscore_matrix,
+    sample_similarity_tables,
+)
 from src.analysis.program_comparison import SplicingProgramComparator
 from src.analysis.splicing_landscape import SplicingLandscapeAnalyzer
+from src.analysis.stable_as import apply_stable_as_filter, pairwise_direction_consistency
 from src.analysis.tx_splicing_integration import TxSplicingIntegrator
 from src.runtime_paths import bundled_configs_root, bundled_software_root
+from src.services.artifact_registry import AnalysisArtifactRegistry
+from src.services.cross_comparison_service import CrossComparisonService
+from src.services.jutils_benchmark_service import JutilsBenchmarkService
+from src.services.output_directory_service import OutputDirectoryService, OutputMigrationResult
+from src.services.project_report_service import ProjectReportService
 from src.services.shortlist_service import ShortlistService
 from src.adapters.isoformswitch_adapter import IsoformSwitchAdapter
 from src.domain.models.analysis import AnalysisRequest, AnalysisResults, AnalysisRunState, ThresholdConfig
@@ -35,6 +51,7 @@ from src.io.scanner import ProjectScanner
 
 
 class ProjectService:
+    NATIVE_PATTERN_SCHEMA_VERSION = "3"
     ANALYSIS_MODULES = [
         "splicing_landscape",
         "program_comparison",
@@ -56,12 +73,23 @@ class ProjectService:
         self.native_sashimi_adapter = NativeSashimiAdapter()
         self.isoform_runner: IsoformSwitchRunner | None = None
         self.shortlist_service = ShortlistService()
+        self.output_directories = OutputDirectoryService(self.application_source_root())
+        self.jutils_benchmark = JutilsBenchmarkService()
         self.default_thresholds = self._load_default_thresholds()
         self.run_state = AnalysisRunState()
-        self.current_thresholds = ThresholdConfig(**self.default_thresholds["presets"]["default"])
+        self.current_thresholds = self._threshold_config_from_mapping(self.default_thresholds["presets"]["default"])
         self._last_jutils_report: dict[str, object] = {
             "status": "idle",
             "command_lines": [],
+            "output_directory": "",
+            "generated_files": [],
+            "stdout": "",
+            "stderr": "",
+            "error_log": "",
+        }
+        self._last_native_jutils_report: dict[str, object] = {
+            "status": "idle",
+            "mode": "pattern",
             "output_directory": "",
             "generated_files": [],
             "stdout": "",
@@ -76,14 +104,17 @@ class ProjectService:
         self._candidate_catalog_cache: dict[tuple[str, int, tuple[str, ...]], pd.DataFrame] = {}
         self._significant_as_event_summary_cache: dict[str, pd.DataFrame] = {}
         self._rbp_support_cache: dict[tuple[str, str, int, str], dict[str, pd.DataFrame]] = {}
-        self._rbp_cross_support_cache: dict[tuple[str, int, str], dict[str, pd.DataFrame]] = {}
+        self._rbp_cross_support_cache: dict[tuple[str, int, str, tuple[str, ...]], dict[str, pd.DataFrame]] = {}
         self._isoform_support_cache: dict[tuple[str, str, int], dict[str, pd.DataFrame]] = {}
-        self._isoform_cross_support_cache: dict[tuple[str, int], dict[str, pd.DataFrame]] = {}
+        self._isoform_cross_support_cache: dict[tuple[str, int, tuple[str, ...]], dict[str, pd.DataFrame]] = {}
+        self._native_jutils_cache: dict[tuple[str, tuple[str, ...], float, float, str], dict[str, pd.DataFrame]] = {}
         self._gtf_transcript_gene_cache: dict[str, pd.DataFrame] = {}
         self._deg_expression_cache: dict[str, pd.DataFrame] = {}
         self._comparison_expression_support_cache: dict[str, pd.DataFrame] = {}
         self._expression_support_cache = pd.DataFrame()
         self._expression_support_loaded = False
+        self._candidate_cache_fingerprint_in_memory = ""
+        self._artifact_registry: AnalysisArtifactRegistry | None = None
         self._module_states = self._new_module_states()
 
     def _clear_candidate_selection_caches(self) -> None:
@@ -92,6 +123,7 @@ class ProjectService:
         self._rbp_cross_support_cache = {}
         self._isoform_support_cache = {}
         self._isoform_cross_support_cache = {}
+        self._native_jutils_cache = {}
 
     def _emit_progress(self, callback, message: str) -> None:
         if callback is not None:
@@ -99,6 +131,9 @@ class ProjectService:
 
     def _log_heavy(self, message: str) -> None:
         print(f"[katana-heavy] {message}")
+
+    def _log_cache(self, message: str) -> None:
+        print(f"[katana-cache] {message}")
 
     def _new_module_states(self) -> dict[str, dict[str, object]]:
         return {
@@ -122,6 +157,8 @@ class ProjectService:
             "isoform": {"status": "not_run", "message": "Not run."},
             "isoform_support": {"status": "not_run", "message": "Not run."},
             "isoform_cross_support": {"status": "not_run", "message": "Not run."},
+            "deg_explorer": {"status": "not_run", "message": "Not run."},
+            "functional_enrichment": {"status": "not_run", "message": "Not run."},
         }
 
     def _reset_module_states(self) -> None:
@@ -197,12 +234,17 @@ class ProjectService:
         self._candidate_catalog_cache = {}
         self._significant_as_event_summary_cache = {}
         self._rbp_support_cache = {}
+        self._rbp_cross_support_cache = {}
         self._isoform_support_cache = {}
+        self._isoform_cross_support_cache = {}
+        self._native_jutils_cache = {}
         self._gtf_transcript_gene_cache = {}
         self._deg_expression_cache = {}
         self._comparison_expression_support_cache = {}
         self._expression_support_cache = pd.DataFrame()
         self._expression_support_loaded = False
+        self._candidate_cache_fingerprint_in_memory = ""
+        self._artifact_registry = None
         self.current_project = self.scanner.scan(
             root_dir,
             input_paths=input_paths,
@@ -210,10 +252,6 @@ class ProjectService:
             progress_callback=progress_callback,
         )
         self._emit_progress(progress_callback, "load comparison config")
-        self.current_project.confirmed = False
-        self.current_project.pairing_confirmed = False
-        self.current_project.comparison_sets_confirmed = False
-        self.current_project.visualization_groups_confirmed = False
         self._emit_progress(progress_callback, "load pairing direction")
         self._refresh_tool_adapters()
         self._normalize_project_selection_state()
@@ -223,11 +261,79 @@ class ProjectService:
         self._ensure_default_visualization_groups()
         saved_thresholds = self.current_project.tool_paths.get("saved_thresholds")
         if isinstance(saved_thresholds, dict) and saved_thresholds:
-            self.current_thresholds = ThresholdConfig(**saved_thresholds)
+            self.current_thresholds = self._threshold_config_from_mapping(saved_thresholds)
         self._emit_progress(progress_callback, "load cached candidate selection state")
         self._autodetect_embedded_tools()
         self._emit_progress(progress_callback, "finish load project")
         return self.current_project
+
+    def artifact_registry(self) -> AnalysisArtifactRegistry:
+        resolved_root = self.require_output_root()
+        if self._artifact_registry is None or self._artifact_registry.output_root != resolved_root:
+            self._artifact_registry = AnalysisArtifactRegistry(
+                resolved_root,
+                self.current_project.project_name,
+            )
+        return self._artifact_registry
+
+    @staticmethod
+    def application_source_root() -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    def output_root_validation_error(self, output_root: str | Path | None = None) -> str:
+        if self.current_project is None:
+            return "No project loaded."
+        candidate = output_root if output_root is not None else self.current_project.output_root
+        return self.output_directories.validation_error(candidate)
+
+    def require_output_root(self, *, create: bool = True) -> Path:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        return self.output_directories.require(self.current_project.output_root, create=create)
+
+    def default_export_path(self, filename: str) -> Path:
+        export_root = self.require_output_root() / "exports"
+        export_root.mkdir(parents=True, exist_ok=True)
+        return export_root / filename
+
+    def build_project_report(self) -> dict[str, Path]:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        project = self.current_project
+        output_root = self.require_output_root()
+        report_service = ProjectReportService(output_root, project.project_name)
+        selected_comparisons = self.selected_comparisons_for_display()
+        outputs = report_service.build(
+            registry=self.artifact_registry(),
+            project_summary={
+                "project_name": project.project_name,
+                "project_root": str(project.project_root),
+                "output_root": str(output_root),
+                "selected_comparisons": len(selected_comparisons),
+                "comparison_ids": ", ".join(item.comparison_id for item in selected_comparisons),
+                "pairing_confirmed": bool(project.pairing_confirmed),
+                "comparison_sets_confirmed": bool(project.comparison_sets_confirmed),
+                "visualization_groups_confirmed": bool(project.visualization_groups_confirmed),
+            },
+            module_states={key: dict(value) for key, value in self._module_states.items()},
+        )
+        source_ids = [
+            record.artifact_id
+            for record in self.artifact_registry().find()
+            if record.module_id != "project_report"
+        ]
+        for artifact_key, path in outputs.items():
+            self.artifact_registry().register(
+                module_id="project_report",
+                artifact_key=artifact_key,
+                kind="report" if path.suffix.lower() == ".html" else "table" if path.suffix.lower() == ".tsv" else "parameters",
+                entity_type="project",
+                path=path,
+                source_artifact_ids=source_ids,
+                consumer_modules=["project_report"],
+                description="Cached project-wide provenance and artifact inventory report.",
+            )
+        return outputs
 
     def _normalize_project_selection_state(self) -> None:
         if self.current_project is None:
@@ -312,6 +418,8 @@ class ProjectService:
         self._cross_as_interaction_batch_cache = {}
         self._candidate_catalog_cache = {}
         self._significant_as_event_summary_cache = {}
+        self._candidate_cache_fingerprint_in_memory = ""
+        self._deg_expression_cache = {}
         self._reset_module_states()
 
     def confirm_comparison_sets(self) -> None:
@@ -826,6 +934,226 @@ class ProjectService:
             ordered.append(text)
         return ordered
 
+    def publish_analysis_selection(
+        self,
+        *,
+        module_id: str,
+        artifact_key: str,
+        entity_type: str,
+        frame: pd.DataFrame,
+        scope: str,
+        scope_id: str,
+        comparison_ids: list[str] | tuple[str, ...] = (),
+        id_columns: list[str] | tuple[str, ...] = (),
+        source_artifact_ids: list[str] | tuple[str, ...] = (),
+        consumer_modules: list[str] | tuple[str, ...] = (),
+        selection_rule: str = "",
+        parameters: dict[str, object] | None = None,
+    ):
+        return self.artifact_registry().publish_selection(
+            module_id=module_id,
+            artifact_key=artifact_key,
+            entity_type=entity_type,
+            frame=frame,
+            scope=scope,
+            scope_id=scope_id,
+            comparison_ids=comparison_ids,
+            id_columns=id_columns,
+            source_artifact_ids=source_artifact_ids,
+            consumer_modules=consumer_modules,
+            selection_rule=selection_rule,
+            parameters=parameters,
+        )
+
+    def publish_candidate_selection_artifacts(self, comparison_id: str) -> None:
+        if self.current_project is None or not comparison_id:
+            return
+        selected_genes = self.candidate_selection_genes_for_display(comparison_id)
+        blacklist_genes = self.candidate_blacklist_genes_for_display(comparison_id)
+        catalog = self.candidate_selection_catalog(comparison_id, allow_generate=False)
+        selected = self._candidate_custom_gene_rows(catalog, comparison_id, selected_genes) if not catalog.empty else pd.DataFrame()
+        if selected.empty:
+            selected = pd.DataFrame({"gene_symbol": selected_genes})
+        if "comparison_id" not in selected.columns:
+            selected.insert(0, "comparison_id", comparison_id)
+        blacklist = pd.DataFrame(
+            {
+                "comparison_id": [comparison_id] * len(blacklist_genes),
+                "gene_symbol": blacklist_genes,
+            }
+        )
+        self.publish_analysis_selection(
+            module_id="5.3.2",
+            artifact_key="candidate_gene_selection",
+            entity_type="gene",
+            frame=selected,
+            scope="comparison",
+            scope_id=comparison_id,
+            comparison_ids=[comparison_id],
+            id_columns=["comparison_id", "gene_symbol", "gene_id"],
+            consumer_modules=["5.3.3", "5.3.4", "5.3.5", "5.5", "7.1", "8.1"],
+            selection_rule="Comparison-specific candidate selection after blacklist exclusion.",
+            parameters={"blacklist_count": len(blacklist_genes)},
+        )
+        self.publish_analysis_selection(
+            module_id="5.3.2",
+            artifact_key="candidate_gene_blacklist",
+            entity_type="gene",
+            frame=blacklist,
+            scope="comparison",
+            scope_id=comparison_id,
+            comparison_ids=[comparison_id],
+            id_columns=["comparison_id", "gene_symbol"],
+            consumer_modules=["5.3.3", "5.3.4", "5.3.5", "5.5", "7.1", "8.1"],
+            selection_rule="Genes excluded from downstream candidate visualizations.",
+        )
+
+    def downstream_gene_selection(
+        self,
+        comparison_id: str,
+        *,
+        consumer_module: str,
+    ) -> tuple[pd.DataFrame, dict[str, object]]:
+        frame, artifact = self.artifact_registry().latest_selection(
+            entity_type="gene",
+            scope_id=comparison_id,
+            module_id="5.3.2",
+            artifact_key="candidate_gene_selection",
+        )
+        if artifact is not None and not frame.empty:
+            return frame, {
+                "artifact_id": artifact.artifact_id,
+                "source_module": artifact.module_id,
+                "selection_rule": artifact.selection_rule,
+                "fingerprint": artifact.fingerprint,
+                "consumer_module": consumer_module,
+                "cache_status": "artifact_registry",
+            }
+        genes = self.candidate_selection_genes_for_display(comparison_id)
+        fallback = pd.DataFrame(
+            {
+                "comparison_id": [comparison_id] * len(genes),
+                "gene_symbol": genes,
+            }
+        )
+        return fallback, {
+            "artifact_id": "",
+            "source_module": "project_config",
+            "selection_rule": "Legacy comparison-specific candidate selection.",
+            "fingerprint": "",
+            "consumer_module": consumer_module,
+            "cache_status": "project_config_fallback",
+        }
+
+    def publish_sashimi_event_selection(
+        self,
+        frame: pd.DataFrame,
+        *,
+        comparison_id: str,
+        selection_rule: str,
+    ) -> None:
+        if frame is None or frame.empty or not comparison_id:
+            return
+        selection = frame.copy()
+        if "comparison_id" not in selection.columns:
+            selection.insert(0, "comparison_id", comparison_id)
+        if "event_id" not in selection.columns and "event_uid" in selection.columns:
+            selection["event_id"] = selection["event_uid"]
+        if "event_matching_key" not in selection.columns:
+            gene = selection.get("gene_symbol", selection.get("geneSymbol", pd.Series("", index=selection.index)))
+            event_type = selection.get("event_type", pd.Series("", index=selection.index))
+            event_id = selection.get("event_id", pd.Series("", index=selection.index))
+            selection["event_matching_key"] = (
+                gene.fillna("").astype(str)
+                + "|"
+                + event_type.fillna("").astype(str)
+                + "|"
+                + event_id.fillna("").astype(str)
+            )
+        self.publish_analysis_selection(
+            module_id="5.5.2",
+            artifact_key="selected_sashimi_events",
+            entity_type="event",
+            frame=selection,
+            scope="comparison",
+            scope_id=comparison_id,
+            comparison_ids=[comparison_id],
+            id_columns=["comparison_id", "event_matching_key", "event_id"],
+            consumer_modules=["5.5.2", "5.5.3", "9.CoSplice"],
+            selection_rule=selection_rule,
+        )
+
+    @staticmethod
+    def cosplice_module_catalog(output_dir: str | Path) -> pd.DataFrame:
+        root = Path(output_dir)
+        summary_path = root / "04c_consensus_modules" / "consensus_module_summary.tsv"
+        assignments_path = root / "04c_consensus_modules" / "consensus_event_module_assignments.tsv"
+        if not assignments_path.exists():
+            assignments_path = root / "04_network" / "observed" / "event_module_assignments.tsv"
+        summary = pd.DataFrame()
+        if summary_path.exists():
+            try:
+                summary = pd.read_csv(summary_path, sep="\t", low_memory=False)
+            except (OSError, pd.errors.ParserError, UnicodeDecodeError):
+                summary = pd.DataFrame()
+        assignments = pd.DataFrame()
+        if assignments_path.exists():
+            try:
+                assignments = pd.read_csv(assignments_path, sep="\t", low_memory=False)
+            except (OSError, pd.errors.ParserError, UnicodeDecodeError):
+                assignments = pd.DataFrame()
+        if summary.empty and not assignments.empty and "module" in assignments.columns:
+            aggregations: dict[str, tuple[str, str]] = {
+                "n_events": ("module", "size"),
+            }
+            for output_name, source_name in (
+                ("mean_module_membership", "module_membership"),
+                ("mean_network_connectivity", "network_connectivity"),
+                ("mean_bootstrap_support", "mean_incident_bootstrap_support"),
+            ):
+                if source_name in assignments.columns:
+                    aggregations[output_name] = (source_name, "mean")
+            summary = assignments.groupby("module", dropna=False).agg(**aggregations).reset_index()
+        module_column = next(
+            (column for column in ("module", "consensus_module", "module_id") if column in summary.columns),
+            None,
+        )
+        if module_column is None:
+            return pd.DataFrame()
+        if module_column != "module":
+            summary = summary.rename(columns={module_column: "module"})
+        summary["module"] = summary["module"].fillna("").astype(str)
+        summary = summary.loc[summary["module"].ne("") & summary["module"].ne("grey")].copy()
+        return summary.drop_duplicates("module", keep="first").sort_values("module").reset_index(drop=True)
+
+    def publish_cosplice_module_selection(
+        self,
+        output_dir: str | Path,
+        module_ids: list[str] | tuple[str, ...],
+    ) -> pd.DataFrame:
+        clean_ids = list(dict.fromkeys(str(item).strip() for item in module_ids if str(item).strip()))
+        if not clean_ids:
+            raise RuntimeError("Select one or more CoSplice modules before publishing the handoff.")
+        catalog = self.cosplice_module_catalog(output_dir)
+        if catalog.empty:
+            raise RuntimeError("No cached CoSplice module catalog is available.")
+        selected = catalog.loc[catalog["module"].isin(clean_ids)].copy()
+        if selected.empty:
+            raise RuntimeError("The selected CoSplice modules are not present in the cached module catalog.")
+        self.publish_analysis_selection(
+            module_id="9.CoSplice",
+            artifact_key="selected_cosplice_modules",
+            entity_type="module",
+            frame=selected,
+            scope="project",
+            scope_id="project",
+            id_columns=["module"],
+            consumer_modules=["9.CoSplice.interpretation", "7.RBP", "8.Isoform", "project_report"],
+            selection_rule="User-selected cached CoSplice modules; publishing does not rerun the network.",
+            parameters={"cosplice_output_dir": str(Path(output_dir).resolve())},
+        )
+        return selected
+
     def add_candidate_selection_gene(self, comparison_id: str, gene: str) -> None:
         self.add_candidate_selection_genes(comparison_id, [gene])
 
@@ -856,6 +1184,7 @@ class ProjectService:
             self.current_project.candidate_selection_genes[comparison_id] = self._dedupe_gene_tokens(current)
             self._clear_candidate_selection_caches()
             self.save_project_config()
+            self.publish_candidate_selection_artifacts(comparison_id)
 
     def remove_candidate_selection_gene(self, comparison_id: str, gene: str) -> None:
         if self.current_project is None or not comparison_id:
@@ -868,6 +1197,7 @@ class ProjectService:
         ]
         self._clear_candidate_selection_caches()
         self.save_project_config()
+        self.publish_candidate_selection_artifacts(comparison_id)
 
     def add_candidate_blacklist_gene(self, comparison_id: str, gene: str) -> None:
         self.add_candidate_blacklist_genes(comparison_id, [gene])
@@ -906,6 +1236,7 @@ class ProjectService:
             self.current_project.candidate_selection_genes[comparison_id] = selected_deduped
             self._clear_candidate_selection_caches()
             self.save_project_config()
+            self.publish_candidate_selection_artifacts(comparison_id)
 
     def remove_candidate_blacklist_gene(self, comparison_id: str, gene: str) -> None:
         if self.current_project is None or not comparison_id:
@@ -918,6 +1249,7 @@ class ProjectService:
         ]
         self._clear_candidate_selection_caches()
         self.save_project_config()
+        self.publish_candidate_selection_artifacts(comparison_id)
 
     def reset_candidate_selection(self, comparison_id: str, *, top_n: int = 20) -> None:
         if self.current_project is None or not comparison_id:
@@ -928,6 +1260,7 @@ class ProjectService:
         ))
         self._clear_candidate_selection_caches()
         self.save_project_config()
+        self.publish_candidate_selection_artifacts(comparison_id)
 
     def apply_gene_blacklist(self, frame: pd.DataFrame) -> pd.DataFrame:
         if self.current_project is None or frame.empty or not self.current_project.blacklist_genes:
@@ -1018,16 +1351,32 @@ class ProjectService:
         self.save_project_config()
 
     def update_thresholds(self, **values: float) -> None:
+        before = asdict(self.current_thresholds)
         for key, value in values.items():
             if hasattr(self.current_thresholds, key):
                 setattr(self.current_thresholds, key, value)
+        if asdict(self.current_thresholds) != before:
+            self.invalidate_analysis_results(
+                "Analysis caches are stale because thresholds changed. Re-run only the module whose output you need."
+            )
+            self._candidate_cache_fingerprint_in_memory = ""
+            self._clear_candidate_selection_caches()
         self.save_project_config()
 
     def apply_threshold_preset(self, preset_name: str) -> None:
         preset = self.default_thresholds["presets"].get(preset_name)
         if preset is None:
             raise KeyError(f"Unknown preset: {preset_name}")
-        self.current_thresholds = ThresholdConfig(**preset)
+        updated = self._threshold_config_from_mapping(preset)
+        if asdict(updated) != asdict(self.current_thresholds):
+            self.current_thresholds = updated
+            self.invalidate_analysis_results(
+                f"Analysis caches are stale because the '{preset_name}' threshold preset was selected."
+            )
+            self._candidate_cache_fingerprint_in_memory = ""
+            self._clear_candidate_selection_caches()
+        else:
+            self.current_thresholds = updated
         self.save_project_config()
 
     def preview_splicing_landscape(self):
@@ -1038,6 +1387,352 @@ class ProjectService:
         request = self.build_default_request()
         request.rmats_mode = self.current_project.selected_rmats_mode
         return self.splicing_landscape.run(self.current_project, request)
+
+    def deg_explorer_file_map(self, comparison_id: str) -> dict[str, Path]:
+        if self.current_project is None or self.current_project.output_root is None:
+            return {}
+        comparison = next(
+            (item for item in self.current_project.available_comparisons if item.comparison_id == comparison_id),
+            None,
+        )
+        if comparison is None:
+            return {}
+        base = self.current_project.output_root / "05_deg_explorer" / (
+            comparison.output_prefix or self._safe_output_name(comparison.comparison_id)
+        )
+        return {
+            "all": base / "deg_all.tsv",
+            "significant": base / "deg_significant.tsv",
+            "up": base / "deg_up.tsv",
+            "down": base / "deg_down.tsv",
+            "summary": base / "summary.tsv",
+            "parameters": base / "parameters.json",
+            "volcano": base / "volcano.png",
+            "ma": base / "ma_plot.png",
+        }
+
+    def preview_deg_explorer(
+        self,
+        comparison_id: str,
+        *,
+        allow_generate: bool = False,
+        force_rebuild: bool = False,
+    ) -> pd.DataFrame:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        files = self.deg_explorer_file_map(comparison_id)
+        parameters = files.get("parameters")
+        expected = self._deg_explorer_signature(comparison_id)
+        if not force_rebuild and parameters is not None and parameters.exists() and files.get("all", Path()).exists():
+            try:
+                metadata = json.loads(parameters.read_text(encoding="utf-8"))
+                if metadata.get("signature") == expected:
+                    frame = pd.read_csv(files["all"], sep="\t", low_memory=False)
+                    self._mark_module_state(
+                        "deg_explorer",
+                        "cache_hit",
+                        f"Loaded cached DEG Explorer result for {comparison_id}.",
+                        from_cache=True,
+                        output_folder=str(files["all"].parent),
+                    )
+                    return frame
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+        if not allow_generate:
+            self._mark_module_state("deg_explorer", "not_run", "No cached DEG Explorer result. Click Run DEG Explorer.")
+            return pd.DataFrame()
+        comparison = next(
+            (item for item in self.current_project.available_comparisons if item.comparison_id == comparison_id),
+            None,
+        )
+        if comparison is None or comparison.deg_path is None or not comparison.deg_path.exists():
+            raise RuntimeError(f"Missing DEG input for comparison: {comparison_id}")
+        self._mark_module_state("deg_explorer", "running", f"Running DEG Explorer for {comparison_id}.")
+        self._deg_expression_cache.pop(comparison_id, None)
+        frame = self._deg_expression_frame(comparison_id)
+        if frame.empty:
+            raise RuntimeError(f"DEG input contains no usable rows for comparison: {comparison_id}")
+        frame = frame.copy()
+        frame.insert(0, "comparison_id", comparison.comparison_id)
+        frame.insert(1, "display_name", comparison.display_resolved_name)
+        deg_group1, deg_group2 = self._comparison_deg_direction_labels(comparison)
+        frame["DEG_direction"] = f"{deg_group1} vs {deg_group2}"
+        frame["direction_class"] = "not_significant"
+        frame.loc[frame["DEG_significant"] & frame["standardized_log2FC"].gt(0), "direction_class"] = "up"
+        frame.loc[frame["DEG_significant"] & frame["standardized_log2FC"].lt(0), "direction_class"] = "down"
+        output_dir = files["all"].parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(files["all"], sep="\t", index=False)
+        significant = frame.loc[frame["DEG_significant"].fillna(False)].copy()
+        significant.to_csv(files["significant"], sep="\t", index=False)
+        significant.loc[significant["standardized_log2FC"].gt(0)].to_csv(files["up"], sep="\t", index=False)
+        significant.loc[significant["standardized_log2FC"].lt(0)].to_csv(files["down"], sep="\t", index=False)
+        summary = pd.DataFrame(
+            [{
+                "comparison_id": comparison.comparison_id,
+                "display_name": comparison.display_resolved_name,
+                "n_tested": len(frame),
+                "n_significant": len(significant),
+                "n_up": int((significant["standardized_log2FC"] > 0).sum()),
+                "n_down": int((significant["standardized_log2FC"] < 0).sum()),
+            }]
+        )
+        summary.to_csv(files["summary"], sep="\t", index=False)
+        self._save_deg_explorer_plots(frame, files, comparison.display_resolved_name)
+        self._write_json(
+            files["parameters"],
+            {
+                "signature": expected,
+                "comparison_id": comparison.comparison_id,
+                "display_name": comparison.display_resolved_name,
+                "direction": f"log2FC > 0 means expression is higher in {deg_group1} than {deg_group2}",
+                "thresholds": {"DE_FDR": self.current_thresholds.deg_padj, "abs_log2FC": self.current_thresholds.deg_log2fc},
+                "generated_files": [str(path) for path in files.values()],
+            },
+        )
+        self._mark_module_state(
+            "deg_explorer",
+            "finished",
+            f"Finished DEG Explorer for {comparison_id}.",
+            from_cache=False,
+            output_folder=str(output_dir),
+        )
+        return frame
+
+    def _deg_explorer_signature(self, comparison_id: str) -> dict[str, object]:
+        if self.current_project is None:
+            return {}
+        comparison = next(
+            (item for item in self.current_project.available_comparisons if item.comparison_id == comparison_id),
+            None,
+        )
+        if comparison is None:
+            return {}
+        return {
+            "cache_version": 1,
+            "comparison_id": comparison.comparison_id,
+            "display_name": comparison.display_name or "",
+            "reverse_deg": bool(comparison.reverse_deg),
+            "thresholds": {"deg_padj": self.current_thresholds.deg_padj, "deg_log2fc": self.current_thresholds.deg_log2fc},
+            "deg": self.tx_splicing_integration._file_signature(comparison.deg_path, label="DEG"),
+        }
+
+    @staticmethod
+    def _save_deg_explorer_plots(frame: pd.DataFrame, files: dict[str, Path], title: str) -> None:
+        x = pd.to_numeric(frame["standardized_log2FC"], errors="coerce")
+        fdr = pd.to_numeric(frame["DE_FDR"], errors="coerce").clip(lower=1e-300)
+        significant = frame["DEG_significant"].fillna(False).astype(bool)
+        colors = np.where(significant & x.gt(0), "#d95f59", np.where(significant & x.lt(0), "#247f79", "#aab5bd"))
+        fig, axis = plt.subplots(figsize=(10, 7))
+        axis.scatter(x, -np.log10(fdr), c=colors, s=12, alpha=0.72, linewidths=0)
+        axis.axvline(0, color="#596872", linewidth=0.8)
+        axis.set_xlabel("standardized log2FC")
+        axis.set_ylabel("-log10 adjusted p-value")
+        axis.set_title(f"DEG Volcano: {title}", fontweight="bold")
+        fig.tight_layout()
+        fig.savefig(files["volcano"], dpi=180, bbox_inches="tight")
+        plt.close(fig)
+        base_mean = pd.to_numeric(frame["baseMean"], errors="coerce").clip(lower=0)
+        fig, axis = plt.subplots(figsize=(10, 7))
+        axis.scatter(np.log10(base_mean + 1), x, c=colors, s=12, alpha=0.72, linewidths=0)
+        axis.axhline(0, color="#596872", linewidth=0.8)
+        axis.set_xlabel("log10(baseMean + 1)")
+        axis.set_ylabel("standardized log2FC")
+        axis.set_title(f"DEG MA Plot: {title}", fontweight="bold")
+        fig.tight_layout()
+        fig.savefig(files["ma"], dpi=180, bbox_inches="tight")
+        plt.close(fig)
+
+    def enrichment_file_map(self, comparison_id: str) -> dict[str, Path]:
+        if self.current_project is None or self.current_project.output_root is None:
+            return {}
+        comparison = next(
+            (item for item in self.current_project.available_comparisons if item.comparison_id == comparison_id),
+            None,
+        )
+        if comparison is None:
+            return {}
+        base = self.current_project.output_root / "05b_functional_enrichment" / (
+            comparison.output_prefix or self._safe_output_name(comparison.comparison_id)
+        )
+        return {
+            "results": base / "go_kegg_enrichment.tsv",
+            "genes": base / "input_genes.tsv",
+            "parameters": base / "parameters.json",
+            "plot": base / "go_kegg_enrichment.png",
+        }
+
+    def run_functional_enrichment(
+        self,
+        comparison_id: str,
+        *,
+        source: str,
+        organism: str,
+        custom_genes: list[str] | None = None,
+        force_rebuild: bool = False,
+    ) -> pd.DataFrame:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        genes = self._enrichment_input_genes(comparison_id, source, custom_genes or [])
+        if not genes:
+            raise RuntimeError(
+                f"Missing input genes for '{source}'. Run DEG Explorer or Candidate Gene Selection first, or provide a custom gene list."
+            )
+        files = self.enrichment_file_map(comparison_id)
+        signature = {
+            "cache_version": 1,
+            "comparison_id": comparison_id,
+            "source": source,
+            "organism": organism,
+            "genes_sha256": hashlib.sha256("\n".join(genes).encode("utf-8")).hexdigest(),
+            "sources": ["GO:BP", "GO:MF", "GO:CC", "KEGG"],
+        }
+        if not force_rebuild and files.get("parameters") and files["parameters"].exists() and files["results"].exists():
+            try:
+                metadata = json.loads(files["parameters"].read_text(encoding="utf-8"))
+                if metadata.get("signature") == signature:
+                    result = pd.read_csv(files["results"], sep="\t", low_memory=False)
+                    self._mark_module_state("functional_enrichment", "cache_hit", "Loaded cached GO/KEGG enrichment.", from_cache=True)
+                    return result
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+        self._mark_module_state("functional_enrichment", "running", f"Running GO/KEGG enrichment for {comparison_id}.")
+        payload = json.dumps(
+            {
+                "organism": organism,
+                "query": genes,
+                "sources": ["GO:BP", "GO:MF", "GO:CC", "KEGG"],
+                "user_threshold": 0.05,
+                "significance_threshold_method": "fdr",
+                "no_evidences": False,
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            "https://biit.cs.ut.ee/gprofiler/api/gost/profile/",
+            data=payload,
+            headers={"Content-Type": "application/json", "User-Agent": "Katana-Splicing-Tool/1.0"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            self._mark_module_state("functional_enrichment", "failed", f"GO/KEGG request failed: {exc}")
+            raise RuntimeError(f"GO/KEGG enrichment request failed: {exc}") from exc
+        rows = []
+        for item in data.get("result", []):
+            intersections = item.get("intersections", []) or []
+            flattened_intersections = []
+            for value in intersections:
+                if isinstance(value, (list, tuple, set)):
+                    flattened_intersections.extend(str(gene) for gene in value if gene)
+                elif value:
+                    flattened_intersections.append(str(value))
+            rows.append(
+                {
+                    "comparison_id": comparison_id,
+                    "source": item.get("source"),
+                    "term_id": item.get("native"),
+                    "term_name": item.get("name"),
+                    "FDR": item.get("p_value"),
+                    "term_size": item.get("term_size"),
+                    "query_size": item.get("query_size"),
+                    "intersection_size": item.get("intersection_size"),
+                    "intersection_genes": ";".join(dict.fromkeys(flattened_intersections)),
+                    "input_gene_source": source,
+                    "organism": organism,
+                }
+            )
+        result = pd.DataFrame(rows)
+        output_dir = files["results"].parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+        result.to_csv(files["results"], sep="\t", index=False)
+        pd.DataFrame({"comparison_id": comparison_id, "gene_symbol": genes, "input_gene_source": source}).to_csv(
+            files["genes"], sep="\t", index=False
+        )
+        self._write_json(
+            files["parameters"],
+            {
+                "signature": signature,
+                "generated_at": datetime.now().isoformat(timespec="seconds"),
+                "generated_files": [str(path) for path in files.values()],
+                "note": "Over-representation analysis via the g:Profiler API; enrichment is associative, not causal.",
+            },
+        )
+        self._save_enrichment_plot(result, files["plot"], comparison_id)
+        self._mark_module_state(
+            "functional_enrichment",
+            "finished",
+            f"Finished GO/KEGG enrichment for {comparison_id}; {len(result)} terms passed the API threshold.",
+            output_folder=str(output_dir),
+            from_cache=False,
+        )
+        return result
+
+    def load_cached_functional_enrichment(self, comparison_id: str) -> pd.DataFrame:
+        files = self.enrichment_file_map(comparison_id)
+        path = files.get("results")
+        if path is None or not path.exists():
+            return pd.DataFrame()
+        try:
+            result = pd.read_csv(path, sep="\t", low_memory=False)
+        except Exception:
+            return pd.DataFrame()
+        self._mark_module_state(
+            "functional_enrichment",
+            "cache_hit",
+            f"Loaded cached GO/KEGG enrichment for {comparison_id}.",
+            output_folder=str(path.parent),
+            from_cache=True,
+        )
+        return result
+
+    def _enrichment_input_genes(self, comparison_id: str, source: str, custom_genes: list[str]) -> list[str]:
+        if source == "custom":
+            return self._dedupe_gene_tokens(custom_genes)
+        if source == "candidate_selection":
+            selection, _meta = self.downstream_gene_selection(
+                comparison_id,
+                consumer_module="5.8",
+            )
+            if selection.empty:
+                return []
+            values = selection.get(
+                "gene_symbol",
+                selection.get("gene_id", pd.Series(dtype="object")),
+            ).dropna().astype(str).tolist()
+            return self._dedupe_gene_tokens(values)
+        files = self.deg_explorer_file_map(comparison_id)
+        key = {"deg_significant": "significant", "deg_up": "up", "deg_down": "down"}.get(source)
+        path = files.get(key or "")
+        if path is None or not path.exists():
+            return []
+        try:
+            frame = pd.read_csv(path, sep="\t", low_memory=False, usecols=lambda column: column in {"gene_symbol", "gene_id"})
+        except Exception:
+            return []
+        values = frame.get("gene_symbol", frame.get("gene_id", pd.Series(dtype="object"))).dropna().astype(str).tolist()
+        return self._dedupe_gene_tokens(values)
+
+    @staticmethod
+    def _save_enrichment_plot(frame: pd.DataFrame, path: Path, comparison_id: str) -> None:
+        if frame is None or frame.empty:
+            return
+        show = frame.copy()
+        show["FDR"] = pd.to_numeric(show["FDR"], errors="coerce")
+        show = show.dropna(subset=["FDR"]).sort_values("FDR").head(20).sort_values("FDR", ascending=False)
+        if show.empty:
+            return
+        labels = show["term_name"].astype(str).str.slice(0, 58)
+        values = -np.log10(show["FDR"].clip(lower=1e-300))
+        colors = show["source"].map({"GO:BP": "#247f79", "GO:MF": "#d9903d", "GO:CC": "#4c78a8", "KEGG": "#d95f59"}).fillna("#81909a")
+        fig, axis = plt.subplots(figsize=(11, 8))
+        axis.barh(labels, values, color=colors)
+        axis.set_xlabel("-log10 FDR")
+        axis.set_title(f"GO / KEGG enrichment: {comparison_id}", fontweight="bold")
+        fig.tight_layout()
+        fig.savefig(path, dpi=180, bbox_inches="tight")
+        plt.close(fig)
 
     def preview_program_comparison(self, allow_generate: bool = True):
         if self.current_project is None:
@@ -1100,11 +1795,12 @@ class ProjectService:
     def preview_candidate_gene_screening(self, allow_generate: bool = True, *, force_rebuild: bool = False) -> pd.DataFrame:
         if self.current_project is None:
             raise RuntimeError("No project loaded.")
-        self._log_heavy("preview_candidate_gene_screening triggered")
+        self._log_cache("candidate ranking request: checking memory/disk cache")
         if not force_rebuild and self.run_state.results.candidate_gene_table is not None and not self.run_state.results.candidate_gene_table.empty:
             cached = self._normalize_candidate_gene_table(self.run_state.results.candidate_gene_table)
             self.run_state.results.candidate_gene_table = cached.copy()
             if not self._candidate_support_table_is_stale(cached):
+                self._log_cache("candidate ranking cache hit: in-memory table")
                 self._mark_module_state(
                     "candidate_ranking",
                     "cache_hit",
@@ -1119,6 +1815,7 @@ class ProjectService:
                 can_rebuild = self.run_state.results.tx_splicing_gene_table is not None and not self.run_state.results.tx_splicing_gene_table.empty
                 if not allow_generate or not self._candidate_support_table_is_stale(cached_disk) or not can_rebuild:
                     self.run_state.results.candidate_gene_table = cached_disk.copy()
+                    self._log_cache("candidate ranking cache hit: cached TSV output")
                     self._mark_module_state(
                         "candidate_ranking",
                         "cache_hit",
@@ -1140,7 +1837,13 @@ class ProjectService:
             return pd.DataFrame()
         mechanism = self.run_state.results.mechanism_support
         if mechanism is None or mechanism.empty:
-            mechanism = self.preview_mechanism_support(allow_generate=True)
+            mechanism = pd.DataFrame()
+            self._mark_module_state(
+                "mechanism_support",
+                "not_run",
+                "Mechanism support was not auto-generated by 5.3. Run the mechanism/support module explicitly if DEXSeq/DTU support columns are required.",
+            )
+        self._log_heavy("candidate ranking rebuild started from cached transcript + splicing integration")
         rebuilt = self._normalize_candidate_gene_table(self._build_candidate_gene_table(integration, mechanism)).copy()
         self.run_state.results.candidate_gene_table = rebuilt.copy()
         self._clear_candidate_selection_caches()
@@ -1149,6 +1852,7 @@ class ProjectService:
             self._candidate_output_tables(),
         )
         self._write_per_comparison_candidate_outputs()
+        self._write_candidate_cache_meta()
         self._mark_module_state(
             "candidate_ranking",
             "finished",
@@ -1163,7 +1867,8 @@ class ProjectService:
             return []
         root = self.current_project.output_root
         paths: list[tuple[Path, str | None]] = [
-            (root / "04a_candidate_gene_screening" / "gene_level_integrated_candidates.tsv", None)
+            (root / "04a_candidate_gene_screening" / "data" / "gene_level_integrated_candidates.tsv", None),
+            (root / "04a_candidate_gene_screening" / "gene_level_integrated_candidates.tsv", None),
         ]
         for comparison in self.selected_comparisons_for_display():
             path = self.candidate_screening_file_map(comparison.comparison_id).get("gene_level_integrated_candidates")
@@ -1172,6 +1877,19 @@ class ProjectService:
         return paths
 
     def _load_cached_candidate_gene_table(self) -> pd.DataFrame:
+        expected = self._candidate_cache_signature()
+        meta_path = self._candidate_cache_meta_path()
+        if meta_path is None or not meta_path.exists():
+            self._log_cache("candidate ranking cache miss: parameter fingerprint metadata is missing")
+            return pd.DataFrame()
+        try:
+            cached_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            self._log_cache("candidate ranking cache miss: parameter fingerprint metadata is unreadable")
+            return pd.DataFrame()
+        if cached_meta.get("signature") != expected:
+            self._log_cache("candidate ranking cache stale: comparison, direction, threshold, or input fingerprint changed")
+            return pd.DataFrame()
         frames: list[pd.DataFrame] = []
         for path, comparison_id in self._candidate_gene_table_cache_paths():
             if not path.exists() or path.stat().st_size <= 0:
@@ -1191,7 +1909,62 @@ class ProjectService:
                 break
         if not frames:
             return pd.DataFrame()
+        self._candidate_cache_fingerprint_in_memory = str(cached_meta.get("fingerprint", ""))
         return self._normalize_candidate_gene_table(pd.concat(frames, axis=0, ignore_index=True, sort=False))
+
+    def _candidate_cache_meta_path(self) -> Path | None:
+        if self.current_project is None or self.current_project.output_root is None:
+            return None
+        return self.current_project.output_root / "04a_candidate_gene_screening" / "candidate_cache_meta.json"
+
+    def _candidate_cache_signature(self) -> dict[str, object]:
+        if self.current_project is None:
+            return {}
+        request = self.build_default_request()
+        comparisons = []
+        for comparison in self._selected_comparisons():
+            comparisons.append(
+                {
+                    "identity": {
+                        "comparison_id": comparison.comparison_id,
+                        "display_name": comparison.display_name or "",
+                        "experiment_group": comparison.experiment_group or "",
+                        "control_group": comparison.control_group or "",
+                        "reverse_deg": bool(comparison.reverse_deg),
+                        "reverse_splicing": bool(comparison.reverse_splicing),
+                        "rmats_name": comparison.rmats_name or "",
+                        "deg_name": comparison.deg_name or "",
+                        "dexseq_name": comparison.dexseq_name or "",
+                        "dtu_name": comparison.dtu_name or "",
+                    },
+                    "integration": self.tx_splicing_integration._comparison_cache_signature(comparison, request),
+                }
+            )
+        return {
+            "cache_version": 4,
+            "rmats_mode": self.current_project.selected_rmats_mode,
+            "thresholds": asdict(self.current_thresholds),
+            "comparison_order": [item.comparison_id for item in self._selected_comparisons()],
+            "comparisons": comparisons,
+            "input_paths": {key: str(value) for key, value in sorted(self.current_project.input_paths.items())},
+        }
+
+    def _write_candidate_cache_meta(self) -> None:
+        meta_path = self._candidate_cache_meta_path()
+        if meta_path is None:
+            return
+        signature = self._candidate_cache_signature()
+        encoded = json.dumps(signature, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        fingerprint = hashlib.sha256(encoded).hexdigest()
+        self._write_json(
+            meta_path,
+            {
+                "fingerprint": fingerprint,
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "signature": signature,
+            },
+        )
+        self._candidate_cache_fingerprint_in_memory = fingerprint
 
     def _normalize_candidate_gene_table(self, frame: pd.DataFrame | None) -> pd.DataFrame:
         if frame is None or frame.empty:
@@ -1370,7 +2143,7 @@ class ProjectService:
             self._mark_module_state(
                 "cross_comparison_as_interactions",
                 "not_run",
-                "Missing input: no enabled comparison pair is selected for 5.4.4.",
+                "Missing input: no enabled comparison pair is selected for 5.4.3.",
             )
             return self._empty_cross_as_interaction_tables()
 
@@ -1383,7 +2156,7 @@ class ProjectService:
             self._mark_module_state(
                 "cross_comparison_as_interactions",
                 "cache_hit",
-                "Loaded cached 5.4.4 cross-comparison AS interaction modeling tables.",
+                "Loaded cached 5.4.3 cross-comparison AS interaction modeling tables.",
                 from_cache=True,
                 output_folder=str(self.cross_comparison_interaction_output_dir(pair.pair_id) or ""),
             )
@@ -1393,7 +2166,7 @@ class ProjectService:
             self._mark_module_state(
                 "cross_comparison_as_interactions",
                 "not_run",
-                "Not run. Click 'Apply / Recalculate' to build 5.4.4 for the selected comparison pair.",
+                "Not run. Click 'Apply / Recalculate' to build 5.4.3 for the selected comparison pair.",
             )
             return self._empty_cross_as_interaction_tables()
 
@@ -1407,7 +2180,7 @@ class ProjectService:
         self._mark_module_state(
             "cross_comparison_as_interactions",
             "finished",
-            "Built 5.4.4 cross-comparison AS interaction modeling tables.",
+            "Built 5.4.3 cross-comparison AS interaction modeling tables.",
             from_cache=False,
             output_folder=str(self.cross_comparison_interaction_output_dir(pair.pair_id) or ""),
         )
@@ -1430,7 +2203,7 @@ class ProjectService:
             self._mark_module_state(
                 "cross_comparison_as_interactions",
                 "not_run",
-                "Missing input: at least two selected comparisons are required for all-pair 5.4.4 batch summary.",
+                "Missing input: at least two selected comparisons are required for all-pair 5.4.3 batch summary.",
             )
             return self._empty_cross_as_interaction_batch_tables()
 
@@ -1444,7 +2217,7 @@ class ProjectService:
             self._mark_module_state(
                 "cross_comparison_as_interactions",
                 "cache_hit",
-                "Loaded cached all-pair 5.4.4 AS interaction batch summary.",
+                "Loaded cached all-pair 5.4.3 AS interaction batch summary.",
                 from_cache=True,
                 output_folder=str(self.cross_comparison_interaction_batch_output_dir() or ""),
             )
@@ -1454,7 +2227,7 @@ class ProjectService:
             self._mark_module_state(
                 "cross_comparison_as_interactions",
                 "not_run",
-                "Not run. Select an all-pair 5.4.4 view and click 'Apply / Recalculate' to build the batch summary.",
+                "Not run. Select an all-pair 5.4.3 view and click 'Apply / Recalculate' to build the batch summary.",
             )
             return self._empty_cross_as_interaction_batch_tables()
 
@@ -1530,11 +2303,25 @@ class ProjectService:
                     "n_opposite_direction": len(tables.get("opposite_direction", pd.DataFrame())),
                     "n_same_direction_large_delta": len(tables.get("large_delta", pd.DataFrame())),
                     "n_exclusive": len(exclusive),
+                    "n_exclusive_A": int(exclusive.get("exclusive_side", pd.Series(dtype="object")).astype(str).eq("comparison_A_only").sum()) if not exclusive.empty else 0,
+                    "n_exclusive_B": int(exclusive.get("exclusive_side", pd.Series(dtype="object")).astype(str).eq("comparison_B_only").sum()) if not exclusive.empty else 0,
                     "n_exclusive_supported": int(
                         exclusive.get("non_significant_side_read_support", pd.Series(dtype="object"))
                         .astype(str)
                         .str.startswith("supported_")
                         .sum()
+                    ) if not exclusive.empty else 0,
+                    "n_exclusive_A_supported": int(
+                        (
+                            exclusive.get("exclusive_side", pd.Series(dtype="object")).astype(str).eq("comparison_A_only")
+                            & exclusive.get("non_significant_side_read_support", pd.Series(dtype="object")).astype(str).str.startswith("supported_")
+                        ).sum()
+                    ) if not exclusive.empty else 0,
+                    "n_exclusive_B_supported": int(
+                        (
+                            exclusive.get("exclusive_side", pd.Series(dtype="object")).astype(str).eq("comparison_B_only")
+                            & exclusive.get("non_significant_side_read_support", pd.Series(dtype="object")).astype(str).str.startswith("supported_")
+                        ).sum()
                     ) if not exclusive.empty else 0,
                     "n_exclusive_low_power": int(
                         exclusive.get("non_significant_side_read_support", pd.Series(dtype="object"))
@@ -1572,7 +2359,7 @@ class ProjectService:
         self._mark_module_state(
             "cross_comparison_as_interactions",
             "finished",
-            "Built all-pair 5.4.4 AS interaction batch summary.",
+            "Built all-pair 5.4.3 AS interaction batch summary.",
             from_cache=False,
             output_folder=str(self.cross_comparison_interaction_batch_output_dir() or ""),
         )
@@ -1721,8 +2508,36 @@ class ProjectService:
     def update_output_root(self, output_root: str | Path) -> None:
         if self.current_project is None:
             raise RuntimeError("No project loaded.")
-        self.current_project.output_root = Path(output_root).expanduser()
+        self.current_project.output_root = self.output_directories.require(output_root)
+        self._artifact_registry = None
         self.save_project_config()
+
+    def can_migrate_current_output_root(self) -> bool:
+        return bool(
+            self.current_project is not None
+            and self.output_directories.is_recognized_output_root(self.current_project.output_root)
+        )
+
+    def migrate_output_root(
+        self,
+        output_root: str | Path,
+        *,
+        remove_source: bool = True,
+    ) -> OutputMigrationResult:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        source = self.current_project.output_root
+        if source is None:
+            raise RuntimeError("The current project has no existing output directory to migrate.")
+        result = self.output_directories.migrate(
+            source,
+            output_root,
+            remove_source=remove_source,
+        )
+        self.current_project.output_root = result.destination
+        self._artifact_registry = None
+        self.save_project_config()
+        return result
 
     def update_input_path(self, key: str, value: str | Path | None) -> None:
         if self.current_project is None:
@@ -1877,7 +2692,7 @@ class ProjectService:
     def run_native_sashimi_pipeline(self, manifest: pd.DataFrame | None = None) -> str:
         if self.current_project is None:
             raise RuntimeError("No project loaded.")
-        output_root = self.current_project.output_root or (self.current_project.project_root / "katana_output")
+        output_root = self.require_output_root()
         active_manifest = manifest.copy() if manifest is not None else self.run_state.results.sashimi_manifest.copy()
         if active_manifest.empty:
             raise RuntimeError("No selected sashimi manifest is available. Please select events and generate the manifest first.")
@@ -2160,7 +2975,7 @@ class ProjectService:
     def build_jutils_manifest_preview(self) -> pd.DataFrame:
         if self.current_project is None:
             raise RuntimeError("No project loaded.")
-        output_root = self.current_project.output_root or (self.current_project.project_root / "katana_output")
+        output_root = self.require_output_root()
         converted_root = output_root / "08_jutils" / "converted"
         comparison_names = [comparison.resolved_name for comparison in self._selected_comparisons()]
         return self.jutils_adapter.build_tsv_list_frame(comparison_names, converted_root)
@@ -2179,7 +2994,7 @@ class ProjectService:
             and report.get("status") in {"idle", "not_run", ""}
             and not report.get("generated_files")
         ):
-            output_root = self.current_project.output_root or (self.current_project.project_root / "katana_output")
+            output_root = self.require_output_root()
             base = output_root / "08_jutils"
             if base.exists():
                 browser = self.build_jutils_output_browser()
@@ -2192,7 +3007,7 @@ class ProjectService:
     def build_jutils_output_browser(self) -> pd.DataFrame:
         if self.current_project is None:
             raise RuntimeError("No project loaded.")
-        output_root = self.current_project.output_root or (self.current_project.project_root / "katana_output")
+        output_root = self.require_output_root()
         base = output_root / "08_jutils"
         if not base.exists():
             return pd.DataFrame(
@@ -2237,6 +3052,1685 @@ class ProjectService:
                 }
             )
         return pd.DataFrame(rows)
+
+    def native_jutils_report(self, mode: str = "pattern") -> dict[str, object]:
+        report = dict(self._last_native_jutils_report)
+        if str(report.get("mode", "")) != str(mode):
+            report = {
+                "status": "idle",
+                "mode": mode,
+                "output_directory": "",
+                "generated_files": [],
+                "stdout": "",
+                "stderr": "",
+                "error_log": "",
+            }
+        report.setdefault("status", "idle")
+        report.setdefault("mode", mode)
+        report.setdefault("output_directory", "")
+        report.setdefault("generated_files", [])
+        report.setdefault("stdout", "")
+        report.setdefault("stderr", "")
+        report.setdefault("error_log", "")
+        if (
+            self.current_project is not None
+            and report.get("status") in {"idle", "not_run", ""}
+            and not report.get("generated_files")
+        ):
+            browser = self.build_native_jutils_output_browser(mode)
+            if not browser.empty:
+                output_root = self.require_output_root()
+                base = output_root / "06_native_splicing_patterns" / ("candidate_gene_heatmap" if mode == "candidate" else "pattern_explorer")
+                report["status"] = "cache_hit"
+                report["mode"] = mode
+                report["output_directory"] = str(base)
+                report["generated_files"] = browser.to_dict("records")
+        return report
+
+    def native_pattern_summary(self, mode: str = "pattern") -> dict[str, object]:
+        base = self._native_jutils_output_dir(mode)
+        summary: dict[str, object] = {
+            "status": "not_run",
+            "comparison_count": 0,
+            "event_count": 0,
+            "sample_count": 0,
+            "pattern_cluster_count": 0,
+            "pair_count": 0,
+            "median_direction_similarity": float("nan"),
+            "median_weighted_cosine_similarity": float("nan"),
+            "low_confidence_pair_count": 0,
+            "output_directory": str(base),
+        }
+        parameters_path = base / "parameters.json"
+        if not parameters_path.exists() or not self._native_jutils_cache_schema_matches(base):
+            return summary
+        try:
+            parameters = json.loads(parameters_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return summary
+        summary["status"] = "cache_hit"
+        summary["comparison_count"] = len(parameters.get("comparison_ids", []) or [])
+
+        cached_summary = self._read_table_or_empty(base / "native_pattern_summary.tsv")
+        if not cached_summary.empty:
+            row = cached_summary.iloc[0].to_dict()
+            for key in summary:
+                if key in row and key not in {"status", "output_directory"}:
+                    summary[key] = row[key]
+            return summary
+
+        def read_table(name: str) -> pd.DataFrame:
+            return self._read_table_or_empty(base / name)
+
+        events = read_table("unified_as_event_table.tsv")
+        psi = read_table("sample_level_psi_matrix.tsv")
+        clusters = read_table("psi_pattern_cluster_summary.tsv")
+        similarity = read_table("pairwise_as_similarity.tsv")
+        summary["event_count"] = int(len(events))
+        summary["sample_count"] = max(int(psi.shape[1] - 1), 0) if not psi.empty else 0
+        summary["pattern_cluster_count"] = int(len(clusters))
+        summary["pair_count"] = int(len(similarity))
+        if not similarity.empty:
+            direction = pd.to_numeric(similarity.get("direction_similarity"), errors="coerce")
+            cosine = pd.to_numeric(similarity.get("weighted_cosine_similarity"), errors="coerce")
+            summary["median_direction_similarity"] = float(direction.median()) if direction.notna().any() else float("nan")
+            summary["median_weighted_cosine_similarity"] = float(cosine.median()) if cosine.notna().any() else float("nan")
+            confidence = similarity.get("similarity_confidence", pd.Series("", index=similarity.index)).astype(str)
+            summary["low_confidence_pair_count"] = int(confidence.str.contains("low|no_shared", case=False, regex=True).sum())
+        return summary
+
+    def _register_native_pattern_outputs(
+        self,
+        *,
+        mode: str,
+        generated: list[Path],
+        comparison_ids: tuple[str, ...],
+        parameters: dict[str, object],
+    ) -> None:
+        module_id = "5.3.5" if mode == "candidate" else "5.6"
+        source_artifact_ids: list[str] = []
+        if mode == "candidate":
+            for comparison_id in comparison_ids:
+                selection = self.artifact_registry().find(
+                    module_id="5.3.2",
+                    artifact_key="candidate_gene_selection",
+                    scope_id=comparison_id,
+                )
+                if selection:
+                    source_artifact_ids.append(selection[0].artifact_id)
+        for path in generated:
+            suffix = path.suffix.lower()
+            kind = (
+                "plot"
+                if suffix in {".png", ".jpg", ".jpeg", ".svg", ".pdf"}
+                else "table"
+                if suffix in {".tsv", ".csv", ".xlsx"}
+                else "parameters"
+                if suffix == ".json"
+                else "report"
+                if suffix in {".html", ".htm"}
+                else "other"
+            )
+            entity_type = (
+                "event"
+                if "event" in path.name.lower() or "psi" in path.name.lower() or "dpsi" in path.name.lower()
+                else "analysis"
+            )
+            self.artifact_registry().register(
+                module_id=module_id,
+                artifact_key=path.relative_to(self._native_jutils_output_dir(mode)).as_posix(),
+                kind=kind,
+                entity_type=entity_type,
+                path=path,
+                scope="comparison_set",
+                scope_id="|".join(comparison_ids) or "project",
+                comparison_ids=comparison_ids,
+                source_artifact_ids=source_artifact_ids,
+                consumer_modules=["5.6.4", "9"] if mode == "pattern" else ["5.3.4", "5.5"],
+                description=(
+                    "Candidate-selected splicing pattern artifact."
+                    if mode == "candidate"
+                    else "Global selected-comparison splicing pattern artifact."
+                ),
+                parameters=parameters,
+            )
+
+    def build_native_jutils_output_browser(self, mode: str = "pattern") -> pd.DataFrame:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        output_root = self.require_output_root()
+        base = output_root / "06_native_splicing_patterns" / ("candidate_gene_heatmap" if mode == "candidate" else "pattern_explorer")
+        columns = [
+            "result_group",
+            "preview_priority",
+            "comparison_id",
+            "relative_path",
+            "absolute_path",
+            "file_type",
+            "file_size",
+            "last_modified",
+            "preview_kind",
+            "previewable",
+        ]
+        if not base.exists():
+            return pd.DataFrame(columns=columns)
+        if not self._native_jutils_cache_schema_matches(base):
+            return pd.DataFrame(columns=columns)
+        rows: list[dict[str, object]] = []
+        for path in sorted(base.rglob("*")):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(base)
+            stat = path.stat()
+            suffix = path.suffix.lower()
+            preview_kind = self._preview_kind_for_path(path)
+            result_group, preview_priority = self._native_jutils_browser_priority(str(rel).replace("\\", "/"), mode)
+            comparison_scope = self._native_jutils_browser_scope(str(rel).replace("\\", "/"))
+            rows.append(
+                {
+                    "result_group": result_group,
+                    "preview_priority": preview_priority,
+                    "comparison_id": comparison_scope,
+                    "relative_path": str(rel),
+                    "absolute_path": str(path),
+                    "file_type": suffix.lstrip(".") or "file",
+                    "file_size": stat.st_size,
+                    "last_modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+                    "preview_kind": preview_kind,
+                    "previewable": preview_kind != "binary",
+                }
+            )
+        if not rows:
+            return pd.DataFrame(columns=columns)
+        frame = pd.DataFrame(rows, columns=columns)
+        return frame.sort_values(["preview_priority", "relative_path"], ascending=[True, True]).reset_index(drop=True)
+
+    @staticmethod
+    def _native_jutils_browser_scope(relative_path: str) -> str:
+        normalized = relative_path.replace("\\", "/")
+        parts = normalized.split("/")
+        if len(parts) >= 3 and parts[0] == "plots" and parts[1] == "per_comparison":
+            stem = Path(parts[-1]).stem
+            for suffix in (
+                "_sample_psi_heatmap_clustered",
+                "_sample_psi_heatmap",
+                "_sample_psi_pca",
+            ):
+                if stem.endswith(suffix):
+                    stem = stem[: -len(suffix)]
+                    break
+            return f"per_comparison:{stem}"
+        return "cross_comparison"
+
+    @staticmethod
+    def _native_jutils_browser_priority(relative_path: str, mode: str) -> tuple[str, int]:
+        path = relative_path.lower()
+        if mode == "candidate":
+            priorities = [
+                ("plots/native_candidate_gene_as_summary_heatmap.png", "1. Candidate gene AS summary", 0),
+                ("candidate_gene_as_summary.tsv", "1. Candidate gene AS summary", 1),
+                ("candidate_gene_as_matrix.tsv", "1. Candidate gene AS summary", 2),
+                ("plots/per_comparison/", "2. Per-comparison sample PSI", 20),
+                ("plots/native_as_dpsi_pattern_heatmap.png", "3. Candidate event dPSI", 30),
+                ("dpsi_matrix.tsv", "3. Candidate event dPSI", 31),
+            ]
+        else:
+            priorities = [
+                ("plots/per_comparison/", "1. Per-comparison PSI heatmap / PCA", 0),
+                ("per_comparison_sample_psi_pca.tsv", "1. Per-comparison PSI heatmap / PCA", 1),
+                ("plots/native_sample_level_psi_heatmap.png", "2. Absolute sample PSI heatmap", 20),
+                ("sample_level_psi_matrix.tsv", "2. Absolute sample PSI heatmap", 21),
+                ("plots/native_sample_level_psi_zscore_heatmap.png", "3. Z-score PSI heatmap / pattern clusters", 30),
+                ("plots/native_sample_psi_pattern_clusters.png", "3. Z-score PSI heatmap / pattern clusters", 31),
+                ("psi_pattern_clusters.tsv", "3. Z-score PSI heatmap / pattern clusters", 32),
+                ("psi_pattern_cluster_summary.tsv", "3. Z-score PSI heatmap / pattern clusters", 33),
+                ("plots/native_sample_psi_pca.png", "4. Sample PSI PCA / replicate QC", 40),
+                ("sample_psi_pca.tsv", "4. Sample PSI PCA / replicate QC", 41),
+                ("plots/native_replicate_group_separation.png", "4. Sample PSI PCA / replicate QC", 42),
+                ("replicate_group_separation.tsv", "4. Sample PSI PCA / replicate QC", 43),
+                ("plots/native_sample_psi_similarity_heatmap.png", "5. Sample PSI similarity + denominator", 50),
+                ("plots/native_sample_psi_shared_event_counts.png", "5. Sample PSI similarity + denominator", 51),
+                ("sample_psi_similarity.tsv", "5. Sample PSI similarity + denominator", 52),
+                ("sample_psi_spearman_matrix.tsv", "5. Sample PSI similarity + denominator", 53),
+                ("sample_psi_shared_event_count_matrix.tsv", "5. Sample PSI similarity + denominator", 54),
+                ("plots/native_as_similarity_heatmap.png", "6. Comparison significant-event overlap", 60),
+                ("plots/native_as_direction_similarity_heatmap.png", "6. Comparison significant-event overlap", 61),
+                ("pairwise_as_similarity.tsv", "6. Comparison significant-event overlap", 62),
+                ("plots/native_as_dpsi_pattern_heatmap.png", "7. Cross-comparison dPSI audit", 70),
+                ("dpsi_matrix.tsv", "7. Cross-comparison dPSI audit", 71),
+            ]
+        for marker, group, priority in priorities:
+            if path.endswith(marker) or marker.endswith("/") and marker in path:
+                return group, priority
+        if path.endswith("parameters.json"):
+            return "9. Parameters / reproducibility", 900
+        if path.endswith(".tsv"):
+            return "8. Source tables", 800
+        return "8. Other outputs", 850
+
+    def run_native_jutils_pattern_explorer(
+        self,
+        *,
+        fdr_cutoff: float = 0.05,
+        abs_dpsi_cutoff: float = 0.05,
+        top_events: int = 100,
+        selection_mode: str = "supervised",
+    ) -> dict[str, pd.DataFrame]:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        comparisons = self._selected_comparisons()
+        comparison_ids = tuple(comparison.comparison_id for comparison in comparisons)
+        selection_mode = "unsupervised" if str(selection_mode).lower().startswith("unsupervised") else "supervised"
+        cache_key = (
+            self.NATIVE_PATTERN_SCHEMA_VERSION,
+            "pattern",
+            comparison_ids,
+            float(fdr_cutoff),
+            float(abs_dpsi_cutoff),
+            str(top_events),
+            selection_mode,
+        )
+        self._log_heavy("native Jutils pattern explorer rebuild started")
+        tables = self._build_native_jutils_tables(
+            comparisons,
+            fdr_cutoff=fdr_cutoff,
+            abs_dpsi_cutoff=abs_dpsi_cutoff,
+            top_events=top_events,
+            selection_mode=selection_mode,
+            gene_filter=None,
+        )
+        tables["native_pattern_summary"] = self._native_pattern_summary_table(
+            tables,
+            comparison_ids=comparison_ids,
+            fdr_cutoff=fdr_cutoff,
+            abs_dpsi_cutoff=abs_dpsi_cutoff,
+            top_events=top_events,
+            selection_mode=selection_mode,
+        )
+        self._native_jutils_cache[cache_key] = {key: value.copy() for key, value in tables.items()}
+        base = self._native_jutils_output_dir("pattern")
+        output_parameters = {
+            "mode": "pattern_explorer",
+            "analysis_schema_version": self.NATIVE_PATTERN_SCHEMA_VERSION,
+            "description": "Native selected-comparison AS pattern overview. Support-prioritization only; not a causal model.",
+            "fdr_cutoff": fdr_cutoff,
+            "abs_dpsi_cutoff": abs_dpsi_cutoff,
+            "top_events": top_events,
+            "selection_mode": selection_mode,
+            "comparison_ids": list(comparison_ids),
+            "heatmap_row_order": "hierarchical row clustering with weighted linkage and cityblock distance when scipy is available; deterministic signal ordering fallback",
+            "heatmap_column_order": "biological sample order for the absolute PSI matrix; clustered views may reorder samples by PSI similarity",
+            "pca_method": "SVD PCA on the event x biological-sample PSI matrix after feature standardization and mean imputation",
+            "cluster_method": "weighted-linkage hierarchical clustering on row-z-scored sample/replicate PSI trajectories",
+            "similarity_rule": "sample PSI Spearman correlation is always reported with the shared measured-event count; significant-event overlap and direction agreement are separate comparison-level metrics",
+        }
+        generated = self._write_native_jutils_outputs(
+            base,
+            tables,
+            output_parameters,
+        )
+        self._register_native_pattern_outputs(
+            mode="pattern",
+            generated=generated,
+            comparison_ids=comparison_ids,
+            parameters=output_parameters,
+        )
+        browser = self.build_native_jutils_output_browser("pattern")
+        self._last_native_jutils_report = {
+            "status": "finished",
+            "mode": "pattern",
+            "output_directory": str(base),
+            "generated_files": browser.to_dict("records"),
+            "stdout": "\n".join(str(path) for path in generated),
+            "stderr": "",
+            "error_log": "",
+        }
+        return tables
+
+    def run_native_jutils_candidate_gene_heatmap(
+        self,
+        *,
+        gene_text: str = "",
+        fdr_cutoff: float = 0.05,
+        abs_dpsi_cutoff: float = 0.05,
+        top_events: int = 100,
+        selection_mode: str = "supervised",
+    ) -> dict[str, pd.DataFrame]:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        comparisons = self._selected_comparisons()
+        gene_map = self._native_jutils_gene_filter_map(gene_text, comparisons)
+        genes = set(gene_map)
+        if not genes:
+            raise RuntimeError("No candidate genes provided or selected. Enter gene symbols/IDs or run 5.3.2 candidate selection first.")
+        comparison_ids = tuple(comparison.comparison_id for comparison in comparisons)
+        selection_mode = "unsupervised" if str(selection_mode).lower().startswith("unsupervised") else "supervised"
+        cache_key = (
+            self.NATIVE_PATTERN_SCHEMA_VERSION,
+            "candidate",
+            comparison_ids,
+            float(fdr_cutoff),
+            float(abs_dpsi_cutoff),
+            str(top_events),
+            selection_mode,
+            "|".join(sorted(genes)),
+        )
+        self._log_heavy("native Jutils candidate gene AS heatmap rebuild started")
+        tables = self._build_native_jutils_tables(
+            comparisons,
+            fdr_cutoff=fdr_cutoff,
+            abs_dpsi_cutoff=abs_dpsi_cutoff,
+            top_events=top_events,
+            selection_mode=selection_mode,
+            gene_filter=genes,
+            gene_filter_display=gene_map,
+        )
+        tables["native_pattern_summary"] = self._native_pattern_summary_table(
+            tables,
+            comparison_ids=comparison_ids,
+            fdr_cutoff=fdr_cutoff,
+            abs_dpsi_cutoff=abs_dpsi_cutoff,
+            top_events=top_events,
+            selection_mode=selection_mode,
+        )
+        self._native_jutils_cache[cache_key] = {key: value.copy() for key, value in tables.items()}
+        base = self._native_jutils_output_dir("candidate")
+        output_parameters = {
+            "mode": "candidate_gene_as_heatmap",
+            "analysis_schema_version": self.NATIVE_PATTERN_SCHEMA_VERSION,
+            "description": "Native candidate-gene AS heatmap. Uses selected genes only; not part of global AS pattern overview.",
+            "fdr_cutoff": fdr_cutoff,
+            "abs_dpsi_cutoff": abs_dpsi_cutoff,
+            "top_events": top_events,
+            "selection_mode": selection_mode,
+            "genes": list(gene_map.values()),
+            "comparison_ids": list(comparison_ids),
+            "heatmap_row_order": "hierarchical row clustering with weighted linkage and cityblock distance when scipy is available; deterministic signal ordering fallback",
+            "heatmap_column_order": "biological sample order for the absolute PSI matrix; clustered views may reorder samples by PSI similarity",
+            "pca_method": "SVD PCA on the event x biological-sample PSI matrix after feature standardization and mean imputation",
+            "cluster_method": "weighted-linkage hierarchical clustering on row-z-scored sample/replicate PSI trajectories",
+            "similarity_rule": "sample PSI Spearman correlation is always reported with the shared measured-event count; significant-event overlap and direction agreement are separate comparison-level metrics",
+        }
+        generated = self._write_native_jutils_outputs(
+            base,
+            tables,
+            output_parameters,
+        )
+        self._register_native_pattern_outputs(
+            mode="candidate",
+            generated=generated,
+            comparison_ids=comparison_ids,
+            parameters=output_parameters,
+        )
+        browser = self.build_native_jutils_output_browser("candidate")
+        self._last_native_jutils_report = {
+            "status": "finished",
+            "mode": "candidate",
+            "output_directory": str(base),
+            "generated_files": browser.to_dict("records"),
+            "stdout": "\n".join(str(path) for path in generated),
+            "stderr": "",
+            "error_log": "",
+        }
+        return tables
+
+    def _native_jutils_output_dir(self, mode: str) -> Path:
+        if self.current_project is None:
+            raise RuntimeError("No project loaded.")
+        output_root = self.require_output_root()
+        return output_root / "06_native_splicing_patterns" / ("candidate_gene_heatmap" if mode == "candidate" else "pattern_explorer")
+
+    @staticmethod
+    def _native_pattern_summary_table(
+        tables: dict[str, pd.DataFrame],
+        *,
+        comparison_ids: tuple[str, ...],
+        fdr_cutoff: float,
+        abs_dpsi_cutoff: float,
+        top_events: int,
+        selection_mode: str,
+    ) -> pd.DataFrame:
+        events = tables.get("unified_as_event_table", pd.DataFrame())
+        psi = tables.get("sample_level_psi_matrix", pd.DataFrame())
+        clusters = tables.get("psi_pattern_cluster_summary", pd.DataFrame())
+        similarity = tables.get("pairwise_as_similarity", pd.DataFrame())
+        direction = pd.to_numeric(
+            similarity.get(
+                "direction_similarity",
+                pd.Series(float("nan"), index=similarity.index, dtype="float64"),
+            ),
+            errors="coerce",
+        )
+        cosine = pd.to_numeric(
+            similarity.get(
+                "weighted_cosine_similarity",
+                pd.Series(float("nan"), index=similarity.index, dtype="float64"),
+            ),
+            errors="coerce",
+        )
+        confidence = similarity.get(
+            "similarity_confidence",
+            pd.Series("", index=similarity.index, dtype="object"),
+        ).astype(str)
+        measured_pairs = int(len(similarity))
+        low_confidence_pairs = int(confidence.str.contains("low|no_shared", case=False, regex=True).sum())
+        interpretation = (
+            "No comparison-pair similarity could be estimated."
+            if measured_pairs == 0
+            else (
+                f"{low_confidence_pairs} of {measured_pairs} comparison pairs have low or insufficient shared-event "
+                "support; interpret similarity together with its measured-event denominator."
+            )
+        )
+        return pd.DataFrame(
+            [
+                {
+                    "comparison_count": len(comparison_ids),
+                    "comparison_ids": "|".join(comparison_ids),
+                    "event_count": int(len(events)),
+                    "sample_count": max(int(psi.shape[1] - 1), 0) if not psi.empty else 0,
+                    "pattern_cluster_count": int(len(clusters)),
+                    "pair_count": measured_pairs,
+                    "median_direction_similarity": (
+                        float(direction.median()) if direction.notna().any() else float("nan")
+                    ),
+                    "median_weighted_cosine_similarity": (
+                        float(cosine.median()) if cosine.notna().any() else float("nan")
+                    ),
+                    "low_confidence_pair_count": low_confidence_pairs,
+                    "fdr_cutoff_used": float(fdr_cutoff),
+                    "abs_dpsi_cutoff_used": float(abs_dpsi_cutoff),
+                    "top_events_per_comparison": int(top_events),
+                    "selection_mode": str(selection_mode),
+                    "interpretation": interpretation,
+                    "scientific_scope": (
+                        "Descriptive sample-PSI pattern, replicate QC and comparison-similarity analysis; "
+                        "not a causal regulator model."
+                    ),
+                }
+            ]
+        )
+
+    def _native_jutils_cache_schema_matches(self, base: Path) -> bool:
+        parameters_path = base / "parameters.json"
+        if not parameters_path.exists():
+            return False
+        try:
+            payload = json.loads(parameters_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            return False
+        return str(payload.get("analysis_schema_version", "")) == self.NATIVE_PATTERN_SCHEMA_VERSION
+
+    def _native_jutils_gene_filter_map(self, gene_text: str, comparisons: list) -> dict[str, str]:
+        tokens: dict[str, str] = {}
+        for token in re.split(r"[\s,;]+", gene_text or ""):
+            value = token.strip()
+            if not value:
+                continue
+            tokens.setdefault(value.casefold(), value)
+        if tokens:
+            return tokens
+        selected: dict[str, str] = {}
+        for comparison in comparisons:
+            selection, _meta = self.downstream_gene_selection(
+                comparison.comparison_id,
+                consumer_module="5.3.5",
+            )
+            values = selection.get(
+                "gene_symbol",
+                selection.get("gene_id", pd.Series(dtype="object")),
+            ).dropna().astype(str).tolist()
+            for token in values:
+                value = str(token or "").strip()
+                if value:
+                    selected.setdefault(value.casefold(), value)
+        return selected
+
+    def _native_jutils_gene_filter(self, gene_text: str, comparisons: list) -> set[str]:
+        return set(self._native_jutils_gene_filter_map(gene_text, comparisons))
+
+    def _build_native_jutils_tables(
+        self,
+        comparisons: list,
+        *,
+        fdr_cutoff: float,
+        abs_dpsi_cutoff: float,
+        top_events: int,
+        selection_mode: str,
+        gene_filter: set[str] | None,
+        gene_filter_display: dict[str, str] | None = None,
+    ) -> dict[str, pd.DataFrame]:
+        event_rows: list[dict[str, object]] = []
+        psi_rows: list[dict[str, object]] = []
+        annotation_lookup = self._annotation_gene_symbol_lookup()
+        sample_ids_by_group = self._native_jutils_sample_ids_by_group()
+        mode = self.current_project.selected_rmats_mode if self.current_project else "JC"
+        for comparison in comparisons:
+            group1_label, group2_label = self._comparison_splicing_direction_labels(comparison)
+            display_name = comparison.display_resolved_name
+            for event_type in EVENT_TYPES:
+                source_path = self._resolve_rmats_event_table_path(comparison, event_type, mode or "JC")
+                if source_path is None or not source_path.exists():
+                    continue
+                try:
+                    frame = pd.read_csv(source_path, sep="\t", low_memory=False)
+                except Exception:
+                    continue
+                if frame.empty:
+                    continue
+                gene_ids = self._normalized_gene_id_series(frame)
+                if "geneSymbol" in frame.columns:
+                    gene_symbols = frame["geneSymbol"].astype("object")
+                elif "gene_symbol" in frame.columns:
+                    gene_symbols = frame["gene_symbol"].astype("object")
+                else:
+                    gene_symbols = gene_ids.map(annotation_lookup)
+                gene_symbols = gene_symbols.fillna(gene_ids)
+                if gene_filter is not None:
+                    symbol_keys = gene_symbols.astype(str).str.casefold()
+                    gene_id_keys = gene_ids.astype(str).str.casefold()
+                    keep_mask = symbol_keys.isin(gene_filter) | gene_id_keys.isin(gene_filter)
+                    if not bool(keep_mask.any()):
+                        continue
+                    frame = frame.loc[keep_mask].copy()
+                    gene_ids = gene_ids.loc[frame.index]
+                    gene_symbols = gene_symbols.loc[frame.index]
+                fdr_values = pd.to_numeric(frame["FDR"] if "FDR" in frame.columns else frame.get("fdr"), errors="coerce")
+                dpsi_values = pd.to_numeric(
+                    frame["IncLevelDifference"] if "IncLevelDifference" in frame.columns else frame.get("dPSI"),
+                    errors="coerce",
+                )
+                if comparison.reverse_splicing:
+                    dpsi_values = -dpsi_values
+                supervised = str(selection_mode).lower() != "unsupervised"
+                if supervised:
+                    significant_mask = fdr_values.notna() & dpsi_values.notna() & (fdr_values <= fdr_cutoff) & (dpsi_values.abs() >= abs_dpsi_cutoff)
+                    if not bool(significant_mask.any()):
+                        continue
+                    frame = frame.loc[significant_mask].copy()
+                    gene_ids = gene_ids.loc[frame.index]
+                    gene_symbols = gene_symbols.loc[frame.index]
+                    fdr_values = fdr_values.loc[frame.index]
+                    dpsi_values = dpsi_values.loc[frame.index]
+                event_ids = frame.apply(lambda row: event_uid_from_row(row, event_type), axis=1)
+                for idx, row in frame.iterrows():
+                    gene_id = str(gene_ids.loc[idx] or "").strip()
+                    gene_symbol = str(gene_symbols.loc[idx] or gene_id).strip()
+                    if gene_filter is not None:
+                        if gene_symbol.casefold() not in gene_filter and gene_id.casefold() not in gene_filter:
+                            continue
+                    fdr = fdr_values.loc[idx]
+                    dpsi = dpsi_values.loc[idx]
+                    significant = bool(pd.notna(fdr) and pd.notna(dpsi) and float(fdr) <= fdr_cutoff and abs(float(dpsi)) >= abs_dpsi_cutoff)
+                    if supervised and not significant:
+                        continue
+                    event_id = str(event_ids.loc[idx])
+                    matching_key = f"{gene_symbol}|{event_type}|{event_id}"
+                    psi_1 = self._parse_float_list(row.get("IncLevel1"))
+                    psi_2 = self._parse_float_list(row.get("IncLevel2"))
+                    ijc_1 = self._parse_float_list(row.get("IJC_SAMPLE_1"))
+                    ijc_2 = self._parse_float_list(row.get("IJC_SAMPLE_2"))
+                    sjc_1 = self._parse_float_list(row.get("SJC_SAMPLE_1"))
+                    sjc_2 = self._parse_float_list(row.get("SJC_SAMPLE_2"))
+                    if comparison.reverse_splicing:
+                        psi_1, psi_2 = psi_2, psi_1
+                        ijc_1, ijc_2 = ijc_2, ijc_1
+                        sjc_1, sjc_2 = sjc_2, sjc_1
+                    psi_1_mean = float(np.nanmean(psi_1)) if psi_1 else float("nan")
+                    psi_2_mean = float(np.nanmean(psi_2)) if psi_2 else float("nan")
+                    event_rows.append(
+                        {
+                            "comparison_id": comparison.comparison_id,
+                            "comparison_display_name": display_name,
+                            "gene_symbol": gene_symbol,
+                            "gene_id": gene_id,
+                            "event_type": event_type,
+                            "event_id": event_id,
+                            "event_matching_key": matching_key,
+                            "FDR": fdr,
+                            "dPSI": dpsi,
+                            "abs_dPSI": abs(float(dpsi)) if pd.notna(dpsi) else float("nan"),
+                            "significant": significant,
+                            "direction": "positive" if pd.notna(dpsi) and float(dpsi) > 0 else "negative" if pd.notna(dpsi) and float(dpsi) < 0 else "zero",
+                            "psi_group1_mean": psi_1_mean,
+                            "psi_group2_mean": psi_2_mean,
+                            "group1_label": group1_label,
+                            "group2_label": group2_label,
+                            "coordinates": self._rmats_event_coordinates(row, event_type),
+                            "splicing_direction_flipped": bool(comparison.reverse_splicing),
+                            "fdr_cutoff_used": fdr_cutoff,
+                            "abs_dpsi_cutoff_used": abs_dpsi_cutoff,
+                            "native_jutils_selection_mode": selection_mode,
+                        }
+                    )
+                    max_len = max(len(psi_1), len(psi_2), len(ijc_1), len(ijc_2), len(sjc_1), len(sjc_2))
+                    for sample_idx in range(max_len):
+                        if sample_idx < len(psi_1):
+                            psi_rows.append(
+                                {
+                                    "comparison_id": comparison.comparison_id,
+                                    "comparison_display_name": display_name,
+                                    "event_matching_key": matching_key,
+                                    "event_id": event_id,
+                                    "gene_symbol": gene_symbol,
+                                    "event_type": event_type,
+                                    "sample_id": f"{comparison.comparison_id}:{group1_label}:rep{sample_idx + 1}",
+                                    "biological_sample_id": self._native_jutils_biological_sample_id(
+                                        sample_ids_by_group,
+                                        group1_label,
+                                        sample_idx,
+                                    ),
+                                    "sample_group": group1_label,
+                                    "group_side": "canonical_group1",
+                                    "PSI": psi_1[sample_idx],
+                                    "IJC": ijc_1[sample_idx] if sample_idx < len(ijc_1) else pd.NA,
+                                    "SJC": sjc_1[sample_idx] if sample_idx < len(sjc_1) else pd.NA,
+                                }
+                            )
+                        if sample_idx < len(psi_2):
+                            psi_rows.append(
+                                {
+                                    "comparison_id": comparison.comparison_id,
+                                    "comparison_display_name": display_name,
+                                    "event_matching_key": matching_key,
+                                    "event_id": event_id,
+                                    "gene_symbol": gene_symbol,
+                                    "event_type": event_type,
+                                    "sample_id": f"{comparison.comparison_id}:{group2_label}:rep{sample_idx + 1}",
+                                    "biological_sample_id": self._native_jutils_biological_sample_id(
+                                        sample_ids_by_group,
+                                        group2_label,
+                                        sample_idx,
+                                    ),
+                                    "sample_group": group2_label,
+                                    "group_side": "canonical_group2",
+                                    "PSI": psi_2[sample_idx],
+                                    "IJC": ijc_2[sample_idx] if sample_idx < len(ijc_2) else pd.NA,
+                                    "SJC": sjc_2[sample_idx] if sample_idx < len(sjc_2) else pd.NA,
+                                }
+                            )
+
+        events = pd.DataFrame(event_rows)
+        psi_long = pd.DataFrame(psi_rows)
+        if events.empty:
+            tables = self._empty_native_jutils_tables()
+            if gene_filter:
+                summary, matrix = self._native_jutils_candidate_gene_summary(
+                    events,
+                    gene_filter_display or {key: key for key in sorted(gene_filter)},
+                    comparisons,
+                    fdr_cutoff=fdr_cutoff,
+                    abs_dpsi_cutoff=abs_dpsi_cutoff,
+                )
+                tables["candidate_gene_as_summary"] = summary
+                tables["candidate_gene_as_matrix"] = matrix
+            return tables
+        events = events.sort_values(["significant", "FDR", "abs_dPSI", "event_type", "gene_symbol"], ascending=[False, True, False, True, True], na_position="last")
+        top_n = max(int(top_events), 1)
+        if str(selection_mode).lower() == "unsupervised" and not psi_long.empty:
+            scores = (
+                psi_long.assign(PSI_numeric=pd.to_numeric(psi_long["PSI"], errors="coerce"))
+                .groupby(["comparison_id", "event_matching_key"], dropna=False)["PSI_numeric"]
+                .apply(lambda values: float((values - values.mean()).abs().mean()) if values.notna().any() else float("nan"))
+                .reset_index(name="native_jutils_selection_score")
+            )
+            events = events.merge(scores, on=["comparison_id", "event_matching_key"], how="left")
+            events = events.sort_values(
+                ["native_jutils_selection_score", "abs_dPSI", "FDR", "event_type", "gene_symbol"],
+                ascending=[False, False, True, True, True],
+                na_position="last",
+            )
+        else:
+            events["native_jutils_selection_score"] = pd.to_numeric(events["abs_dPSI"], errors="coerce")
+        events = events.groupby("comparison_id", sort=False, group_keys=False).head(top_n).copy()
+        keep_pairs = set(zip(events["comparison_id"].astype(str), events["event_matching_key"].astype(str)))
+        if not psi_long.empty:
+            psi_long = psi_long.loc[
+                [
+                    (str(row.comparison_id), str(row.event_matching_key)) in keep_pairs
+                    for row in psi_long[["comparison_id", "event_matching_key"]].itertuples(index=False)
+                ]
+            ].copy()
+        dpsi_matrix = self._native_jutils_dpsi_matrix(events)
+        psi_matrix = self._native_jutils_psi_matrix(psi_long)
+        psi_zscore_matrix = row_zscore_matrix(psi_matrix)
+        similarity = self._native_jutils_similarity(events, comparisons)
+        replicate_qc = self._native_jutils_replicate_qc(events)
+        sample_pca = self._native_jutils_sample_pca(psi_matrix, psi_long)
+        per_comparison_sample_pca = self._native_jutils_per_comparison_sample_pca(psi_long)
+        sample_similarity, sample_similarity_matrix, sample_overlap_matrix = sample_similarity_tables(psi_matrix)
+        replicate_separation = replicate_group_separation(psi_long, sample_similarity)
+        pattern_clusters, pattern_cluster_summary = psi_pattern_clusters(psi_matrix, events)
+        tables = {
+            "unified_as_event_table": events.reset_index(drop=True),
+            "sample_level_psi_long": psi_long.reset_index(drop=True),
+            "dpsi_matrix": dpsi_matrix,
+            "sample_level_psi_matrix": psi_matrix,
+            "sample_level_psi_zscore_matrix": psi_zscore_matrix,
+            "pairwise_as_similarity": similarity,
+            "sample_psi_similarity": sample_similarity,
+            "sample_psi_spearman_matrix": sample_similarity_matrix,
+            "sample_psi_shared_event_count_matrix": sample_overlap_matrix,
+            "sample_psi_pca": sample_pca,
+            "per_comparison_sample_psi_pca": per_comparison_sample_pca,
+            "replicate_psi_qc": replicate_qc,
+            "replicate_group_separation": replicate_separation,
+            "psi_pattern_clusters": pattern_clusters,
+            "psi_pattern_cluster_summary": pattern_cluster_summary,
+        }
+        if gene_filter:
+            summary, matrix = self._native_jutils_candidate_gene_summary(
+                events,
+                gene_filter_display or {key: key for key in sorted(gene_filter)},
+                comparisons,
+                fdr_cutoff=fdr_cutoff,
+                abs_dpsi_cutoff=abs_dpsi_cutoff,
+            )
+            tables["candidate_gene_as_summary"] = summary
+            tables["candidate_gene_as_matrix"] = matrix
+        return tables
+
+    def _empty_native_jutils_tables(self) -> dict[str, pd.DataFrame]:
+        return {
+            "unified_as_event_table": pd.DataFrame(),
+            "sample_level_psi_long": pd.DataFrame(),
+            "dpsi_matrix": pd.DataFrame(),
+            "sample_level_psi_matrix": pd.DataFrame(),
+            "sample_level_psi_zscore_matrix": pd.DataFrame(),
+            "pairwise_as_similarity": pd.DataFrame(),
+            "sample_psi_similarity": pd.DataFrame(),
+            "sample_psi_spearman_matrix": pd.DataFrame(),
+            "sample_psi_shared_event_count_matrix": pd.DataFrame(),
+            "sample_psi_pca": pd.DataFrame(),
+            "per_comparison_sample_psi_pca": pd.DataFrame(),
+            "replicate_psi_qc": pd.DataFrame(),
+            "replicate_group_separation": pd.DataFrame(),
+            "psi_pattern_clusters": pd.DataFrame(),
+            "psi_pattern_cluster_summary": pd.DataFrame(),
+            "candidate_gene_as_summary": pd.DataFrame(),
+            "candidate_gene_as_matrix": pd.DataFrame(),
+        }
+
+    def _native_jutils_dpsi_matrix(self, events: pd.DataFrame) -> pd.DataFrame:
+        matrix = events.pivot_table(index="event_matching_key", columns="comparison_display_name", values="dPSI", aggfunc="first")
+        matrix = matrix.reindex(index=events.drop_duplicates("event_matching_key")["event_matching_key"].tolist())
+        return matrix.reset_index()
+
+    def _native_jutils_psi_matrix(self, psi_long: pd.DataFrame) -> pd.DataFrame:
+        if psi_long.empty:
+            return pd.DataFrame()
+        sample_column = "biological_sample_id" if "biological_sample_id" in psi_long.columns else "sample_id"
+        matrix = psi_long.pivot_table(index="event_matching_key", columns=sample_column, values="PSI", aggfunc="mean")
+        return matrix.reset_index()
+
+    def _native_jutils_sample_ids_by_group(self) -> dict[str, list[str]]:
+        if self.current_project is None:
+            return {}
+        grouped: dict[str, list[str]] = {}
+        for sample in self.current_project.isoform_samples:
+            if not sample.include:
+                continue
+            group = str(sample.sample_group or sample.condition or "").strip()
+            sample_id = str(sample.sample_id or "").strip()
+            if not group or not sample_id:
+                continue
+            grouped.setdefault(group.casefold(), []).append(sample_id)
+
+        def natural_key(value: str) -> list[object]:
+            return [int(token) if token.isdigit() else token.casefold() for token in re.split(r"(\d+)", value)]
+
+        return {key: sorted(set(values), key=natural_key) for key, values in grouped.items()}
+
+    @staticmethod
+    def _native_jutils_biological_sample_id(
+        sample_ids_by_group: dict[str, list[str]],
+        group_label: str,
+        sample_index: int,
+    ) -> str:
+        candidates = sample_ids_by_group.get(str(group_label).strip().casefold(), [])
+        if sample_index < len(candidates):
+            return candidates[sample_index]
+        return f"{group_label}:rep{sample_index + 1}"
+
+    def _native_jutils_candidate_gene_summary(
+        self,
+        events: pd.DataFrame,
+        gene_filter_display: dict[str, str],
+        comparisons: list,
+        *,
+        fdr_cutoff: float,
+        abs_dpsi_cutoff: float,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        rows: list[dict[str, object]] = []
+        event_lookup = events.copy()
+        if not event_lookup.empty:
+            event_lookup["_gene_symbol_key"] = event_lookup["gene_symbol"].astype(str).str.casefold()
+            event_lookup["_gene_id_key"] = event_lookup["gene_id"].astype(str).str.casefold()
+            event_lookup["FDR_numeric"] = pd.to_numeric(event_lookup["FDR"], errors="coerce")
+            event_lookup["dPSI_numeric"] = pd.to_numeric(event_lookup["dPSI"], errors="coerce")
+            event_lookup["abs_dPSI_numeric"] = event_lookup["dPSI_numeric"].abs()
+        for query_key, display_gene in gene_filter_display.items():
+            for comparison in comparisons:
+                display_name = comparison.display_resolved_name
+                subset = pd.DataFrame()
+                if not event_lookup.empty:
+                    subset = event_lookup.loc[
+                        (event_lookup["comparison_id"].astype(str) == comparison.comparison_id)
+                        & (
+                            (event_lookup["_gene_symbol_key"] == query_key)
+                            | (event_lookup["_gene_id_key"] == query_key)
+                        )
+                    ].copy()
+                significant = subset.loc[subset["significant"].fillna(False)].copy() if not subset.empty else pd.DataFrame()
+                if significant.empty:
+                    rows.append(
+                        {
+                            "gene_symbol": display_gene,
+                            "gene_query": display_gene,
+                            "comparison_id": comparison.comparison_id,
+                            "comparison_display_name": display_name,
+                            "n_significant_as_events": 0,
+                            "event_types": "",
+                            "dominant_event_type": "",
+                            "dominant_event_id": "",
+                            "best_FDR": pd.NA,
+                            "best_dPSI": pd.NA,
+                            "best_abs_dPSI": pd.NA,
+                            "direction": "no_significant_AS",
+                            "plotted_in_event_heatmap": False,
+                            "selection_note": "selected gene retained; no significant AS event under active cutoffs",
+                            "fdr_cutoff_used": fdr_cutoff,
+                            "abs_dpsi_cutoff_used": abs_dpsi_cutoff,
+                        }
+                    )
+                    continue
+                significant = significant.sort_values(
+                    ["abs_dPSI_numeric", "FDR_numeric", "event_type"],
+                    ascending=[False, True, True],
+                    na_position="last",
+                )
+                dominant = significant.iloc[0]
+                event_types = ";".join(
+                    significant["event_type"].dropna().astype(str).drop_duplicates().tolist()
+                )
+                rows.append(
+                    {
+                        "gene_symbol": str(dominant.get("gene_symbol") or display_gene),
+                        "gene_query": display_gene,
+                        "comparison_id": comparison.comparison_id,
+                        "comparison_display_name": display_name,
+                        "n_significant_as_events": int(len(significant)),
+                        "event_types": event_types,
+                        "dominant_event_type": dominant.get("event_type", ""),
+                        "dominant_event_id": dominant.get("event_id", ""),
+                        "best_FDR": dominant.get("FDR", pd.NA),
+                        "best_dPSI": dominant.get("dPSI", pd.NA),
+                        "best_abs_dPSI": dominant.get("abs_dPSI", pd.NA),
+                        "direction": dominant.get("direction", ""),
+                        "plotted_in_event_heatmap": True,
+                        "selection_note": "dominant event selected by max abs(dPSI) among significant events",
+                        "fdr_cutoff_used": fdr_cutoff,
+                        "abs_dpsi_cutoff_used": abs_dpsi_cutoff,
+                    }
+                )
+        summary = pd.DataFrame(rows)
+        if summary.empty:
+            return summary, pd.DataFrame()
+        matrix = summary.pivot_table(
+            index="gene_symbol",
+            columns="comparison_display_name",
+            values="best_dPSI",
+            aggfunc="first",
+            dropna=False,
+        )
+        ordered_genes = []
+        seen: set[str] = set()
+        for gene in summary["gene_symbol"].astype(str).tolist():
+            if gene not in seen:
+                seen.add(gene)
+                ordered_genes.append(gene)
+        matrix = matrix.reindex(index=ordered_genes)
+        return summary, matrix.reset_index()
+
+    def _native_jutils_similarity(self, events: pd.DataFrame, comparisons: list) -> pd.DataFrame:
+        rows: list[dict[str, object]] = []
+        by_comparison = {
+            comparison.display_resolved_name: events.loc[
+                (events["comparison_id"].astype(str) == comparison.comparison_id) & events["significant"].fillna(False)
+            ].copy()
+            for comparison in comparisons
+        }
+        for comp_a, comp_b in combinations(comparisons, 2):
+            name_a = comp_a.display_resolved_name
+            name_b = comp_b.display_resolved_name
+            frame_a = by_comparison.get(name_a, pd.DataFrame())
+            frame_b = by_comparison.get(name_b, pd.DataFrame())
+            map_a = frame_a.drop_duplicates("event_matching_key").set_index("event_matching_key") if not frame_a.empty else pd.DataFrame()
+            map_b = frame_b.drop_duplicates("event_matching_key").set_index("event_matching_key") if not frame_b.empty else pd.DataFrame()
+            keys_a = set(map_a.index.astype(str)) if not map_a.empty else set()
+            keys_b = set(map_b.index.astype(str)) if not map_b.empty else set()
+            shared = keys_a & keys_b
+            union = keys_a | keys_b
+            same_direction = 0
+            opposite_direction = 0
+            dpsi_a: list[float] = []
+            dpsi_b: list[float] = []
+            for key in shared:
+                value_a = float(map_a.loc[key, "dPSI"])
+                value_b = float(map_b.loc[key, "dPSI"])
+                dpsi_a.append(value_a)
+                dpsi_b.append(value_b)
+                if np.sign(value_a) == np.sign(value_b):
+                    same_direction += 1
+                else:
+                    opposite_direction += 1
+            signed_a = {f"{key}|{int(np.sign(float(map_a.loc[key, 'dPSI'])))}" for key in keys_a if pd.notna(map_a.loc[key, "dPSI"])}
+            signed_b = {f"{key}|{int(np.sign(float(map_b.loc[key, 'dPSI'])))}" for key in keys_b if pd.notna(map_b.loc[key, "dPSI"])}
+            weighted_cosine = float("nan")
+            if union:
+                vector_a = []
+                vector_b = []
+                for key in sorted(union):
+                    vector_a.append(float(map_a.loc[key, "dPSI"]) if key in keys_a else 0.0)
+                    vector_b.append(float(map_b.loc[key, "dPSI"]) if key in keys_b else 0.0)
+                a_arr = np.asarray(vector_a, dtype=float)
+                b_arr = np.asarray(vector_b, dtype=float)
+                denom = float(np.linalg.norm(a_arr) * np.linalg.norm(b_arr))
+                weighted_cosine = float(np.dot(a_arr, b_arr) / denom) if denom > 0 else float("nan")
+            rows.append(
+                {
+                    "comparison_A": comp_a.comparison_id,
+                    "comparison_B": comp_b.comparison_id,
+                    "comparison_A_display_name": name_a,
+                    "comparison_B_display_name": name_b,
+                    "n_significant_A": len(keys_a),
+                    "n_significant_B": len(keys_b),
+                    "shared_significant_events": len(shared),
+                    "union_significant_events": len(union),
+                    "shared_event_support_fraction": (
+                        len(shared) / min(len(keys_a), len(keys_b))
+                        if min(len(keys_a), len(keys_b)) > 0
+                        else float("nan")
+                    ),
+                    "jaccard_overlap": len(shared) / len(union) if union else float("nan"),
+                    "signed_jaccard_overlap": len(signed_a & signed_b) / len(signed_a | signed_b) if (signed_a | signed_b) else float("nan"),
+                    "direction_similarity": same_direction / len(shared) if shared else float("nan"),
+                    "opposite_direction_fraction": opposite_direction / len(shared) if shared else float("nan"),
+                    "spearman_dPSI_correlation": pd.Series(dpsi_a).corr(pd.Series(dpsi_b), method="spearman") if len(dpsi_a) >= 2 else float("nan"),
+                    "weighted_cosine_similarity": weighted_cosine,
+                    "similarity_evidence_weight": min(1.0, len(shared) / 20.0),
+                    "confidence_weighted_cosine_similarity": (
+                        weighted_cosine * min(1.0, len(shared) / 20.0)
+                        if pd.notna(weighted_cosine)
+                        else float("nan")
+                    ),
+                    "similarity_confidence": (
+                        "high_shared_support"
+                        if len(shared) >= 50
+                        else "moderate_shared_support"
+                        if len(shared) >= 10
+                        else "low_shared_support_interpret_cautiously"
+                        if len(shared) > 0
+                        else "no_shared_events"
+                    ),
+                    "similarity_interpretation": (
+                        f"{len(shared)} shared significant event(s) out of {len(union)} union event(s). "
+                        "Interpret weighted_cosine_similarity together with shared_event_support_fraction; "
+                        "confidence_weighted_cosine_similarity downweights pairs with few shared events."
+                    ),
+                    "specificity_A": (len(keys_a - keys_b) / len(keys_a)) if keys_a else float("nan"),
+                    "specificity_B": (len(keys_b - keys_a) / len(keys_b)) if keys_b else float("nan"),
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def _native_jutils_sample_pca(self, psi_matrix: pd.DataFrame, psi_long: pd.DataFrame) -> pd.DataFrame:
+        if psi_matrix.empty or psi_matrix.shape[1] <= 2:
+            return pd.DataFrame()
+        numeric = psi_matrix.drop(columns=[psi_matrix.columns[0]]).apply(pd.to_numeric, errors="coerce")
+        scores, explained = self._pca_scores(numeric.transpose())
+        if scores.empty:
+            return pd.DataFrame()
+        output = scores.rename_axis("sample_id").reset_index()
+        if not psi_long.empty and "biological_sample_id" in psi_long.columns:
+            metadata = (
+                psi_long.groupby("biological_sample_id", dropna=False)
+                .agg(
+                    sample_group=("sample_group", lambda values: "; ".join(dict.fromkeys(values.astype(str)))),
+                    comparison_memberships=("comparison_id", lambda values: "; ".join(dict.fromkeys(values.astype(str)))),
+                )
+            )
+            output["sample_group"] = output["sample_id"].map(metadata["sample_group"])
+            output["comparison_memberships"] = output["sample_id"].map(metadata["comparison_memberships"])
+        else:
+            output["sample_group"] = output["sample_id"].astype(str).str.split(":").str[0]
+            output["comparison_memberships"] = ""
+        output["PC1_variance_explained"] = explained[0] if len(explained) > 0 else float("nan")
+        output["PC2_variance_explained"] = explained[1] if len(explained) > 1 else float("nan")
+        return output
+
+    def _native_jutils_per_comparison_sample_pca(self, psi_long: pd.DataFrame) -> pd.DataFrame:
+        if psi_long.empty or not {"comparison_id", "event_matching_key", "sample_id", "PSI"}.issubset(psi_long.columns):
+            return pd.DataFrame()
+        rows: list[pd.DataFrame] = []
+        for comparison_id, subset in psi_long.groupby("comparison_id", sort=False):
+            pivot = subset.pivot_table(
+                index="event_matching_key",
+                columns="sample_id",
+                values="PSI",
+                aggfunc="mean",
+            )
+            if pivot.shape[0] < 2 or pivot.shape[1] < 2:
+                continue
+            scores, explained = self._pca_scores(pivot.transpose())
+            if scores.empty:
+                continue
+            output = scores.rename_axis("sample_id").reset_index()
+            output["comparison_id"] = str(comparison_id)
+            output["comparison_display_name"] = (
+                str(subset["comparison_display_name"].dropna().iloc[0])
+                if "comparison_display_name" in subset.columns and subset["comparison_display_name"].notna().any()
+                else str(comparison_id)
+            )
+            output["sample_group"] = output["sample_id"].astype(str).str.split(":").str[1]
+            output["PC1_variance_explained"] = explained[0] if len(explained) > 0 else float("nan")
+            output["PC2_variance_explained"] = explained[1] if len(explained) > 1 else float("nan")
+            output["pca_scope"] = "per_comparison_sample_PSI"
+            rows.append(output)
+        return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
+    def _pca_scores(self, matrix: pd.DataFrame) -> tuple[pd.DataFrame, list[float]]:
+        if matrix.empty:
+            return pd.DataFrame(), []
+        numeric = matrix.copy()
+        numeric = numeric.apply(pd.to_numeric, errors="coerce")
+        numeric = numeric.loc[:, numeric.notna().any(axis=0)]
+        numeric = numeric.fillna(numeric.mean(axis=0)).fillna(0.0)
+        if numeric.shape[0] < 2 or numeric.shape[1] < 2:
+            return pd.DataFrame(), []
+        centered = numeric - numeric.mean(axis=0)
+        std = centered.std(axis=0).replace(0, 1.0).fillna(1.0)
+        scaled = centered / std
+        try:
+            u, s, _vt = np.linalg.svd(scaled.to_numpy(dtype=float), full_matrices=False)
+        except np.linalg.LinAlgError:
+            return pd.DataFrame(), []
+        scores = u[:, :2] * s[:2]
+        explained = (s**2) / max(float(np.sum(s**2)), 1e-12)
+        output = pd.DataFrame(scores, index=numeric.index, columns=["PC1", "PC2"][: scores.shape[1]])
+        if "PC2" not in output.columns:
+            output["PC2"] = 0.0
+        return output, explained[:2].tolist()
+
+    def _native_jutils_replicate_qc(self, events: pd.DataFrame) -> pd.DataFrame:
+        if events.empty:
+            return pd.DataFrame()
+        working = events.copy()
+        working["psi_delta_from_group_means"] = pd.to_numeric(working["psi_group1_mean"], errors="coerce") - pd.to_numeric(working["psi_group2_mean"], errors="coerce")
+        working["psi_group_mean_disagrees_with_dPSI"] = np.sign(working["psi_delta_from_group_means"].fillna(0)) != np.sign(pd.to_numeric(working["dPSI"], errors="coerce").fillna(0))
+        return working[
+            [
+                "comparison_id",
+                "comparison_display_name",
+                "event_matching_key",
+                "gene_symbol",
+                "event_type",
+                "FDR",
+                "dPSI",
+                "psi_group1_mean",
+                "psi_group2_mean",
+                "psi_delta_from_group_means",
+                "psi_group_mean_disagrees_with_dPSI",
+            ]
+        ].copy()
+
+    def _write_native_jutils_outputs(self, base: Path, tables: dict[str, pd.DataFrame], parameters: dict[str, object]) -> list[Path]:
+        if base.exists():
+            shutil.rmtree(base)
+        base.mkdir(parents=True, exist_ok=True)
+        plots_dir = base / "plots"
+        plots_dir.mkdir(parents=True, exist_ok=True)
+        generated: list[Path] = []
+        for name, frame in tables.items():
+            path = base / f"{name}.tsv"
+            frame.to_csv(path, sep="\t", index=False)
+            generated.append(path)
+        plot_files = self._plot_native_jutils_tables(tables, plots_dir)
+        benchmark_files = self._write_native_vs_legacy_jutils_benchmark(base, tables)
+        parameters = dict(parameters)
+        parameters["generated_plots"] = [str(path) for path in plot_files]
+        parameters["generated_tables"] = [str(base / f"{name}.tsv") for name in tables]
+        parameters["generated_benchmarks"] = [str(path) for path in benchmark_files]
+        self._write_json(base / "parameters.json", parameters)
+        generated.append(base / "parameters.json")
+        generated.extend(plot_files)
+        generated.extend(benchmark_files)
+        return generated
+
+    def _write_native_vs_legacy_jutils_benchmark(self, base: Path, tables: dict[str, pd.DataFrame]) -> list[Path]:
+        if self.current_project is None:
+            return []
+        return self.jutils_benchmark.write(base, self.require_output_root(), tables)
+
+    def _plot_native_jutils_tables(self, tables: dict[str, pd.DataFrame], plots_dir: Path) -> list[Path]:
+        generated: list[Path] = []
+        candidate_summary = tables.get("candidate_gene_as_summary", pd.DataFrame())
+        if not candidate_summary.empty:
+            generated.append(
+                self._plot_candidate_gene_as_heatmap(
+                    candidate_summary,
+                    plots_dir / "native_candidate_gene_as_summary_heatmap.png",
+                )
+            )
+        generated.extend(self._plot_native_per_comparison_psi_heatmaps(tables, plots_dir / "per_comparison"))
+        generated.extend(self._plot_native_per_comparison_psi_pcas(tables, plots_dir / "per_comparison"))
+        dpsi_matrix = tables.get("dpsi_matrix", pd.DataFrame())
+        if not dpsi_matrix.empty:
+            generated.append(
+                self._plot_matrix_heatmap(
+                    dpsi_matrix,
+                    "Native AS dPSI pattern heatmap",
+                    plots_dir / "native_as_dpsi_pattern_heatmap.png",
+                    center_zero=True,
+                    cluster_rows=True,
+                )
+            )
+        psi_matrix = tables.get("sample_level_psi_matrix", pd.DataFrame())
+        if not psi_matrix.empty:
+            generated.append(
+                self._plot_matrix_heatmap(
+                    psi_matrix,
+                    "Native sample-level PSI heatmap",
+                    plots_dir / "native_sample_level_psi_heatmap.png",
+                    center_zero=False,
+                    cluster_rows=True,
+                )
+            )
+        psi_zscore_matrix = tables.get("sample_level_psi_zscore_matrix", pd.DataFrame())
+        if not psi_zscore_matrix.empty:
+            generated.append(
+                self._plot_matrix_heatmap(
+                    psi_zscore_matrix,
+                    "Sample-level PSI heatmap (row Z-score)",
+                    plots_dir / "native_sample_level_psi_zscore_heatmap.png",
+                    center_zero=True,
+                    cluster_rows=True,
+                    cluster_columns=True,
+                )
+            )
+        similarity = tables.get("pairwise_as_similarity", pd.DataFrame())
+        if not similarity.empty:
+            generated.append(self._plot_similarity_heatmap(similarity, "weighted_cosine_similarity", "AS weighted cosine similarity", plots_dir / "native_as_similarity_heatmap.png"))
+            generated.append(self._plot_similarity_heatmap(similarity, "direction_similarity", "AS direction agreement", plots_dir / "native_as_direction_similarity_heatmap.png"))
+        sample_similarity = tables.get("sample_psi_spearman_matrix", pd.DataFrame())
+        sample_overlap = tables.get("sample_psi_shared_event_count_matrix", pd.DataFrame())
+        if not sample_similarity.empty:
+            generated.append(
+                self._plot_square_matrix_heatmap(
+                    sample_similarity,
+                    "Sample PSI similarity (Spearman)",
+                    plots_dir / "native_sample_psi_similarity_heatmap.png",
+                    value_label="Spearman rho",
+                    minimum=-1.0,
+                    maximum=1.0,
+                    cmap="RdBu_r",
+                )
+            )
+        if not sample_overlap.empty:
+            maximum = pd.to_numeric(
+                sample_overlap.drop(columns=[sample_overlap.columns[0]]).stack(), errors="coerce"
+            ).max()
+            generated.append(
+                self._plot_square_matrix_heatmap(
+                    sample_overlap,
+                    "Shared measured AS events per sample pair",
+                    plots_dir / "native_sample_psi_shared_event_counts.png",
+                    value_label="shared events",
+                    minimum=0.0,
+                    maximum=max(float(maximum) if pd.notna(maximum) else 1.0, 1.0),
+                    cmap="YlGnBu",
+                    integer_labels=True,
+                )
+            )
+        sample_pca = tables.get("sample_psi_pca", pd.DataFrame())
+        if not sample_pca.empty:
+            generated.append(
+                self._plot_native_pca(
+                    sample_pca,
+                    "sample_id",
+                    "Native sample-level PSI PCA",
+                    plots_dir / "native_sample_psi_pca.png",
+                    color_column="sample_group",
+                )
+            )
+        pattern_clusters = tables.get("psi_pattern_clusters", pd.DataFrame())
+        if not pattern_clusters.empty:
+            generated.append(
+                self._plot_psi_pattern_cluster_heatmap(
+                    pattern_clusters,
+                    plots_dir / "native_sample_psi_pattern_clusters.png",
+                )
+            )
+        replicate_separation = tables.get("replicate_group_separation", pd.DataFrame())
+        if not replicate_separation.empty:
+            generated.append(
+                self._plot_replicate_group_separation(
+                    replicate_separation,
+                    plots_dir / "native_replicate_group_separation.png",
+                )
+            )
+        return [path for path in generated if path.exists()]
+
+    def _plot_square_matrix_heatmap(
+        self,
+        frame: pd.DataFrame,
+        title: str,
+        path: Path,
+        *,
+        value_label: str,
+        minimum: float,
+        maximum: float,
+        cmap: str,
+        integer_labels: bool = False,
+    ) -> Path:
+        if frame.empty or frame.shape[1] <= 1:
+            return path
+        labels = frame.iloc[:, 0].astype(str).tolist()
+        numeric = frame.iloc[:, 1:].apply(pd.to_numeric, errors="coerce")
+        numeric.columns = numeric.columns.astype(str)
+        numeric = numeric.reindex(columns=labels)
+        data = numeric.to_numpy(dtype=float)
+        size = max(6.5, min(16, 3.5 + len(labels) * 0.75))
+        fig, ax = plt.subplots(figsize=(size, size))
+        image = ax.imshow(np.ma.masked_invalid(data), cmap=cmap, vmin=minimum, vmax=maximum)
+        ax.set_title(title, fontweight="bold", pad=14)
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels, rotation=90, ha="center", fontsize=8)
+        ax.set_yticks(range(len(labels)))
+        ax.set_yticklabels(labels, fontsize=8)
+        if len(labels) <= 18:
+            for row_index in range(len(labels)):
+                for column_index in range(len(labels)):
+                    value = data[row_index, column_index]
+                    if np.isfinite(value):
+                        label = f"{int(round(value))}" if integer_labels else f"{value:.2f}"
+                        ax.text(column_index, row_index, label, ha="center", va="center", fontsize=7)
+        fig.colorbar(image, ax=ax, fraction=0.04, pad=0.03, label=value_label)
+        fig.tight_layout()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=220, bbox_inches="tight")
+        plt.close(fig)
+        return path
+
+    def _plot_psi_pattern_cluster_heatmap(self, frame: pd.DataFrame, path: Path) -> Path:
+        if frame.empty or "psi_pattern_cluster" not in frame.columns:
+            return path
+        metadata = {
+            "event_matching_key",
+            "gene_symbol",
+            "event_type",
+            "event_id",
+            "psi_pattern_cluster",
+        }
+        value_columns = [
+            column
+            for column in frame.columns
+            if column not in metadata and pd.api.types.is_numeric_dtype(frame[column])
+        ]
+        if not value_columns:
+            return path
+        working = frame.sort_values(["psi_pattern_cluster", "event_type", "gene_symbol"], na_position="last").head(120)
+        data = working[value_columns].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+        fig, ax = plt.subplots(
+            figsize=(max(9, min(18, 3 + len(value_columns) * 0.75)), max(6, min(18, 2 + len(working) * 0.16)))
+        )
+        image = ax.imshow(np.ma.masked_invalid(data), aspect="auto", cmap="RdBu_r", vmin=-2.5, vmax=2.5)
+        ax.set_title("Sample-level PSI trajectory clusters", fontweight="bold", pad=14)
+        ax.set_xticks(range(len(value_columns)))
+        ax.set_xticklabels(value_columns, rotation=90, fontsize=7)
+        labels = [
+            f"C{row.psi_pattern_cluster} | {str(getattr(row, 'gene_symbol', ''))[:18]} | {getattr(row, 'event_type', '')}"
+            for row in working.itertuples(index=False)
+        ]
+        ax.set_yticks(range(len(labels)))
+        ax.set_yticklabels(labels, fontsize=6)
+        fig.colorbar(image, ax=ax, fraction=0.025, pad=0.02, label="row Z-score PSI")
+        fig.tight_layout()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=220, bbox_inches="tight")
+        plt.close(fig)
+        return path
+
+    def _plot_replicate_group_separation(self, frame: pd.DataFrame, path: Path) -> Path:
+        working = frame.copy()
+        if working.empty or "comparison_id" not in working.columns:
+            return path
+        within = pd.to_numeric(working["median_within_group_spearman"], errors="coerce")
+        between = pd.to_numeric(working["median_between_group_spearman"], errors="coerce")
+        x = np.arange(len(working))
+        fig, ax = plt.subplots(figsize=(max(8, len(working) * 1.35), 5.5))
+        width = 0.36
+        ax.bar(x - width / 2, within, width, label="within-group replicates", color="#20a39e")
+        ax.bar(x + width / 2, between, width, label="between groups", color="#f19c79")
+        ax.axhline(0, color="#6d7b86", linewidth=0.8)
+        ax.set_ylim(-1, 1)
+        ax.set_ylabel("Median Spearman PSI similarity")
+        ax.set_title("Replicate/group PSI similarity QC", fontweight="bold")
+        ax.set_xticks(x)
+        ax.set_xticklabels(working["comparison_id"].astype(str), rotation=35, ha="right")
+        ax.legend(frameon=False, loc="upper right")
+        fig.tight_layout()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=220, bbox_inches="tight")
+        plt.close(fig)
+        return path
+
+    def _plot_candidate_gene_as_heatmap(self, summary: pd.DataFrame, path: Path) -> Path:
+        required = {"gene_symbol", "comparison_display_name", "best_dPSI", "n_significant_as_events"}
+        if summary.empty or not required.issubset(summary.columns):
+            return path
+        working = summary.copy()
+        working["best_dPSI_numeric"] = pd.to_numeric(working["best_dPSI"], errors="coerce")
+        working["n_significant_numeric"] = pd.to_numeric(working["n_significant_as_events"], errors="coerce").fillna(0)
+        pivot = working.pivot_table(
+            index="gene_symbol",
+            columns="comparison_display_name",
+            values="best_dPSI_numeric",
+            aggfunc="first",
+            dropna=False,
+        )
+        counts = working.pivot_table(
+            index="gene_symbol",
+            columns="comparison_display_name",
+            values="n_significant_numeric",
+            aggfunc="max",
+            fill_value=0,
+            dropna=False,
+        ).reindex(index=pivot.index, columns=pivot.columns, fill_value=0)
+        order = (
+            pd.DataFrame(
+                {
+                    "n_total_significant": counts.sum(axis=1),
+                    "max_abs_dPSI": pivot.abs().max(axis=1).fillna(0),
+                    "gene": pivot.index.astype(str),
+                },
+                index=pivot.index,
+            )
+            .sort_values(["n_total_significant", "max_abs_dPSI", "gene"], ascending=[False, False, True])
+            .index
+        )
+        pivot = pivot.loc[order].head(80)
+        counts = counts.loc[pivot.index]
+        data = pivot.to_numpy(dtype=float)
+        masked = np.ma.masked_invalid(data)
+        vmax = float(np.nanmax(np.abs(data))) if np.isfinite(data).any() else 0.2
+        vmax = max(vmax, 0.2)
+        cmap = plt.get_cmap("RdBu_r").copy()
+        cmap.set_bad("#d8d8d8")
+        width = max(8, min(18, 2.8 + pivot.shape[1] * 1.4))
+        height = max(5.5, min(18, 2.2 + pivot.shape[0] * 0.34))
+        fig, ax = plt.subplots(figsize=(width, height))
+        image = ax.imshow(masked, aspect="auto", cmap=cmap, vmin=-vmax, vmax=vmax)
+        ax.set_title("Candidate gene AS summary heatmap\nselected genes retained; gray = no significant AS under active cutoffs")
+        ax.set_xticks(range(pivot.shape[1]))
+        ax.set_xticklabels([str(col) for col in pivot.columns], rotation=35, ha="right", fontsize=8)
+        ax.set_yticks(range(pivot.shape[0]))
+        ax.set_yticklabels([str(item)[:45] for item in pivot.index], fontsize=8)
+        for row_idx in range(pivot.shape[0]):
+            for col_idx in range(pivot.shape[1]):
+                count_value = int(counts.iloc[row_idx, col_idx]) if pd.notna(counts.iloc[row_idx, col_idx]) else 0
+                if count_value > 0:
+                    ax.text(col_idx, row_idx, f"n={count_value}", ha="center", va="center", fontsize=6, color="black")
+        fig.colorbar(image, ax=ax, fraction=0.025, pad=0.02, label="dominant significant AS dPSI")
+        fig.tight_layout()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=220)
+        plt.close(fig)
+        return path
+
+    def _plot_native_per_comparison_psi_pcas(self, tables: dict[str, pd.DataFrame], plots_dir: Path) -> list[Path]:
+        frame = tables.get("per_comparison_sample_psi_pca", pd.DataFrame())
+        if frame.empty or "comparison_id" not in frame.columns:
+            return []
+        generated: list[Path] = []
+        for comparison_id, subset in frame.groupby("comparison_id", sort=False):
+            display_name = (
+                str(subset["comparison_display_name"].dropna().iloc[0])
+                if "comparison_display_name" in subset.columns and subset["comparison_display_name"].notna().any()
+                else str(comparison_id)
+            )
+            path = plots_dir / f"{self._safe_output_name(display_name)}_sample_psi_pca.png"
+            generated.append(
+                self._plot_native_pca(
+                    subset,
+                    "sample_id",
+                    f"Native sample PSI PCA: {display_name}",
+                    path,
+                    color_column="sample_group",
+                )
+            )
+        return generated
+
+    def _plot_native_per_comparison_psi_heatmaps(self, tables: dict[str, pd.DataFrame], plots_dir: Path) -> list[Path]:
+        psi_long = tables.get("sample_level_psi_long", pd.DataFrame())
+        events = tables.get("unified_as_event_table", pd.DataFrame())
+        if psi_long.empty or "comparison_id" not in psi_long.columns:
+            return []
+        generated: list[Path] = []
+        event_meta = pd.DataFrame()
+        if not events.empty and {"comparison_id", "event_matching_key"}.issubset(events.columns):
+            meta_cols = [
+                column
+                for column in [
+                    "comparison_id",
+                    "comparison_display_name",
+                    "event_matching_key",
+                    "gene_symbol",
+                    "event_type",
+                    "FDR",
+                    "dPSI",
+                    "abs_dPSI",
+                    "native_jutils_selection_score",
+                ]
+                if column in events.columns
+            ]
+            event_meta = events[meta_cols].drop_duplicates(["comparison_id", "event_matching_key"])
+        for comparison_id, subset in psi_long.groupby("comparison_id", sort=False):
+            pivot = subset.pivot_table(
+                index="event_matching_key",
+                columns="sample_id",
+                values="PSI",
+                aggfunc="mean",
+            )
+            if pivot.empty:
+                continue
+            if not event_meta.empty:
+                meta = event_meta.loc[event_meta["comparison_id"].astype(str) == str(comparison_id)].copy()
+                if not meta.empty:
+                    sort_columns = [column for column in ["native_jutils_selection_score", "abs_dPSI", "FDR"] if column in meta.columns]
+                    sort_ascending = [False if column != "FDR" else True for column in sort_columns]
+                    order_source = meta.sort_values(sort_columns, ascending=sort_ascending, na_position="last") if sort_columns else meta
+                    order = order_source["event_matching_key"].astype(str).tolist()
+                    pivot = pivot.loc[[key for key in order if key in pivot.index]]
+                    label_lookup = {
+                        str(row.event_matching_key): f"{str(row.gene_symbol)[:18]} | {str(row.event_type)}"
+                        for row in meta[["event_matching_key", "gene_symbol", "event_type"]].itertuples(index=False)
+                    }
+                    pivot.index = [label_lookup.get(str(index), str(index)[:50]) for index in pivot.index]
+            display_name = str(subset["comparison_display_name"].dropna().iloc[0]) if "comparison_display_name" in subset.columns and subset["comparison_display_name"].notna().any() else str(comparison_id)
+            path = plots_dir / f"{self._safe_output_name(display_name)}_sample_psi_heatmap.png"
+            generated.append(
+                self._plot_matrix_heatmap(
+                    pivot.reset_index().rename(columns={"index": "event"}),
+                    f"Native sample PSI heatmap: {display_name}",
+                    path,
+                    center_zero=False,
+                    cluster_rows=True,
+                )
+            )
+            clustered_path = plots_dir / f"{self._safe_output_name(display_name)}_sample_psi_heatmap_clustered.png"
+            generated.append(
+                self._plot_matrix_heatmap(
+                    pivot.reset_index().rename(columns={"index": "event"}),
+                    f"Native clustered sample PSI heatmap: {display_name}",
+                    clustered_path,
+                    center_zero=False,
+                    cluster_rows=True,
+                    cluster_columns=True,
+                )
+            )
+        return generated
+
+    def _plot_matrix_heatmap(
+        self,
+        frame: pd.DataFrame,
+        title: str,
+        path: Path,
+        *,
+        center_zero: bool,
+        cluster_rows: bool = True,
+        cluster_columns: bool = False,
+    ) -> Path:
+        working = frame.copy()
+        if working.empty or working.shape[1] <= 1:
+            return path
+        index_col = working.columns[0]
+        working = working.set_index(index_col)
+        numeric = working.apply(pd.to_numeric, errors="coerce")
+        row_score = numeric.abs().max(axis=1).fillna(0)
+        numeric = numeric.loc[row_score.sort_values(ascending=False).index].head(120)
+        if cluster_rows and len(numeric) > 2:
+            numeric = self._cluster_order_matrix_rows(numeric)
+        if cluster_columns and numeric.shape[1] > 2:
+            numeric = self._cluster_order_matrix_rows(numeric.T).T
+        numeric = numeric.head(80)
+        data = numeric.to_numpy(dtype=float)
+        masked = np.ma.masked_invalid(data)
+        width = max(8, min(18, 2 + numeric.shape[1] * 1.2))
+        height = max(5, min(18, 2 + numeric.shape[0] * 0.22))
+        fig, ax = plt.subplots(figsize=(width, height))
+        if center_zero:
+            vmax = float(np.nanmax(np.abs(data))) if np.isfinite(data).any() else 1.0
+            vmax = max(vmax, 0.2)
+            image = ax.imshow(masked, aspect="auto", cmap="RdBu_r", vmin=-vmax, vmax=vmax)
+        else:
+            image = ax.imshow(masked, aspect="auto", cmap="magma", vmin=0, vmax=1)
+        ax.set_title(title)
+        ax.set_xticks(range(numeric.shape[1]))
+        ax.set_xticklabels([str(col) for col in numeric.columns], rotation=45, ha="right", fontsize=8)
+        y_labels = [str(item)[:70] for item in numeric.index]
+        ax.set_yticks(range(numeric.shape[0]))
+        ax.set_yticklabels(y_labels, fontsize=6)
+        fig.colorbar(image, ax=ax, fraction=0.025, pad=0.02)
+        fig.tight_layout()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=220)
+        plt.close(fig)
+        return path
+
+    def _cluster_order_matrix_rows(self, numeric: pd.DataFrame) -> pd.DataFrame:
+        working = numeric.apply(pd.to_numeric, errors="coerce")
+        filled = working.fillna(working.mean(axis=0)).fillna(0.0)
+        if len(filled) <= 2:
+            return working
+        try:
+            from scipy.cluster.hierarchy import leaves_list, linkage
+            from scipy.spatial.distance import pdist
+
+            distances = pdist(filled.to_numpy(dtype=float), metric="cityblock")
+            if len(distances) and np.isfinite(distances).all():
+                ordered_index = filled.index[leaves_list(linkage(distances, method="weighted"))]
+                return working.loc[ordered_index]
+        except Exception:
+            pass
+        # Stable fallback when SciPy is unavailable or the matrix is degenerate.
+        order_frame = pd.DataFrame(
+            {
+                "row": filled.index.astype(str),
+                "mean_abs_signal": filled.abs().mean(axis=1).to_numpy(dtype=float),
+                "max_abs_signal": filled.abs().max(axis=1).to_numpy(dtype=float),
+            },
+            index=filled.index,
+        )
+        ordered_index = order_frame.sort_values(["max_abs_signal", "mean_abs_signal", "row"], ascending=[False, False, True]).index
+        return working.loc[ordered_index]
+
+    def _plot_similarity_heatmap(self, frame: pd.DataFrame, metric: str, title: str, path: Path) -> Path:
+        labels = sorted(set(frame["comparison_A_display_name"].astype(str)) | set(frame["comparison_B_display_name"].astype(str)))
+        matrix = pd.DataFrame(np.nan, index=labels, columns=labels, dtype=float)
+        for label in labels:
+            matrix.loc[label, label] = 1.0
+        for _, row in frame.iterrows():
+            left = str(row["comparison_A_display_name"])
+            right = str(row["comparison_B_display_name"])
+            value = pd.to_numeric(row.get(metric), errors="coerce")
+            matrix.loc[left, right] = value
+            matrix.loc[right, left] = value
+        fig, ax = plt.subplots(figsize=(max(6, len(labels) * 1.2), max(5, len(labels) * 1.0)))
+        image = ax.imshow(np.ma.masked_invalid(matrix.to_numpy(dtype=float)), cmap="viridis", vmin=-1 if "cosine" in metric else 0, vmax=1)
+        ax.set_title(title)
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        ax.set_yticks(range(len(labels)))
+        ax.set_yticklabels(labels)
+        for row_idx in range(len(labels)):
+            for col_idx in range(len(labels)):
+                value = matrix.iloc[row_idx, col_idx]
+                if pd.notna(value):
+                    ax.text(col_idx, row_idx, f"{float(value):.2f}", ha="center", va="center", color="white" if float(value) < 0.45 else "black", fontsize=8)
+        fig.colorbar(image, ax=ax, fraction=0.04, pad=0.03)
+        fig.tight_layout()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=220)
+        plt.close(fig)
+        return path
+
+    def _plot_native_pca(self, frame: pd.DataFrame, label_column: str, title: str, path: Path, *, color_column: str | None = None) -> Path:
+        if frame.empty or "PC1" not in frame.columns or "PC2" not in frame.columns:
+            return path
+        fig, ax = plt.subplots(figsize=(8, 6))
+        label_offsets: dict[object, tuple[int, int]] = {}
+        if color_column and color_column in frame.columns:
+            groups = frame[color_column].astype(str).fillna("")
+            unique_groups = sorted(groups.unique().tolist())
+            cmap = plt.get_cmap("tab10")
+            for idx, group in enumerate(unique_groups):
+                subset = frame.loc[groups == group]
+                ax.scatter(subset["PC1"], subset["PC2"], s=70, label=group, color=cmap(idx % 10), edgecolor="black", linewidth=0.4)
+                ordered_indices = subset.sort_values(["PC2", "PC1"]).index.tolist()
+                offsets = [-12, 0, 12, -20, 20]
+                for rank, row_index in enumerate(ordered_indices):
+                    label_offsets[row_index] = (7, offsets[rank % len(offsets)])
+        else:
+            ax.scatter(frame["PC1"], frame["PC2"], s=85, color="#4C78A8", edgecolor="black", linewidth=0.5)
+        for row_index, row in frame.iterrows():
+            label = str(row.get(label_column, ""))[:38]
+            offset = label_offsets.get(row_index, (7, 0))
+            ax.annotate(
+                label,
+                (float(row["PC1"]), float(row["PC2"])),
+                xytext=offset,
+                textcoords="offset points",
+                fontsize=8,
+                va="center",
+                arrowprops={"arrowstyle": "-", "color": "#7b8794", "linewidth": 0.45},
+            )
+        pc1_var = pd.to_numeric(frame.get("PC1_variance_explained"), errors="coerce").dropna()
+        pc2_var = pd.to_numeric(frame.get("PC2_variance_explained"), errors="coerce").dropna()
+        x_label = f"PC1 ({float(pc1_var.iloc[0]) * 100:.1f}% var)" if not pc1_var.empty else "PC1"
+        y_label = f"PC2 ({float(pc2_var.iloc[0]) * 100:.1f}% var)" if not pc2_var.empty else "PC2"
+        ax.set_title(title)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.axhline(0, color="#999999", linewidth=0.8)
+        ax.axvline(0, color="#999999", linewidth=0.8)
+        if color_column and color_column in frame.columns:
+            ax.legend(title=color_column, bbox_to_anchor=(1.02, 1), loc="upper left")
+        fig.tight_layout()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=220)
+        plt.close(fig)
+        return path
 
     def candidate_screening_output_dir(self, comparison_id: str | None) -> Path | None:
         if self.current_project is None or self.current_project.output_root is None or not comparison_id:
@@ -2354,72 +4848,42 @@ class ProjectService:
     def cross_comparison_output_dir(self) -> Path | None:
         if self.current_project is None or self.current_project.output_root is None:
             return None
-        return self.current_project.output_root / "03_cross_comparison_candidate_comparison"
+        return CrossComparisonService(self.current_project.output_root).base_dir()
 
     def cross_comparison_file_map(self) -> dict[str, Path]:
-        base = self.cross_comparison_output_dir()
-        if base is None:
+        if self.current_project is None or self.current_project.output_root is None:
             return {}
-        return {
-            "matrix": base / "cross_comparison_candidate_matrix.tsv",
-            "summary": base / "cross_comparison_summary.tsv",
-        }
+        return CrossComparisonService(self.current_project.output_root).candidate_files()
 
     def cross_comparison_pattern_output_dir(self, pair_id: str | None) -> Path | None:
-        base = self.cross_comparison_output_dir()
-        if base is None or not pair_id:
+        if self.current_project is None or self.current_project.output_root is None:
             return None
-        return base / self._safe_output_name(pair_id)
+        return CrossComparisonService(self.current_project.output_root).pattern_dir(pair_id)
 
     def cross_comparison_pattern_file_map(self, pair_id: str | None) -> dict[str, Path]:
-        base = self.cross_comparison_pattern_output_dir(pair_id)
-        if base is None:
+        if self.current_project is None or self.current_project.output_root is None:
             return {}
-        return {
-            "same_direction_large_delta": base / "same_direction_large_delta_significant_as_events.tsv",
-            "opposite_direction": base / "opposite_direction_significant_as_events.tsv",
-            "all_shared": base / "all_shared_significant_as_pairwise_dpsi_delta.tsv",
-            "condition_specific": base / "optional_condition_specific_as_events.tsv",
-            "summary": base / "summary_counts.tsv",
-        }
+        return CrossComparisonService(self.current_project.output_root).pattern_files(pair_id)
 
     def cross_comparison_interaction_output_dir(self, pair_id: str | None) -> Path | None:
-        base = self.cross_comparison_output_dir()
-        if base is None or not pair_id:
+        if self.current_project is None or self.current_project.output_root is None:
             return None
-        return base / self._safe_output_name(pair_id) / "as_interaction_modeling"
+        return CrossComparisonService(self.current_project.output_root).interaction_dir(pair_id)
 
     def cross_comparison_interaction_file_map(self, pair_id: str | None) -> dict[str, Path]:
-        base = self.cross_comparison_interaction_output_dir(pair_id)
-        if base is None:
+        if self.current_project is None or self.current_project.output_root is None:
             return {}
-        return {
-            "shared_interaction": base / "shared_significant_as_interaction_model.tsv",
-            "opposite_direction": base / "opposite_direction_interaction_events.tsv",
-            "large_delta": base / "large_delta_interaction_events.tsv",
-            "exclusive": base / "exclusive_significant_as_support.tsv",
-            "benchmark": base / "delta_dpsi_vs_interaction_benchmark.tsv",
-            "diagnostics": base / "interaction_diagnostics.tsv",
-        }
+        return CrossComparisonService(self.current_project.output_root).interaction_files(pair_id)
 
     def cross_comparison_interaction_batch_output_dir(self) -> Path | None:
-        base = self.cross_comparison_output_dir()
-        if base is None:
+        if self.current_project is None or self.current_project.output_root is None:
             return None
-        return base / "as_interaction_modeling_all_pairs"
+        return CrossComparisonService(self.current_project.output_root).interaction_batch_dir()
 
     def cross_comparison_interaction_batch_file_map(self) -> dict[str, Path]:
-        base = self.cross_comparison_interaction_batch_output_dir()
-        if base is None:
+        if self.current_project is None or self.current_project.output_root is None:
             return {}
-        return {
-            "batch_summary": base / "all_pair_interaction_summary.tsv",
-            "batch_top_interactions": base / "all_pair_top_interactions.tsv",
-            "batch_exclusive": base / "all_pair_exclusive_support.tsv",
-            "batch_benchmark": base / "all_pair_delta_dpsi_vs_interaction_benchmark.tsv",
-            "batch_diagnostics": base / "all_pair_interaction_diagnostics.tsv",
-            "parameters": base / "parameters.json",
-        }
+        return CrossComparisonService(self.current_project.output_root).interaction_batch_files()
 
     def _write_cross_comparison_pattern_outputs(
         self,
@@ -2428,36 +4892,21 @@ class ProjectService:
         abs_cutoff: float,
         delta_cutoff: float,
     ) -> None:
-        base = self.cross_comparison_pattern_output_dir(pair.pair_id)
-        if base is None:
+        if self.current_project is None or self.current_project.output_root is None:
             return
-        base.mkdir(parents=True, exist_ok=True)
-        file_map = self.cross_comparison_pattern_file_map(pair.pair_id)
-        for key in ("same_direction_large_delta", "opposite_direction", "all_shared", "condition_specific"):
-            frame = tables.get(key, pd.DataFrame())
-            path = file_map.get(key)
-            if path is None:
-                continue
-            frame.to_csv(path, sep="\t", index=False)
-        summary = pd.DataFrame(
-            [
-                {
-                    "pair_id": pair.pair_id,
-                    "pair_name": pair.resolved_name,
-                    "comparison_A": pair.comparison_a,
-                    "comparison_B": pair.comparison_b,
-                    "n_same_direction_large_delta": len(tables.get("same_direction_large_delta", pd.DataFrame())),
-                    "n_opposite_direction": len(tables.get("opposite_direction", pd.DataFrame())),
-                    "n_all_shared": len(tables.get("all_shared", pd.DataFrame())),
-                    "n_condition_specific": len(tables.get("condition_specific", pd.DataFrame())),
-                    "abs_dPSI_significance_cutoff_used": abs_cutoff,
-                    "large_delta_dPSI_cutoff_used": delta_cutoff,
-                }
-            ]
+        generated = CrossComparisonService(self.current_project.output_root).write_pattern_outputs(
+            pair=pair,
+            tables=tables,
+            abs_cutoff=abs_cutoff,
+            delta_cutoff=delta_cutoff,
         )
-        summary_path = file_map.get("summary")
-        if summary_path is not None:
-            summary.to_csv(summary_path, sep="\t", index=False)
+        self._register_cross_comparison_outputs(
+            generated,
+            module_id="5.4.legacy_pattern",
+            scope_id=pair.pair_id,
+            comparison_ids=(pair.comparison_a, pair.comparison_b),
+            parameters={"abs_dpsi_cutoff": abs_cutoff, "large_delta_dpsi_cutoff": delta_cutoff},
+        )
 
     def _write_cross_comparison_interaction_outputs(
         self,
@@ -2467,32 +4916,23 @@ class ProjectService:
         delta_cutoff: float,
         min_total_reads: int,
     ) -> None:
-        base = self.cross_comparison_interaction_output_dir(pair.pair_id)
-        if base is None:
+        if self.current_project is None or self.current_project.output_root is None:
             return
-        base.mkdir(parents=True, exist_ok=True)
-        file_map = self.cross_comparison_interaction_file_map(pair.pair_id)
-        for key in ("shared_interaction", "opposite_direction", "large_delta", "exclusive", "benchmark", "diagnostics"):
-            frame = tables.get(key, pd.DataFrame())
-            path = file_map.get(key)
-            if path is None:
-                continue
-            frame.to_csv(path, sep="\t", index=False)
-        self._write_json(
-            base / "parameters.json",
-            {
-                "module": "5.4.4 Cross-comparison AS interaction modeling",
-                "description": (
-                    "Count-based binomial GLM interaction model for shared significant AS events using replicate-level rMATS IJC/SJC counts. "
-                    "The interaction term tests whether the group effect differs between comparison A and comparison B; Pearson overdispersion is used as a quasi-binomial-style SE correction. "
-                    "An empirical-Bayes shrinkage layer stabilizes interaction log-odds and an interpretable priority score combines effect-size divergence, shrunken statistical confidence, replicate consistency and read support."
-                ),
-                "pair_id": pair.pair_id,
-                "pair_name": pair.resolved_name,
-                "comparison_A": pair.comparison_a,
-                "comparison_B": pair.comparison_b,
-                "abs_dPSI_significance_cutoff": abs_cutoff,
-                "large_delta_dPSI_cutoff": delta_cutoff,
+        generated = CrossComparisonService(self.current_project.output_root).write_interaction_outputs(
+            pair=pair,
+            tables=tables,
+            abs_cutoff=abs_cutoff,
+            delta_cutoff=delta_cutoff,
+            min_total_reads=min_total_reads,
+        )
+        self._register_cross_comparison_outputs(
+            generated,
+            module_id="5.4.3",
+            scope_id=pair.pair_id,
+            comparison_ids=(pair.comparison_a, pair.comparison_b),
+            parameters={
+                "abs_dpsi_cutoff": abs_cutoff,
+                "large_delta_dpsi_cutoff": delta_cutoff,
                 "min_total_reads": min_total_reads,
             },
         )
@@ -2504,30 +4944,55 @@ class ProjectService:
         delta_cutoff: float,
         min_total_reads: int,
     ) -> None:
-        base = self.cross_comparison_interaction_batch_output_dir()
-        if base is None:
+        if self.current_project is None or self.current_project.output_root is None:
             return
-        base.mkdir(parents=True, exist_ok=True)
-        file_map = self.cross_comparison_interaction_batch_file_map()
-        for key in ("batch_summary", "batch_top_interactions", "batch_exclusive", "batch_benchmark", "batch_diagnostics"):
-            table = tables.get(key, pd.DataFrame())
-            path = file_map.get(key)
-            if path is not None:
-                table.to_csv(path, sep="\t", index=False)
-        self._write_json(
-            file_map.get("parameters", base / "parameters.json"),
-            {
-                "module": "5.4.4 Cross-comparison AS interaction modeling all-pair batch summary",
-                "description": (
-                    "Runs the 5.4.4 replicate-aware AS interaction model for every selected comparison pair and aggregates pair-level summaries, "
-                    "top interaction candidates, and complete exclusive read-support classifications."
-                ),
-                "abs_dPSI_significance_cutoff": abs_cutoff,
-                "large_delta_dPSI_cutoff": delta_cutoff,
+        generated = CrossComparisonService(self.current_project.output_root).write_interaction_batch_outputs(
+            tables=tables,
+            abs_cutoff=abs_cutoff,
+            delta_cutoff=delta_cutoff,
+            min_total_reads=min_total_reads,
+        )
+        comparison_ids = tuple(comparison.comparison_id for comparison in self._selected_comparisons())
+        self._register_cross_comparison_outputs(
+            generated,
+            module_id="5.4.3",
+            scope_id="all_pairs",
+            comparison_ids=comparison_ids,
+            parameters={
+                "abs_dpsi_cutoff": abs_cutoff,
+                "large_delta_dpsi_cutoff": delta_cutoff,
                 "min_total_reads": min_total_reads,
-                "generated_at": datetime.now().isoformat(timespec="seconds"),
+                "batch": True,
             },
         )
+
+    def _register_cross_comparison_outputs(
+        self,
+        generated: list[Path],
+        *,
+        module_id: str,
+        scope_id: str,
+        comparison_ids: tuple[str, ...],
+        parameters: dict[str, object],
+    ) -> None:
+        if not generated:
+            return
+        for path in generated:
+            suffix = path.suffix.lower()
+            kind = "table" if suffix in {".tsv", ".csv", ".xlsx"} else "parameters" if suffix == ".json" else "other"
+            self.artifact_registry().register(
+                module_id=module_id,
+                artifact_key=f"{scope_id}/{path.name}",
+                kind=kind,
+                entity_type="event",
+                path=path,
+                scope="comparison_pair" if scope_id != "all_pairs" else "comparison_set",
+                scope_id=scope_id,
+                comparison_ids=comparison_ids,
+                consumer_modules=["5.5", "7.2", "8.2", "9"],
+                description="Cross-comparison AS event output registered for downstream reuse and project reporting.",
+                parameters=parameters,
+            )
 
     def selected_isoform_samples(self) -> list[IsoformSampleDefinition]:
         if self.current_project is None:
@@ -2644,6 +5109,9 @@ class ProjectService:
             f"|log2FC|>={self.current_thresholds.deg_log2fc:g}, "
             f"rMATS_FDR<={self.current_thresholds.splicing_fdr:g}, "
             f"|dPSI|>={self.current_thresholds.splicing_dpsi:g}, "
+            f"stable_AS mean(IJC+SJC)>={self.current_thresholds.stable_min_junction_reads:g}, "
+            f"stable_AS reps/group>={self.current_thresholds.stable_min_replicates_per_group:g}, "
+            f"stable_AS direction_consistency>={self.current_thresholds.stable_min_pairwise_consistency:g}, "
             f"DEXSeq_q<={self.current_thresholds.dexseq_qvalue:g}, "
             f"DTU_q<={self.current_thresholds.dtu_qvalue:g}"
         )
@@ -3014,6 +5482,7 @@ class ProjectService:
                 dpsi = -dpsi
             working["dPSI"] = dpsi
             working["FDR"] = pd.to_numeric(working.get("FDR"), errors="coerce")
+            working = self._apply_stable_as_columns(working, dpsi_column="dPSI", reverse_splicing=bool(comparison.reverse_splicing))
             psi_left = working.get("IncLevel1", pd.Series(pd.NA, index=working.index)).map(self._parse_inc_level_mean)
             psi_right = working.get("IncLevel2", pd.Series(pd.NA, index=working.index)).map(self._parse_inc_level_mean)
             if comparison.reverse_splicing:
@@ -3024,10 +5493,7 @@ class ProjectService:
                 working["psi_control"] = psi_right
             working["psi_experiment_group"] = left_group
             working["psi_control_group"] = right_group
-            working["significant_event"] = (
-                (working["FDR"] <= self.current_thresholds.splicing_fdr)
-                & (working["dPSI"].abs() >= self.current_thresholds.splicing_dpsi)
-            )
+            working["significant_event"] = working["stable_as_event"].fillna(False).map(self._safe_bool)
             working["direction"] = working["dPSI"].map(
                 lambda value: (
                     "positive in canonical AS direction"
@@ -3066,6 +5532,16 @@ class ProjectService:
                         "direction",
                         "inclusion_direction",
                         "coordinates",
+                        "rmats_sig_before_stability",
+                        "stable_as_event",
+                        "mean_junction_reads_group1",
+                        "mean_junction_reads_group2",
+                        "replicate_count_group1",
+                        "replicate_count_group2",
+                        "supported_replicate_count_group1",
+                        "supported_replicate_count_group2",
+                        "replicate_direction_consistency",
+                        "stable_support_status",
                         "significant_event",
                     ]
                 ].copy()
@@ -3777,17 +6253,21 @@ class ProjectService:
 
         summary_frames: list[pd.DataFrame] = []
         matched_frames: list[pd.DataFrame] = []
+        missing_comparisons: list[str] = []
         for comparison in comparisons:
             tables = self.preview_rbp_support(
                 comparison.comparison_id,
                 source=source,
                 top_n=top_n,
                 custom_gene_set_path=custom_gene_set_path,
-                allow_generate=True,
-                force_rebuild=force_rebuild,
+                allow_generate=False,
+                force_rebuild=False,
             )
             summary = tables.get("summary", pd.DataFrame()).copy()
             matched = tables.get("matched_genes", pd.DataFrame()).copy()
+            if summary.empty and matched.empty:
+                missing_comparisons.append(comparison.display_resolved_name)
+                continue
             if not summary.empty and "rbp_gene_set" in summary.columns:
                 summary = summary.loc[summary["rbp_gene_set"].astype(str).str.strip().ne("")].copy()
                 summary_frames.append(summary)
@@ -3807,10 +6287,17 @@ class ProjectService:
 
         self._write_rbp_cross_support_outputs(tables, source, top_n, custom_gene_set_path)
         self._rbp_cross_support_cache[cache_key] = {key: value.copy() for key, value in tables.items()}
+        missing_note = (
+            f" Missing per-comparison RBP support cache for: {', '.join(missing_comparisons)}."
+            if missing_comparisons
+            else ""
+        )
         self._mark_module_state(
             "rbp_cross_support",
             "finished",
-            "Cross-comparison RBP support completed. This is a support-pattern view, not causal RBP inference.",
+            "Cross-comparison RBP support completed from cached per-comparison RBP support tables. "
+            "This is a support-pattern view, not causal RBP inference."
+            + missing_note,
             from_cache=False,
             output_folder=str(self.rbp_cross_support_output_dir() or ""),
         )
@@ -3965,16 +6452,20 @@ class ProjectService:
 
         gene_frames: list[pd.DataFrame] = []
         transcript_frames: list[pd.DataFrame] = []
+        missing_comparisons: list[str] = []
         for comparison in comparisons:
             tables = self.preview_isoform_candidate_support(
                 comparison.comparison_id,
                 source=source,
                 top_n=top_n,
-                allow_generate=True,
-                force_rebuild=force_rebuild,
+                allow_generate=False,
+                force_rebuild=False,
             )
             gene_summary = tables.get("gene_summary", pd.DataFrame()).copy()
             transcript_table = tables.get("transcript_table", pd.DataFrame()).copy()
+            if gene_summary.empty and transcript_table.empty:
+                missing_comparisons.append(comparison.display_resolved_name)
+                continue
             if not gene_summary.empty and "comparison_id" in gene_summary.columns:
                 gene_summary = gene_summary.loc[gene_summary["comparison_id"].astype(str).eq(comparison.comparison_id)].copy()
                 gene_frames.append(gene_summary)
@@ -3998,10 +6489,17 @@ class ProjectService:
 
         self._write_isoform_cross_support_outputs(tables, source, top_n)
         self._isoform_cross_support_cache[cache_key] = {key: value.copy() for key, value in tables.items()}
+        missing_note = (
+            f" Missing per-comparison isoform support cache for: {', '.join(missing_comparisons)}."
+            if missing_comparisons
+            else ""
+        )
         self._mark_module_state(
             "isoform_cross_support",
             "finished",
-            "Cross-comparison isoform support completed. This compares support patterns and dominant isoforms across comparisons.",
+            "Cross-comparison isoform support completed from cached per-comparison isoform support tables. "
+            "This compares support patterns and dominant isoforms across comparisons."
+            + missing_note,
             from_cache=False,
             output_folder=str(self.isoform_cross_support_output_dir() or ""),
         )
@@ -4080,6 +6578,41 @@ class ProjectService:
             return pd.DataFrame()
 
     def _candidate_rows_for_support(self, comparison_id: str, *, source: str, top_n: int) -> tuple[pd.DataFrame, dict[str, object]]:
+        if source == "selection":
+            artifact_rows, artifact_meta = self.downstream_gene_selection(
+                comparison_id,
+                consumer_module="7/8",
+            )
+            if not artifact_rows.empty:
+                catalog = self.candidate_selection_catalog(comparison_id, allow_generate=False)
+                if not catalog.empty:
+                    gene_keys = {
+                        str(value).strip().casefold()
+                        for column in ("gene_symbol", "gene_id")
+                        if column in artifact_rows.columns
+                        for value in artifact_rows[column].dropna().astype(str)
+                        if str(value).strip()
+                    }
+                    mask = pd.Series(False, index=catalog.index)
+                    for column in ("gene_symbol", "gene_id"):
+                        if column in catalog.columns:
+                            mask |= catalog[column].fillna("").astype(str).str.casefold().isin(gene_keys)
+                    matched = self._dedupe_candidate_frame(catalog.loc[mask].copy())
+                    if not matched.empty:
+                        artifact_meta.update(
+                            {
+                                "gene_count": int(len(matched)),
+                                "source": "artifact_registry_selection",
+                            }
+                        )
+                        return matched, artifact_meta
+                artifact_meta.update(
+                    {
+                        "gene_count": int(len(artifact_rows)),
+                        "source": "artifact_registry_selection",
+                    }
+                )
+                return self._dedupe_candidate_frame(artifact_rows), artifact_meta
         selected, meta = self.candidate_selection_frame(
             comparison_id,
             source=source,
@@ -5392,9 +7925,13 @@ class ProjectService:
         comparison_id: str | None,
         *,
         allow_generate: bool = False,
+        force_refresh: bool = False,
     ) -> pd.DataFrame:
         _ = allow_generate  # Explicitly unused: opening the page must not generate downstream inputs.
-        return self._sashimi_event_catalog_frame(comparison_id)
+        return self._sashimi_event_catalog_frame(comparison_id, force_rebuild=force_refresh)
+
+    def refresh_sashimi_event_catalog(self, comparison_id: str | None) -> pd.DataFrame:
+        return self._sashimi_event_catalog_frame(comparison_id, force_rebuild=True)
 
     def _empty_sashimi_events_frame(self) -> pd.DataFrame:
         return pd.DataFrame(
@@ -5410,11 +7947,46 @@ class ProjectService:
                 "FDR",
                 "direction",
                 "coordinates",
+                "rmats_sig_before_stability",
+                "stable_as_event",
+                "mean_junction_reads_group1",
+                "mean_junction_reads_group2",
+                "replicate_count_group1",
+                "replicate_count_group2",
+                "supported_replicate_count_group1",
+                "supported_replicate_count_group2",
+                "replicate_direction_consistency",
+                "stable_support_status",
                 "splicing_direction_flipped",
             ]
         )
 
-    def _sashimi_event_catalog_frame(self, comparison_id: str | None) -> pd.DataFrame:
+    def _sashimi_event_catalog_file_map(self, comparison_id: str | None) -> dict[str, Path]:
+        if self.current_project is None or self.current_project.output_root is None or not comparison_id:
+            return {}
+        base = self.current_project.output_root / "06_sashimi" / "event_catalog"
+        safe_id = self._safe_output_name(str(comparison_id))
+        return {
+            "catalog": base / f"{safe_id}_sashimi_event_catalog.tsv",
+            "parameters": base / f"{safe_id}_sashimi_event_catalog.parameters.json",
+        }
+
+    def _sashimi_event_catalog_parameters(self, comparison) -> dict[str, object]:
+        return {
+            "comparison_id": comparison.comparison_id,
+            "rmats_mode": self.current_project.selected_rmats_mode if self.current_project else "JC",
+            "rmats_name": comparison.rmats_name or "",
+            "rmats_path": str(comparison.rmats_path or ""),
+            "reverse_splicing": bool(comparison.reverse_splicing),
+            "splicing_fdr": self.current_thresholds.splicing_fdr,
+            "splicing_dpsi": self.current_thresholds.splicing_dpsi,
+            "stable_min_junction_reads": self.current_thresholds.stable_min_junction_reads,
+            "stable_min_replicates_per_group": self.current_thresholds.stable_min_replicates_per_group,
+            "stable_min_pairwise_consistency": self.current_thresholds.stable_min_pairwise_consistency,
+            "catalog_version": 3,
+        }
+
+    def _sashimi_event_catalog_frame(self, comparison_id: str | None, *, force_rebuild: bool = False) -> pd.DataFrame:
         if self.current_project is None or not comparison_id:
             return self._empty_sashimi_events_frame()
         comparison = next(
@@ -5424,10 +7996,42 @@ class ProjectService:
         if comparison is None or comparison.rmats_path is None:
             return self._empty_sashimi_events_frame()
         mode = self.current_project.selected_rmats_mode or "JC"
-        cache_key = f"{comparison.comparison_id}|{mode}|{int(bool(comparison.reverse_splicing))}"
-        cached = self._sashimi_event_catalog_cache.get(cache_key)
+        cache_key = "|".join(
+            [
+                comparison.comparison_id,
+                str(mode),
+                str(int(bool(comparison.reverse_splicing))),
+                f"{float(self.current_thresholds.splicing_fdr):.6g}",
+                f"{float(self.current_thresholds.splicing_dpsi):.6g}",
+                f"{float(self.current_thresholds.stable_min_junction_reads):.6g}",
+                str(int(self.current_thresholds.stable_min_replicates_per_group)),
+                f"{float(self.current_thresholds.stable_min_pairwise_consistency):.6g}",
+            ]
+        )
+        cached = None if force_rebuild else self._sashimi_event_catalog_cache.get(cache_key)
         if cached is not None:
+            self._log_cache(f"sashimi event catalog cache hit: memory for {comparison.comparison_id}")
             return cached.copy()
+
+        file_map = self._sashimi_event_catalog_file_map(comparison.comparison_id)
+        expected_parameters = self._sashimi_event_catalog_parameters(comparison)
+        catalog_path = file_map.get("catalog")
+        if (
+            not force_rebuild
+            and catalog_path is not None
+            and catalog_path.exists()
+            and self._cached_parameters_match(file_map.get("parameters"), expected_parameters)
+        ):
+            try:
+                disk_cached = pd.read_csv(catalog_path, sep="\t", low_memory=False)
+            except Exception:
+                disk_cached = pd.DataFrame()
+            if list(disk_cached.columns):
+                self._log_cache(f"sashimi event catalog cache hit: disk for {comparison.comparison_id}")
+                self._sashimi_event_catalog_cache[cache_key] = disk_cached.copy()
+                return disk_cached
+
+        self._log_heavy(f"sashimi event catalog rebuild started for {comparison.comparison_id}")
 
         annotation_lookup = self._annotation_gene_symbol_lookup()
         rows: list[pd.DataFrame] = []
@@ -5477,6 +8081,7 @@ class ProjectService:
             working["dPSI"] = dpsi_series
             working["splicing_direction_flipped"] = bool(comparison.reverse_splicing)
             working["FDR"] = pd.to_numeric(working["FDR"] if "FDR" in working.columns else working.get("fdr"), errors="coerce")
+            working = self._apply_stable_as_columns(working, dpsi_column="dPSI", reverse_splicing=bool(comparison.reverse_splicing))
             working["direction"] = working["dPSI"].map(
                 lambda value: (
                     "positive in canonical AS direction"
@@ -5505,6 +8110,16 @@ class ProjectService:
                         "FDR",
                         "direction",
                         "coordinates",
+                        "rmats_sig_before_stability",
+                        "stable_as_event",
+                        "mean_junction_reads_group1",
+                        "mean_junction_reads_group2",
+                        "replicate_count_group1",
+                        "replicate_count_group2",
+                        "supported_replicate_count_group1",
+                        "supported_replicate_count_group2",
+                        "replicate_direction_consistency",
+                        "stable_support_status",
                         "splicing_direction_flipped",
                     ]
                 ].copy()
@@ -5513,6 +8128,7 @@ class ProjectService:
         if not rows:
             empty = self._empty_sashimi_events_frame()
             self._sashimi_event_catalog_cache[cache_key] = empty
+            self._write_sashimi_event_catalog_cache(empty, file_map, expected_parameters)
             return empty.copy()
 
         combined = pd.concat(rows, ignore_index=True)
@@ -5523,7 +8139,22 @@ class ProjectService:
             na_position="last",
         ).reset_index(drop=True)
         self._sashimi_event_catalog_cache[cache_key] = combined.copy()
+        self._write_sashimi_event_catalog_cache(combined, file_map, expected_parameters)
         return combined
+
+    def _write_sashimi_event_catalog_cache(
+        self,
+        frame: pd.DataFrame,
+        file_map: dict[str, Path],
+        parameters: dict[str, object],
+    ) -> None:
+        catalog_path = file_map.get("catalog")
+        parameters_path = file_map.get("parameters")
+        if catalog_path is None or parameters_path is None:
+            return
+        catalog_path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(catalog_path, sep="\t", index=False)
+        self._write_json(parameters_path, parameters)
 
     def _significant_as_event_summary_frame(self, comparison_id: str | None) -> pd.DataFrame:
         cache_key = "|".join(
@@ -5531,6 +8162,9 @@ class ProjectService:
                 str(comparison_id or ""),
                 f"{float(self.current_thresholds.splicing_fdr):.6g}",
                 f"{float(self.current_thresholds.splicing_dpsi):.6g}",
+                f"{float(self.current_thresholds.stable_min_junction_reads):.6g}",
+                str(int(self.current_thresholds.stable_min_replicates_per_group)),
+                f"{float(self.current_thresholds.stable_min_pairwise_consistency):.6g}",
             ]
         )
         cached = self._significant_as_event_summary_cache.get(cache_key)
@@ -5544,6 +8178,10 @@ class ProjectService:
                     "normalized_gene_id",
                     "significant_as_event_ids",
                     "significant_as_event_list",
+                    "significant_as_stability_summary",
+                    "stable_as_min_supported_replicates_group1",
+                    "stable_as_min_supported_replicates_group2",
+                    "stable_as_min_direction_consistency",
                 ]
             )
             self._significant_as_event_summary_cache[cache_key] = empty.copy()
@@ -5551,10 +8189,13 @@ class ProjectService:
         working = events.copy()
         working["FDR"] = pd.to_numeric(working.get("FDR"), errors="coerce")
         working["dPSI"] = pd.to_numeric(working.get("dPSI"), errors="coerce")
-        working["significant_event"] = (
-            working["FDR"].le(self.current_thresholds.splicing_fdr)
-            & working["dPSI"].abs().ge(self.current_thresholds.splicing_dpsi)
-        )
+        if "stable_as_event" in working.columns:
+            working["significant_event"] = working["stable_as_event"].fillna(False).map(self._safe_bool)
+        else:
+            working["significant_event"] = (
+                working["FDR"].le(self.current_thresholds.splicing_fdr)
+                & working["dPSI"].abs().ge(self.current_thresholds.splicing_dpsi)
+            )
         working = working.loc[working["significant_event"].fillna(False)].copy()
         if working.empty:
             empty = pd.DataFrame(
@@ -5563,6 +8204,10 @@ class ProjectService:
                     "normalized_gene_id",
                     "significant_as_event_ids",
                     "significant_as_event_list",
+                    "significant_as_stability_summary",
+                    "stable_as_min_supported_replicates_group1",
+                    "stable_as_min_supported_replicates_group2",
+                    "stable_as_min_direction_consistency",
                 ]
             )
             self._significant_as_event_summary_cache[cache_key] = empty.copy()
@@ -5575,9 +8220,15 @@ class ProjectService:
         for (comp_id, gene_id), subset in working.groupby(["comparison_id", "normalized_gene_id"], dropna=False):
             event_ids = []
             event_labels = []
+            stability_labels = []
             seen_ids: set[str] = set()
             seen_labels: set[str] = set()
-            for _, row in subset.sort_values(["FDR", "event_type", "event_id"], ascending=[True, True, True], na_position="last").iterrows():
+            ordered_subset = subset.sort_values(
+                ["FDR", "event_type", "event_id"],
+                ascending=[True, True, True],
+                na_position="last",
+            )
+            for _, row in ordered_subset.iterrows():
                 event_id = self._safe_text(row.get("event_id", ""))
                 event_label = self._safe_text(row.get("event_label", ""))
                 if event_id and event_id not in seen_ids:
@@ -5586,12 +8237,41 @@ class ProjectService:
                 if event_label and event_label not in seen_labels:
                     seen_labels.add(event_label)
                     event_labels.append(event_label)
+                    supported_1 = pd.to_numeric(row.get("supported_replicate_count_group1"), errors="coerce")
+                    supported_2 = pd.to_numeric(row.get("supported_replicate_count_group2"), errors="coerce")
+                    total_1 = pd.to_numeric(row.get("replicate_count_group1"), errors="coerce")
+                    total_2 = pd.to_numeric(row.get("replicate_count_group2"), errors="coerce")
+                    reads_1 = pd.to_numeric(row.get("mean_junction_reads_group1"), errors="coerce")
+                    reads_2 = pd.to_numeric(row.get("mean_junction_reads_group2"), errors="coerce")
+                    consistency = pd.to_numeric(row.get("replicate_direction_consistency"), errors="coerce")
+                    stability_labels.append(
+                        f"{event_label} | supported replicates "
+                        f"{int(supported_1) if pd.notna(supported_1) else 'NA'}/{int(total_1) if pd.notna(total_1) else 'NA'} vs "
+                        f"{int(supported_2) if pd.notna(supported_2) else 'NA'}/{int(total_2) if pd.notna(total_2) else 'NA'} | "
+                        f"mean IJC+SJC {float(reads_1):.1f}/{float(reads_2):.1f} | "
+                        f"direction consistency {float(consistency):.2f}"
+                        if pd.notna(reads_1) and pd.notna(reads_2) and pd.notna(consistency)
+                        else f"{event_label} | replicate stability metrics unavailable"
+                    )
+            supported_group1 = pd.to_numeric(
+                ordered_subset.get("supported_replicate_count_group1"), errors="coerce"
+            )
+            supported_group2 = pd.to_numeric(
+                ordered_subset.get("supported_replicate_count_group2"), errors="coerce"
+            )
+            consistency_values = pd.to_numeric(
+                ordered_subset.get("replicate_direction_consistency"), errors="coerce"
+            )
             rows.append(
                 {
                     "comparison_id": self._safe_text(comp_id),
                     "normalized_gene_id": self._safe_text(gene_id),
                     "significant_as_event_ids": "; ".join(event_ids),
                     "significant_as_event_list": "; ".join(event_labels),
+                    "significant_as_stability_summary": "; ".join(stability_labels),
+                    "stable_as_min_supported_replicates_group1": supported_group1.min(skipna=True),
+                    "stable_as_min_supported_replicates_group2": supported_group2.min(skipna=True),
+                    "stable_as_min_direction_consistency": consistency_values.min(skipna=True),
                 }
             )
         result = pd.DataFrame(rows)
@@ -5666,6 +8346,12 @@ class ProjectService:
         manifest = manifest.reset_index(drop=True) if manifest is not None and not manifest.empty else pd.DataFrame()
         manifest = self._enrich_sashimi_manifest_with_event_metadata(manifest, source)
         self.run_state.results.sashimi_manifest = manifest.copy()
+        selected_comparison_id = str(source["comparison_id"].iloc[0]) if "comparison_id" in source.columns else str(comparison_id or "")
+        self.publish_sashimi_event_selection(
+            source,
+            comparison_id=selected_comparison_id,
+            selection_rule="User-selected rMATS events from the 5.5 event catalog.",
+        )
         self._mark_module_state(
             "sashimi_manifest",
             "finished" if not manifest.empty else "failed",
@@ -5731,7 +8417,7 @@ class ProjectService:
         event_id = text_value("event_id") or self._safe_output_name(
             f"custom_{gene_symbol or gene_id}_{chrom}_{event_start}_{event_end}_{event_type}"
         )
-        output_root = self.current_project.output_root or (self.current_project.project_root / "katana_output")
+        output_root = self.require_output_root()
         event_root = output_root / "06_sashimi" / "custom_events" / self._safe_output_name(comparison.comparison_id)
         bam_root = output_root / "06_sashimi" / "generated_bam_lists"
         event_root.mkdir(parents=True, exist_ok=True)
@@ -5798,6 +8484,11 @@ class ProjectService:
             ]
         )
         self.run_state.results.sashimi_manifest = manifest.copy()
+        self.publish_sashimi_event_selection(
+            manifest,
+            comparison_id=comparison.comparison_id,
+            selection_rule="User-defined native sashimi event coordinates.",
+        )
         self._mark_module_state(
             "sashimi_manifest",
             "finished",
@@ -5985,7 +8676,7 @@ class ProjectService:
         result = pd.DataFrame(rows)
         if result.empty:
             return self._empty_continuous_skip_frame()
-        output_root = self.current_project.output_root or (self.current_project.project_root / "katana_output")
+        output_root = self.require_output_root()
         outdir = output_root / "06_sashimi" / "continuous_skip_detector" / self._safe_output_name(comparison.comparison_id)
         outdir.mkdir(parents=True, exist_ok=True)
         result.to_csv(outdir / "significant_continuous_skipped_exon_junctions.tsv", sep="\t", index=False)
@@ -6148,7 +8839,7 @@ class ProjectService:
     def build_sashimi_output_browser(self, comparison_id: str | None = None) -> pd.DataFrame:
         if self.current_project is None:
             raise RuntimeError("No project loaded.")
-        output_root = self.current_project.output_root or (self.current_project.project_root / "katana_output")
+        output_root = self.require_output_root()
         base = output_root / "06_sashimi" / "plots"
         columns = [
             "gene",
@@ -6367,6 +9058,9 @@ class ProjectService:
             "thresholds": {
                 "splicing_fdr": self.current_thresholds.splicing_fdr,
                 "splicing_dpsi": self.current_thresholds.splicing_dpsi,
+                "stable_min_junction_reads": self.current_thresholds.stable_min_junction_reads,
+                "stable_min_replicates_per_group": self.current_thresholds.stable_min_replicates_per_group,
+                "stable_min_pairwise_consistency": self.current_thresholds.stable_min_pairwise_consistency,
                 "program_delta_dpsi": self.current_thresholds.program_delta_dpsi,
                 "deg_padj": self.current_thresholds.deg_padj,
                 "deg_log2fc": self.current_thresholds.deg_log2fc,
@@ -6623,15 +9317,12 @@ class ProjectService:
             if kind == "transcript":
                 preferred = int("transcript" not in name and "cdna" not in name)
                 avoided = int("genome" in name or "dna.primary" in name or "primary_assembly" in name)
-                key = "transcript_fasta"
             elif kind == "genome":
                 preferred = int("genome" not in name and "dna.primary" not in name and "primary_assembly" not in name)
                 avoided = int("transcript" in name or "cdna" in name)
-                key = "genome_fasta"
             else:
                 preferred = 0
                 avoided = 0
-                key = "fasta"
             return (preferred, avoided, len(path.parts), str(path))
 
         chosen = sorted(candidates, key=score)[0]
@@ -6673,7 +9364,7 @@ class ProjectService:
         suffix = path.suffix.lower()
         if suffix in {".png", ".jpg", ".jpeg", ".svg"}:
             return "image"
-        if suffix in {".tsv", ".csv", ".txt"}:
+        if suffix in {".tsv", ".csv", ".txt", ".md"}:
             return "table"
         if suffix in {".xlsx", ".xls"}:
             return "excel"
@@ -7062,6 +9753,7 @@ class ProjectService:
         splicing_sig_source = frame["splicing_sig"] if "splicing_sig" in frame.columns else pd.Series(False, index=frame.index)
         frame["DEG_significant"] = deg_sig_source.map(self._safe_bool)
         frame["rMATS_significant"] = splicing_sig_source.map(self._safe_bool)
+        frame["stable_AS_confirmed"] = frame["rMATS_significant"]
         frame["DEXSeq_significant"] = frame["support_DEXSeq"] > 0
         frame["DTU_significant"] = frame["support_DTU"] > 0
         frame["n_rMATS_significant_events"] = pd.to_numeric(frame.get("n_sig_events_all"), errors="coerce").fillna(0).astype(int)
@@ -7069,6 +9761,30 @@ class ProjectService:
         frame["dominant_rMATS_event_type"] = frame.get("representative_event_type")
         frame["best_rMATS_event_id"] = frame.get("representative_event_id")
         frame["dominant_rMATS_standardized_dPSI"] = frame["standardized_dPSI"]
+        frame["dominant_rMATS_mean_junction_reads_group1"] = pd.to_numeric(
+            frame.get("representative_mean_junction_reads_group1"), errors="coerce"
+        )
+        frame["dominant_rMATS_mean_junction_reads_group2"] = pd.to_numeric(
+            frame.get("representative_mean_junction_reads_group2"), errors="coerce"
+        )
+        frame["dominant_rMATS_replicate_count_group1"] = pd.to_numeric(
+            frame.get("representative_replicate_count_group1"), errors="coerce"
+        )
+        frame["dominant_rMATS_replicate_count_group2"] = pd.to_numeric(
+            frame.get("representative_replicate_count_group2"), errors="coerce"
+        )
+        frame["dominant_rMATS_supported_replicates_group1"] = pd.to_numeric(
+            frame.get("representative_supported_replicate_count_group1"), errors="coerce"
+        )
+        frame["dominant_rMATS_supported_replicates_group2"] = pd.to_numeric(
+            frame.get("representative_supported_replicate_count_group2"), errors="coerce"
+        )
+        frame["dominant_rMATS_replicate_direction_consistency"] = pd.to_numeric(
+            frame.get("representative_replicate_direction_consistency"), errors="coerce"
+        )
+        frame["dominant_rMATS_stable_support_status"] = frame.get(
+            "representative_stable_support_status", pd.Series(pd.NA, index=frame.index)
+        )
         frame["significant_as_event_types"] = frame.get("sig_event_types", pd.Series("", index=frame.index)).fillna("").astype(str)
         frame["as_event_summary"] = frame.apply(
             lambda row: (
@@ -7173,6 +9889,15 @@ class ProjectService:
             frame["significant_as_event_ids"] = ""
         if "significant_as_event_list" not in frame.columns:
             frame["significant_as_event_list"] = ""
+        if "significant_as_stability_summary" not in frame.columns:
+            frame["significant_as_stability_summary"] = ""
+        for column in (
+            "stable_as_min_supported_replicates_group1",
+            "stable_as_min_supported_replicates_group2",
+            "stable_as_min_direction_consistency",
+        ):
+            if column not in frame.columns:
+                frame[column] = pd.NA
         frame["shortlist_gene"] = frame["gene_symbol"].astype(str).isin(self._shortlist_gene_set())
         frame["blacklist_gene"] = frame["gene_symbol"].astype(str).isin(set(self.blacklist_genes_for_display()))
         frame["blacklist_exclusion_reason"] = frame["blacklist_gene"].map(lambda value: "manual blacklist" if value else "")
@@ -7218,10 +9943,15 @@ class ProjectService:
                 "log2fc_direction_label",
                 "transcript_direction_flipped",
                 "rMATS_significant",
+                "stable_AS_confirmed",
                 "n_rMATS_significant_events",
                 "significant_as_event_types",
                 "significant_as_event_ids",
                 "significant_as_event_list",
+                "significant_as_stability_summary",
+                "stable_as_min_supported_replicates_group1",
+                "stable_as_min_supported_replicates_group2",
+                "stable_as_min_direction_consistency",
                 "as_event_summary",
                 "cross_candidate_pattern",
                 "cross_pattern_reason",
@@ -7238,6 +9968,14 @@ class ProjectService:
                 "dominant_rMATS_event_type",
                 "best_rMATS_event_id",
                 "dominant_rMATS_standardized_dPSI",
+                "dominant_rMATS_mean_junction_reads_group1",
+                "dominant_rMATS_mean_junction_reads_group2",
+                "dominant_rMATS_replicate_count_group1",
+                "dominant_rMATS_replicate_count_group2",
+                "dominant_rMATS_supported_replicates_group1",
+                "dominant_rMATS_supported_replicates_group2",
+                "dominant_rMATS_replicate_direction_consistency",
+                "dominant_rMATS_stable_support_status",
                 "dpsi_direction_label",
                 "dexseq_direction_label",
                 "dtu_direction_label",
@@ -7553,12 +10291,16 @@ class ProjectService:
             "non_significant_side_FDR",
             "non_significant_side_read_support",
             "event_class",
+            "unified_result_type",
+            "unified_display_class",
+            "support_class",
             "abs_dPSI_significance_cutoff_used",
             "large_delta_dPSI_cutoff_used",
             "min_total_reads_used",
         ]
         empty = pd.DataFrame(columns=base_columns)
         return {
+            "unified_event_table": empty.copy(),
             "shared_interaction": empty.copy(),
             "opposite_direction": empty.copy(),
             "large_delta": empty.copy(),
@@ -7618,7 +10360,11 @@ class ProjectService:
                     "n_opposite_direction",
                     "n_same_direction_large_delta",
                     "n_exclusive",
+                    "n_exclusive_A",
+                    "n_exclusive_B",
                     "n_exclusive_supported",
+                    "n_exclusive_A_supported",
+                    "n_exclusive_B_supported",
                     "n_exclusive_low_power",
                     "n_exclusive_counterpart_not_found",
                     "top_gene",
@@ -7657,6 +10403,28 @@ class ProjectService:
             except ValueError:
                 continue
         return values
+
+    @staticmethod
+    def _paired_read_totals(ijc_values: list[float], sjc_values: list[float]) -> list[float]:
+        n_items = max(len(ijc_values), len(sjc_values))
+        totals: list[float] = []
+        for idx in range(n_items):
+            ijc = ijc_values[idx] if idx < len(ijc_values) and np.isfinite(ijc_values[idx]) else 0.0
+            sjc = sjc_values[idx] if idx < len(sjc_values) and np.isfinite(sjc_values[idx]) else 0.0
+            totals.append(float(ijc) + float(sjc))
+        return totals
+
+    def _apply_stable_as_columns(self, frame: pd.DataFrame, *, dpsi_column: str = "dPSI", reverse_splicing: bool = False) -> pd.DataFrame:
+        working = frame.copy()
+        fdr = pd.to_numeric(working.get("FDR"), errors="coerce")
+        standardized_dpsi = pd.to_numeric(working.get(dpsi_column), errors="coerce")
+        return apply_stable_as_filter(
+            working,
+            fdr=fdr,
+            standardized_dpsi=standardized_dpsi,
+            reverse_splicing=reverse_splicing,
+            thresholds=self.current_thresholds,
+        )
 
     @staticmethod
     def _safe_logit(value: float) -> float:
@@ -7720,19 +10488,7 @@ class ProjectService:
         }
 
     def _replicate_direction_consistency(self, psi_group1: list[float], psi_group2: list[float], dpsi_value: float) -> float:
-        if not np.isfinite(dpsi_value) or float(dpsi_value) == 0:
-            return float("nan")
-        direction = np.sign(float(dpsi_value))
-        diffs = []
-        for left, right in zip(psi_group1, psi_group2, strict=False):
-            if np.isfinite(left) and np.isfinite(right):
-                diffs.append(float(left) - float(right))
-        if not diffs:
-            return float("nan")
-        signs = [np.sign(value) for value in diffs if value != 0]
-        if not signs:
-            return float("nan")
-        return float(np.mean([sign == direction for sign in signs]))
+        return pairwise_direction_consistency(psi_group1, psi_group2, dpsi_value)
 
     def _fit_binomial_glm_interaction(self, row: pd.Series) -> dict[str, object]:
         """Fit IJC/SJC ~ comparison + group + comparison:group.
@@ -8037,6 +10793,11 @@ class ProjectService:
             dpsi_values = pd.to_numeric(working.get("IncLevelDifference"), errors="coerce")
             if comparison.reverse_splicing:
                 dpsi_values = -dpsi_values
+            working["FDR"] = fdr_values
+            working["dPSI"] = dpsi_values
+            working = self._apply_stable_as_columns(working, dpsi_column="dPSI", reverse_splicing=bool(comparison.reverse_splicing))
+            fdr_values = pd.to_numeric(working.get("FDR"), errors="coerce")
+            dpsi_values = pd.to_numeric(working.get("dPSI"), errors="coerce")
             normalized_gene_ids = self._normalized_gene_id_series(working)
             if "geneSymbol" in working.columns:
                 gene_symbols = working["geneSymbol"].astype("object")
@@ -8061,7 +10822,7 @@ class ProjectService:
                 + "|"
                 + matching_ids.fillna("").astype(str)
             )
-            significant_mask = fdr_values.le(0.05) & dpsi_values.abs().ge(abs_dpsi_cutoff)
+            significant_mask = working["stable_as_event"].fillna(False).map(self._safe_bool) & dpsi_values.abs().ge(abs_dpsi_cutoff)
             if candidate_keys is not None:
                 keep_mask = event_keys.isin(candidate_keys)
             elif significant_only:
@@ -8079,6 +10840,8 @@ class ProjectService:
             coordinates = coordinates.loc[working.index]
             event_keys = event_keys.loc[working.index]
             significant_mask = significant_mask.loc[working.index]
+            stable_as_event = working["stable_as_event"].loc[working.index]
+            rmats_sig_before_stability = working["rmats_sig_before_stability"].loc[working.index]
 
             for idx, row in working.iterrows():
                 gene_id = str(normalized_gene_ids.loc[idx] or "").strip()
@@ -8135,6 +10898,8 @@ class ProjectService:
                         "dPSI": float(dpsi) if pd.notna(dpsi) else float("nan"),
                         "FDR": float(fdr) if pd.notna(fdr) else float("nan"),
                         "significant": significant,
+                        "rmats_sig_before_stability": bool(rmats_sig_before_stability.loc[idx]),
+                        "stable_as_event": bool(stable_as_event.loc[idx]),
                         "direction": (
                             f"inclusion higher in {left_label} than {right_label}"
                             if pd.notna(dpsi) and float(dpsi) > 0
@@ -8553,7 +11318,54 @@ class ProjectService:
                 }
             ]
         )
+        unified_parts: list[pd.DataFrame] = []
+        if not shared.empty:
+            shared_unified = shared.copy()
+            shared_unified["unified_result_type"] = "shared_significant_modeled"
+            shared_unified["unified_display_class"] = "Shared significant modeled"
+            shared_unified.loc[shared_unified.get("opposite_direction", pd.Series(False, index=shared_unified.index)).map(self._safe_bool), "unified_display_class"] = "Opposite direction"
+            shared_unified.loc[
+                shared_unified.get("same_direction", pd.Series(False, index=shared_unified.index)).map(self._safe_bool)
+                & pd.to_numeric(shared_unified.get("same_direction_strength_delta", pd.Series(np.nan, index=shared_unified.index)), errors="coerce").ge(large_delta_dpsi_cutoff),
+                "unified_display_class",
+            ] = "Same direction + large dPSI delta"
+            shared_unified["support_class"] = shared_unified.get("read_support_class", "shared_significant")
+            unified_parts.append(shared_unified)
+        if not exclusive.empty:
+            exclusive_unified = exclusive.copy()
+            side = exclusive_unified.get("exclusive_side", pd.Series("", index=exclusive_unified.index)).fillna("").astype(str)
+            support = exclusive_unified.get("non_significant_side_read_support", pd.Series("", index=exclusive_unified.index)).fillna("").astype(str)
+            exclusive_unified["unified_result_type"] = np.where(
+                side.eq("comparison_A_only"),
+                "A_specific_significant",
+                np.where(side.eq("comparison_B_only"), "B_specific_significant", "exclusive_significant"),
+            )
+            exclusive_unified["unified_display_class"] = np.where(
+                side.eq("comparison_A_only"),
+                "A-specific significant",
+                np.where(side.eq("comparison_B_only"), "B-specific significant", "Specific significant"),
+            )
+            exclusive_unified["support_class"] = support
+            unified_parts.append(exclusive_unified)
+        if unified_parts:
+            unified = pd.concat(unified_parts, ignore_index=True, sort=False)
+            unified["_sort_priority"] = unified["unified_result_type"].map(
+                {
+                    "shared_significant_modeled": 0,
+                    "A_specific_significant": 1,
+                    "B_specific_significant": 2,
+                    "exclusive_significant": 3,
+                }
+            ).fillna(9)
+            unified = unified.sort_values(
+                ["_sort_priority", "interaction_priority_score", "abs_delta_dPSI", "gene"],
+                ascending=[True, False, False, True],
+                na_position="last",
+            ).drop(columns=["_sort_priority"], errors="ignore")
+        else:
+            unified = pd.DataFrame(columns=output_columns)
         return {
+            "unified_event_table": unified.reindex(columns=output_columns).reset_index(drop=True),
             "shared_interaction": shared.reindex(columns=output_columns).reset_index(drop=True),
             "opposite_direction": opposite.reindex(columns=output_columns).reset_index(drop=True),
             "large_delta": large_delta.reindex(columns=output_columns).reset_index(drop=True),
@@ -8685,10 +11497,12 @@ class ProjectService:
                 else "no directional shift"
             )
         )
-        working["significant"] = (
-            working["FDR"].le(0.05)
-            & working["dPSI"].abs().ge(abs_dpsi_cutoff)
+        stable_source = (
+            working["stable_as_event"].fillna(False).map(self._safe_bool)
+            if "stable_as_event" in working.columns
+            else working["FDR"].le(self.current_thresholds.splicing_fdr)
         )
+        working["significant"] = stable_source & working["dPSI"].abs().ge(abs_dpsi_cutoff)
         working = working.sort_values(["significant", "FDR"], ascending=[False, True], na_position="last")
         working = working.drop_duplicates(subset=["event_matching_key"], keep="first").reset_index(drop=True)
         return working[
@@ -8706,6 +11520,14 @@ class ProjectService:
                 "FDR",
                 "significant",
                 "direction",
+                "mean_junction_reads_group1",
+                "mean_junction_reads_group2",
+                "replicate_count_group1",
+                "replicate_count_group2",
+                "supported_replicate_count_group1",
+                "supported_replicate_count_group2",
+                "replicate_direction_consistency",
+                "stable_support_status",
             ]
         ].copy()
 
@@ -9067,8 +11889,8 @@ class ProjectService:
         payload: dict[str, object] = {}
         for comparison in self.current_project.available_comparisons:
             group1, group2 = self._comparison_group_labels(comparison)
-            numerator_group = comparison.experiment_group or comparison.source_experiment_group or group1
-            denominator_group = comparison.control_group or comparison.source_control_group or group2
+            deg_group1, deg_group2 = self._comparison_deg_direction_labels(comparison)
+            as_group1, as_group2 = self._comparison_splicing_direction_labels(comparison)
             output_prefix = comparison.output_prefix or self._safe_output_name(comparison.comparison_id)
             payload[comparison.comparison_id] = {
                 "display_name": comparison.display_resolved_name,
@@ -9076,14 +11898,14 @@ class ProjectService:
                 "group1": group1,
                 "group2": group2,
                 "transcript_contrast": {
-                    "numerator_group": numerator_group,
-                    "denominator_group": denominator_group,
-                    "log2fc_positive_means": f"Transcript expression higher in {numerator_group} than {denominator_group}",
+                    "numerator_group": deg_group1,
+                    "denominator_group": deg_group2,
+                    "log2fc_positive_means": f"Transcript expression higher in {deg_group1} than {deg_group2}",
                 },
                 "splicing_contrast": {
-                    "group1": group1,
-                    "group2": group2,
-                    "dpsi_positive_means": f"Event usage higher in {group1} than {group2}",
+                    "group1": as_group1,
+                    "group2": as_group2,
+                    "dpsi_positive_means": f"Event usage higher in {as_group1} than {as_group2}",
                 },
                 "expected_direction_notes": {
                     "notes": comparison.expected_direction_notes or "",
@@ -9096,8 +11918,8 @@ class ProjectService:
 
     def _comparison_parameters_payload(self, comparison) -> dict[str, object]:
         group1, group2 = self._comparison_group_labels(comparison)
-        numerator_group = comparison.experiment_group or comparison.source_experiment_group or group1
-        denominator_group = comparison.control_group or comparison.source_control_group or group2
+        deg_group1, deg_group2 = self._comparison_deg_direction_labels(comparison)
+        as_group1, as_group2 = self._comparison_splicing_direction_labels(comparison)
         return {
             "comparison_id": comparison.comparison_id,
             "display_name": comparison.display_resolved_name,
@@ -9105,15 +11927,15 @@ class ProjectService:
             "group1": group1,
             "group2": group2,
             "transcript_contrast": {
-                "numerator_group": numerator_group,
-                "denominator_group": denominator_group,
+                "numerator_group": deg_group1,
+                "denominator_group": deg_group2,
             },
             "splicing_contrast": {
-                "group1": group1,
-                "group2": group2,
+                "group1": as_group1,
+                "group2": as_group2,
             },
-            "log2fc_direction_label": f"log2FC > 0 means transcript expression is higher in {numerator_group} than {denominator_group}",
-            "dpsi_direction_label": f"dPSI > 0 means event usage is higher in {group1} than {group2}",
+            "log2fc_direction_label": f"log2FC > 0 means transcript expression is higher in {deg_group1} than {deg_group2}",
+            "dpsi_direction_label": f"dPSI > 0 means event usage is higher in {as_group1} than {as_group2}",
             "transcript_direction_flipped": bool(comparison.reverse_deg),
             "splicing_direction_flipped": bool(comparison.reverse_splicing),
             "thresholds": {
@@ -9121,6 +11943,9 @@ class ProjectService:
                 "abs_standardized_log2FC": self.current_thresholds.deg_log2fc,
                 "rMATS_FDR": self.current_thresholds.splicing_fdr,
                 "abs_standardized_dPSI": self.current_thresholds.splicing_dpsi,
+                "stable_AS_min_IJC_plus_SJC_per_replicate": self.current_thresholds.stable_min_junction_reads,
+                "stable_AS_min_replicates_per_group": self.current_thresholds.stable_min_replicates_per_group,
+                "stable_AS_direction_consistency": self.current_thresholds.stable_min_pairwise_consistency,
                 "DEXSeq_qvalue": self.current_thresholds.dexseq_qvalue,
                 "DTU_qvalue": self.current_thresholds.dtu_qvalue,
                 "program_delta_dpsi": self.current_thresholds.program_delta_dpsi,
@@ -9214,6 +12039,9 @@ class ProjectService:
                     "abs_standardized_log2FC": self.current_thresholds.deg_log2fc,
                     "rMATS_FDR": self.current_thresholds.splicing_fdr,
                     "abs_standardized_dPSI": self.current_thresholds.splicing_dpsi,
+                    "stable_AS_min_IJC_plus_SJC_per_replicate": self.current_thresholds.stable_min_junction_reads,
+                    "stable_AS_min_replicates_per_group": self.current_thresholds.stable_min_replicates_per_group,
+                    "stable_AS_direction_consistency": self.current_thresholds.stable_min_pairwise_consistency,
                     "DEXSeq_qvalue": self.current_thresholds.dexseq_qvalue,
                     "DTU_qvalue": self.current_thresholds.dtu_qvalue,
                     "program_delta_dpsi": self.current_thresholds.program_delta_dpsi,
@@ -9904,6 +12732,12 @@ class ProjectService:
         config_path = bundled_configs_root() / "default_thresholds.yaml"
         with config_path.open("r", encoding="utf-8") as handle:
             return yaml.safe_load(handle)
+
+    @staticmethod
+    def _threshold_config_from_mapping(values: dict | None) -> ThresholdConfig:
+        allowed = set(ThresholdConfig.__dataclass_fields__.keys())
+        cleaned = {key: value for key, value in (values or {}).items() if key in allowed}
+        return ThresholdConfig(**cleaned)
 
 
 def _looks_like_genome_gtf(path: Path) -> bool:

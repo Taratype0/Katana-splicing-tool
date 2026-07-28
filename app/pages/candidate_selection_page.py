@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 from pandas.api.types import is_bool_dtype, is_numeric_dtype
-from PySide6.QtCore import QObject, QThread, Signal, Qt
+from PySide6.QtCore import QObject, QThread, QTimer, Signal, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
+    QDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -16,10 +16,12 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
+from app.pages.module_details import module_detail
 from src.services.project_service import ProjectService
 
 
@@ -60,7 +62,7 @@ class CandidateSelectionPage(QWidget):
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search candidate genes for this comparison")
-        self.search.textChanged.connect(self.refresh)
+        self.search.textChanged.connect(self._schedule_refresh)
 
         self.top_n = QSpinBox()
         self.top_n.setRange(1, 500)
@@ -68,6 +70,8 @@ class CandidateSelectionPage(QWidget):
 
         self.load_button = QPushButton("Load Candidate Ranking")
         self.load_button.clicked.connect(self._load_candidate_ranking)
+        self.detail_button = QPushButton("Detail")
+        self.detail_button.clicked.connect(self._show_detail_dialog)
         self.reset_button = QPushButton("Reset Top 20")
         self.reset_button.clicked.connect(self._reset_top_n)
         self.load_progress = QProgressBar()
@@ -117,6 +121,7 @@ class CandidateSelectionPage(QWidget):
 
         controls = QHBoxLayout()
         controls.addWidget(self.load_button)
+        controls.addWidget(self.detail_button)
         controls.addWidget(QLabel("Default top N"))
         controls.addWidget(self.top_n)
         controls.addWidget(self.reset_button)
@@ -168,6 +173,26 @@ class CandidateSelectionPage(QWidget):
         self._tab_keys: list[str] = []
         self._candidate_load_thread: QThread | None = None
         self._candidate_load_worker: CandidateRankingLoadWorker | None = None
+        self._max_catalog_display_rows = 1000
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(300)
+        self._search_timer.timeout.connect(self.refresh)
+
+    def _show_detail_dialog(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Module details")
+        dialog.resize(760, 420)
+        layout = QVBoxLayout(dialog)
+        viewer = QTextEdit(dialog)
+        viewer.setReadOnly(True)
+        viewer.setPlainText(module_detail("5.3.selection"))
+        close_button = QPushButton("Close", dialog)
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(viewer, 1)
+        layout.addWidget(close_button)
+        QTimer.singleShot(0, dialog.showMaximized)
+        dialog.exec()
 
     def refresh(self) -> None:
         project = self.project_service.current_project
@@ -199,7 +224,8 @@ class CandidateSelectionPage(QWidget):
         catalog = self.project_service.candidate_selection_catalog(comparison_id, allow_generate=False)
         catalog = self._apply_catalog_search(catalog)
         self._current_catalog = catalog.copy()
-        self._populate_table(self.catalog_table, catalog)
+        catalog_display = catalog.head(self._max_catalog_display_rows).copy()
+        self._populate_table(self.catalog_table, catalog_display)
 
         selected, _meta = self.project_service.candidate_selection_frame(
             comparison_id,
@@ -253,9 +279,18 @@ class CandidateSelectionPage(QWidget):
         self.selection_status.setText(
             f"Selected genes: {len(self.project_service.candidate_selection_genes_for_display(comparison_id))} | "
             f"Blacklist genes: {len(blacklist)} | "
+            + (
+                f"Catalog preview shows first {len(catalog_display)} of {len(catalog)} filtered genes. "
+                if len(catalog) > len(catalog_display)
+                else ""
+            )
+            +
             "Each comparison tab keeps its own independent selection / blacklist. "
             "Downstream evidence heatmap / candidate cards use only the current comparison selection and exclude blacklist genes."
         )
+
+    def _schedule_refresh(self) -> None:
+        self._search_timer.start()
 
     def _load_candidate_ranking(self) -> None:
         comparison_id = self._current_comparison_id()
