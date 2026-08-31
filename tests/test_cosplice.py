@@ -1374,6 +1374,26 @@ def test_annotation_aware_alignment_matches_same_build_splice_sites() -> None:
     assert result.shared_events == reference.tolist()
     assert result.reference_to_target[reference[0]] == target[0]
     assert result.mapping.iloc[0]["matching_rule"].startswith("same-build exact splice-site")
+    assert result.mapping.iloc[0]["alignment_confidence"] == "same_build_exact_splice_sites"
+
+
+def test_annotation_aware_alignment_rejects_ambiguous_same_build_signature() -> None:
+    reference = pd.Index(
+        [
+            "GeneA|SE|chr1|+|100|200|300",
+            "GeneB|SE|chr1|+|100|200|300",
+        ]
+    )
+    target = pd.Index(["GeneC|SE|chr1|+|100|200|300"])
+    result = annotation_aware_event_alignment(
+        reference,
+        target,
+        "external",
+        reference_genome_build="GRCm39",
+        target_genome_build="GRCm39",
+    )
+    assert result.shared_events == []
+    assert result.mapping["alignment_confidence"].eq("unmatched").all()
 
 
 def test_annotation_aware_alignment_requires_explicit_mapping_across_builds() -> None:

@@ -1289,6 +1289,8 @@ def build_bootstrap_coassignment_consensus(
     gene_prior: GeneMantelPrior | None = None,
     gene_prior_weight: float = 0.0,
     candidate_scorer: CandidateScorer | None = None,
+    posterior_alpha: pd.DataFrame | None = None,
+    posterior_beta: pd.DataFrame | None = None,
     progress: Progress = None,
 ) -> ConsensusResult:
     if matrix.empty:
@@ -1300,6 +1302,14 @@ def build_bootstrap_coassignment_consensus(
         )
     if not matrix.index.is_unique or not matrix.columns.is_unique:
         raise ValueError("Consensus input event and sample labels must be unique.")
+    posterior_bootstrap = posterior_alpha is not None or posterior_beta is not None
+    if posterior_bootstrap:
+        if posterior_alpha is None or posterior_beta is None:
+            raise ValueError("posterior alpha and beta must be supplied together")
+        posterior_alpha = posterior_alpha.reindex(index=matrix.index, columns=matrix.columns)
+        posterior_beta = posterior_beta.reindex(index=matrix.index, columns=matrix.columns)
+        if posterior_alpha.isna().any().any() or posterior_beta.isna().any().any():
+            raise ValueError("posterior alpha/beta do not cover the consensus matrix")
     baseline = observed_assignments.set_index("event_key")["module"].reindex(matrix.index).fillna("grey").astype(str)
     event_keys = matrix.index.astype(str).to_numpy()
     n_events = len(event_keys)
@@ -1359,6 +1369,10 @@ def build_bootstrap_coassignment_consensus(
     for iteration in range(1, settings.bootstrap_iterations + 1):
         indices = _bootstrap_indices(samples, matrix.columns, rng)
         bootstrap = matrix.iloc[:, indices].copy()
+        if posterior_bootstrap:
+            alpha_values = posterior_alpha.iloc[:, indices].to_numpy(dtype=float)
+            beta_values = posterior_beta.iloc[:, indices].to_numpy(dtype=float)
+            bootstrap.iloc[:, :] = rng.beta(alpha_values, beta_values)
         bootstrap.columns = [
             f"coassign_{iteration:03d}_{position:03d}"
             for position in range(len(indices))
@@ -1563,6 +1577,7 @@ def build_bootstrap_coassignment_consensus(
                     gene_prior_weight if gene_prior is not None else 0.0
                 ),
                 "read_uncertainty_weighting": event_reliability is not None,
+                "posterior_measurement_uncertainty_bootstrap": posterior_bootstrap,
                 "median_event_reliability": (
                     float(
                         pd.to_numeric(

@@ -25,9 +25,9 @@ Primary references: [WGCNA](https://pubmed.ncbi.nlm.nih.gov/19114008/),
 [WGCNA/Mantel cosplicing](https://pmc.ncbi.nlm.nih.gov/articles/PMC4429622/),
 [graphical-model splicing networks](https://pubmed.ncbi.nlm.nih.gov/26449793/), and
 [cross-species coregulated splicing networks](https://genome.cshlp.org/content/27/10/1759).
-The outer consensus implementation additionally follows the resampling/co-association rationale of
+The outer confidence implementation additionally follows the resampling/co-association rationale of
 [consensus clustering](https://link.springer.com/article/10.1023/A:1023949509487). Production
-modules use official Dynamic Tree Cut on exact TOM. Bootstrap co-assignment filters unstable event boundaries without reclustering the WGCNA backbone. Leiden and
+modules use official Dynamic Tree Cut on exact TOM. Bootstrap co-assignment annotates unstable event boundaries without changing the WGCNA backbone. Leiden and
 the sparse multiscale-network implementation remain available only for historical cache and
 comparator compatibility. This combination is a Katana workflow; those references do not by
 themselves validate it as a new universally superior method.
@@ -39,7 +39,7 @@ The network is therefore fit across all selected samples, not independently insi
 1. **Input audit** resolves sample identity, conditions, rMATS bamlists, BAM/BAI coverage, quant coverage and references.
 2. **Sample-level matrix** either extracts exact rMATS event PSI/IJC/SJC or builds competing-junction usage directly from BAM CIGAR `N` operations.
 3. **Stable-AS QC** filters events using condition coverage, junction-read support, informative PSI range and replicate repeatability.
-4. **Observed network** uses official R WGCNA signed adjacency, exact TOM, Dynamic Tree Cut and eigengene merging across the full cohort.
+4. **Observed network** uses beta-posterior-mean PSI with official R WGCNA signed adjacency, exact TOM, Dynamic Tree Cut and eigengene merging across the full cohort; posterior-draw correlations are retained as edge-confidence diagnostics.
 5. **Residual network** optionally removes configured covariates and repeats network discovery.
 6. **Bootstrap co-assignment confidence** resamples samples within conditions and annotates confidence in the full-data WGCNA assignment without changing that assignment.
 7. **Legacy compatibility** can reproduce former sparse/Leiden, tight/diffuse, and boundary-rejecting consensus outputs, but production emits one WGCNA partition with confidence annotations.
@@ -56,10 +56,10 @@ The network is therefore fit across all selected samples, not independently insi
 18. **Report** summarizes cached outputs, warnings and provenance.
 
 The read-count uncertainty stage estimates beta-binomial overdispersion, posterior PSI and
-measurement reliability from replicate IJC/SJC. It is enabled and parameter-fingerprinted by default: low-reliability events are removed before networking and posterior PSI supplies the production matrix. Reliability is retained as event-level evidence and is not multiplied directly into TOM adjacency, because that can collapse otherwise valid modules. PSI-only public cohorts use unmodified `WGCNA::blockwiseModules`; the software never invents read uncertainty. See
+measurement reliability from replicate IJC/SJC. It is enabled and parameter-fingerprinted by default: low-reliability events are removed before networking, posterior-mean PSI supplies the WGCNA partition, and repeated posterior draws supply edge and bootstrap confidence. Reliability is retained as event-level evidence and is not multiplied directly into TOM adjacency, because that can collapse otherwise valid modules. PSI-only public cohorts use unmodified `WGCNA::blockwiseModules`; the software never invents read uncertainty. See
 [COSPLICE_METHOD_EXTENSIONS.md](COSPLICE_METHOD_EXTENSIONS.md).
 
-The default engine uses official R WGCNA signed bicor adjacency, exact TOM, Dynamic Tree Cut and eigengene merging. CoSplice's method layer is read uncertainty, condition-stratified bootstrap confidence, differential topology, cross-cohort validation and event-level interpretation, not a replacement for WGCNA.
+The default engine uses posterior-mean PSI and official R WGCNA signed bicor adjacency, exact TOM, Dynamic Tree Cut and eigengene merging. CoSplice's method layer is posterior-draw uncertainty diagnostics, condition-stratified bootstrap confidence, differential topology, cross-cohort validation and event-level interpretation, not a replacement for WGCNA.
 
 ## Stable-AS rationale
 

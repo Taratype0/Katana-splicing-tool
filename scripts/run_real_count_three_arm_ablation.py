@@ -14,12 +14,15 @@ from sklearn.metrics import adjusted_rand_score
 
 from katana_cosplice.config import ConsensusConfig, NetworkConfig, UncertaintyConfig
 from katana_cosplice.consensus import _confidence_tables, _select_final_modules
+from katana_cosplice.ensemble_network import posterior_ensemble_correlation
 from katana_cosplice.network import discover_module_labels
+from katana_cosplice.r_wgcna import exact_wgcna_labels
 from katana_cosplice.uncertainty import estimate_beta_binomial_uncertainty
 
 
 ARM_RAW = "raw_PSI_WGCNA"
-ARM_UNCERTAINTY = "WGCNA_plus_read_uncertainty"
+ARM_UNCERTAINTY = "posterior_mean_WGCNA"
+ARM_ENSEMBLE = "posterior_ensemble_WGCNA"
 ARM_FULL = "full_CoSplice"
 
 
@@ -70,8 +73,15 @@ def _arm_summary(
     non_grey = labels.loc[labels.ne("grey")]
     sizes = non_grey.value_counts()
     subset = bootstrap_rows.loc[bootstrap_rows["arm"].eq(arm), "adjusted_rand_index"]
+    bootstrap_scope = {
+        ARM_RAW: "condition-stratified sample bootstrap",
+        ARM_UNCERTAINTY: "condition-stratified sample bootstrap",
+        ARM_ENSEMBLE: "sample bootstrap plus posterior correlation ensemble",
+        ARM_FULL: "sample bootstrap plus one beta-posterior PSI draw",
+    }[arm]
     return {
         "arm": arm,
+        "bootstrap_scope": bootstrap_scope,
         "n_input_events": universe_size,
         "n_modules": int(len(sizes)),
         "n_assigned_events": int(len(non_grey)),
@@ -90,8 +100,14 @@ def _render_plot(
     output: Path,
 ) -> None:
     sns.set_theme(style="whitegrid", context="talk")
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
-    palette = ["#6B7280", "#2D6CDF", "#0F766E"]
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6.5))
+    palette = ["#6B7280", "#4C78A8", "#E07A5F", "#0F766E"]
+    display_labels = {
+        ARM_RAW: "Raw PSI\nWGCNA",
+        ARM_UNCERTAINTY: "Posterior\nmean WGCNA",
+        ARM_ENSEMBLE: "Posterior\nensemble\n(experimental)",
+        ARM_FULL: "Full CoSplice\nconfidence\nstress test",
+    }
 
     sns.boxplot(
         data=bootstrap,
@@ -111,16 +127,24 @@ def _render_plot(
         size=4,
         ax=axes[0],
     )
-    axes[0].set_title("Matched-bootstrap module stability", fontweight="bold")
+    axes[0].set_title("Partition recovery / uncertainty stress", fontweight="bold")
     axes[0].set_xlabel("")
     axes[0].set_ylabel("ARI vs full-data assignment")
-    axes[0].tick_params(axis="x", rotation=22)
+    axes[0].set_xticks(
+        axes[0].get_xticks(),
+        [display_labels.get(value, value) for value in summary["arm"]],
+    )
+    axes[0].tick_params(axis="x", rotation=0, labelsize=10)
 
     axes[1].bar(summary["arm"], summary["assigned_event_fraction"], color=palette)
     axes[1].set_ylim(0, 1.05)
-    axes[1].set_title("Confident event coverage", fontweight="bold")
+    axes[1].set_title("Fixed-partition event assignment", fontweight="bold")
     axes[1].set_ylabel("Assigned event fraction")
-    axes[1].tick_params(axis="x", rotation=22)
+    axes[1].set_xticks(
+        axes[1].get_xticks(),
+        [display_labels.get(value, value) for value in summary["arm"]],
+    )
+    axes[1].tick_params(axis="x", rotation=0, labelsize=10)
     for index, value in enumerate(summary["assigned_event_fraction"]):
         axes[1].text(index, value + 0.025, f"{value:.1%}", ha="center", fontsize=11)
 
@@ -131,20 +155,28 @@ def _render_plot(
     axes[2].legend(frameon=False)
 
     fig.suptitle(
-        "Setd2 real-count three-arm ablation",
+        "Setd2 real-count four-arm ablation",
         fontsize=20,
         fontweight="bold",
         x=0.02,
         ha="left",
     )
-    fig.tight_layout()
+    fig.text(
+        0.02,
+        0.01,
+        "Raw/posterior mean: sample-bootstrap recovery. Ensemble/full CoSplice: "
+        "additional posterior-measurement uncertainty stress. High assignment alone is not superiority.",
+        fontsize=10,
+        color="#4B5563",
+    )
+    fig.tight_layout(rect=[0, 0.06, 1, 0.94])
     fig.savefig(output, dpi=220, bbox_inches="tight")
     plt.close(fig)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Matched-bootstrap WGCNA/read-uncertainty/full-CoSplice ablation."
+        description="Matched-bootstrap WGCNA/posterior-ensemble/full-CoSplice ablation."
     )
     parser.add_argument("--cosplice-output", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -219,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     consensus_cfg = ConsensusConfig(
         bootstrap_iterations=args.bootstraps,
         min_module_size=args.min_module_size,
-        clustering_method="backbone_refined_consensus",
+        clustering_method="backbone_confidence_only",
         dense_max_events=max(3_000, len(retained)),
         random_seed=args.seed,
     )
@@ -231,14 +263,33 @@ def main(argv: list[str] | None = None) -> int:
         weighted_matrix,
         network,
     )
+    ensemble = posterior_ensemble_correlation(
+        uncertainty.posterior_alpha.reindex(retained),
+        uncertainty.posterior_beta.reindex(retained),
+        n_draws=uncertainty_cfg.posterior_draws,
+        method=network.method,
+        random_seed=uncertainty_cfg.posterior_random_seed,
+    )
+    ensemble_labels = exact_wgcna_labels(
+        weighted_matrix,
+        soft_power=network.soft_power,
+        min_module_size=network.min_module_size,
+        merge_cut_height=network.wgcna_merge_cut_height,
+        deep_split=network.dynamic_deep_split,
+        pam_respects_dendro=network.dynamic_pam_respects_dendro,
+        rscript=network.wgcna_rscript,
+        precomputed_correlation=ensemble.mean_correlation,
+    )
     universe = raw.index
     references = {
         ARM_RAW: _expanded_labels(universe, universe, raw_labels),
         ARM_UNCERTAINTY: _expanded_labels(universe, retained, uncertainty_labels),
+        ARM_ENSEMBLE: _expanded_labels(universe, retained, ensemble_labels),
     }
     rng = np.random.default_rng(args.seed)
     bootstrap_rows: list[dict[str, object]] = []
-    weighted_run_labels: list[np.ndarray] = []
+    ensemble_run_labels: list[np.ndarray] = []
+    full_run_labels: list[np.ndarray] = []
     coassignment_counts = np.zeros((len(retained), len(retained)), dtype=np.uint16)
     for iteration in range(1, args.bootstraps + 1):
         indices = _bootstrap_indices(samples, raw.columns, rng)
@@ -246,18 +297,50 @@ def main(argv: list[str] | None = None) -> int:
         raw_boot.columns = [f"boot_{iteration:03d}_{position:03d}" for position in range(len(indices))]
         weighted_boot = uncertainty.posterior_psi.reindex(retained).iloc[:, indices].copy()
         weighted_boot.columns = raw_boot.columns
+        alpha_boot = uncertainty.posterior_alpha.reindex(retained).iloc[:, indices].copy()
+        beta_boot = uncertainty.posterior_beta.reindex(retained).iloc[:, indices].copy()
+        alpha_boot.columns = raw_boot.columns
+        beta_boot.columns = raw_boot.columns
         boot_raw_labels = discover_module_labels(raw_boot, network)
         boot_weighted_labels = discover_module_labels(
             weighted_boot,
             network,
         )
-        weighted_run_labels.append(boot_weighted_labels.copy())
-        for module in set(boot_weighted_labels).difference({"grey"}):
-            module_indices = np.flatnonzero(boot_weighted_labels == module)
+        boot_ensemble = posterior_ensemble_correlation(
+            alpha_boot,
+            beta_boot,
+            n_draws=uncertainty_cfg.posterior_draws,
+            method=network.method,
+            random_seed=uncertainty_cfg.posterior_random_seed + iteration,
+        )
+        boot_ensemble_labels = exact_wgcna_labels(
+            weighted_boot,
+            soft_power=network.soft_power,
+            min_module_size=network.min_module_size,
+            merge_cut_height=network.wgcna_merge_cut_height,
+            deep_split=network.dynamic_deep_split,
+            pam_respects_dendro=network.dynamic_pam_respects_dendro,
+            rscript=network.wgcna_rscript,
+            precomputed_correlation=boot_ensemble.mean_correlation,
+        )
+        ensemble_run_labels.append(boot_ensemble_labels.copy())
+        posterior_draw_boot = pd.DataFrame(
+            rng.beta(
+                alpha_boot.to_numpy(dtype=float),
+                beta_boot.to_numpy(dtype=float),
+            ),
+            index=retained,
+            columns=raw_boot.columns,
+        )
+        boot_full_labels = discover_module_labels(posterior_draw_boot, network)
+        full_run_labels.append(boot_full_labels.copy())
+        for module in set(boot_full_labels).difference({"grey"}):
+            module_indices = np.flatnonzero(boot_full_labels == module)
             coassignment_counts[np.ix_(module_indices, module_indices)] += 1
         boot_assignments = {
             ARM_RAW: _expanded_labels(universe, universe, boot_raw_labels),
             ARM_UNCERTAINTY: _expanded_labels(universe, retained, boot_weighted_labels),
+            ARM_ENSEMBLE: _expanded_labels(universe, retained, boot_ensemble_labels),
         }
         for arm, labels in boot_assignments.items():
             bootstrap_rows.append(
@@ -283,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
         coassignment,
         consensus_cfg,
         args.min_module_size,
-        weighted_run_labels,
+        full_run_labels,
         backbone_labels=np.asarray(uncertainty_labels, dtype=object),
     )
     baseline = pd.Series(uncertainty_labels, index=retained, dtype=str)
@@ -301,8 +384,8 @@ def main(argv: list[str] | None = None) -> int:
     references[ARM_FULL] = _expanded_labels(
         universe, retained, np.asarray(full_label_values, dtype=object)
     )
-    for iteration, boot_weighted_labels in enumerate(weighted_run_labels, start=1):
-        labels = _expanded_labels(universe, retained, boot_weighted_labels)
+    for iteration, boot_full_labels in enumerate(full_run_labels, start=1):
+        labels = _expanded_labels(universe, retained, boot_full_labels)
         bootstrap_rows.append(
             {
                 "bootstrap_iteration": iteration,
@@ -315,7 +398,7 @@ def main(argv: list[str] | None = None) -> int:
     summary = pd.DataFrame(
         [
             _arm_summary(arm, references[arm], len(universe), bootstrap)
-            for arm in (ARM_RAW, ARM_UNCERTAINTY, ARM_FULL)
+            for arm in (ARM_RAW, ARM_UNCERTAINTY, ARM_ENSEMBLE, ARM_FULL)
         ]
     )
     assignments = pd.DataFrame(index=universe)
@@ -345,19 +428,46 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
     concordance = pd.DataFrame(pair_rows)
+    decision = summary.loc[
+        :,
+        [
+            "arm",
+            "n_modules",
+            "assigned_event_fraction",
+            "largest_module_fraction",
+            "mean_bootstrap_ARI",
+        ],
+    ].copy()
+    decision["production_role"] = decision["arm"].map(
+        {
+            ARM_RAW: "sensitivity comparator",
+            ARM_UNCERTAINTY: "production partition",
+            ARM_ENSEMBLE: "rejected experimental partition",
+            ARM_FULL: "production confidence stress test",
+        }
+    )
+    decision["decision_reason"] = decision["arm"].map(
+        {
+            ARM_RAW: "Established raw-PSI WGCNA reference arm.",
+            ARM_UNCERTAINTY: "Best balance of module recovery, coverage and largest-module fraction.",
+            ARM_ENSEMBLE: "High ARI accompanied by an over-dominant module and near-universal assignment.",
+            ARM_FULL: "Does not redefine membership; quantifies sample plus read-measurement uncertainty.",
+        }
+    )
 
-    summary.to_csv(output / "setd2_three_arm_summary.tsv", sep="\t", index=False)
+    summary.to_csv(output / "setd2_four_arm_summary.tsv", sep="\t", index=False)
     bootstrap.to_csv(output / "setd2_matched_bootstrap_stability.tsv", sep="\t", index=False)
     assignments.to_csv(output / "setd2_event_assignments.tsv", sep="\t")
     concordance.to_csv(output / "setd2_assignment_concordance.tsv", sep="\t", index=False)
+    decision.to_csv(output / "setd2_arm_decision.tsv", sep="\t", index=False)
     uncertainty.event_metrics.to_csv(output / "setd2_uncertainty_event_metrics.tsv", sep="\t")
     full_assignments.to_csv(output / "setd2_full_cosplice_confidence.tsv", sep="\t", index=False)
     full_module_summary.to_csv(output / "setd2_full_cosplice_module_summary.tsv", sep="\t", index=False)
     parameter_search.to_csv(output / "setd2_consensus_parameter_search.tsv", sep="\t", index=False)
-    _render_plot(summary, bootstrap, reliability, output / "setd2_three_arm_ablation.png")
+    _render_plot(summary, bootstrap, reliability, output / "setd2_four_arm_ablation.png")
 
     parameters = {
-        "design": "real replicate IJC/SJC three-arm ablation",
+        "design": "real replicate IJC/SJC four-arm ablation",
         "seed": args.seed,
         "bootstrap_iterations": args.bootstraps,
         "source": str(source),
@@ -373,7 +483,7 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(parameters, indent=2, default=str), encoding="utf-8"
     )
     report = [
-        "# Setd2 real-count three-arm ablation",
+        "# Setd2 real-count four-arm ablation",
         "",
         "## Design",
         "",
@@ -382,21 +492,31 @@ def main(argv: list[str] | None = None) -> int:
         f"- All arms used seed {args.seed} and the same {args.bootstraps} condition-stratified bootstrap samples.",
         "- Raw arm: signed bicor WGCNA/TOM on raw PSI.",
         "- Uncertainty arm: the same WGCNA/TOM backbone on beta-binomial posterior PSI with low-reliability rejection; reliability is not multiplied into TOM adjacency.",
-        "- Full CoSplice arm: uncertainty arm plus bootstrap co-assignment confidence and conservative boundary rejection.",
+        "- Posterior-ensemble arm: Fisher-z mean correlations across beta-posterior PSI draws feed the same signed WGCNA/TOM backbone.",
+        "- Full CoSplice arm: posterior-mean WGCNA backbone plus condition-stratified beta-posterior-draw co-assignment confidence; confidence does not alter membership.",
         "",
         "## Results",
         "",
         summary.to_markdown(index=False, floatfmt=".4f"),
         "",
+        "Raw and posterior-mean ARI compare sample-bootstrap partition recovery. "
+        "The ensemble and full-CoSplice ARI columns additionally perturb PSI measurement "
+        "uncertainty and are therefore stricter uncertainty stress tests, not directly "
+        "interchangeable performance scores.",
+        "",
         "## Assignment concordance",
         "",
         concordance.to_markdown(index=False, floatfmt=".4f"),
+        "",
+        "## Production decision",
+        "",
+        decision.to_markdown(index=False, floatfmt=".4f"),
         "",
         "## Interpretation boundary",
         "",
         "This ablation tests whether read-count uncertainty and consensus confidence improve reproducibility or confidence on the same Setd2 experiment. It does not constitute external biological replication.",
     ]
-    (output / "SETD2_THREE_ARM_ABLATION_REPORT.md").write_text("\n".join(report), encoding="utf-8")
+    (output / "SETD2_FOUR_ARM_ABLATION_REPORT.md").write_text("\n".join(report), encoding="utf-8")
     print(summary.to_string(index=False), flush=True)
     print(f"Output: {output}", flush=True)
     return 0

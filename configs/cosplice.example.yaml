@@ -29,11 +29,16 @@ stable_as:
   min_psi_variance: null
   min_repeatability: null
 uncertainty:
-  # Production default: use beta-binomial posterior PSI for the WGCNA network
+  # Production default: posterior-mean PSI supplies the WGCNA partition;
+  # posterior draws quantify edge and bootstrap confidence without replacing it.
   # and use replicate/read reliability to remove low-confidence events.
   # Reliability is not multiplied directly into TOM adjacency.
   enabled: true
   network_mode: posterior
+  posterior_draws: 25
+  posterior_random_seed: 17
+  min_edge_sign_probability: 0.80
+  posterior_edge_diagnostics: true
   prior_strength: 1.0
   reliability_read_scale: 20.0
   reliability_floor: 0.10

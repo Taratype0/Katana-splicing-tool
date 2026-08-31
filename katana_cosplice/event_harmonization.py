@@ -33,6 +33,7 @@ def exact_event_alignment(reference_events: pd.Index, target_events: pd.Index, c
             "in_target": union.isin(target),
             "exact_match": union.isin(shared),
             "matching_rule": "exact canonical event_key (gene_id + event_type + strand + rMATS coordinates)",
+            "alignment_confidence": ["exact" if value else "unmatched" for value in union.isin(shared)],
         }
     )
     return EventAlignmentResult(mapping=mapping, shared_events=shared, reference_to_target={key: key for key in shared})
@@ -55,7 +56,12 @@ def annotation_aware_event_alignment(
         required = {"reference_event_key", "target_event_key"}
         if not required.issubset(mapping_table):
             raise ValueError("Event mapping table requires reference_event_key and target_event_key.")
-        for _, row in mapping_table.iterrows():
+        validated = mapping_table.loc[:, list(required)].drop_duplicates()
+        if validated["reference_event_key"].duplicated().any() or validated[
+            "target_event_key"
+        ].duplicated().any():
+            raise ValueError("Validated event mapping must be one-to-one.")
+        for _, row in validated.iterrows():
             left, right = str(row["reference_event_key"]), str(row["target_event_key"])
             if left in reference and right in target:
                 pairs[left] = right
@@ -63,13 +69,17 @@ def annotation_aware_event_alignment(
     same_build = bool(reference_genome_build and target_genome_build and reference_genome_build == target_genome_build)
     if same_build or (not reference_genome_build and not target_genome_build):
         target_by_signature: dict[str, list[str]] = {}
+        reference_by_signature: dict[str, list[str]] = {}
         for event in target:
             target_by_signature.setdefault(splice_site_signature(event), []).append(event)
+        for event in reference:
+            reference_by_signature.setdefault(splice_site_signature(event), []).append(event)
         for event in reference:
             if event in pairs:
                 continue
             candidates = target_by_signature.get(splice_site_signature(event), [])
-            if len(candidates) == 1:
+            signature = splice_site_signature(event)
+            if len(candidates) == 1 and len(reference_by_signature.get(signature, [])) == 1:
                 pairs[event] = candidates[0]
                 methods[event] = "same-build exact splice-site signature; annotation label may differ"
     rows = []
@@ -86,6 +96,19 @@ def annotation_aware_event_alignment(
             "target_event_key": target_event,
             "matched": bool(target_event),
             "matching_rule": matching_rule,
+            "alignment_confidence": (
+                "exact"
+                if matching_rule == "exact canonical event_key"
+                else (
+                    "validated_mapping"
+                    if matching_rule == "explicit validated event/liftover mapping"
+                    else (
+                        "same_build_exact_splice_sites"
+                        if matching_rule.startswith("same-build")
+                        else "unmatched"
+                    )
+                )
+            ),
             "reference_genome_build": reference_genome_build,
             "target_genome_build": target_genome_build,
         })

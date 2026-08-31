@@ -16,21 +16,26 @@ Available network modes are:
 - `raw_reliability_weighted`
 - `posterior`
 - `posterior_reliability_weighted`
+- `posterior_ensemble`
 
-The production mode is `posterior`: beta-binomial posterior PSI supplies the
-WGCNA matrix, while reliability filters low-confidence events and remains an
-event-level confidence annotation. The two reliability-weighted modes are kept
+The production mode is `posterior`: reliability first filters low-confidence
+events and posterior-mean PSI supplies the official WGCNA partition. Repeated
+beta-posterior draws separately estimate edge correlation SD, sign probability
+and bootstrap co-assignment confidence. These are uncertainty diagnostics, not
+p-values, and do not replace the production partition. The two
+reliability-weighted modes are kept
 for research reproduction only. They multiply reliability into network edges
 and are not production defaults because a real-count ablation showed that this
 operation can destroy otherwise coherent TOM structure and return an all-grey
 solution. `diagnostic_only` is the explicit raw-PSI sensitivity arm.
 
-The formal historical three-arm ablation compared raw-PSI WGCNA,
-posterior-PSI WGCNA after reliability filtering, and posterior-PSI WGCNA plus
-bootstrap co-assignment boundary refinement. Because the third arm did not
-improve stability, production now uses the second arm and reports bootstrap
-co-assignment as annotation-only confidence. All ablation arms used identical
-events, seeds and stratified resamples whenever the input permitted.
+The v1.2 four-arm ablation compares raw-PSI WGCNA, posterior-mean WGCNA,
+posterior-ensemble WGCNA, and posterior-mean WGCNA plus annotation-only
+posterior-draw bootstrap confidence. All arms use identical events, seeds and stratified
+resamples. Posterior-ensemble partitioning was rejected as the default because
+its high ARI coincided with an over-dominant module. Full CoSplice therefore
+keeps posterior-mean WGCNA and uses posterior draws only for event, module, kME,
+hub and edge-confidence reporting.
 
 Scientific basis: beta-binomial read-count uncertainty is established in
 replicate-aware splicing models such as FRASER and Bisbee. CoSplice uses it for

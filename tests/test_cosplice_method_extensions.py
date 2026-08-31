@@ -7,7 +7,15 @@ from katana_cosplice.bayesian_preservation import (
     bayesian_multi_cohort_preservation,
 )
 from katana_cosplice.config import UncertaintyConfig
-from katana_cosplice.differential_network import compare_condition_networks
+from katana_cosplice.differential_network import (
+    compare_condition_networks,
+    render_differential_network_plots,
+)
+from katana_cosplice.ensemble_network import (
+    load_posterior_correlation,
+    posterior_ensemble_correlation,
+    save_posterior_correlation,
+)
 from katana_cosplice.multiview import fuse_event_edge_views
 from katana_cosplice.uncertainty import estimate_beta_binomial_uncertainty
 
@@ -19,6 +27,8 @@ def test_uncertainty_is_a_required_production_layer_by_default() -> None:
     assert settings.network_mode == "posterior"
     assert settings.filter_low_reliability is True
     assert settings.min_network_reliability == 0.15
+    assert settings.posterior_draws >= 20
+    assert settings.posterior_edge_diagnostics is True
 
 
 def test_uncertainty_downweights_low_depth_inconsistent_events() -> None:
@@ -57,6 +67,37 @@ def test_uncertainty_downweights_low_depth_inconsistent_events() -> None:
         "low_depth", "median_posterior_sd"
     ]
     assert result.posterior_psi.shape == ijc.shape
+    assert result.posterior_alpha.shape == ijc.shape
+    assert result.posterior_beta.shape == ijc.shape
+
+
+def test_posterior_ensemble_attenuates_uncertain_correlation(tmp_path) -> None:
+    columns = [f"s{index}" for index in range(12)]
+    alpha = pd.DataFrame(
+        [np.linspace(2, 20, 12), np.linspace(2, 20, 12), np.ones(12)],
+        index=["stable_a", "stable_b", "uncertain"],
+        columns=columns,
+    )
+    beta = pd.DataFrame(
+        [np.linspace(20, 2, 12), np.linspace(20, 2, 12), np.ones(12)],
+        index=alpha.index,
+        columns=columns,
+    )
+    result = posterior_ensemble_correlation(
+        alpha,
+        beta,
+        n_draws=40,
+        method="pearson",
+        random_seed=5,
+    )
+    assert result.mean_correlation[0, 1] > 0.8
+    assert abs(result.mean_correlation[0, 2]) < result.mean_correlation[0, 1]
+    assert result.sign_probability[0, 1] > result.sign_probability[0, 2]
+    cache = tmp_path / "ensemble.npz"
+    save_posterior_correlation(result, cache)
+    loaded = load_posterior_correlation(cache, alpha.index)
+    np.testing.assert_allclose(loaded.mean_correlation, result.mean_correlation)
+    assert loaded.n_draws == 40
 
 
 def test_differential_network_recovers_condition_specific_density() -> None:
@@ -101,7 +142,32 @@ def test_differential_network_recovers_condition_specific_density() -> None:
         "density_changed_and_rewired",
     }
     assert bool(row["has_significant_density_change"])
+    assert row["density_delta_bootstrap_CI_low"] < row["density_delta_bootstrap_CI_high"]
+    assert 0.0 <= row["density_change_direction_probability"] <= 1.0
     assert len(result.event_rewiring) == len(matrix)
+
+
+def test_differential_network_plots_include_ci_and_rewiring(tmp_path) -> None:
+    modules = pd.DataFrame(
+        {
+            "comparison_pair": ["A__vs__B"],
+            "module": ["C01"],
+            "density_delta_B_minus_A": [0.2],
+            "density_delta_bootstrap_CI_low": [0.1],
+            "density_delta_bootstrap_CI_high": [0.3],
+            "topology_RMS_delta": [0.15],
+            "differential_network_state": ["gained_in_B"],
+        }
+    )
+    from katana_cosplice.differential_network import DifferentialNetworkResult
+
+    result = DifferentialNetworkResult(modules, pd.DataFrame(), pd.DataFrame())
+    plots = render_differential_network_plots(result, tmp_path)
+    assert {path.name for path in plots} == {
+        "differential_module_density_forest.png",
+        "differential_module_rewiring_heatmap.png",
+    }
+    assert all(path.stat().st_size > 0 for path in plots)
 
 
 def test_multiview_reweights_only_existing_as_edges() -> None:

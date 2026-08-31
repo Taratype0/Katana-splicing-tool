@@ -17,7 +17,7 @@ from sklearn.metrics import adjusted_rand_score
 from statsmodels.stats.multitest import multipletests
 
 from katana_cosplice.config import NetworkConfig, ValidationConfig
-from katana_cosplice.network import discover_module_labels
+from katana_cosplice.network import _program_scores, discover_module_labels
 
 
 Progress = Callable[[str], None] | None
@@ -31,6 +31,7 @@ class ValidationResult:
     parameter_sensitivity: pd.DataFrame
     preservation_pairs: pd.DataFrame
     preservation_summary: pd.DataFrame
+    program_score_confidence: pd.DataFrame
 
 
 def _module_sets(labels: pd.Series) -> dict[str, set[str]]:
@@ -111,6 +112,8 @@ def _bootstrap_validation(
     baseline = baseline.reindex(matrix.index).fillna("grey").astype(str)
     baseline_sets = _module_sets(baseline)
     membership_hits = pd.Series(0.0, index=matrix.index)
+    kme_values: dict[str, list[float]] = {str(key): [] for key in matrix.index}
+    hub_hits = pd.Series(0.0, index=matrix.index)
     module_jaccards: dict[str, list[float]] = {module: [] for module in baseline_sets}
     run_rows: list[dict[str, object]] = []
     rng = np.random.default_rng(settings.random_seed)
@@ -122,6 +125,19 @@ def _bootstrap_validation(
         mapping, matches = _match_modules(baseline, boot_labels)
         mapped = boot_labels.map(mapping).fillna("unmatched")
         membership_hits += mapped.eq(baseline).astype(float)
+        fixed_scores = _program_scores(boot_matrix, baseline.to_numpy(dtype=object))
+        for module, event_keys in baseline_sets.items():
+            if module not in fixed_scores or not event_keys:
+                continue
+            keys = sorted(event_keys)
+            score = fixed_scores[module]
+            module_kme = boot_matrix.loc[keys].T.apply(
+                lambda values: values.corr(score)
+            ).fillna(0.0)
+            for event_key, value in module_kme.items():
+                kme_values[str(event_key)].append(float(value))
+            top_n = max(1, int(np.ceil(len(module_kme) * 0.10)))
+            hub_hits.loc[module_kme.abs().nlargest(top_n).index] += 1.0
         optimal = matches.loc[matches["is_optimal_match"]]
         for module in baseline_sets:
             values = optimal.loc[optimal["reference_module"].eq(module), "jaccard"]
@@ -148,6 +164,32 @@ def _bootstrap_validation(
         }
     )
     event_stability["stability_class"] = event_stability["membership_stability"].map(lambda value: _classification(float(value), settings))
+    event_stability["bootstrap_kME_mean"] = event_stability["event_key"].map(
+        lambda key: float(np.mean(kme_values[str(key)]))
+        if kme_values[str(key)]
+        else np.nan
+    )
+    event_stability["bootstrap_kME_sd"] = event_stability["event_key"].map(
+        lambda key: float(np.std(kme_values[str(key)], ddof=1))
+        if len(kme_values[str(key)]) > 1
+        else np.nan
+    )
+    event_stability["bootstrap_kME_sign_consistency"] = event_stability["event_key"].map(
+        lambda key: (
+            float(
+                max(
+                    np.mean(np.asarray(kme_values[str(key)]) >= 0),
+                    np.mean(np.asarray(kme_values[str(key)]) < 0),
+                )
+            )
+            if kme_values[str(key)]
+            else np.nan
+        )
+    )
+    event_stability["bootstrap_hub_top_decile_fraction"] = (
+        event_stability["event_key"].map(hub_hits).fillna(0.0)
+        / settings.bootstrap_iterations
+    )
     module_rows: list[dict[str, object]] = []
     for module, event_keys in baseline_sets.items():
         values = np.asarray(module_jaccards[module], dtype=float)
@@ -162,6 +204,18 @@ def _bootstrap_validation(
                 "min_best_jaccard": float(values.min()),
                 "mean_event_membership_stability": float(module_membership.mean()),
                 "robust_event_fraction": float(module_membership.ge(settings.robust_jaccard).mean()),
+                "median_bootstrap_kME_sd": float(
+                    event_stability.loc[
+                        event_stability["baseline_module"].eq(module),
+                        "bootstrap_kME_sd",
+                    ].median()
+                ),
+                "max_hub_top_decile_fraction": float(
+                    event_stability.loc[
+                        event_stability["baseline_module"].eq(module),
+                        "bootstrap_hub_top_decile_fraction",
+                    ].max()
+                ),
                 "validation_score": combined,
                 "stability_class": _classification(combined, settings),
             }
@@ -176,6 +230,8 @@ def _bootstrap_validation(
             "min_best_jaccard",
             "mean_event_membership_stability",
             "robust_event_fraction",
+            "median_bootstrap_kME_sd",
+            "max_hub_top_decile_fraction",
             "validation_score",
             "stability_class",
         ],
@@ -283,6 +339,59 @@ def _parameter_sensitivity(
     return pd.DataFrame(rows)
 
 
+def _program_score_confidence(
+    matrix: pd.DataFrame,
+    labels: pd.Series,
+    iterations: int,
+    random_seed: int,
+) -> pd.DataFrame:
+    """Estimate score uncertainty by resampling events within fixed modules."""
+
+    labels = labels.reindex(matrix.index).fillna("grey").astype(str)
+    baseline = _program_scores(matrix, labels.to_numpy(dtype=object))
+    if baseline.empty:
+        return pd.DataFrame()
+    rng = np.random.default_rng(random_seed + 50_000)
+    draws: dict[tuple[str, str], list[float]] = {
+        (str(sample), str(module)): []
+        for sample in matrix.columns
+        for module in baseline.columns
+    }
+    for _ in range(iterations):
+        for module in baseline.columns:
+            members = labels.index[labels.eq(str(module))]
+            if len(members) < 2:
+                continue
+            sampled = rng.choice(members.to_numpy(), size=len(members), replace=True)
+            boot = matrix.loc[sampled].copy()
+            boot.index = [f"event_{index}" for index in range(len(boot))]
+            score = _program_scores(
+                boot,
+                np.asarray([str(module)] * len(boot), dtype=object),
+            )[str(module)]
+            if score.corr(baseline[str(module)]) < 0:
+                score = -score
+            for sample, value in score.items():
+                draws[(str(sample), str(module))].append(float(value))
+    rows: list[dict[str, object]] = []
+    for (sample, module), values in draws.items():
+        array = np.asarray(values, dtype=float)
+        rows.append(
+            {
+                "sample_id": sample,
+                "module": module,
+                "program_score": float(baseline.loc[sample, module]),
+                "composition_bootstrap_mean": float(np.mean(array)) if len(array) else np.nan,
+                "composition_bootstrap_sd": float(np.std(array, ddof=1)) if len(array) > 1 else np.nan,
+                "composition_bootstrap_CI_low": float(np.quantile(array, 0.025)) if len(array) else np.nan,
+                "composition_bootstrap_CI_high": float(np.quantile(array, 0.975)) if len(array) else np.nan,
+                "bootstrap_iterations": iterations,
+                "uncertainty_scope": "event-composition uncertainty within fixed module",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _preservation(observed: pd.Series, residual: pd.Series) -> tuple[pd.DataFrame, pd.DataFrame]:
     shared = observed.index.intersection(residual.index)
     observed = observed.reindex(shared).astype(str)
@@ -330,6 +439,23 @@ def _preservation(observed: pd.Series, residual: pd.Series) -> tuple[pd.DataFram
             "FDR",
         ]
     ].reset_index(drop=True)
+    summary["observed_residual_program_class"] = np.select(
+        [
+            summary["FDR"].le(0.05) & summary["best_jaccard"].ge(0.75),
+            summary["FDR"].le(0.05) & summary["best_jaccard"].ge(0.50),
+            summary["FDR"].le(0.05),
+        ],
+        [
+            "residual_preserved_intrinsic_program",
+            "partially_residual_preserved_program",
+            "weak_residual_overlap",
+        ],
+        default="condition_dominated_or_unstable_program",
+    )
+    summary["classification_note"] = (
+        "Descriptive observed-vs-residual preservation; use continuous Jaccard, recall, "
+        "precision and FDR for inference."
+    )
     return pairs, summary
 
 
@@ -353,6 +479,12 @@ def validate_network_modules(
     else:
         preservation_pairs = pd.DataFrame()
         preservation_summary = pd.DataFrame()
+    program_score_confidence = _program_score_confidence(
+        matrix,
+        observed,
+        settings.bootstrap_iterations,
+        settings.random_seed,
+    )
     return ValidationResult(
         event_stability,
         module_stability,
@@ -360,6 +492,7 @@ def validate_network_modules(
         parameter_sensitivity,
         preservation_pairs,
         preservation_summary,
+        program_score_confidence,
     )
 
 

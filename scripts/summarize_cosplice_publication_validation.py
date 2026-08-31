@@ -157,7 +157,17 @@ def _render(
     axes[1].set_title("b  Real IJC/SJC ablation", loc="left")
     axes[1].set_xlabel("")
     axes[1].set_ylabel("Mean matched-bootstrap ARI")
-    axes[1].set_xticklabels(["Raw\nWGCNA", "WGCNA +\nuncertainty", "Full\nCoSplice"])
+    display = {
+        "raw_PSI_WGCNA": "Raw\nWGCNA",
+        "posterior_mean_WGCNA": "Posterior mean\nWGCNA",
+        "posterior_ensemble_WGCNA": "Posterior ensemble\nWGCNA",
+        "WGCNA_plus_read_uncertainty": "WGCNA +\nuncertainty",
+        "full_CoSplice": "Full\nCoSplice",
+    }
+    axes[1].set_xticks(
+        axes[1].get_xticks(),
+        [display.get(str(value), str(value)) for value in setd2["arm"]],
+    )
     for patch, value in zip(axes[1].patches, setd2["mean_bootstrap_ARI"], strict=False):
         axes[1].text(
             patch.get_x() + patch.get_width() / 2,
@@ -211,7 +221,13 @@ def main() -> int:
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     locked = _locked_summary(args.locked_panel.resolve())
-    setd2 = _read(args.setd2_ablation.resolve() / "setd2_three_arm_summary.tsv")
+    four_arm_path = args.setd2_ablation.resolve() / "setd2_four_arm_summary.tsv"
+    setd2_path = (
+        four_arm_path
+        if four_arm_path.exists()
+        else args.setd2_ablation.resolve() / "setd2_three_arm_summary.tsv"
+    )
+    setd2 = _read(setd2_path)
     kirc, kirc_top = _kirc_summary(args.kirc_validation.resolve())
     locked.to_csv(output / "locked_panel_method_summary.tsv", sep="\t", index=False)
     setd2.to_csv(output / "setd2_real_count_ablation_summary.tsv", sep="\t", index=False)
@@ -246,7 +262,7 @@ def main() -> int:
         "",
         setd2.to_markdown(index=False, floatfmt=".3f"),
         "",
-        "Posterior PSI plus reliability filtering modestly improved matched-bootstrap ARI over raw PSI. The current conservative consensus boundary step did not add stability and should be described as confidence/rejection rather than a universally improving clustering layer.",
+        "The matched arms separate reliability filtering/posterior mean from posterior-draw correlation propagation. Full CoSplice retains the posterior-ensemble WGCNA partition and adds uncertainty annotations rather than claiming a second clustering gain.",
         "",
         "## Independent human KIRC SETD2 validation",
         "",
@@ -267,7 +283,7 @@ def main() -> int:
     )
     files = [
         args.locked_panel.resolve() / "LOCKED_ABLATION_PANEL_SUMMARY.tsv",
-        args.setd2_ablation.resolve() / "setd2_three_arm_summary.tsv",
+        setd2_path,
         args.kirc_validation.resolve() / "tcga_kirc_SETD2_module_associations.tsv",
         args.kirc_validation.resolve() / "tcga_kirc_to_kich_module_preservation.tsv",
         args.kirc_validation.resolve() / "tcga_kirc_module_GO_KEGG_enrichment.tsv",

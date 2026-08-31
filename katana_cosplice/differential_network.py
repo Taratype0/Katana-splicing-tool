@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import combinations
+from pathlib import Path
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from scipy.stats import false_discovery_control
 
 
@@ -52,6 +57,7 @@ def compare_condition_networks(
     soft_power: int = 6,
     shrinkage: float = 5.0,
     permutations: int = 200,
+    bootstrap_iterations: int = 200,
     max_output_edges_per_module_pair: int = 5_000,
     random_seed: int = 71,
 ) -> DifferentialNetworkResult:
@@ -104,6 +110,29 @@ def compare_condition_networks(
             topology_delta = float(
                 np.sqrt(np.mean(edge_delta[np.triu_indices_from(edge_delta, k=1)] ** 2))
             )
+            bootstrap_density: list[float] = []
+            for _ in range(bootstrap_iterations):
+                sampled_a = rng.choice(n_a, size=n_a, replace=True)
+                sampled_b = n_a + rng.choice(len(sample_b), size=len(sample_b), replace=True)
+                boot_a = _adjacency(values[:, sampled_a], soft_power, shrinkage)
+                boot_b = _adjacency(values[:, sampled_b], soft_power, shrinkage)
+                boot_density_a, _ = _module_statistics(boot_a)
+                boot_density_b, _ = _module_statistics(boot_b)
+                bootstrap_density.append(boot_density_b - boot_density_a)
+            density_ci_low, density_ci_high = (
+                np.quantile(bootstrap_density, [0.025, 0.975])
+                if bootstrap_density
+                else (np.nan, np.nan)
+            )
+            direction_probability = (
+                float(np.mean(np.asarray(bootstrap_density) > 0.0))
+                if density_delta >= 0 and bootstrap_density
+                else (
+                    float(np.mean(np.asarray(bootstrap_density) < 0.0))
+                    if bootstrap_density
+                    else np.nan
+                )
+            )
             null_density: list[float] = []
             null_topology: list[float] = []
             for _ in range(permutations):
@@ -142,10 +171,14 @@ def compare_condition_networks(
                     "density_A": density_a,
                     "density_B": density_b,
                     "density_delta_B_minus_A": density_delta,
+                    "density_delta_bootstrap_CI_low": density_ci_low,
+                    "density_delta_bootstrap_CI_high": density_ci_high,
+                    "density_change_direction_probability": direction_probability,
                     "topology_RMS_delta": topology_delta,
                     "density_permutation_pvalue": density_p,
                     "topology_permutation_pvalue": topology_p,
                     "network_method": "condition_specific_shrinkage_correlation",
+                    "bootstrap_iterations": bootstrap_iterations,
                 }
             )
             event_delta = np.mean(np.abs(edge_delta), axis=1)
@@ -238,3 +271,89 @@ def compare_condition_networks(
         pd.DataFrame(event_rows),
         pd.DataFrame(edge_rows),
     )
+
+
+def render_differential_network_plots(
+    result: DifferentialNetworkResult,
+    output_dir: Path,
+    *,
+    max_rows: int = 40,
+) -> list[Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generated: list[Path] = []
+    modules = result.module_changes.copy()
+    if modules.empty:
+        return generated
+    visible = modules.assign(
+        absolute_change=modules["density_delta_B_minus_A"].abs()
+    ).nlargest(max_rows, "absolute_change").sort_values("density_delta_B_minus_A")
+    labels = visible["comparison_pair"].astype(str) + " | " + visible["module"].astype(str)
+    colors = visible["differential_network_state"].map(
+        {
+            "gained_in_B": "#C44E52",
+            "lost_in_B": "#4C72B0",
+            "rewired": "#DD8452",
+            "density_changed_and_rewired": "#8172B2",
+            "stable_or_underpowered": "#A7ADB4",
+        }
+    ).fillna("#A7ADB4")
+    values = visible["density_delta_B_minus_A"].to_numpy(dtype=float)
+    low = visible["density_delta_bootstrap_CI_low"].to_numpy(dtype=float)
+    high = visible["density_delta_bootstrap_CI_high"].to_numpy(dtype=float)
+    fig, ax = plt.subplots(figsize=(11, max(6, len(visible) * 0.28)))
+    positions = np.arange(len(visible))
+    ax.errorbar(
+        values,
+        positions,
+        xerr=np.vstack([values - low, high - values]),
+        fmt="none",
+        ecolor="#66727E",
+        elinewidth=1.1,
+        capsize=2,
+        alpha=0.8,
+    )
+    ax.scatter(values, positions, c=colors, s=38, edgecolor="white", linewidth=0.5)
+    ax.axvline(0.0, color="#202B33", linewidth=1.0)
+    ax.set_yticks(positions, labels)
+    ax.set_xlabel("Module density change (condition B - condition A), bootstrap 95% CI")
+    ax.set_title("Fixed-module differential co-splicing density", loc="left", fontweight="bold")
+    ax.text(
+        0.0,
+        -0.08,
+        "Colors use global permutation FDR; grey is not significant or underpowered.",
+        transform=ax.transAxes,
+        fontsize=9,
+        color="#58636F",
+    )
+    fig.tight_layout()
+    path = output_dir / "differential_module_density_forest.png"
+    fig.savefig(path, dpi=220, bbox_inches="tight")
+    plt.close(fig)
+    generated.append(path)
+
+    heatmap = modules.pivot_table(
+        index="comparison_pair",
+        columns="module",
+        values="topology_RMS_delta",
+        aggfunc="max",
+    )
+    if not heatmap.empty:
+        fig, ax = plt.subplots(
+            figsize=(max(8, heatmap.shape[1] * 0.75), max(5, heatmap.shape[0] * 0.32))
+        )
+        sns.heatmap(
+            heatmap,
+            cmap="mako",
+            linewidths=0.25,
+            cbar_kws={"label": "RMS adjacency change"},
+            ax=ax,
+        )
+        ax.set_title("Condition-pair module rewiring magnitude", loc="left", fontweight="bold")
+        ax.set_xlabel("Fixed global module")
+        ax.set_ylabel("Condition pair")
+        fig.tight_layout()
+        path = output_dir / "differential_module_rewiring_heatmap.png"
+        fig.savefig(path, dpi=220, bbox_inches="tight")
+        plt.close(fig)
+        generated.append(path)
+    return generated

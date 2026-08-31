@@ -137,6 +137,7 @@ def _tom_hierarchy(
     reliability_power: float = 0.50,
     gene_prior: GeneMantelPrior | None = None,
     gene_prior_weight: float = 0.0,
+    precomputed_correlation: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Fit the signed soft-adjacency/TOM backbone without truncating events."""
 
@@ -147,7 +148,15 @@ def _tom_hierarchy(
             "Raise the explicit audited memory cap or use exact R blockwise WGCNA; "
             "CoSplice will not silently select a top-N subset."
         )
-    correlation = correlation_matrix(matrix, settings.method)
+    correlation = (
+        correlation_matrix(matrix, settings.method)
+        if precomputed_correlation is None
+        else np.asarray(precomputed_correlation, dtype=float)
+    )
+    if correlation.shape != (len(matrix), len(matrix)):
+        raise ValueError("precomputed correlation must match the selected event universe")
+    correlation = np.clip((correlation + correlation.T) / 2.0, -1.0, 1.0)
+    np.fill_diagonal(correlation, 1.0)
     adjacency = signed_soft_adjacency(correlation, settings)
     if event_reliability is not None:
         reliability_factor = np.power(
@@ -1283,6 +1292,11 @@ def fit_network(
     reliability_power: float = 0.50,
     gene_prior: GeneMantelPrior | None = None,
     gene_prior_weight: float = 0.0,
+    precomputed_correlation: np.ndarray | None = None,
+    correlation_sd: np.ndarray | None = None,
+    edge_sign_probability: np.ndarray | None = None,
+    min_edge_sign_probability: float = 0.80,
+    precomputed_event_keys: pd.Index | np.ndarray | None = None,
 ) -> NetworkResult:
     if not matrix.index.is_unique or not matrix.columns.is_unique:
         raise ValueError("Network matrix event and sample labels must be unique.")
@@ -1318,6 +1332,29 @@ def fit_network(
         ranking = stability.sort_values(ascending=False)
     selected_keys = ranking.index if settings.max_events is None else ranking.index[: settings.max_events]
     selected = matrix.loc[selected_keys].copy()
+    if (
+        precomputed_correlation is not None
+        or correlation_sd is not None
+        or edge_sign_probability is not None
+    ):
+        source_keys = (
+            pd.Index(np.asarray(precomputed_event_keys, dtype=str))
+            if precomputed_event_keys is not None
+            else matrix.index.astype(str)
+        )
+        full_index = source_keys.get_indexer(selected.index.astype(str))
+        if np.any(full_index < 0):
+            raise ValueError("precomputed correlation is missing selected network events")
+        if precomputed_correlation is not None:
+            precomputed_correlation = np.asarray(precomputed_correlation)[
+                np.ix_(full_index, full_index)
+            ]
+        if correlation_sd is not None:
+            correlation_sd = np.asarray(correlation_sd)[np.ix_(full_index, full_index)]
+        if edge_sign_probability is not None:
+            edge_sign_probability = np.asarray(edge_sign_probability)[
+                np.ix_(full_index, full_index)
+            ]
     linkage_matrix: np.ndarray | None = None
     if settings.engine == "tom_hierarchical":
         selected_reliability = (
@@ -1339,6 +1376,7 @@ def fit_network(
             reliability_power=reliability_power,
             gene_prior=gene_prior,
             gene_prior_weight=gene_prior_weight,
+            precomputed_correlation=precomputed_correlation,
         )
         if settings.module_detection == "wgcna_blockwise":
             from katana_cosplice.r_wgcna import exact_wgcna_labels
@@ -1357,6 +1395,7 @@ def fit_network(
                     else None
                 ),
                 reliability_power=reliability_power,
+                precomputed_correlation=precomputed_correlation,
             )
             raw_labels = None
         elif settings.module_detection == "dynamic_tree_cut":
@@ -1393,6 +1432,19 @@ def fit_network(
             base_as_adjacency=base_as_adjacency,
             gene_prior_matrix=gene_prior_matrix if gene_prior is not None else None,
         )
+        if not edges.empty and correlation_sd is not None:
+            event_index = {key: index for index, key in enumerate(selected.index)}
+            rows = edges["event_a"].map(event_index).to_numpy(dtype=int)
+            cols = edges["event_b"].map(event_index).to_numpy(dtype=int)
+            edges["posterior_correlation_sd"] = correlation_sd[rows, cols]
+        if not edges.empty and edge_sign_probability is not None:
+            event_index = {key: index for index, key in enumerate(selected.index)}
+            rows = edges["event_a"].map(event_index).to_numpy(dtype=int)
+            cols = edges["event_b"].map(event_index).to_numpy(dtype=int)
+            edges["posterior_sign_probability"] = edge_sign_probability[rows, cols]
+            edges["posterior_direction_stable"] = edges[
+                "posterior_sign_probability"
+            ].ge(min_edge_sign_probability)
         sensitivity = (
             _dynamic_tree_sensitivity(linkage_matrix, tom, settings)
             if settings.module_detection in {"wgcna_blockwise", "dynamic_tree_cut"}
@@ -1602,6 +1654,18 @@ def fit_network(
         )
     )
     diagnostics["uncertainty_weighting"] = reliability is not None
+    diagnostics["posterior_ensemble_correlation"] = precomputed_correlation is not None
+    diagnostics["posterior_ensemble_edge_diagnostics"] = (
+        correlation_sd is not None and edge_sign_probability is not None
+    )
+    diagnostics["min_edge_sign_probability"] = (
+        min_edge_sign_probability if edge_sign_probability is not None else np.nan
+    )
+    diagnostics["posterior_direction_stable_edge_fraction"] = (
+        float(edges["posterior_direction_stable"].mean())
+        if "posterior_direction_stable" in edges and not edges.empty
+        else np.nan
+    )
     diagnostics["reliability_floor"] = reliability_floor if reliability is not None else np.nan
     diagnostics["reliability_power"] = reliability_power if reliability is not None else np.nan
     diagnostics["median_network_reliability"] = (

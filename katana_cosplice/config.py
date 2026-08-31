@@ -139,6 +139,10 @@ class UncertaintyConfig:
     reliability_power: float = 0.50
     filter_low_reliability: bool = True
     min_network_reliability: float = 0.15
+    posterior_draws: int = 25
+    posterior_random_seed: int = 17
+    min_edge_sign_probability: float = 0.80
+    posterior_edge_diagnostics: bool = True
 
 
 @dataclass
@@ -167,6 +171,7 @@ class DifferentialNetworkConfig:
     min_samples_per_condition: int = 3
     shrinkage: float = 5.0
     permutations: int = 200
+    bootstrap_iterations: int = 200
     max_output_edges_per_module_pair: int = 5_000
     random_seed: int = 71
 
@@ -604,11 +609,12 @@ class CoSpliceConfig:
             "raw_reliability_weighted",
             "posterior",
             "posterior_reliability_weighted",
+            "posterior_ensemble",
         }:
             raise ValueError(
                 "uncertainty.network_mode must be diagnostic_only, "
-                "raw_reliability_weighted, posterior or "
-                "posterior_reliability_weighted"
+                "raw_reliability_weighted, posterior, "
+                "posterior_reliability_weighted or posterior_ensemble"
             )
         if self.uncertainty.reliability_read_scale <= 0:
             raise ValueError("uncertainty.reliability_read_scale must be positive")
@@ -619,6 +625,12 @@ class CoSpliceConfig:
         if not 0.0 <= self.uncertainty.min_network_reliability <= 1.0:
             raise ValueError(
                 "uncertainty.min_network_reliability must be within [0, 1]"
+            )
+        if self.uncertainty.posterior_draws < 2:
+            raise ValueError("uncertainty.posterior_draws must be at least 2")
+        if not 0.5 <= self.uncertainty.min_edge_sign_probability <= 1.0:
+            raise ValueError(
+                "uncertainty.min_edge_sign_probability must be within [0.5, 1]"
             )
         if self.gene_prior.enabled and self.gene_prior.exon_count_matrix is None:
             raise ValueError("Enabled gene_prior requires exon_count_matrix")
@@ -666,6 +678,10 @@ class CoSpliceConfig:
             raise ValueError("differential_network.shrinkage cannot be negative")
         if self.differential_network.permutations < 19:
             raise ValueError("differential_network.permutations must be at least 19")
+        if self.differential_network.bootstrap_iterations < 20:
+            raise ValueError(
+                "differential_network.bootstrap_iterations must be at least 20"
+            )
         if self.differential_network.max_output_edges_per_module_pair < 1:
             raise ValueError(
                 "differential_network.max_output_edges_per_module_pair must be positive"

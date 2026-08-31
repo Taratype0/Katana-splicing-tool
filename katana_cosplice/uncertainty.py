@@ -9,6 +9,8 @@ import pandas as pd
 @dataclass
 class UncertaintyResult:
     posterior_psi: pd.DataFrame
+    posterior_alpha: pd.DataFrame
+    posterior_beta: pd.DataFrame
     event_metrics: pd.DataFrame
     sample_metrics: pd.DataFrame
 
@@ -151,4 +153,12 @@ def estimate_beta_binomial_uncertainty(
             "read_precision": read_precision.ravel(),
         }
     )
-    return UncertaintyResult(posterior_frame, event_metrics, sample_metrics)
+    alpha_frame = pd.DataFrame(alpha, index=ijc.index, columns=ijc.columns)
+    beta_frame = pd.DataFrame(beta, index=ijc.index, columns=ijc.columns)
+    return UncertaintyResult(
+        posterior_frame,
+        alpha_frame,
+        beta_frame,
+        event_metrics,
+        sample_metrics,
+    )

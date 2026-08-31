@@ -21,7 +21,15 @@ from katana_cosplice.audit import audit_inputs, load_sample_metadata, resolve_rm
 from katana_cosplice.benchmark import render_benchmark_plots, render_benchmark_report, run_method_benchmark
 from katana_cosplice.bayesian_preservation import bayesian_multi_cohort_preservation
 from katana_cosplice.config import CoSpliceConfig
-from katana_cosplice.differential_network import compare_condition_networks
+from katana_cosplice.differential_network import (
+    compare_condition_networks,
+    render_differential_network_plots,
+)
+from katana_cosplice.ensemble_network import (
+    load_posterior_correlation,
+    posterior_ensemble_correlation,
+    save_posterior_correlation,
+)
 from katana_cosplice.factor_contrasts import analyze_factor_contrasts, render_factor_contrast_plots
 from katana_cosplice.gene_prior import (
     build_gene_mantel_prior,
@@ -359,6 +367,8 @@ class CoSplicePipeline:
                 {
                     "posterior_matrix": out_dir
                     / "stable_posterior_psi_matrix.tsv",
+                    "posterior_alpha": out_dir / "stable_posterior_alpha_matrix.tsv",
+                    "posterior_beta": out_dir / "stable_posterior_beta_matrix.tsv",
                     "uncertainty_events": out_dir
                     / "beta_binomial_event_uncertainty.tsv",
                     "uncertainty_samples": out_dir
@@ -491,6 +501,12 @@ class CoSplicePipeline:
                 uncertainty.posterior_psi.loc[stable_keys].to_csv(
                     outputs["posterior_matrix"], sep="\t", float_format="%.6g"
                 )
+                uncertainty.posterior_alpha.loc[stable_keys].to_csv(
+                    outputs["posterior_alpha"], sep="\t", float_format="%.6g"
+                )
+                uncertainty.posterior_beta.loc[stable_keys].to_csv(
+                    outputs["posterior_beta"], sep="\t", float_format="%.6g"
+                )
                 uncertainty.event_metrics.loc[stable_keys].to_csv(
                     outputs["uncertainty_events"], sep="\t", float_format="%.6g"
                 )
@@ -527,14 +543,23 @@ class CoSplicePipeline:
         qc_dir = self.output / "03_stable_as_qc"
         matrix_path = qc_dir / "stable_psi_matrix.tsv"
         posterior_path = qc_dir / "stable_posterior_psi_matrix.tsv"
+        posterior_alpha_path = qc_dir / "stable_posterior_alpha_matrix.tsv"
+        posterior_beta_path = qc_dir / "stable_posterior_beta_matrix.tsv"
         uncertainty_path = qc_dir / "beta_binomial_event_uncertainty.tsv"
         metrics_path = qc_dir / "stable_as_event_qc.tsv"
         samples_path = self.output / "02_matrix" / "sample_metadata_resolved.tsv"
         required = [matrix_path, metrics_path, samples_path]
         uncertainty_enabled = self.config.uncertainty.enabled
         uncertainty_mode = self.config.uncertainty.network_mode
+        ensemble_diagnostics = (
+            uncertainty_enabled
+            and self.config.uncertainty.posterior_edge_diagnostics
+            and uncertainty_mode in {"posterior", "posterior_ensemble"}
+        )
         if uncertainty_enabled:
             required.extend([posterior_path, uncertainty_path])
+            if ensemble_diagnostics:
+                required.extend([posterior_alpha_path, posterior_beta_path])
         gene_prior_enabled = self.config.gene_prior.enabled
         if gene_prior_enabled:
             if self.config.gene_prior.exon_count_matrix is None:
@@ -554,6 +579,8 @@ class CoSplicePipeline:
             "selected": out_dir / "selected_event_matrix.tsv",
             "parameters": out_dir / "parameters.json",
         }
+        if ensemble_diagnostics:
+            outputs["posterior_correlation"] = out_dir / "posterior_ensemble_correlation.npz"
         if gene_prior_enabled:
             outputs |= {
                 "gene_prior_matrix": out_dir / "gene_mantel_prior_matrix.npz",
@@ -566,10 +593,14 @@ class CoSplicePipeline:
             "uncertainty": self.config.uncertainty.__dict__,
             "gene_prior": self.config.gene_prior.__dict__,
             "matrix_source": (
-                "beta_binomial_posterior_psi"
+                (
+                    "beta_binomial_posterior_ensemble_correlation"
+                    if uncertainty_mode == "posterior_ensemble"
+                    else "beta_binomial_posterior_psi"
+                )
                 if uncertainty_enabled
                 and uncertainty_mode
-                in {"posterior", "posterior_reliability_weighted"}
+                in {"posterior", "posterior_reliability_weighted", "posterior_ensemble"}
                 else "stable_observed_psi"
             ),
         }
@@ -583,6 +614,7 @@ class CoSplicePipeline:
             use_posterior = uncertainty_enabled and uncertainty_mode in {
                 "posterior",
                 "posterior_reliability_weighted",
+                "posterior_ensemble",
             }
             matrix = pd.read_csv(
                 posterior_path if use_posterior else matrix_path,
@@ -593,6 +625,49 @@ class CoSplicePipeline:
             samples = pd.read_csv(samples_path, sep="\t")
             if network_name == "residual":
                 matrix = residualize_matrix(matrix, samples, self.config.residual_covariates)
+            ensemble = None
+            if ensemble_diagnostics:
+                alpha = pd.read_csv(posterior_alpha_path, sep="\t", index_col=0)
+                beta = pd.read_csv(posterior_beta_path, sep="\t", index_col=0)
+                ensemble_keys = (
+                    metrics.reindex(matrix.index)["stability_score"]
+                    .fillna(0.0)
+                    .sort_values(ascending=False)
+                    .index
+                )
+                if self.config.network.max_events is not None:
+                    ensemble_keys = ensemble_keys[: self.config.network.max_events]
+                alpha = alpha.reindex(index=ensemble_keys, columns=matrix.columns)
+                beta = beta.reindex(index=ensemble_keys, columns=matrix.columns)
+                cache_path = outputs["posterior_correlation"]
+                if cache_path.exists() and not force:
+                    try:
+                        ensemble = load_posterior_correlation(cache_path, alpha.index)
+                        self._emit(
+                            f"Posterior ensemble cache hit for {network_name}: "
+                            f"{ensemble.n_draws} draws."
+                        )
+                    except (ValueError, KeyError, OSError):
+                        ensemble = None
+                if ensemble is None:
+                    self._emit(
+                        f"Building {network_name} posterior correlation ensemble "
+                        f"from {self.config.uncertainty.posterior_draws} beta draws."
+                    )
+                    transform = None
+                    if network_name == "residual":
+                        transform = lambda draw: residualize_matrix(
+                            draw, samples, self.config.residual_covariates
+                        )
+                    ensemble = posterior_ensemble_correlation(
+                        alpha,
+                        beta,
+                        n_draws=self.config.uncertainty.posterior_draws,
+                        method=self.config.network.method,
+                        random_seed=self.config.uncertainty.posterior_random_seed,
+                        draw_transform=transform,
+                    )
+                    save_posterior_correlation(ensemble, cache_path)
             reliability = None
             use_reliability = uncertainty_enabled and uncertainty_mode in {
                 "raw_reliability_weighted",
@@ -624,6 +699,23 @@ class CoSplicePipeline:
                 reliability_power=self.config.uncertainty.reliability_power,
                 gene_prior=gene_prior,
                 gene_prior_weight=self.config.gene_prior.weight,
+                precomputed_correlation=(
+                    ensemble.mean_correlation
+                    if ensemble is not None and uncertainty_mode == "posterior_ensemble"
+                    else None
+                ),
+                correlation_sd=(
+                    ensemble.correlation_sd if ensemble is not None else None
+                ),
+                edge_sign_probability=(
+                    ensemble.sign_probability if ensemble is not None else None
+                ),
+                min_edge_sign_probability=(
+                    self.config.uncertainty.min_edge_sign_probability
+                ),
+                precomputed_event_keys=(
+                    pd.Index(ensemble.event_keys) if ensemble is not None else None
+                ),
             )
             out_dir.mkdir(parents=True, exist_ok=True)
             if gene_prior is not None:
@@ -741,6 +833,19 @@ class CoSplicePipeline:
         )
         if use_reliability:
             required.append(uncertainty_path)
+        posterior_bootstrap = (
+            self.config.uncertainty.enabled
+            and self.config.uncertainty.network_mode
+            in {"posterior", "posterior_reliability_weighted", "posterior_ensemble"}
+        )
+        posterior_alpha_path = (
+            self.output / "03_stable_as_qc" / "stable_posterior_alpha_matrix.tsv"
+        )
+        posterior_beta_path = (
+            self.output / "03_stable_as_qc" / "stable_posterior_beta_matrix.tsv"
+        )
+        if posterior_bootstrap:
+            required.extend([posterior_alpha_path, posterior_beta_path])
         event_metadata_path = self.output / "02_matrix" / "event_metadata.tsv"
         multiobjective = self.config.multiobjective_selection
         gene_prior_path = (
@@ -842,6 +947,18 @@ class CoSplicePipeline:
                 if use_reliability
                 else None
             )
+            posterior_alpha = (
+                pd.read_csv(posterior_alpha_path, sep="\t", index_col=0)
+                .reindex(index=matrix.index, columns=matrix.columns)
+                if posterior_bootstrap
+                else None
+            )
+            posterior_beta = (
+                pd.read_csv(posterior_beta_path, sep="\t", index_col=0)
+                .reindex(index=matrix.index, columns=matrix.columns)
+                if posterior_bootstrap
+                else None
+            )
             result = build_bootstrap_coassignment_consensus(
                 matrix,
                 observed,
@@ -854,6 +971,8 @@ class CoSplicePipeline:
                 gene_prior=gene_prior,
                 gene_prior_weight=self.config.gene_prior.weight,
                 candidate_scorer=candidate_scorer,
+                posterior_alpha=posterior_alpha,
+                posterior_beta=posterior_beta,
                 progress=self._emit,
             )
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -1346,6 +1465,7 @@ class CoSplicePipeline:
             "parameters_table": out_dir / "network_parameter_sensitivity.tsv",
             "preservation_pairs": out_dir / "observed_residual_preservation_pairs.tsv",
             "preservation_summary": out_dir / "observed_residual_preservation_summary.tsv",
+            "program_score_confidence": out_dir / "module_program_score_confidence.tsv",
             "report": out_dir / "module_validation_report.html",
             "parameters": out_dir / "parameters.json",
         }
@@ -1381,6 +1501,12 @@ class CoSplicePipeline:
             result.parameter_sensitivity.to_csv(outputs["parameters_table"], sep="\t", index=False, float_format="%.6g")
             result.preservation_pairs.to_csv(outputs["preservation_pairs"], sep="\t", index=False, float_format="%.6g")
             result.preservation_summary.to_csv(outputs["preservation_summary"], sep="\t", index=False, float_format="%.6g")
+            result.program_score_confidence.to_csv(
+                outputs["program_score_confidence"],
+                sep="\t",
+                index=False,
+                float_format="%.6g",
+            )
             plots = render_validation_plots(result, out_dir / "plots", self.config.validation)
             render_validation_report(result, outputs["report"])
             write_json(
@@ -2406,6 +2532,7 @@ class CoSplicePipeline:
                 soft_power=self.config.network.soft_power,
                 shrinkage=settings.shrinkage,
                 permutations=settings.permutations,
+                bootstrap_iterations=settings.bootstrap_iterations,
                 max_output_edges_per_module_pair=(
                     settings.max_output_edges_per_module_pair
                 ),
@@ -2421,6 +2548,7 @@ class CoSplicePipeline:
             result.condition_edges.to_csv(
                 outputs["edges"], sep="\t", index=False, float_format="%.6g"
             )
+            plots = render_differential_network_plots(result, out_dir / "plots")
             write_json(
                 outputs["parameters"],
                 {
@@ -2441,6 +2569,7 @@ class CoSplicePipeline:
                         "condition-pair/module tests; *_pairwise_FDR columns are "
                         "exploratory within-pair diagnostics only"
                     ),
+                    "generated_plots": [str(path) for path in plots],
                 },
             )
             self._mark(
@@ -2449,7 +2578,7 @@ class CoSplicePipeline:
                 f"Differential network finished: {len(result.module_changes):,} "
                 "module-pair tests.",
                 stage_fp,
-                list(outputs.values()),
+                [*outputs.values(), *plots],
             )
             return outputs
         except Exception as exc:

@@ -20,6 +20,7 @@ def exact_wgcna_labels(
     rscript: str | Path | None = None,
     event_reliability: pd.Series | None = None,
     reliability_power: float = 0.5,
+    precomputed_correlation: np.ndarray | None = None,
 ) -> np.ndarray:
     """Run the production signed WGCNA/TOM backbone in official R WGCNA."""
 
@@ -52,6 +53,7 @@ def exact_wgcna_labels(
         temp = Path(temp_dir)
         matrix_path = temp / "matrix.csv"
         reliability_path = temp / "reliability.csv"
+        correlation_path = temp / "correlation.bin"
         output_path = temp / "modules.csv"
         script_path = temp / "network.R"
         matrix.T.to_csv(matrix_path, index=True, index_label="sample_id")
@@ -65,6 +67,14 @@ def exact_wgcna_labels(
                 .rename("reliability")
             )
         reliability.to_csv(reliability_path, index=True, index_label="event_key")
+        if precomputed_correlation is not None:
+            correlation = np.asarray(precomputed_correlation, dtype=float)
+            if correlation.shape != (len(matrix), len(matrix)):
+                raise ValueError("precomputed correlation must match the WGCNA event universe")
+            # A symmetric float64 matrix has identical row-major and R
+            # column-major byte order after transposition. Symmetry therefore
+            # lets R read this compact binary directly without a huge CSV.
+            np.asarray(correlation, dtype="<f8", order="C").tofile(correlation_path)
         script_path.write_text(
             """
 args <- commandArgs(trailingOnly=TRUE)
@@ -73,9 +83,20 @@ suppressPackageStartupMessages(library(dynamicTreeCut))
 dat <- read.csv(args[1], row.names=1, check.names=FALSE)
 rel <- read.csv(args[2], row.names=1, check.names=FALSE)[, 1]
 rel <- rel[colnames(dat)]
-corMat <- bicor(dat, use='pairwise.complete.obs')
+usePrecomputed <- as.logical(args[10])
+if (usePrecomputed) {
+  handle <- file(args[11], "rb")
+  values <- readBin(handle, what="double", n=ncol(dat)^2, size=8, endian="little")
+  close(handle)
+  if (length(values) != ncol(dat)^2) stop("Incomplete precomputed correlation matrix")
+  corMat <- matrix(values, nrow=ncol(dat), ncol=ncol(dat))
+  rownames(corMat) <- colnames(dat)
+  colnames(corMat) <- colnames(dat)
+} else {
+  corMat <- bicor(dat, use='pairwise.complete.obs')
+}
 weightPower <- as.numeric(args[9])
-if (weightPower <= 0) {
+if (weightPower <= 0 && !usePrecomputed) {
   net <- blockwiseModules(
     dat,
     power=as.numeric(args[4]),
@@ -144,6 +165,8 @@ write.csv(
                 str(deep_split),
                 "TRUE" if pam_respects_dendro else "FALSE",
                 str(reliability_power if event_reliability is not None else 0.0),
+                "TRUE" if precomputed_correlation is not None else "FALSE",
+                str(correlation_path),
             ],
             capture_output=True,
             text=True,
