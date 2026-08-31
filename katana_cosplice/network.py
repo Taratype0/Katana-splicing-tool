@@ -17,6 +17,7 @@ from scipy.spatial.distance import squareform
 from sklearn.neighbors import NearestNeighbors
 
 from katana_cosplice.config import NetworkConfig
+from katana_cosplice.dynamic_tree import dynamic_tree_cut_labels
 
 if TYPE_CHECKING:
     from katana_cosplice.gene_prior import GeneMantelPrior
@@ -81,6 +82,186 @@ def correlation_matrix(matrix: pd.DataFrame, method: str) -> np.ndarray:
     correlation = np.nan_to_num(correlation, nan=0.0, posinf=0.0, neginf=0.0)
     np.fill_diagonal(correlation, 1.0)
     return np.clip(correlation, -1.0, 1.0)
+
+
+def signed_soft_adjacency(
+    correlation: np.ndarray,
+    settings: NetworkConfig,
+) -> np.ndarray:
+    """Build the WGCNA-style soft adjacency used by the production network."""
+
+    base = (
+        (1.0 + correlation) / 2.0
+        if settings.signed
+        else np.abs(correlation)
+    )
+    adjacency = np.power(
+        np.clip(base, 0.0, 1.0),
+        settings.soft_power,
+    ).astype(np.float32, copy=False)
+    np.fill_diagonal(adjacency, 0.0)
+    return adjacency
+
+
+def topological_overlap_matrix(adjacency: np.ndarray) -> np.ndarray:
+    """Return the weighted TOM similarity for a symmetric adjacency matrix."""
+
+    if adjacency.ndim != 2 or adjacency.shape[0] != adjacency.shape[1]:
+        raise ValueError("TOM adjacency must be a square matrix.")
+    adjacency = np.asarray(adjacency, dtype=np.float32)
+    adjacency = np.clip((adjacency + adjacency.T) / 2.0, 0.0, 1.0)
+    np.fill_diagonal(adjacency, 0.0)
+    connectivity = adjacency.sum(axis=1, dtype=np.float64)
+    shared = adjacency @ adjacency
+    denominator = (
+        np.minimum.outer(connectivity, connectivity).astype(np.float32)
+        + 1.0
+        - adjacency
+    )
+    tom = np.divide(
+        shared + adjacency,
+        denominator,
+        out=np.zeros_like(shared, dtype=np.float32),
+        where=denominator > 1e-12,
+    )
+    tom = np.clip((tom + tom.T) / 2.0, 0.0, 1.0)
+    np.fill_diagonal(tom, 1.0)
+    return tom
+
+
+def _tom_hierarchy(
+    matrix: pd.DataFrame,
+    settings: NetworkConfig,
+    *,
+    event_reliability: np.ndarray | None = None,
+    reliability_power: float = 0.50,
+    gene_prior: GeneMantelPrior | None = None,
+    gene_prior_weight: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Fit the signed soft-adjacency/TOM backbone without truncating events."""
+
+    if len(matrix) > settings.tom_dense_max_events:
+        raise ValueError(
+            f"TOM network requires {len(matrix)} events, exceeding "
+            f"network.tom_dense_max_events={settings.tom_dense_max_events}. "
+            "Raise the explicit audited memory cap or use exact R blockwise WGCNA; "
+            "CoSplice will not silently select a top-N subset."
+        )
+    correlation = correlation_matrix(matrix, settings.method)
+    adjacency = signed_soft_adjacency(correlation, settings)
+    if event_reliability is not None:
+        reliability_factor = np.power(
+            np.outer(event_reliability, event_reliability),
+            reliability_power / 2.0,
+        ).astype(np.float32, copy=False)
+        adjacency *= reliability_factor
+    base_as_adjacency = adjacency.copy()
+    upper_rows, upper_cols = np.triu_indices(len(matrix), k=1)
+    reinforced, gene_prior_values = _reinforce_with_gene_prior(
+        adjacency[upper_rows, upper_cols],
+        matrix.index,
+        upper_rows,
+        upper_cols,
+        gene_prior,
+        gene_prior_weight,
+    )
+    if len(reinforced):
+        adjacency[upper_rows, upper_cols] = reinforced
+        adjacency[upper_cols, upper_rows] = reinforced
+    np.fill_diagonal(adjacency, 0.0)
+    tom = topological_overlap_matrix(adjacency)
+    distance = np.clip(1.0 - tom, 0.0, 1.0)
+    np.fill_diagonal(distance, 0.0)
+    hierarchy = linkage(squareform(distance, checks=False), method="average")
+    return (
+        correlation,
+        adjacency,
+        tom,
+        hierarchy,
+        base_as_adjacency,
+        gene_prior_values,
+    )
+
+
+def discover_tom_label_grid(
+    matrix: pd.DataFrame,
+    settings: NetworkConfig,
+    cut_heights: list[float],
+    *,
+    gene_prior: GeneMantelPrior | None = None,
+    gene_prior_weight: float = 0.0,
+) -> dict[float, np.ndarray]:
+    """Cut one TOM hierarchy at several predeclared heights."""
+
+    (
+        _correlation,
+        _adjacency,
+        _tom,
+        hierarchy,
+        _base_as_adjacency,
+        _gene_prior_values,
+    ) = (
+        _tom_hierarchy(
+            matrix,
+            settings,
+            gene_prior=gene_prior,
+            gene_prior_weight=gene_prior_weight,
+        )
+    )
+    output: dict[float, np.ndarray] = {}
+    for height in sorted(set(float(value) for value in cut_heights)):
+        raw_labels = fcluster(hierarchy, t=height, criterion="distance")
+        labels, _ = _module_labels(raw_labels, settings.min_module_size)
+        if settings.module_refinement:
+            labels, _ = _refine_module_labels(matrix, labels, settings)
+        output[height] = labels
+    return output
+
+
+def discover_dynamic_label_grid(
+    matrix: pd.DataFrame,
+    settings: NetworkConfig,
+    deep_splits: list[int],
+    *,
+    event_reliability: np.ndarray | None = None,
+    reliability_power: float = 0.50,
+    gene_prior: GeneMantelPrior | None = None,
+    gene_prior_weight: float = 0.0,
+) -> dict[int, np.ndarray]:
+    """Apply published Dynamic Tree Cut variants to one exact TOM hierarchy."""
+
+    (
+        _correlation,
+        _adjacency,
+        tom,
+        hierarchy,
+        _base_as_adjacency,
+        _gene_prior_values,
+    ) = _tom_hierarchy(
+        matrix,
+        settings,
+        event_reliability=event_reliability,
+        reliability_power=reliability_power,
+        gene_prior=gene_prior,
+        gene_prior_weight=gene_prior_weight,
+    )
+    distance = np.clip(1.0 - tom, 0.0, 1.0)
+    np.fill_diagonal(distance, 0.0)
+    output: dict[int, np.ndarray] = {}
+    for deep_split in sorted(set(int(value) for value in deep_splits)):
+        raw_labels = dynamic_tree_cut_labels(
+            hierarchy,
+            distance,
+            min_module_size=settings.min_module_size,
+            deep_split=deep_split,
+            cut_height=settings.dynamic_cut_height,
+            pam_respects_dendro=settings.dynamic_pam_respects_dendro,
+        )
+        labels, _ = _module_labels(raw_labels, settings.min_module_size)
+        if settings.module_refinement:
+            labels, _ = _refine_module_labels(matrix, labels, settings)
+        output[deep_split] = labels
+    return output
 
 
 def _standardized_profiles(matrix: pd.DataFrame, method: str) -> np.ndarray:
@@ -449,7 +630,11 @@ def _reinforce_with_gene_prior(
 
 def _module_labels(raw_labels: np.ndarray, min_size: int) -> tuple[np.ndarray, dict[int, str]]:
     counts = pd.Series(raw_labels).value_counts()
-    retained = [int(label) for label, count in counts.items() if count >= min_size]
+    retained = [
+        int(label)
+        for label, count in counts.items()
+        if int(label) != 0 and count >= min_size
+    ]
     retained.sort(key=lambda label: (-int(counts[label]), label))
     names = {label: f"M{index:02d}" for index, label in enumerate(retained, start=1)}
     labels = np.asarray([names.get(int(label), "grey") for label in raw_labels], dtype=object)
@@ -672,7 +857,16 @@ def _adaptive_membership_cutoffs(
     )
 
 
-def _edge_table(correlation: np.ndarray, adjacency: np.ndarray, event_keys: list[str], threshold: float, max_edges: int = 100_000) -> pd.DataFrame:
+def _edge_table(
+    correlation: np.ndarray,
+    adjacency: np.ndarray,
+    event_keys: list[str],
+    threshold: float,
+    max_edges: int = 100_000,
+    *,
+    base_as_adjacency: np.ndarray | None = None,
+    gene_prior_matrix: np.ndarray | None = None,
+) -> pd.DataFrame:
     upper = np.triu_indices_from(adjacency, k=1)
     scores = adjacency[upper]
     selected = np.flatnonzero(scores >= threshold)
@@ -689,6 +883,13 @@ def _edge_table(correlation: np.ndarray, adjacency: np.ndarray, event_keys: list
             "adjacency": adjacency[rows, cols],
         }
     )
+    if base_as_adjacency is not None:
+        result["base_AS_adjacency"] = base_as_adjacency[rows, cols]
+    if gene_prior_matrix is not None:
+        result["gene_mantel_prior"] = gene_prior_matrix[rows, cols]
+        result["gene_prior_adjacency_boost"] = (
+            result["adjacency"] - result.get("base_AS_adjacency", result["adjacency"])
+        )
     return result.sort_values("adjacency", ascending=False).reset_index(drop=True)
 
 
@@ -787,7 +988,24 @@ def _effective_consensus_bootstrap_iterations(
 
 
 def _cut_height_sensitivity(linkage_matrix: np.ndarray, settings: NetworkConfig) -> pd.DataFrame:
-    heights = sorted(set([0.35, 0.45, 0.55, 0.65, settings.module_cut_height, 0.75, 0.85]))
+    if settings.engine == "tom_hierarchical":
+        heights = sorted(
+            set([0.70, 0.75, settings.module_cut_height, 0.85, 0.90])
+        )
+    else:
+        heights = sorted(
+            set(
+                [
+                    0.35,
+                    0.45,
+                    0.55,
+                    0.65,
+                    settings.module_cut_height,
+                    0.75,
+                    0.85,
+                ]
+            )
+        )
     rows: list[dict[str, object]] = []
     n_events = linkage_matrix.shape[0] + 1
     for height in heights:
@@ -804,6 +1022,42 @@ def _cut_height_sensitivity(linkage_matrix: np.ndarray, settings: NetworkConfig)
                 "largest_module_events": largest,
                 "largest_module_fraction": largest / n_events,
                 "is_active_setting": bool(np.isclose(height, settings.module_cut_height)),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _dynamic_tree_sensitivity(
+    linkage_matrix: np.ndarray,
+    tom: np.ndarray,
+    settings: NetworkConfig,
+) -> pd.DataFrame:
+    distance = np.clip(1.0 - tom, 0.0, 1.0)
+    np.fill_diagonal(distance, 0.0)
+    rows: list[dict[str, object]] = []
+    n_events = len(distance)
+    for deep_split in sorted(set(settings.dynamic_deep_splits)):
+        raw = dynamic_tree_cut_labels(
+            linkage_matrix,
+            distance,
+            min_module_size=settings.min_module_size,
+            deep_split=deep_split,
+            cut_height=settings.dynamic_cut_height,
+            pam_respects_dendro=settings.dynamic_pam_respects_dendro,
+        )
+        labels, _ = _module_labels(raw, settings.min_module_size)
+        counts = pd.Series(labels).value_counts()
+        retained = counts.drop(labels="grey", errors="ignore")
+        largest = int(retained.max()) if not retained.empty else 0
+        rows.append(
+            {
+                "dynamic_deep_split": deep_split,
+                "dynamic_cut_height": settings.dynamic_cut_height,
+                "n_modules": int(len(retained)),
+                "n_grey_events": int(counts.get("grey", 0)),
+                "largest_module_events": largest,
+                "largest_module_fraction": largest / n_events,
+                "is_active_setting": deep_split == settings.dynamic_deep_split,
             }
         )
     return pd.DataFrame(rows)
@@ -909,11 +1163,54 @@ def discover_module_labels(
     matrix: pd.DataFrame,
     settings: NetworkConfig,
     community_resolution: float | None = None,
+    event_reliability: pd.Series | None = None,
+    reliability_floor: float = 0.10,
+    reliability_power: float = 0.50,
     gene_prior: GeneMantelPrior | None = None,
     gene_prior_weight: float = 0.0,
 ) -> np.ndarray:
     """Discover module labels without program scores, edge bootstrap or sensitivity sweeps."""
-    if settings.engine == "sparse_knn":
+    if settings.engine == "tom_hierarchical":
+        reliability = (
+            pd.to_numeric(event_reliability.reindex(matrix.index), errors="coerce")
+            .fillna(0.0)
+            .clip(reliability_floor, 1.0)
+            .to_numpy(dtype=float)
+            if event_reliability is not None
+            else None
+        )
+        if settings.module_detection == "wgcna_blockwise":
+            from katana_cosplice.r_wgcna import exact_wgcna_labels
+
+            return exact_wgcna_labels(
+                matrix,
+                soft_power=settings.soft_power,
+                min_module_size=settings.min_module_size,
+                merge_cut_height=settings.wgcna_merge_cut_height,
+                deep_split=settings.dynamic_deep_split,
+                pam_respects_dendro=settings.dynamic_pam_respects_dendro,
+                rscript=settings.wgcna_rscript,
+                event_reliability=event_reliability,
+                reliability_power=reliability_power,
+            )
+        if settings.module_detection == "dynamic_tree_cut":
+            return discover_dynamic_label_grid(
+                matrix,
+                settings,
+                [settings.dynamic_deep_split],
+                event_reliability=reliability,
+                reliability_power=reliability_power,
+                gene_prior=gene_prior,
+                gene_prior_weight=gene_prior_weight,
+            )[int(settings.dynamic_deep_split)]
+        return discover_tom_label_grid(
+            matrix,
+            settings,
+            [settings.module_cut_height],
+            gene_prior=gene_prior,
+            gene_prior_weight=gene_prior_weight,
+        )[float(settings.module_cut_height)]
+    elif settings.engine == "sparse_knn":
         rows, cols, _correlations, adjacencies, _overlaps, _consensus = _network_edges(
             matrix,
             settings,
@@ -1022,7 +1319,91 @@ def fit_network(
     selected_keys = ranking.index if settings.max_events is None else ranking.index[: settings.max_events]
     selected = matrix.loc[selected_keys].copy()
     linkage_matrix: np.ndarray | None = None
-    if settings.engine == "exact_hierarchical":
+    if settings.engine == "tom_hierarchical":
+        selected_reliability = (
+            reliability.reindex(selected.index).to_numpy(dtype=float)
+            if reliability is not None
+            else None
+        )
+        (
+            correlation,
+            adjacency,
+            tom,
+            linkage_matrix,
+            base_as_adjacency,
+            gene_prior_values,
+        ) = _tom_hierarchy(
+            selected,
+            settings,
+            event_reliability=selected_reliability,
+            reliability_power=reliability_power,
+            gene_prior=gene_prior,
+            gene_prior_weight=gene_prior_weight,
+        )
+        if settings.module_detection == "wgcna_blockwise":
+            from katana_cosplice.r_wgcna import exact_wgcna_labels
+
+            module_labels = exact_wgcna_labels(
+                selected,
+                soft_power=settings.soft_power,
+                min_module_size=settings.min_module_size,
+                merge_cut_height=settings.wgcna_merge_cut_height,
+                deep_split=settings.dynamic_deep_split,
+                pam_respects_dendro=settings.dynamic_pam_respects_dendro,
+                rscript=settings.wgcna_rscript,
+                event_reliability=(
+                    reliability.reindex(selected.index)
+                    if reliability is not None
+                    else None
+                ),
+                reliability_power=reliability_power,
+            )
+            raw_labels = None
+        elif settings.module_detection == "dynamic_tree_cut":
+            distance = np.clip(1.0 - tom, 0.0, 1.0)
+            np.fill_diagonal(distance, 0.0)
+            raw_labels = dynamic_tree_cut_labels(
+                linkage_matrix,
+                distance,
+                min_module_size=settings.min_module_size,
+                deep_split=settings.dynamic_deep_split,
+                cut_height=settings.dynamic_cut_height,
+                pam_respects_dendro=settings.dynamic_pam_respects_dendro,
+            )
+        else:
+            raw_labels = fcluster(
+                linkage_matrix,
+                t=settings.module_cut_height,
+                criterion="distance",
+            )
+        if raw_labels is not None:
+            module_labels, _ = _module_labels(raw_labels, settings.min_module_size)
+        connectivity = adjacency.sum(axis=1)
+        gene_prior_matrix = np.zeros_like(adjacency)
+        upper_rows, upper_cols = np.triu_indices(len(selected), k=1)
+        if len(gene_prior_values):
+            gene_prior_matrix[upper_rows, upper_cols] = gene_prior_values
+            gene_prior_matrix[upper_cols, upper_rows] = gene_prior_values
+        edges = _edge_table(
+            correlation,
+            adjacency,
+            selected.index.tolist(),
+            settings.edge_threshold,
+            settings.max_output_edges,
+            base_as_adjacency=base_as_adjacency,
+            gene_prior_matrix=gene_prior_matrix if gene_prior is not None else None,
+        )
+        sensitivity = (
+            _dynamic_tree_sensitivity(linkage_matrix, tom, settings)
+            if settings.module_detection in {"wgcna_blockwise", "dynamic_tree_cut"}
+            else _cut_height_sensitivity(linkage_matrix, settings)
+        )
+        n_graph_edges = int(
+            np.count_nonzero(
+                np.triu(adjacency >= settings.edge_threshold, k=1)
+            )
+        )
+    elif settings.engine == "exact_hierarchical":
         correlation = correlation_matrix(selected, settings.method)
         base = (1.0 + correlation) / 2.0 if settings.signed else np.abs(correlation)
         adjacency = np.power(np.clip(base, 0.0, 1.0), settings.soft_power)
@@ -1033,6 +1414,7 @@ def fit_network(
                 reliability_power / 2.0,
             )
             adjacency *= reliability_factor
+        base_as_adjacency = adjacency.copy()
         upper_rows, upper_cols = np.triu_indices(len(selected), k=1)
         reinforced, gene_prior_values = _reinforce_with_gene_prior(
             adjacency[upper_rows, upper_cols],
@@ -1057,12 +1439,18 @@ def fit_network(
         raw_labels = fcluster(linkage_matrix, t=settings.module_cut_height, criterion="distance")
         module_labels, _ = _module_labels(raw_labels, settings.min_module_size)
         connectivity = adjacency.sum(axis=1)
+        gene_prior_matrix = np.zeros_like(adjacency)
+        if len(gene_prior_values):
+            gene_prior_matrix[upper_rows, upper_cols] = gene_prior_values
+            gene_prior_matrix[upper_cols, upper_rows] = gene_prior_values
         edges = _edge_table(
             correlation,
             adjacency,
             selected.index.tolist(),
             settings.edge_threshold,
             settings.max_output_edges,
+            base_as_adjacency=base_as_adjacency,
+            gene_prior_matrix=gene_prior_matrix if gene_prior is not None else None,
         )
         sensitivity = _cut_height_sensitivity(linkage_matrix, settings)
         n_graph_edges = int(np.count_nonzero(np.triu(adjacency >= settings.edge_threshold, k=1)))
@@ -1134,7 +1522,7 @@ def fit_network(
         sensitivity = _community_resolution_sensitivity(len(selected), rows, cols, adjacencies, settings)
         n_graph_edges = len(rows)
     initial_module_labels = module_labels.copy()
-    if settings.module_refinement:
+    if settings.module_refinement and settings.module_detection != "wgcna_blockwise":
         module_labels, membership = _refine_module_labels(selected, module_labels, settings)
     else:
         membership = _membership_statistics(selected, module_labels, settings)
@@ -1182,6 +1570,10 @@ def fit_network(
     )
     assignments["module_membership_rank"] = assignments.groupby("module", observed=True)["network_connectivity"].rank(method="dense", ascending=False)
     edges["bootstrap_support"] = _edge_bootstrap_support(selected, edges, settings, samples)
+    if "graph_bootstrap_support" not in edges:
+        # Dense TOM has no separate sparse-graph bootstrap. Edge survival under
+        # the same condition-stratified resampling is the equivalent provenance.
+        edges["graph_bootstrap_support"] = edges["bootstrap_support"]
     edges["bootstrap_stable"] = edges["bootstrap_support"].ge(settings.bootstrap_edge_threshold)
     if not edges.empty:
         incident = pd.concat(
@@ -1236,6 +1628,37 @@ def fit_network(
     diagnostics["soft_power"] = settings.soft_power
     diagnostics["signed_network"] = settings.signed
     diagnostics["bootstrap_iterations"] = settings.bootstrap_iterations
+    diagnostics["network_backbone"] = (
+        "signed_soft_adjacency_exact_TOM_average_linkage"
+        if settings.engine == "tom_hierarchical"
+        else settings.engine
+    )
+    diagnostics["module_detection"] = settings.module_detection
+    diagnostics["dynamic_tree_backend"] = (
+        "official_R_WGCNA"
+        if settings.module_detection == "wgcna_blockwise"
+        else (
+            "dynamicTreeCut_python_0.1.1"
+            if settings.module_detection == "dynamic_tree_cut"
+            else "not_used"
+        )
+    )
+    diagnostics["dynamic_cut_height"] = (
+        settings.dynamic_cut_height
+        if settings.module_detection in {"wgcna_blockwise", "dynamic_tree_cut"}
+        else np.nan
+    )
+    diagnostics["dynamic_deep_split"] = (
+        settings.dynamic_deep_split
+        if settings.module_detection in {"wgcna_blockwise", "dynamic_tree_cut"}
+        else np.nan
+    )
+    diagnostics["dynamic_pam_respects_dendro"] = (
+        settings.dynamic_pam_respects_dendro
+        if settings.module_detection in {"wgcna_blockwise", "dynamic_tree_cut"}
+        else False
+    )
+    diagnostics["tom_dense_max_events"] = settings.tom_dense_max_events
     diagnostics["knn_neighbors"] = settings.knn_neighbors if settings.engine == "sparse_knn" else np.nan
     diagnostics["edge_smoothing"] = settings.edge_smoothing if settings.engine == "sparse_knn" else "none"
     diagnostics["shared_neighbor_weight"] = settings.shared_neighbor_weight if settings.engine == "sparse_knn" else np.nan
@@ -1312,7 +1735,18 @@ def render_network_plots(result: NetworkResult, samples: pd.DataFrame, output_di
 
     fig, ax = plt.subplots(figsize=(11, 6.5))
     sizes = result.assignments.loc[result.assignments["module"].ne("grey")].groupby("module", observed=True).size().sort_values(ascending=False)
-    sizes.plot.bar(ax=ax, color="#087E8B", edgecolor="#17324D")
+    if sizes.empty:
+        ax.text(
+            0.5,
+            0.5,
+            "No non-grey module passed the production confidence rules",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.set_xticks([])
+    else:
+        sizes.plot.bar(ax=ax, color="#087E8B", edgecolor="#17324D")
     ax.set_title(f"{network_name.title()} co-splicing module sizes", fontweight="bold")
     ax.set_xlabel("Module")
     ax.set_ylabel("Stable AS events")

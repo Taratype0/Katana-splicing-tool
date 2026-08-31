@@ -1,35 +1,44 @@
-# CoSplice Multi-objective Module Selection
+# CoSplice Multi-objective Validation Audit
+
+> Production status: since v1.1.0, `backbone_confidence_only` preserves the
+> official WGCNA partition. The objectives below audit a fixed partition and
+> cannot alter module membership. Candidate selection remains available only
+> for explicit reproduction of historical research runs.
 
 ## Purpose
 
-The publication-oriented selector chooses one consensus partition that is simultaneously:
+The publication-oriented audit asks whether the fixed WGCNA partition is:
 
 1. reproducible under discovery-cohort sample bootstrap;
 2. structurally preserved in predeclared tuning cohorts;
 3. functionally coherent against a versioned tuning gene-set collection.
 
-This replaces the weaker practice of selecting modules only for internal stability and describing
-external preservation or enrichment after the fact.
+These metrics support validation and reporting; they are not allowed to tune the
+production module definition.
 
 ## Data separation
 
 - **Discovery cohort**: builds the co-assignment matrix and candidate partitions.
-- **Tuning cohorts**: may influence parameter selection through preservation scores.
-- **Holdout cohorts**: are never loaded during selection and remain confirmatory.
-- **Tuning GMT**: may influence module selection; enrichment against the same GMT is not independent
-  validation.
+- **Tuning cohorts**: contribute preservation evidence to the fixed-partition audit.
+- **Holdout cohorts**: are never loaded during this audit and remain confirmatory.
+- **Tuning GMT**: contributes functional evidence; enrichment against the same GMT is not independent
+  validation and cannot change production membership.
 
 Tuning and holdout cohort names must be disjoint. The stage fails if configured tuning inputs are
 missing. Functional evidence is adaptive by default: if fewer than the predeclared number of
 modules pass the functional FDR cutoff, the functional objective is disabled and its weight is
 renormalized across internal stability and tuning preservation. This prevents a weak raw enrichment
-score from changing the selected partition.
+score from distorting the audit; explicit historical selection modes retain their original behavior.
 
-## Candidate partitions
+## Historical candidate partitions
 
-The existing Leiden grid search supplies candidate partitions across graph edge thresholds and
-resolutions. Grey-fraction, largest-module-fraction and module-count constraints are applied before
-objective optimization.
+Historical candidate generation had two frozen levels. First, a discovery-only pilot reuses one
+TOM hierarchy and compares predeclared cut heights using lower-tail bootstrap ARI plus event
+coverage. The selected TOM height is then frozen before the outer bootstrap and before holdout
+access. Second, hierarchical cuts of the outer-bootstrap co-assignment matrix supply the final
+candidate partitions. Grey-fraction, largest-module-fraction and module-count constraints are
+applied before objective optimization. Sparse Leiden candidates remain available only for legacy
+cache compatibility.
 
 ### Internal stability
 
@@ -60,7 +69,9 @@ For each module and tuning cohort, exact shared events are used to calculate:
 The module/cohort preservation contribution is a geometric composite. Candidate preservation
 \(P_c\) is the median contribution across eligible module/cohort tests. This is a continuous,
 permutation-free tuning surrogate. It is not the final WGCNA-like Zsummary or Bayesian holdout
-preservation statistic.
+preservation statistic. If no candidate has an eligible tuning preservation test, the preservation
+objective is disabled and the remaining active weights are renormalized; an unevaluable objective
+cannot force every joint score to zero.
 
 ### Functional coherence
 
@@ -83,7 +94,7 @@ F_m = annotation\_coverage_m \times
 
 Candidate functional coherence \(F_c\) is the median across eligible modules.
 
-## Joint objective
+## Joint audit score
 
 The configured weights are:
 
@@ -91,7 +102,7 @@ The configured weights are:
 - tuning preservation: 0.35;
 - functional coherence: 0.25.
 
-After marking the Pareto frontier, the selected feasible candidate maximizes:
+For audit and historical reproduction, the joint score is:
 
 \[
 J_c =
@@ -104,15 +115,17 @@ w_F\log(\max(F_c,\epsilon))
 
 with default \(\epsilon=0.01\). The geometric objective makes compensation deliberately limited: a
 near-zero preservation or active functional score cannot be hidden by excellent internal stability.
-Under the default `auto_significance` mode, a failed functional gate renormalizes 0.40/0.35 to
-0.533/0.467 and sets the effective functional weight to zero. `always` requires evaluable formal
-functional signal; `disabled` always excludes it.
+Under `auto_significance`, a failed functional gate sets the effective functional
+weight to zero. An unevaluable tuning-preservation objective is handled in the same conservative
+way. All remaining active weights are renormalized to sum to one and exported. `always` requires
+evaluable formal functional signal; `disabled` always excludes it.
 
 ## Outputs
 
 `04c_consensus_modules/` contains:
 
-- `consensus_parameter_search.tsv`: all candidates, three objectives, Pareto status and final score;
+- `consensus_parameter_search.tsv`: TOM pilot cuts and final consensus candidates, active objectives,
+  Pareto status and final score;
 - `multiobjective_selection_audit.tsv`: selected-partition module/cohort and functional contributions;
 - `consensus_diagnostics.tsv`: selected objective values and method;
 - `parameters.json`: configured and effective weights, functional-gate state, tuning/holdout roles,
@@ -122,8 +135,8 @@ functional signal; `disabled` always excludes it.
 
 ## Publication boundary
 
-The selector provides a scientifically motivated parameter-selection rule. It does not itself prove
-generalization or biological mechanism. A methods claim still requires:
+The production audit does not prove generalization or biological mechanism and
+does not manipulate module membership. A methods claim still requires:
 
 1. a locked partition;
 2. untouched external holdout cohorts;

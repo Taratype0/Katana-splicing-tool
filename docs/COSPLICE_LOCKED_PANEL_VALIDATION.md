@@ -1,56 +1,75 @@
 # CoSplice locked validation panel
 
-## Question
+## Question and design
 
-This validation asks whether CoSplice recovers stable, non-trivial event programs that transfer to
-an untouched cohort better than a same-input exact R WGCNA baseline. It does not assume that more
-modules, a higher ARI, or one enriched term alone proves superiority.
+This panel asks whether a WGCNA/TOM-first CoSplice partition improves reproducibility or external
+preservation over exact R WGCNA when both methods receive the identical discovery-selected event
+universe. It does not treat a larger module count, a coarse one-module solution, or a high ARI alone
+as proof of biological superiority.
 
-## Locked design
+The frozen panel contains 11 runs spanning AA, AD, AP, AT, ES, ME and RI events; ES event-universe
+sensitivity at 250, 500 and 1,000 events; a 68-event ME stress test; and KICH, LUAD and LUSC
+holdouts. KIRC is discovery, KIRP is tuning, and each holdout is inaccessible until TOM cut height,
+consensus threshold and method parameters are frozen. KICH is a same-organ kidney holdout; LUAD and
+LUSC are transportability challenges rather than same-disease replication.
 
-- Discovery: TCGA SpliceSeq KIRC.
-- Tuning: TCGA SpliceSeq KIRP.
-- Primary same-organ holdout: TCGA SpliceSeq KICH.
-- Transportability challenges: LUAD and LUSC.
-- Event classes: ES, RI, AA, AD, AP, AT and ME.
-- Scale sensitivity: 250, 500 and 1,000 ES events where available.
-- Comparators: stability-only CoSplice, adaptive multi-objective CoSplice and exact R WGCNA.
-- Selection: discovery and tuning only; holdout files are read after assignments and SHA256
-  fingerprints have been frozen.
-- Functional source: a predeclared local GO/KEGG GMT. Functional evidence affects selection only
-  after its formal FDR activation gate passes.
+Three arms are fitted:
 
-Each child output contains the analysis plan, pre-holdout freeze manifest, input/assignment hashes,
-holdout access audit, assignments, preservation statistics, enrichment tables, report and figure.
-The aggregate command produces one TSV, PNG, Markdown report and parameter manifest.
+1. stability-only CoSplice using the TOM backbone and bootstrap co-assignment consensus;
+2. adaptive CoSplice, which may add predeclared tuning-cohort preservation and tuning-GMT
+   functional coherence only when those objectives are evaluable;
+3. exact R `WGCNA::blockwiseModules` on the same events and samples.
 
-## Current result
+This is a frozen historical validation of the boundary-rejecting consensus
+arm. The real-count ablation later showed that rejection reduced stability, so
+v1.1.0 production now preserves the WGCNA partition and uses co-assignment only
+as confidence annotation. The frozen results below are retained for provenance.
 
-Across 11 frozen runs, CoSplice produced a valid multi-module partition in 9/11 settings, compared
-with 2/11 for exact WGCNA. Mean holdout program-score preservation was 0.534 for CoSplice and 0.483
-for WGCNA. WGCNA had higher mean bootstrap ARI (0.883 versus 0.705), and mean traditional
-Zsummary-like preservation did not favor CoSplice (0.247 versus 0.139).
+## Frozen result
 
-No run contained enough formally significant tuning-GMT modules to activate the functional
-objective. Adaptive multi-objective CoSplice therefore correctly reduced to the stability and
-preservation objective and selected the same partitions as stability-only CoSplice in 11/11 runs.
-No independent GO/KEGG term replication was observed. These are retained negative results.
+Across the 11 runs, the final paired rerun used one seed and identical bootstrap
+sample indices for every arm. TOM-first CoSplice reached WGCNA-level stability
+but did not improve the panel mean:
 
-## Defensible claim
+| Metric | CoSplice | Exact WGCNA | Interpretation |
+| --- | ---: | ---: | --- |
+| Mean bootstrap ARI | 0.867 | 0.871 | 3 wins, 7 ties and 1 loss for CoSplice |
+| Mean holdout program-score preservation | 0.497 | 0.472 | 3 wins, 7 ties and 1 loss for CoSplice |
+| Non-empty module recovery | 11/11 | 11/11 | Equal recovery |
+| Valid multi-module partition after strict coverage gate | 2/11 | 2/11 | Equal strict recovery |
+| Functional objective activated | 0/11 | not applicable | No tuning-GMT module passed the predeclared gate |
 
-The current evidence supports a narrower architectural advantage: CoSplice more often resolves
-non-trivial event-level program structure and has modestly higher program-score preservation on this
-panel. It does not support universal superiority over WGCNA, superior internal stability, or
-superior functional replication. TCGA cohorts are independent patient cohorts but share one data
-generation and processing ecosystem; a cross-study, cross-platform holdout remains necessary for a
-strong methods-paper generalization claim.
+The primary 500-event ES run was exactly tied: both methods returned one module,
+mean bootstrap ARI 0.883, KICH Zsummary-like preservation 0.281 and
+program-score preservation 0.582. This is parity, not improvement.
 
-## Commands
+AT was the clearest preservation tradeoff: CoSplice recovered three modules with
+bootstrap ARI 0.641 and median holdout program-score preservation 0.607, versus
+four WGCNA modules with ARI 0.683 and preservation 0.332. Both passed the strict
+partition gate. This is improved external score preservation at the cost of
+lower internal stability, not an across-metric win.
+
+## Claim boundary
+
+Zero-module/all-grey partitions are excluded from ARI means and paired ARI wins because a constant
+all-grey partition can otherwise receive a misleading perfect ARI. The frozen evidence supports
+the statement that **a WGCNA/TOM backbone plus CoSplice bootstrap consensus
+matches WGCNA-level resampling stability and modestly improves average external
+program-score preservation on this panel**. It does not support universal superiority over WGCNA, better results
+for every AS class, or stronger biological function. Zero GO/KEGG replication is retained as a
+negative result and blocks a functional-superiority claim. The adaptive arm equals stability-only
+whenever preservation cannot be evaluated or functional enrichment fails the predeclared FDR gate;
+this is intentional rather than a missing analysis.
+
+## Reproduction
 
 ```powershell
 katana-cosplice-locked-ablation --help
 katana-cosplice-locked-panel-report --root E:\path\to\completed_locked_runs
 ```
 
-The TCGA SpliceSeq downloader accepts repeated `--splice-type` arguments for `ES`, `RI`, `AA`,
-`AD`, `AP`, `AT` and `ME`, and merges incremental downloads into one panel manifest.
+Every child run records the pre-holdout freeze manifest, assignment and input SHA256 fingerprints,
+holdout-access audit, method-specific assignments, preservation statistics, local enrichment tables,
+plots and a standalone report. The aggregator writes `LOCKED_ABLATION_PANEL_SUMMARY.tsv`,
+`locked_ablation_panel.png`, `LOCKED_ABLATION_PANEL_REPORT.md` and
+`locked_panel_parameters.json`.

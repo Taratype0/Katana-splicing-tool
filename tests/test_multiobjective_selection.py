@@ -206,3 +206,34 @@ def test_multiobjective_selection_disables_functional_weight_without_fdr_signal(
     assert scored["effective_preservation_weight"].iloc[0] == pytest.approx(
         0.35 / 0.75
     )
+
+
+def test_multiobjective_selection_falls_back_when_preservation_is_not_evaluable() -> None:
+    candidates = pd.DataFrame(
+        {
+            "robust_bootstrap_stability": [0.80, 0.65],
+            "objective_external_preservation": [0.0, 0.0],
+            "objective_functional_coherence": [0.0, 0.0],
+            "objective_stability_weight": [0.40, 0.40],
+            "objective_preservation_weight": [0.35, 0.35],
+            "objective_functional_weight": [0.25, 0.25],
+            "functional_weight_mode": ["auto_significance"] * 2,
+            "min_significant_functional_modules": [1, 1],
+            "objective_score_floor": [0.01, 0.01],
+            "n_preservation_module_cohort_tests": [0, 0],
+            "n_functional_modules_scored": [0, 0],
+            "n_significant_functional_modules": [0, 0],
+            "n_modules": [1, 1],
+            "grey_fraction": [0.40, 0.40],
+            "module_balance_entropy": [0.0, 0.0],
+            "mean_membership_confidence": [0.90, 0.90],
+            "mean_confidence_margin": [0.90, 0.90],
+        }
+    )
+
+    scored = _finalize_candidate_objectives(candidates, True)
+
+    assert not scored["preservation_objective_active"].any()
+    assert not scored["functional_objective_active"].any()
+    assert (scored["effective_stability_weight"] == 1.0).all()
+    assert (scored["effective_preservation_weight"] == 0.0).all()

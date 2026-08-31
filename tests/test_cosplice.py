@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import katana_cosplice.cli as cosplice_cli
+from sklearn.metrics import adjusted_rand_score
 
 from katana_cosplice.audit import audit_inputs, load_sample_metadata
 from katana_cosplice.association import factorial_program_association
@@ -27,7 +28,10 @@ from katana_cosplice.config import (
     MetaAnalysisConfig,
     FactorContrastConfig,
 )
-from katana_cosplice.consensus import build_bootstrap_coassignment_consensus
+from katana_cosplice.consensus import (
+    _backbone_confidence_only_membership,
+    build_bootstrap_coassignment_consensus,
+)
 from katana_cosplice.hybrid_programs import build_hybrid_programs
 from katana_cosplice.matrix import EVENT_COORDINATES, build_sample_matrices
 from katana_cosplice.module_annotation import annotate_modules
@@ -43,6 +47,8 @@ from katana_cosplice.network import (
     _effective_consensus_bootstrap_iterations,
     _sparse_knn_edges,
     fit_network,
+    signed_soft_adjacency,
+    topological_overlap_matrix,
 )
 from katana_cosplice.pipeline import CoSplicePipeline
 from katana_cosplice.preservation import evaluate_external_module_preservation
@@ -405,17 +411,97 @@ def test_bootstrap_coassignment_builds_confident_consensus_modules() -> None:
         "candidate_graph_module",
         "analysis_module",
         "analysis_assignment_scope",
+        "partition_source",
+        "confidence_action",
     }.issubset(result.assignments)
     assert set(result.assignments["analysis_assignment_scope"]).issubset(
-        {"conservative_consensus", "exploratory_uncertain", "unassigned"}
+        {
+            "wgcna_backbone_confident",
+            "wgcna_backbone_low_confidence",
+            "unassigned",
+        }
     )
+    assert set(result.assignments["partition_source"]) == {
+        "full_data_wgcna_backbone"
+    }
+    assert set(result.assignments["confidence_action"]) == {"annotation_only"}
+    assert adjusted_rand_score(
+        observed["module"], result.assignments["consensus_module"]
+    ) == 1.0
     assert result.parameter_search["selected"].sum() == 1
     assert {
-        "edge_threshold",
-        "resolution",
+        "dynamic_deep_split",
         "selection_score",
         "robust_bootstrap_stability",
     }.issubset(result.parameter_search)
+    assert set(result.parameter_search["method"]) == {
+        "tom_backbone_confidence_only"
+    }
+    assert set(result.parameter_search["partition_policy"]) == {
+        "fixed_wgcna_backbone"
+    }
+    assert set(result.parameter_search["constraints_role"]) == {
+        "diagnostic_only"
+    }
+    assert set(result.parameter_search["selection_method"]) == {
+        "fixed_wgcna_backbone_no_selection"
+    }
+    assert "backbone_cut_height" in result.parameter_search
+    assert result.diagnostics.loc[0, "partition_changed_from_backbone"] == False
+    assert result.selection_audit["audit_type"].eq(
+        "tom_backbone_selection"
+    ).any()
+
+
+def test_tom_backbone_strengthens_shared_neighbors() -> None:
+    correlation = np.asarray(
+        [
+            [1.0, 0.9, 0.9, 0.0],
+            [0.9, 1.0, 0.9, 0.0],
+            [0.9, 0.9, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    settings = NetworkConfig(soft_power=2, min_module_size=2)
+    adjacency = signed_soft_adjacency(correlation, settings)
+    tom = topological_overlap_matrix(adjacency)
+
+    assert NetworkConfig().engine == "tom_hierarchical"
+    assert NetworkConfig().module_detection == "wgcna_blockwise"
+    assert ConsensusConfig().clustering_method == "backbone_confidence_only"
+    assert np.allclose(tom, tom.T)
+    assert np.allclose(np.diag(tom), 1.0)
+    assert tom[0, 1] > tom[0, 3]
+
+
+def test_confidence_only_keeps_low_confidence_backbone_events_assigned() -> None:
+    coassignment = np.asarray(
+        [
+            [1.0, 0.60, 0.40, 0.40],
+            [0.60, 1.0, 0.40, 0.40],
+            [0.40, 0.40, 1.0, 0.60],
+            [0.40, 0.40, 0.60, 1.0],
+        ]
+    )
+    labels, roles, confidence, second, margin, candidates = (
+        _backbone_confidence_only_membership(
+            coassignment,
+            np.asarray(["M01", "M01", "M02", "M02"], dtype=object),
+            2,
+            ConsensusConfig(
+                core_membership_min=0.90,
+                peripheral_membership_min=0.80,
+                peripheral_membership_margin=0.30,
+            ),
+        )
+    )
+
+    assert set(labels) == {"C01", "C02"}
+    assert np.all(roles == "uncertain")
+    assert np.allclose(confidence, 0.60)
+    assert np.allclose(second, 0.40)
+    assert np.allclose(margin, 0.20)
+    assert np.array_equal(labels, candidates)
 
 
 def test_hybrid_programs_retain_tight_and_diffuse_assignments() -> None:

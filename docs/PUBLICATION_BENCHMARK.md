@@ -13,12 +13,12 @@ splicing methods. It does not seek one universal winner. The primary questions a
 
 ## Fair direct comparison
 
-The final bootstrap-consensus CoSplice partition, exact `WGCNA::blockwiseModules`, Pearson
+The confidence-annotated CoSplice WGCNA partition, exact `WGCNA::blockwiseModules`, Pearson
 hierarchical clustering and graphical lasso receive the same discovery-selected event-by-sample matrix. Event selection
 occurs once and is not repeated per method. Zero-module and one-module partitions are degenerate
 and cannot earn a stability win.
 
-Production CoSplice exposes one final bootstrap-consensus partition. The former tight/diffuse
+Production CoSplice exposes one WGCNA partition plus bootstrap confidence. The former tight/diffuse
 hybrid remains benchmark-only legacy code and is not part of the UI or default pipeline.
 
 The direct primary endpoints are matched-bootstrap adjusted Rand index, independent-cohort module

@@ -23,7 +23,12 @@ except ImportError:  # pragma: no cover - exercised only in minimal installation
     leidenalg = None
 
 from katana_cosplice.config import ConsensusConfig, NetworkConfig
-from katana_cosplice.network import _program_scores, discover_module_labels
+from katana_cosplice.dynamic_tree import dynamic_tree_cut_labels
+from katana_cosplice.network import (
+    _program_scores,
+    discover_module_labels,
+    discover_tom_label_grid,
+)
 
 if TYPE_CHECKING:
     from katana_cosplice.gene_prior import GeneMantelPrior
@@ -55,9 +60,135 @@ def _bootstrap_indices(samples: pd.DataFrame, columns: pd.Index, rng: np.random.
     return np.concatenate([rng.choice(group, size=len(group), replace=True) for group in groups])
 
 
+def _select_tom_cut_height(
+    matrix: pd.DataFrame,
+    samples: pd.DataFrame,
+    network: NetworkConfig,
+    *,
+    gene_prior: GeneMantelPrior | None,
+    gene_prior_weight: float,
+    random_seed: int,
+    progress: Progress,
+) -> tuple[float, pd.DataFrame, np.ndarray]:
+    heights = sorted(set(float(value) for value in network.tom_cut_heights))
+    baseline_grid = discover_tom_label_grid(
+        matrix,
+        network,
+        heights,
+        gene_prior=gene_prior,
+        gene_prior_weight=gene_prior_weight,
+    )
+    if len(heights) == 1:
+        height = heights[0]
+        labels = baseline_grid[height]
+        counts = pd.Series(labels[labels != "grey"]).value_counts()
+        audit = pd.DataFrame(
+            [
+                {
+                    "backbone_cut_height": height,
+                    "n_modules": int(len(counts)),
+                    "assigned_event_fraction": float(np.mean(labels != "grey")),
+                    "largest_module_fraction": (
+                        float(counts.max() / len(labels))
+                        if not counts.empty
+                        else 0.0
+                    ),
+                    "mean_bootstrap_ari": np.nan,
+                    "median_bootstrap_ari": np.nan,
+                    "min_bootstrap_ari": np.nan,
+                    "robust_bootstrap_stability": np.nan,
+                    "backbone_selection_score": np.nan,
+                    "selected": True,
+                    "selection_scope": "pre_frozen_height_no_holdout_tuning",
+                }
+            ]
+        )
+        return height, audit, labels
+    runs: dict[float, list[np.ndarray]] = {height: [] for height in heights}
+    rng = np.random.default_rng(random_seed + 10_000)
+    for iteration in range(1, network.tom_cut_selection_bootstraps + 1):
+        indices = _bootstrap_indices(samples, matrix.columns, rng)
+        bootstrap = matrix.iloc[:, indices].copy()
+        bootstrap.columns = [
+            f"tom_select_{iteration:03d}_{position:03d}"
+            for position in range(len(indices))
+        ]
+        grid = discover_tom_label_grid(
+            bootstrap,
+            network,
+            heights,
+            gene_prior=gene_prior,
+            gene_prior_weight=gene_prior_weight,
+        )
+        for height in heights:
+            runs[height].append(grid[height])
+        if progress and (
+            iteration == 1
+            or iteration % 5 == 0
+            or iteration == network.tom_cut_selection_bootstraps
+        ):
+            progress(
+                f"TOM cut selection {iteration}/"
+                f"{network.tom_cut_selection_bootstraps}"
+            )
+    rows: list[dict[str, object]] = []
+    for height in heights:
+        baseline = baseline_grid[height]
+        ari = np.asarray(
+            [adjusted_rand_score(baseline, labels) for labels in runs[height]],
+            dtype=float,
+        )
+        counts = pd.Series(baseline[baseline != "grey"]).value_counts()
+        coverage = float(np.mean(baseline != "grey"))
+        robust = float(
+            0.50 * ari.mean() + 0.30 * np.median(ari) + 0.20 * ari.min()
+        )
+        score = 0.80 * robust + 0.20 * coverage
+        if counts.empty:
+            score = -1.0
+        rows.append(
+            {
+                "backbone_cut_height": height,
+                "n_modules": int(len(counts)),
+                "assigned_event_fraction": coverage,
+                "largest_module_fraction": (
+                    float(counts.max() / len(baseline))
+                    if not counts.empty
+                    else 0.0
+                ),
+                "mean_bootstrap_ari": float(ari.mean()),
+                "median_bootstrap_ari": float(np.median(ari)),
+                "min_bootstrap_ari": float(ari.min()),
+                "robust_bootstrap_stability": robust,
+                "backbone_selection_score": score,
+            }
+        )
+    audit = pd.DataFrame(rows).sort_values(
+        [
+            "backbone_selection_score",
+            "robust_bootstrap_stability",
+            "assigned_event_fraction",
+            "backbone_cut_height",
+        ],
+        ascending=[False, False, False, True],
+    )
+    selected_height = float(audit.iloc[0]["backbone_cut_height"])
+    audit["selected"] = audit["backbone_cut_height"].eq(selected_height)
+    audit["selection_scope"] = "discovery_only_bootstrap_selection"
+    audit = audit.sort_values(
+        ["selected", "backbone_selection_score"],
+        ascending=[False, False],
+    ).reset_index(drop=True)
+    return selected_height, audit, baseline_grid[selected_height]
+
+
 def _canonical_modules(raw_labels: np.ndarray, min_module_size: int) -> np.ndarray:
     counts = pd.Series(raw_labels).value_counts()
-    retained = [int(label) for label, count in counts.items() if int(count) >= min_module_size]
+    retained = [
+        int(label)
+        for label, count in counts.items()
+        if int(label) != 0 and int(count) >= min_module_size
+    ]
     retained.sort(key=lambda label: (-int(counts[label]), label))
     names = {label: f"C{index:02d}" for index, label in enumerate(retained, start=1)}
     return np.asarray([names.get(int(label), "grey") for label in raw_labels], dtype=object)
@@ -85,6 +216,7 @@ def _confidence_tables(
     confidence: np.ndarray | None = None,
     second_best: np.ndarray | None = None,
     margin: np.ndarray | None = None,
+    assignment_policy: str = "consensus_partition",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     modules = sorted(set(labels).difference({"grey"}))
     indices = {module: np.flatnonzero(labels == module) for module in modules}
@@ -128,17 +260,32 @@ def _confidence_tables(
         )
     assignments = pd.DataFrame(rows)
     assignments["analysis_module"] = assignments["consensus_module"]
-    uncertain = assignments["consensus_module"].eq("grey") & assignments[
-        "candidate_graph_module"
-    ].ne("grey")
-    assignments.loc[uncertain, "analysis_module"] = assignments.loc[
-        uncertain, "candidate_graph_module"
-    ]
-    assignments["analysis_assignment_scope"] = np.where(
-        assignments["consensus_module"].ne("grey"),
-        "conservative_consensus",
-        np.where(uncertain, "exploratory_uncertain", "unassigned"),
-    )
+    if assignment_policy == "backbone_confidence_only":
+        assignments["partition_source"] = "full_data_wgcna_backbone"
+        assignments["confidence_action"] = "annotation_only"
+        assignments["analysis_assignment_scope"] = np.where(
+            assignments["consensus_module"].eq("grey"),
+            "unassigned",
+            np.where(
+                assignments["membership_role"].eq("uncertain"),
+                "wgcna_backbone_low_confidence",
+                "wgcna_backbone_confident",
+            ),
+        )
+    else:
+        uncertain = assignments["consensus_module"].eq("grey") & assignments[
+            "candidate_graph_module"
+        ].ne("grey")
+        assignments.loc[uncertain, "analysis_module"] = assignments.loc[
+            uncertain, "candidate_graph_module"
+        ]
+        assignments["partition_source"] = "bootstrap_consensus"
+        assignments["confidence_action"] = "partition_or_rejection"
+        assignments["analysis_assignment_scope"] = np.where(
+            assignments["consensus_module"].ne("grey"),
+            "conservative_consensus",
+            np.where(uncertain, "exploratory_uncertain", "unassigned"),
+        )
     module_rows: list[dict[str, object]] = []
     for module, module_indices in indices.items():
         if len(module_indices) > 1:
@@ -173,6 +320,12 @@ def _confidence_tables(
                         assignments["candidate_graph_module"].eq(module)
                         & assignments["membership_role"].eq("uncertain")
                     ).sum()
+                ),
+                "n_low_confidence_assigned_events": int(
+                    assignments.loc[
+                        assignments["consensus_module"].eq(module),
+                        "membership_role",
+                    ].eq("uncertain").sum()
                 ),
             }
         )
@@ -396,13 +549,479 @@ def _candidate_metrics(
     }
 
 
+def _backbone_refined_membership(
+    coassignment: np.ndarray,
+    backbone_labels: np.ndarray,
+    min_module_size: int,
+    settings: ConsensusConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Keep the full-data TOM backbone and reject unstable boundaries.
+
+    Bootstrap co-assignment is an event-level confidence layer. It may send a
+    weak or ambiguous event to grey, but it does not repartition stable
+    full-data modules or assign a previously grey event to a new module.
+    """
+
+    candidate = np.asarray(backbone_labels, dtype=object).astype(str)
+    modules = sorted(set(candidate).difference({"grey"}))
+    empty = np.zeros(len(candidate), dtype=float)
+    if not modules:
+        return (
+            np.full(len(candidate), "grey", dtype=object),
+            np.full(len(candidate), "grey", dtype=object),
+            empty,
+            empty.copy(),
+            empty.copy(),
+            candidate,
+        )
+
+    profiles = np.zeros((len(candidate), len(modules)), dtype=float)
+    for module_index, module in enumerate(modules):
+        members = np.flatnonzero(candidate == module)
+        sums = coassignment[:, members].sum(axis=1)
+        profiles[:, module_index] = sums / max(len(members), 1)
+        if len(members) > 1:
+            profiles[members, module_index] = (
+                sums[members] - 1.0
+            ) / (len(members) - 1)
+        else:
+            profiles[members, module_index] = 0.0
+
+    module_index = {module: index for index, module in enumerate(modules)}
+    own = np.asarray(
+        [
+            profiles[index, module_index[module]]
+            if module in module_index
+            else 0.0
+            for index, module in enumerate(candidate)
+        ],
+        dtype=float,
+    )
+    best_indices = np.argmax(profiles, axis=1)
+    best_modules = np.asarray(modules, dtype=object)[best_indices]
+    other = profiles.copy()
+    for event_index, module in enumerate(candidate):
+        if module in module_index:
+            other[event_index, module_index[module]] = -np.inf
+    second = (
+        np.max(other, axis=1)
+        if len(modules) > 1
+        else np.zeros(len(candidate), dtype=float)
+    )
+    second[~np.isfinite(second)] = 0.0
+    margin = own - second
+
+    original_is_best = candidate == best_modules
+    assigned = candidate != "grey"
+    core = assigned & original_is_best & (own >= settings.core_membership_min)
+    peripheral = (
+        assigned
+        & original_is_best
+        & ~core
+        & (own >= settings.peripheral_membership_min)
+        & (margin >= settings.peripheral_membership_margin)
+    )
+    retained = core | peripheral
+    labels = np.where(retained, candidate, "grey").astype(object)
+    roles = np.full(len(candidate), "uncertain", dtype=object)
+    roles[candidate == "grey"] = "grey"
+    roles[core] = "core"
+    roles[peripheral] = "peripheral"
+
+    counts = pd.Series(labels[labels != "grey"]).value_counts()
+    small = set(counts[counts < min_module_size].index.astype(str))
+    if small:
+        rejected = np.isin(labels, list(small))
+        labels[rejected] = "grey"
+        roles[rejected] = "uncertain"
+    counts = pd.Series(labels[labels != "grey"]).value_counts()
+    ordered = sorted(
+        counts.index.astype(str),
+        key=lambda value: (-int(counts[value]), value),
+    )
+    rename = {
+        module: f"C{index:02d}"
+        for index, module in enumerate(ordered, start=1)
+    }
+    labels = np.asarray(
+        [rename.get(str(module), "grey") for module in labels], dtype=object
+    )
+    candidate_display = np.asarray(
+        [
+            rename.get(str(module), str(module))
+            if str(module) != "grey"
+            else "grey"
+            for module in candidate
+        ],
+        dtype=object,
+    )
+    return labels, roles, own, second, margin, candidate_display
+
+
+def _backbone_confidence_only_membership(
+    coassignment: np.ndarray,
+    backbone_labels: np.ndarray,
+    min_module_size: int,
+    settings: ConsensusConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Annotate bootstrap confidence without changing the WGCNA partition."""
+
+    candidate = np.asarray(backbone_labels, dtype=object).astype(str)
+    modules = sorted(set(candidate).difference({"grey"}))
+    empty = np.zeros(len(candidate), dtype=float)
+    if not modules:
+        grey = np.full(len(candidate), "grey", dtype=object)
+        return grey, grey.copy(), empty, empty.copy(), empty.copy(), grey.copy()
+
+    counts = pd.Series(candidate[candidate != "grey"]).value_counts()
+    retained = counts[counts >= min_module_size]
+    ordered = sorted(
+        retained.index.astype(str),
+        key=lambda value: (-int(counts[value]), value),
+    )
+    rename = {
+        module: f"C{index:02d}"
+        for index, module in enumerate(ordered, start=1)
+    }
+    labels = np.asarray(
+        [rename.get(str(module), "grey") for module in candidate], dtype=object
+    )
+    canonical_modules = sorted(set(labels).difference({"grey"}))
+    profiles = np.zeros((len(labels), len(canonical_modules)), dtype=float)
+    for module_index, module in enumerate(canonical_modules):
+        members = np.flatnonzero(labels == module)
+        sums = coassignment[:, members].sum(axis=1)
+        profiles[:, module_index] = sums / max(len(members), 1)
+        if len(members) > 1:
+            profiles[members, module_index] = (
+                sums[members] - 1.0
+            ) / (len(members) - 1)
+        else:
+            profiles[members, module_index] = 0.0
+
+    module_index = {
+        module: index for index, module in enumerate(canonical_modules)
+    }
+    own = np.asarray(
+        [
+            profiles[index, module_index[module]]
+            if module in module_index
+            else 0.0
+            for index, module in enumerate(labels)
+        ],
+        dtype=float,
+    )
+    other = profiles.copy()
+    for event_index, module in enumerate(labels):
+        if module in module_index:
+            other[event_index, module_index[module]] = -np.inf
+    second = (
+        np.max(other, axis=1)
+        if len(canonical_modules) > 1
+        else np.zeros(len(labels), dtype=float)
+    )
+    second[~np.isfinite(second)] = 0.0
+    margin = own - second
+
+    roles = np.full(len(labels), "uncertain", dtype=object)
+    roles[labels == "grey"] = "grey"
+    roles[
+        (labels != "grey")
+        & (own >= settings.peripheral_membership_min)
+        & (margin >= settings.peripheral_membership_margin)
+    ] = "peripheral"
+    roles[(labels != "grey") & (own >= settings.core_membership_min)] = "core"
+    return labels, roles, own, second, margin, labels.copy()
+
+
 def _select_final_modules(
     coassignment: np.ndarray,
     settings: ConsensusConfig,
     min_module_size: int,
     bootstrap_labels: list[np.ndarray] | None = None,
     candidate_scorer: CandidateScorer | None = None,
+    backbone_labels: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
+    if settings.clustering_method == "backbone_confidence_only":
+        if backbone_labels is None:
+            raise ValueError(
+                "backbone_confidence_only requires full-data backbone labels."
+            )
+        payload = _backbone_confidence_only_membership(
+            coassignment,
+            backbone_labels,
+            min_module_size,
+            settings,
+        )
+        labels, _roles, confidence, _second, margin, _candidate = payload
+        metrics = _candidate_metrics(
+            labels,
+            confidence,
+            margin,
+            0.0,
+            settings,
+            bootstrap_labels,
+        )
+        if candidate_scorer is not None:
+            metrics.update(candidate_scorer(labels))
+        search = _finalize_candidate_objectives(
+            pd.DataFrame(
+                [
+                    {
+                        "method": "tom_backbone_confidence_only",
+                        "dynamic_deep_split": np.nan,
+                        "dynamic_cut_height": np.nan,
+                        "max_grey_fraction_allowed": settings.max_grey_fraction,
+                        "max_largest_module_fraction_allowed": (
+                            settings.max_largest_module_fraction
+                        ),
+                        **metrics,
+                    }
+                ]
+            ),
+            candidate_scorer is not None,
+        )
+        search["partition_policy"] = "fixed_wgcna_backbone"
+        search["constraints_role"] = "diagnostic_only"
+        search["selection_method"] = "fixed_wgcna_backbone_no_selection"
+        search["selected"] = True
+        return (*payload, search)
+
+    if settings.clustering_method == "backbone_refined_consensus":
+        if backbone_labels is None:
+            raise ValueError(
+                "backbone_refined_consensus requires full-data backbone labels."
+            )
+        payload = _backbone_refined_membership(
+            coassignment,
+            backbone_labels,
+            min_module_size,
+            settings,
+        )
+        labels, _roles, confidence, _second, margin, _candidate = payload
+        metrics = _candidate_metrics(
+            labels,
+            confidence,
+            margin,
+            0.0,
+            settings,
+            bootstrap_labels,
+        )
+        if candidate_scorer is not None:
+            metrics.update(candidate_scorer(labels))
+        search = _finalize_candidate_objectives(
+            pd.DataFrame(
+                [
+                    {
+                        "method": "tom_backbone_bootstrap_refined",
+                        "dynamic_deep_split": np.nan,
+                        "dynamic_cut_height": np.nan,
+                        "max_grey_fraction_allowed": settings.max_grey_fraction,
+                        "max_largest_module_fraction_allowed": (
+                            settings.max_largest_module_fraction
+                        ),
+                        **metrics,
+                    }
+                ]
+            ),
+            candidate_scorer is not None,
+        )
+        search["selected"] = True
+        return (*payload, search)
+
+    if settings.clustering_method == "dynamic_tree_consensus":
+        distance = np.clip(1.0 - coassignment, 0.0, 1.0)
+        distance = (distance + distance.T) / 2.0
+        np.fill_diagonal(distance, 0.0)
+        hierarchy = linkage(squareform(distance, checks=False), method="average")
+        candidates: list[dict[str, object]] = []
+        payloads: list[
+            tuple[
+                np.ndarray,
+                np.ndarray,
+                np.ndarray,
+                np.ndarray,
+                np.ndarray,
+                np.ndarray,
+            ]
+        ] = []
+        for deep_split in sorted(set(settings.dynamic_deep_splits)):
+            raw = dynamic_tree_cut_labels(
+                hierarchy,
+                distance,
+                min_module_size=min_module_size,
+                deep_split=deep_split,
+                cut_height=settings.dynamic_cut_height,
+                pam_respects_dendro=settings.dynamic_pam_respects_dendro,
+            )
+            candidate = _canonical_modules(raw, min_module_size)
+            (
+                labels,
+                roles,
+                confidence,
+                second,
+                margin,
+                candidate_display,
+            ) = _soft_membership(
+                coassignment,
+                candidate,
+                min_module_size,
+                settings,
+            )
+            metrics = _candidate_metrics(
+                labels,
+                confidence,
+                margin,
+                0.0,
+                settings,
+                bootstrap_labels,
+            )
+            if candidate_scorer is not None:
+                metrics.update(candidate_scorer(labels))
+            candidates.append(
+                {
+                    "method": "tom_bootstrap_dynamic_tree_cut",
+                    "dynamic_deep_split": deep_split,
+                    "dynamic_cut_height": settings.dynamic_cut_height,
+                    "max_grey_fraction_allowed": settings.max_grey_fraction,
+                    "max_largest_module_fraction_allowed": (
+                        settings.max_largest_module_fraction
+                    ),
+                    **metrics,
+                }
+            )
+            payloads.append(
+                (
+                    labels,
+                    roles,
+                    confidence,
+                    second,
+                    margin,
+                    candidate_display,
+                )
+            )
+        search = _finalize_candidate_objectives(
+            pd.DataFrame(candidates),
+            candidate_scorer is not None,
+        )
+        feasible = search.index[search["constraints_satisfied"]]
+        pool = feasible if len(feasible) else search.index
+        if candidate_scorer is not None:
+            pareto_pool = search.index[
+                search["pareto_optimal"] & search.index.isin(pool)
+            ]
+            selection_pool = pareto_pool if len(pareto_pool) else pool
+            selected = int(
+                search.loc[
+                    selection_pool,
+                    "multiobjective_selection_score",
+                ].idxmax()
+            )
+            sort_score = "multiobjective_selection_score"
+        else:
+            selected = int(search.loc[pool, "selection_score"].idxmax())
+            sort_score = "selection_score"
+        search["selected"] = False
+        search.loc[selected, "selected"] = True
+        search = search.sort_values(
+            ["selected", sort_score, "dynamic_deep_split"],
+            ascending=[False, False, True],
+        ).reset_index(drop=True)
+        return (*payloads[selected], search)
+
+    if settings.clustering_method == "hierarchical_consensus":
+        candidates: list[dict[str, object]] = []
+        payloads: list[
+            tuple[
+                np.ndarray,
+                np.ndarray,
+                np.ndarray,
+                np.ndarray,
+                np.ndarray,
+                np.ndarray,
+            ]
+        ] = []
+        for threshold in sorted(
+            set(float(value) for value in settings.hierarchical_thresholds)
+        ):
+            candidate = _final_modules(
+                coassignment,
+                threshold,
+                min_module_size,
+            )
+            (
+                labels,
+                roles,
+                confidence,
+                second,
+                margin,
+                candidate_display,
+            ) = _soft_membership(
+                coassignment,
+                candidate,
+                min_module_size,
+                settings,
+            )
+            metrics = _candidate_metrics(
+                labels,
+                confidence,
+                margin,
+                0.0,
+                settings,
+                bootstrap_labels,
+            )
+            if candidate_scorer is not None:
+                metrics.update(candidate_scorer(labels))
+            candidates.append(
+                {
+                    "method": "tom_bootstrap_hierarchical",
+                    "coassignment_threshold": threshold,
+                    "max_grey_fraction_allowed": settings.max_grey_fraction,
+                    "max_largest_module_fraction_allowed": (
+                        settings.max_largest_module_fraction
+                    ),
+                    **metrics,
+                }
+            )
+            payloads.append(
+                (
+                    labels,
+                    roles,
+                    confidence,
+                    second,
+                    margin,
+                    candidate_display,
+                )
+            )
+        search = _finalize_candidate_objectives(
+            pd.DataFrame(candidates),
+            candidate_scorer is not None,
+        )
+        feasible = search.index[search["constraints_satisfied"]]
+        pool = feasible if len(feasible) else search.index
+        if candidate_scorer is not None:
+            pareto_pool = search.index[
+                search["pareto_optimal"] & search.index.isin(pool)
+            ]
+            selection_pool = pareto_pool if len(pareto_pool) else pool
+            selected = int(
+                search.loc[
+                    selection_pool,
+                    "multiobjective_selection_score",
+                ].idxmax()
+            )
+            sort_score = "multiobjective_selection_score"
+        else:
+            selected = int(search.loc[pool, "selection_score"].idxmax())
+            sort_score = "selection_score"
+        search["selected"] = False
+        search.loc[selected, "selected"] = True
+        search = search.sort_values(
+            ["selected", sort_score, "coassignment_threshold"],
+            ascending=[False, False, True],
+        ).reset_index(drop=True)
+        return (*payloads[selected], search)
+
     if settings.clustering_method == "hierarchical":
         labels = _final_modules(coassignment, settings.min_coassignment, min_module_size)
         roles = np.where(labels == "grey", "grey", "core").astype(object)
@@ -487,18 +1106,15 @@ def _finalize_candidate_objectives(
     if not multiobjective_enabled:
         search["selection_method"] = "legacy_internal_consensus"
         return search
-    if (
-        "n_preservation_module_cohort_tests" not in search
-        or pd.to_numeric(
+    preservation_active = bool(
+        "n_preservation_module_cohort_tests" in search
+        and pd.to_numeric(
             search["n_preservation_module_cohort_tests"], errors="coerce"
-        ).fillna(0).max()
-        <= 0
-    ):
-        raise ValueError(
-            "Multi-objective module selection has no eligible module/cohort "
-            "preservation tests. Check exact event overlap and "
-            "min_shared_events_per_module."
         )
+        .fillna(0)
+        .max()
+        > 0
+    )
     functional_mode = (
         str(search["functional_weight_mode"].iloc[0])
         if "functional_weight_mode" in search
@@ -586,24 +1202,30 @@ def _finalize_candidate_objectives(
             1.0,
         )
     )
-    objective_columns = [
-        "objective_internal_stability",
-        "objective_external_preservation",
-    ]
-    weights = [
-        float(search["objective_stability_weight"].iloc[0]),
-        float(search["objective_preservation_weight"].iloc[0]),
-    ]
+    objective_columns = ["objective_internal_stability"]
+    weights = [float(search["objective_stability_weight"].iloc[0])]
+    objective_roles = ["stability"]
+    if preservation_active:
+        objective_columns.append("objective_external_preservation")
+        weights.append(
+            float(search["objective_preservation_weight"].iloc[0])
+        )
+        objective_roles.append("preservation")
     if functional_active:
         objective_columns.append("objective_functional_coherence")
         weights.append(float(search["objective_functional_weight"].iloc[0]))
+        objective_roles.append("functional")
     weights = np.asarray(weights, dtype=float)
     weights = weights / weights.sum()
+    effective_weights = dict(zip(objective_roles, weights, strict=True))
+    search["preservation_objective_active"] = preservation_active
     search["functional_objective_active"] = functional_active
-    search["effective_stability_weight"] = weights[0]
-    search["effective_preservation_weight"] = weights[1]
-    search["effective_functional_weight"] = (
-        weights[2] if functional_active else 0.0
+    search["effective_stability_weight"] = effective_weights["stability"]
+    search["effective_preservation_weight"] = effective_weights.get(
+        "preservation", 0.0
+    )
+    search["effective_functional_weight"] = effective_weights.get(
+        "functional", 0.0
     )
     floor = float(search["objective_score_floor"].iloc[0])
     objective_values = (
@@ -661,6 +1283,9 @@ def build_bootstrap_coassignment_consensus(
     samples: pd.DataFrame,
     network: NetworkConfig,
     settings: ConsensusConfig,
+    event_reliability: pd.Series | None = None,
+    reliability_floor: float = 0.10,
+    reliability_power: float = 0.50,
     gene_prior: GeneMantelPrior | None = None,
     gene_prior_weight: float = 0.0,
     candidate_scorer: CandidateScorer | None = None,
@@ -690,6 +1315,47 @@ def build_bootstrap_coassignment_consensus(
         community_consensus_runs=1,
         bootstrap_iterations=0,
     )
+    backbone_search = pd.DataFrame()
+    selected_backbone_height = float(partition_settings.module_cut_height)
+    selected_backbone_deep_split = int(partition_settings.dynamic_deep_split)
+    if (
+        partition_settings.engine == "tom_hierarchical"
+        and partition_settings.module_detection == "static_cut"
+    ):
+        (
+            selected_backbone_height,
+            backbone_search,
+            selected_baseline,
+        ) = _select_tom_cut_height(
+            matrix,
+            samples,
+            partition_settings,
+            gene_prior=gene_prior,
+            gene_prior_weight=gene_prior_weight,
+            random_seed=settings.random_seed,
+            progress=progress,
+        )
+        partition_settings = replace(
+            partition_settings,
+            module_cut_height=selected_backbone_height,
+            tom_cut_heights=[selected_backbone_height],
+        )
+        baseline = pd.Series(
+            selected_baseline,
+            index=matrix.index,
+            dtype=str,
+        )
+    elif partition_settings.engine == "tom_hierarchical":
+        backbone_search = pd.DataFrame(
+            [
+                {
+                    "backbone_deep_split": selected_backbone_deep_split,
+                    "dynamic_cut_height": partition_settings.dynamic_cut_height,
+                    "selected": True,
+                    "selection_scope": "predeclared_dynamic_tree_backbone",
+                }
+            ]
+        )
     for iteration in range(1, settings.bootstrap_iterations + 1):
         indices = _bootstrap_indices(samples, matrix.columns, rng)
         bootstrap = matrix.iloc[:, indices].copy()
@@ -700,6 +1366,9 @@ def build_bootstrap_coassignment_consensus(
         labels = discover_module_labels(
             bootstrap,
             partition_settings,
+            event_reliability=event_reliability,
+            reliability_floor=reliability_floor,
+            reliability_power=reliability_power,
             gene_prior=gene_prior,
             gene_prior_weight=gene_prior_weight,
         )
@@ -745,6 +1414,22 @@ def build_bootstrap_coassignment_consensus(
         min_module_size,
         run_labels,
         candidate_scorer=candidate_scorer,
+        backbone_labels=baseline.to_numpy(dtype=object),
+    )
+    if settings.clustering_method in {
+        "backbone_confidence_only",
+        "backbone_refined_consensus",
+    }:
+        parameter_search["dynamic_deep_split"] = selected_backbone_deep_split
+    parameter_search.insert(
+        1,
+        "backbone_cut_height",
+        selected_backbone_height,
+    )
+    parameter_search.insert(
+        2,
+        "backbone_deep_split",
+        selected_backbone_deep_split,
     )
     assignments, module_summary = _confidence_tables(
         coassignment,
@@ -756,6 +1441,11 @@ def build_bootstrap_coassignment_consensus(
         confidence,
         second_best,
         confidence_margin,
+        assignment_policy=(
+            "backbone_confidence_only"
+            if settings.clustering_method == "backbone_confidence_only"
+            else "consensus_partition"
+        ),
     )
     scores = _program_scores(matrix, labels)
     bootstrap_runs = pd.DataFrame(run_rows)
@@ -778,6 +1468,15 @@ def build_bootstrap_coassignment_consensus(
             ]
         )
     )
+    if not backbone_search.empty:
+        backbone_audit = backbone_search.copy()
+        backbone_audit.insert(0, "audit_type", "tom_backbone_selection")
+        selection_audit = pd.concat(
+            [backbone_audit, selection_audit],
+            ignore_index=True,
+            sort=False,
+        )
+    observed_consensus_ari = adjusted_rand_score(baseline, labels)
     diagnostics = pd.DataFrame(
         [
             {
@@ -787,6 +1486,26 @@ def build_bootstrap_coassignment_consensus(
                 "min_coassignment": settings.min_coassignment,
                 "min_module_size": min_module_size,
                 "final_clustering_method": selected_parameters.get("method", settings.clustering_method),
+                "selected_tom_backbone_cut_height": selected_backbone_height,
+                "selected_tom_backbone_deep_split": selected_backbone_deep_split,
+                "tom_cut_selection_bootstraps": (
+                    network.tom_cut_selection_bootstraps
+                    if network.engine == "tom_hierarchical"
+                    and network.module_detection == "static_cut"
+                    else 0
+                ),
+                "dynamic_tree_backend": (
+                    "official_R_WGCNA"
+                    if network.module_detection == "wgcna_blockwise"
+                    else (
+                        "dynamicTreeCut_python_0.1.1"
+                        if network.module_detection == "dynamic_tree_cut"
+                        else "not_used"
+                    )
+                ),
+                "selected_consensus_deep_split": selected_parameters.get(
+                    "dynamic_deep_split", np.nan
+                ),
                 "selected_graph_edge_threshold": selected_parameters.get("edge_threshold", np.nan),
                 "selected_graph_resolution": selected_parameters.get("resolution", np.nan),
                 "selected_graph_edges": selected_parameters.get("graph_edges", np.nan),
@@ -794,6 +1513,12 @@ def build_bootstrap_coassignment_consensus(
                 "parameter_selection_score": selected_parameters["selection_score"],
                 "parameter_selection_method": selected_parameters.get(
                     "selection_method", "legacy_internal_consensus"
+                ),
+                "partition_policy": selected_parameters.get(
+                    "partition_policy", "legacy_consensus_partition"
+                ),
+                "constraints_role": selected_parameters.get(
+                    "constraints_role", "partition_selection"
                 ),
                 "multiobjective_selection_score": selected_parameters.get(
                     "multiobjective_selection_score", np.nan
@@ -816,13 +1541,37 @@ def build_bootstrap_coassignment_consensus(
                 "n_core_events": int(np.count_nonzero(membership_role == "core")),
                 "n_peripheral_events": int(np.count_nonzero(membership_role == "peripheral")),
                 "n_uncertain_events": int(np.count_nonzero(membership_role == "uncertain")),
-                "adjusted_rand_index_observed_vs_consensus": adjusted_rand_score(baseline, labels),
+                "adjusted_rand_index_observed_vs_consensus": observed_consensus_ari,
+                "partition_source": (
+                    "full_data_wgcna_backbone"
+                    if settings.clustering_method == "backbone_confidence_only"
+                    else "bootstrap_consensus"
+                ),
+                "confidence_action": (
+                    "annotation_only"
+                    if settings.clustering_method == "backbone_confidence_only"
+                    else "partition_or_rejection"
+                ),
+                "partition_changed_from_backbone": bool(
+                    not np.isclose(observed_consensus_ari, 1.0)
+                ),
                 "median_bootstrap_ari_vs_observed": float(bootstrap_runs["adjusted_rand_index_vs_observed"].median()),
                 "coassignment_storage": "dense_npz",
                 "partition_inner_bootstrap_disabled": True,
                 "gene_mantel_prior_enabled": gene_prior is not None,
                 "gene_mantel_prior_weight": (
                     gene_prior_weight if gene_prior is not None else 0.0
+                ),
+                "read_uncertainty_weighting": event_reliability is not None,
+                "median_event_reliability": (
+                    float(
+                        pd.to_numeric(
+                            event_reliability.reindex(matrix.index),
+                            errors="coerce",
+                        ).median()
+                    )
+                    if event_reliability is not None
+                    else np.nan
                 ),
             }
         ]
@@ -860,7 +1609,7 @@ def render_consensus_plots(result: ConsensusResult, output_dir: Path) -> list[Pa
         matrix = result.coassignment_matrix[np.ix_(indices, indices)]
         fig, ax = plt.subplots(figsize=(9, 8))
         sns.heatmap(matrix, cmap="mako", vmin=0, vmax=1, ax=ax, xticklabels=False, yticklabels=False)
-        ax.set_title("Bootstrap event co-assignment consensus (up to 250 events)", fontweight="bold")
+        ax.set_title("Bootstrap event co-assignment confidence (up to 250 events)", fontweight="bold")
         fig.tight_layout()
         path = output_dir / "bootstrap_coassignment_heatmap.png"
         fig.savefig(path, dpi=180)
@@ -872,8 +1621,8 @@ def render_consensus_plots(result: ConsensusResult, output_dir: Path) -> list[Pa
         result.assignments["consensus_membership_confidence"], bins=20, color="#087E8B", ax=ax
     )
     ax.set_xlim(0, 1)
-    ax.set_xlabel("Mean co-assignment to final module")
-    ax.set_title("Event consensus confidence", fontweight="bold")
+    ax.set_xlabel("Mean co-assignment to WGCNA module")
+    ax.set_title("Event bootstrap confidence", fontweight="bold")
     fig.tight_layout()
     path = output_dir / "event_consensus_confidence.png"
     fig.savefig(path, dpi=180)
@@ -887,7 +1636,7 @@ def render_consensus_plots(result: ConsensusResult, output_dir: Path) -> list[Pa
         for bar, confidence in zip(bars, table["mean_event_confidence"], strict=False):
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f"{confidence:.2f}", ha="center", va="bottom")
         ax.set_ylabel("Events")
-        ax.set_title("Final consensus modules (labels show mean confidence)", fontweight="bold")
+        ax.set_title("WGCNA modules (labels show bootstrap confidence)", fontweight="bold")
         fig.tight_layout()
         path = output_dir / "consensus_module_sizes.png"
         fig.savefig(path, dpi=180)
@@ -921,7 +1670,7 @@ def render_consensus_plots(result: ConsensusResult, output_dir: Path) -> list[Pa
                 color="#D1495B",
                 edgecolor="white",
                 linewidth=1.2,
-                label="Selected partition",
+                label="Fixed WGCNA partition",
             )
             ax.legend(loc="best", frameon=False)
         ax.axvline(
@@ -998,12 +1747,12 @@ def render_consensus_plots(result: ConsensusResult, output_dir: Path) -> list[Pa
         ax.set_xlabel("External preservation objective (tuning cohorts)")
         ax.set_ylabel("Functional coherence objective (tuning GMT)")
         ax.set_title(
-            "Multi-objective consensus partition selection\n"
+            "Multi-objective validation audit of fixed WGCNA partition\n"
             "Point size = internal bootstrap stability",
             fontweight="bold",
         )
         fig.colorbar(
-            scatter, ax=ax, label="Weighted geometric objective"
+            scatter, ax=ax, label="Weighted geometric audit score"
         )
         fig.tight_layout()
         path = output_dir / "multiobjective_candidate_tradeoff.png"

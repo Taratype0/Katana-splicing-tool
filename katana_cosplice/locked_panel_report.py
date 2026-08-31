@@ -57,15 +57,19 @@ def collect_locked_runs(root: Path) -> pd.DataFrame:
                 frame["largest_module_fraction"], errors="coerce"
             ).le(0.60)
         )
+        frame["stability_evaluable"] = pd.to_numeric(
+            frame["n_modules"], errors="coerce"
+        ).gt(0)
         rows.append(frame)
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
 def _render_panel(frame: pd.DataFrame, output: Path) -> Path:
     plot = frame.copy()
+    plot.loc[~plot["stability_evaluable"], "mean_bootstrap_ARI"] = np.nan
     method_labels = {
-        "stability_only": "CoSplice: stability only",
-        "three_objective_cosplice": "CoSplice: adaptive multi-objective",
+        "stability_only": "CoSplice: TOM + bootstrap consensus",
+        "three_objective_cosplice": "CoSplice: adaptive objectives",
         "event_level_wgcna": "Event-level WGCNA",
     }
     method_order = list(method_labels.values())
@@ -168,21 +172,55 @@ def build_locked_panel_report(root: Path) -> list[Path]:
         "median_holdout_Zsummary",
         "median_holdout_program_score_preservation",
         "valid_multi_module_partition",
+        "stability_evaluable",
         "functional_objective_active",
     ]
     compact = frame[compact_columns]
     cosplice = frame.loc[frame["method"].eq("stability_only")]
     wgcna = frame.loc[frame["method"].eq("event_level_wgcna")]
+    cosplice_stability = cosplice.loc[cosplice["stability_evaluable"]]
+    wgcna_stability = wgcna.loc[wgcna["stability_evaluable"]]
     functional_active_runs = int(
         frame.groupby("run_id")["functional_objective_active"].max().sum()
     )
-    cosplice_mean_ari = float(cosplice["mean_bootstrap_ARI"].mean())
-    wgcna_mean_ari = float(wgcna["mean_bootstrap_ARI"].mean())
+    cosplice_mean_ari = float(cosplice_stability["mean_bootstrap_ARI"].mean())
+    wgcna_mean_ari = float(wgcna_stability["mean_bootstrap_ARI"].mean())
     cosplice_mean_program = float(
         cosplice["median_holdout_program_score_preservation"].mean()
     )
     wgcna_mean_program = float(
         wgcna["median_holdout_program_score_preservation"].mean()
+    )
+    paired_cosplice = cosplice.set_index("run_id")
+    paired_wgcna = wgcna.set_index("run_id")
+    shared_runs = paired_cosplice.index.intersection(paired_wgcna.index)
+    paired_cosplice = paired_cosplice.reindex(shared_runs)
+    paired_wgcna = paired_wgcna.reindex(shared_runs)
+
+    def paired_wins(
+        column: str,
+        *,
+        require_nonempty_partition: bool = False,
+    ) -> tuple[int, int]:
+        left = pd.to_numeric(paired_cosplice[column], errors="coerce")
+        right = pd.to_numeric(paired_wgcna[column], errors="coerce")
+        evaluable = left.notna() & right.notna()
+        if require_nonempty_partition:
+            evaluable &= (
+                paired_cosplice["stability_evaluable"].astype(bool)
+                & paired_wgcna["stability_evaluable"].astype(bool)
+            )
+        return int((left[evaluable] > right[evaluable]).sum()), int(
+            evaluable.sum()
+        )
+
+    ari_wins, ari_evaluable = paired_wins(
+        "mean_bootstrap_ARI",
+        require_nonempty_partition=True,
+    )
+    z_wins, z_evaluable = paired_wins("median_holdout_Zsummary")
+    program_wins, program_evaluable = paired_wins(
+        "median_holdout_program_score_preservation"
     )
     report_path = root / "LOCKED_ABLATION_PANEL_REPORT.md"
     report_path.write_text(
@@ -202,10 +240,15 @@ def build_locked_panel_report(root: Path) -> list[Path]:
                 "",
                 f"- CoSplice valid multi-module partitions: {int(cosplice['valid_multi_module_partition'].sum())}/{len(cosplice)} runs.",
                 f"- Exact WGCNA valid multi-module partitions: {int(wgcna['valid_multi_module_partition'].sum())}/{len(wgcna)} runs.",
+                f"- Non-empty module recovery: CoSplice {int(cosplice['n_modules'].gt(0).sum())}/{len(cosplice)}; exact WGCNA {int(wgcna['n_modules'].gt(0).sum())}/{len(wgcna)}.",
+                f"- Multi-module recovery before the strict coverage gate: CoSplice {int(cosplice['n_modules'].ge(2).sum())}/{len(cosplice)}; exact WGCNA {int(wgcna['n_modules'].ge(2).sum())}/{len(wgcna)}.",
                 f"- Runs in which formal functional evidence activated the optimization weight: {functional_active_runs}/{frame['run_id'].nunique()}.",
-                f"- Mean bootstrap ARI: CoSplice {cosplice_mean_ari:.3f}; exact WGCNA {wgcna_mean_ari:.3f}.",
+                f"- Mean bootstrap ARI among non-empty partitions: CoSplice {cosplice_mean_ari:.3f} ({len(cosplice_stability)} evaluable runs); exact WGCNA {wgcna_mean_ari:.3f} ({len(wgcna_stability)} evaluable runs).",
                 f"- Mean holdout program-score preservation: CoSplice {cosplice_mean_program:.3f}; exact WGCNA {wgcna_mean_program:.3f}.",
+                f"- Paired wins: bootstrap ARI {ari_wins}/{ari_evaluable}; Zsummary-like preservation {z_wins}/{z_evaluable}; program-score preservation {program_wins}/{program_evaluable}.",
                 "- Internal stability, module granularity and external preservation are reported separately; no fused score is used to claim universal superiority.",
+                "- TOM-first CoSplice is deliberately more conservative than the previous Leiden-first release; higher stability is not presented as evidence that absent or grey events form biological modules.",
+                "- Zero-module/all-grey partitions are excluded from ARI means and paired ARI wins because an unchanged all-grey solution can produce a misleading perfect score.",
                 "- The adaptive multi-objective arm equals stability-only whenever no module passes the predeclared functional FDR gate; this is an intentional negative-control result, not a missing analysis.",
                 "- Zero GO/KEGG replication is retained as a negative result and blocks a functional-superiority claim.",
                 "",
@@ -229,9 +272,10 @@ def build_locked_panel_report(root: Path) -> list[Path]:
     parameters_path.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "input_root": str(root),
                 "completed_run_ids": sorted(frame["run_id"].unique()),
+                "stability_summary_rule": "exclude zero-module/all-grey partitions from ARI means and paired ARI wins",
                 "generated_files": [
                     str(summary_path),
                     str(plot_path),

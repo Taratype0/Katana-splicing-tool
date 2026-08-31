@@ -6,9 +6,19 @@ import pandas as pd
 from katana_cosplice.bayesian_preservation import (
     bayesian_multi_cohort_preservation,
 )
+from katana_cosplice.config import UncertaintyConfig
 from katana_cosplice.differential_network import compare_condition_networks
 from katana_cosplice.multiview import fuse_event_edge_views
 from katana_cosplice.uncertainty import estimate_beta_binomial_uncertainty
+
+
+def test_uncertainty_is_a_required_production_layer_by_default() -> None:
+    settings = UncertaintyConfig()
+
+    assert settings.enabled is True
+    assert settings.network_mode == "posterior"
+    assert settings.filter_low_reliability is True
+    assert settings.min_network_reliability == 0.15
 
 
 def test_uncertainty_downweights_low_depth_inconsistent_events() -> None:

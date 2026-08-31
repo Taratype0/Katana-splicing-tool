@@ -1,7 +1,7 @@
 # CoSplice Method Extensions
 
-This document defines four optional CoSplice method extensions, their scientific
-scope, and the ablation evidence used to choose production defaults.
+This document defines four CoSplice method extensions, their scientific scope,
+and the ablation evidence used to choose production defaults.
 
 ## 1. Read-count uncertainty
 
@@ -17,21 +17,20 @@ Available network modes are:
 - `posterior`
 - `posterior_reliability_weighted`
 
-The feature is disabled by default. In the locked Setd2 ablation using 600
-Stable-AS events and 20 condition-stratified bootstraps, median top-edge
-Jaccard was:
+The production mode is `posterior`: beta-binomial posterior PSI supplies the
+WGCNA matrix, while reliability filters low-confidence events and remains an
+event-level confidence annotation. The two reliability-weighted modes are kept
+for research reproduction only. They multiply reliability into network edges
+and are not production defaults because a real-count ablation showed that this
+operation can destroy otherwise coherent TOM structure and return an all-grey
+solution. `diagnostic_only` is the explicit raw-PSI sensitivity arm.
 
-| Mode | Median Jaccard |
-|---|---:|
-| raw Stable-AS PSI | 0.998 |
-| raw PSI + reliability | 0.998 |
-| posterior PSI | 0.511 |
-| posterior PSI + reliability | 0.801 |
-
-Stable-AS QC had already removed low-quality events, so posterior replacement
-over-shrank useful structure. Uncertainty outputs remain useful for audit,
-low-depth sensitivity analyses and future cohorts, but are not silently applied
-to the production network.
+The formal historical three-arm ablation compared raw-PSI WGCNA,
+posterior-PSI WGCNA after reliability filtering, and posterior-PSI WGCNA plus
+bootstrap co-assignment boundary refinement. Because the third arm did not
+improve stability, production now uses the second arm and reports bootstrap
+co-assignment as annotation-only confidence. All ablation arms used identical
+events, seeds and stratified resamples whenever the input permitted.
 
 Scientific basis: beta-binomial read-count uncertainty is established in
 replicate-aware splicing models such as FRASER and Bisbee. CoSplice uses it for
@@ -125,7 +124,7 @@ The reinforcement is bounded:
 
 Therefore a gene prior cannot create an edge where the AS network has no support,
 and its configured weight is restricted to at most 0.50. The same cached prior is
-used inside every sample bootstrap so that observed and consensus partitions use
+used inside every sample bootstrap so that the observed partition and confidence audit use
 the same method. Event identity, PSI values, and differential-splicing statistics
 remain event-level.
 

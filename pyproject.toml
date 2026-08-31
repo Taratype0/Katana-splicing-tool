@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "katana-splicing-tool"
-version = "1.0.2"
+version = "1.1.0"
 description = "Interactive local RNA splicing and transcriptome integration tool."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,6 +22,7 @@ dependencies = [
   "igraph>=1.0",
   "leidenalg>=0.12",
   "statsmodels>=0.14",
+  "dynamicTreeCut==0.1.1",
 ]
 
 [project.scripts]

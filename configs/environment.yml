@@ -13,6 +13,8 @@ dependencies:
   - pyyaml
   - r-base=4.4
   - r-biocmanager
+  - r-wgcna
+  - r-dynamictreecut
   - pip
   - pip:
       - PySide6==6.11.0
@@ -22,3 +24,4 @@ dependencies:
       - umap-learn
       - igraph>=1.0
       - leidenalg>=0.12
+      - dynamicTreeCut==0.1.1

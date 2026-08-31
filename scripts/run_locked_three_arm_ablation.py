@@ -66,9 +66,34 @@ def _labels(frame: pd.DataFrame) -> np.ndarray:
     return frame[column].astype(str).to_numpy(object)
 
 
-def _selected_parameters(result) -> tuple[float, float]:
+def _selected_parameters(result) -> dict[str, float]:
     selected = result.parameter_search.loc[result.parameter_search["selected"]].iloc[0]
-    return float(selected["edge_threshold"]), float(selected["resolution"])
+    parameters = {
+        "backbone_cut_height": float(
+            selected.get("backbone_cut_height", np.nan)
+        )
+    }
+    if "backbone_deep_split" in selected.index:
+        parameters["backbone_deep_split"] = int(
+            selected["backbone_deep_split"]
+        )
+    if "dynamic_deep_split" in selected.index:
+        parameters["dynamic_deep_split"] = int(
+            selected["dynamic_deep_split"]
+        )
+        return parameters
+    if "coassignment_threshold" in selected.index:
+        parameters["coassignment_threshold"] = float(
+            selected["coassignment_threshold"]
+        )
+        return parameters
+    parameters.update(
+        {
+            "edge_threshold": float(selected["edge_threshold"]),
+            "resolution": float(selected["resolution"]),
+        }
+    )
+    return parameters
 
 
 def _wgcna_stability(
@@ -79,8 +104,9 @@ def _wgcna_stability(
     benchmark: BenchmarkConfig,
     rscript: str,
     bootstraps: int,
+    random_seed: int,
 ) -> dict[str, float]:
-    rng = np.random.default_rng(97)
+    rng = np.random.default_rng(random_seed)
     scores: list[float] = []
     for iteration in range(1, bootstraps + 1):
         indices = _bootstrap_indices(samples, matrix.columns, rng)
@@ -279,6 +305,10 @@ def main(argv: list[str] | None = None) -> int:
     discovery.to_csv(prelock / "frozen_discovery_matrix.tsv", sep="\t")
 
     network = NetworkConfig(
+        engine="tom_hierarchical",
+        max_events=None,
+        tom_dense_max_events=max(500, len(discovery)),
+        module_cut_height=0.80,
         min_module_size=args.min_module_size,
         knn_neighbors=min(30, max(5, len(discovery) // 5)),
         consensus_knn_neighbors=[15, 25, 35],
@@ -286,10 +316,15 @@ def main(argv: list[str] | None = None) -> int:
         community_consensus_runs=1,
         bootstrap_iterations=0,
         edge_threshold=0.05,
+        module_detection="wgcna_blockwise",
+        wgcna_rscript=(str(args.rscript.resolve()) if args.rscript else None),
         random_seed=17,
     )
     consensus = ConsensusConfig(
         bootstrap_iterations=args.bootstraps,
+        clustering_method="backbone_refined_consensus",
+        dynamic_deep_splits=[1, 2, 3, 4],
+        hierarchical_thresholds=[0.50, 0.60, 0.70, 0.80],
         min_module_size=args.min_module_size,
         graph_top_k=min(50, max(5, len(discovery) - 1)),
         dense_max_events=max(500, len(discovery)),
@@ -343,7 +378,16 @@ def main(argv: list[str] | None = None) -> int:
     wgcna_labels, _ = _fit_method("wgcna_exact", discovery, network, benchmark, rscript)
     wgcna_runtime = time.perf_counter() - start
     wgcna_assignment = _assignment(discovery.index, wgcna_labels, "wgcna_module")
-    wgcna_stability = _wgcna_stability(discovery, samples, wgcna_labels, network, benchmark, rscript, args.bootstraps)
+    wgcna_stability = _wgcna_stability(
+        discovery,
+        samples,
+        wgcna_labels,
+        network,
+        benchmark,
+        rscript,
+        args.bootstraps,
+        consensus.random_seed,
+    )
 
     assignments = {
         "stability_only": stability_assignment,
@@ -378,8 +422,8 @@ def main(argv: list[str] | None = None) -> int:
         "inputs": [file_record(path, role="prelock") for path in prelock_inputs],
         "settings": {"network": asdict(network), "consensus": asdict(consensus), "benchmark": asdict(benchmark), "preservation": asdict(preservation), "multiobjective": asdict(objective)},
         "selected_parameters": {
-            "stability_only": dict(zip(["edge_threshold", "resolution"], _selected_parameters(stability_result), strict=True)),
-            "three_objective_cosplice": dict(zip(["edge_threshold", "resolution"], _selected_parameters(multi_result), strict=True)),
+            "stability_only": _selected_parameters(stability_result),
+            "three_objective_cosplice": _selected_parameters(multi_result),
             "event_level_wgcna": {"soft_power": network.soft_power, "min_module_size": network.min_module_size, "merge_cut_height": benchmark.wgcna_merge_cut_height},
         },
         "assignment_sha256": {method: sha256_file(prelock / method / "discovery_assignments.tsv") for method in METHODS},
@@ -422,10 +466,51 @@ def main(argv: list[str] | None = None) -> int:
     holdout_observed = _assignment(holdout.index, discover_module_labels(holdout, partition_network), "module")
     holdout_assignments: dict[str, pd.DataFrame] = {}
     for method, discovery_result in (("stability_only", stability_result), ("three_objective_cosplice", multi_result)):
-        threshold, resolution = _selected_parameters(discovery_result)
-        fixed = replace(consensus, graph_edge_thresholds=[threshold], graph_resolutions=[resolution])
+        selected_parameters = _selected_parameters(discovery_result)
+        fixed_network = network
+        if np.isfinite(selected_parameters.get("backbone_cut_height", np.nan)):
+            backbone_height = selected_parameters["backbone_cut_height"]
+            fixed_network = replace(
+                network,
+                module_cut_height=backbone_height,
+                tom_cut_heights=[backbone_height],
+            )
+        if "backbone_deep_split" in selected_parameters:
+            fixed_network = replace(
+                fixed_network,
+                dynamic_deep_split=int(
+                    selected_parameters["backbone_deep_split"]
+                ),
+            )
+        if "dynamic_deep_split" in selected_parameters:
+            fixed = replace(
+                consensus,
+                dynamic_deep_splits=[
+                    int(selected_parameters["dynamic_deep_split"])
+                ],
+            )
+        elif "coassignment_threshold" in selected_parameters:
+            threshold = selected_parameters["coassignment_threshold"]
+            fixed = replace(
+                consensus,
+                min_coassignment=threshold,
+                hierarchical_thresholds=[threshold],
+            )
+        else:
+            fixed = replace(
+                consensus,
+                graph_edge_thresholds=[selected_parameters["edge_threshold"]],
+                graph_resolutions=[selected_parameters["resolution"]],
+            )
         print(f"Fitting frozen holdout partition for {method}", flush=True)
-        result = build_bootstrap_coassignment_consensus(holdout, holdout_observed, holdout_samples, network, fixed, progress=print)
+        result = build_bootstrap_coassignment_consensus(
+            holdout,
+            holdout_observed,
+            holdout_samples,
+            fixed_network,
+            fixed,
+            progress=print,
+        )
         holdout_assignments[method] = result.assignments[["event_key", "consensus_module"]].copy()
     holdout_wgcna, _ = _fit_method("wgcna_exact", holdout, network, benchmark, rscript)
     holdout_assignments["event_level_wgcna"] = _assignment(holdout.index, holdout_wgcna, "wgcna_module")

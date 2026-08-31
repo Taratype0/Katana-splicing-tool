@@ -47,7 +47,16 @@ def _match_modules(reference: pd.Series, candidate: pd.Series) -> tuple[dict[str
     reference_names = sorted(reference_sets)
     candidate_names = sorted(candidate_sets)
     if not reference_names or not candidate_names:
-        return {}, pd.DataFrame(columns=["reference_module", "candidate_module", "intersection", "union", "jaccard"])
+        return {}, pd.DataFrame(
+            columns=[
+                "reference_module",
+                "candidate_module",
+                "intersection",
+                "union",
+                "jaccard",
+                "is_optimal_match",
+            ]
+        )
     jaccard = np.zeros((len(reference_names), len(candidate_names)), dtype=float)
     intersection = np.zeros_like(jaccard, dtype=int)
     for row, reference_name in enumerate(reference_names):
@@ -157,7 +166,21 @@ def _bootstrap_validation(
                 "stability_class": _classification(combined, settings),
             }
         )
-    return event_stability, pd.DataFrame(module_rows), pd.DataFrame(run_rows)
+    module_stability = pd.DataFrame(
+        module_rows,
+        columns=[
+            "module",
+            "n_events",
+            "mean_best_jaccard",
+            "median_best_jaccard",
+            "min_best_jaccard",
+            "mean_event_membership_stability",
+            "robust_event_fraction",
+            "validation_score",
+            "stability_class",
+        ],
+    )
+    return event_stability, module_stability, pd.DataFrame(run_rows)
 
 
 def _parameter_sensitivity(
@@ -169,6 +192,60 @@ def _parameter_sensitivity(
 ) -> pd.DataFrame:
     baseline = baseline.reindex(matrix.index).fillna("grey").astype(str)
     rows: list[dict[str, object]] = []
+    if network.engine == "tom_hierarchical":
+        heights = sorted(
+            set([0.70, 0.75, network.module_cut_height, 0.85, 0.90])
+        )
+        for index, height in enumerate(heights, start=1):
+            active = np.isclose(height, network.module_cut_height)
+            labels = (
+                baseline.copy()
+                if active
+                else pd.Series(
+                    discover_module_labels(
+                        matrix,
+                        replace(network, module_cut_height=float(height)),
+                    ),
+                    index=matrix.index,
+                    dtype=str,
+                )
+            )
+            _mapping, matches = _match_modules(baseline, labels)
+            optimal = matches.loc[matches["is_optimal_match"], "jaccard"]
+            counts = labels.loc[labels.ne("grey")].value_counts()
+            rows.append(
+                {
+                    "parameter_type": "tom_cut_height",
+                    "parameter_value": float(height),
+                    "module_cut_height": float(height),
+                    "knn_neighbors": np.nan,
+                    "community_resolution": np.nan,
+                    "adjusted_rand_index": adjusted_rand_score(
+                        baseline, labels
+                    ),
+                    "mean_matched_module_jaccard": (
+                        float(optimal.mean()) if not optimal.empty else 0.0
+                    ),
+                    "min_matched_module_jaccard": (
+                        float(optimal.min()) if not optimal.empty else 0.0
+                    ),
+                    "n_modules": int(len(counts)),
+                    "n_grey_events": int(labels.eq("grey").sum()),
+                    "largest_module_fraction": (
+                        float(counts.max() / len(labels))
+                        if not counts.empty
+                        else 0.0
+                    ),
+                    "is_active_setting": active,
+                }
+            )
+            if progress:
+                progress(
+                    f"TOM cut-height sensitivity {index}/{len(heights)}: "
+                    f"height={height:g}"
+                )
+        return pd.DataFrame(rows)
+
     combinations = [(int(k), float(resolution)) for k in settings.knn_neighbors for resolution in settings.community_resolutions]
     for index, (neighbors, resolution) in enumerate(combinations, start=1):
         active = neighbors == network.knn_neighbors and np.isclose(resolution, network.community_resolution)
@@ -265,8 +342,6 @@ def validate_network_modules(
     residual_assignments: pd.DataFrame | None = None,
     progress: Progress = None,
 ) -> ValidationResult:
-    if network.engine != "sparse_knn":
-        raise ValueError("Module validation currently requires network.engine=sparse_knn")
     observed = observed_assignments.set_index("event_key")["module"].reindex(matrix.index).fillna("grey").astype(str)
     event_stability, module_stability, bootstrap_runs = _bootstrap_validation(
         matrix, observed, samples, network, settings, progress
@@ -294,8 +369,19 @@ def render_validation_plots(result: ValidationResult, output_dir: Path, settings
 
     table = result.module_stability.sort_values("validation_score", ascending=False)
     fig, ax = plt.subplots(figsize=(max(9, len(table) * 0.8), 6))
-    colors = table["stability_class"].map({"robust": "#087E8B", "moderate": "#F3A712", "unstable": "#C44536"})
-    ax.bar(table["module"], table["validation_score"], color=colors, edgecolor="#17324D")
+    if table.empty:
+        ax.text(
+            0.5,
+            0.5,
+            "No non-grey module was available for bootstrap validation",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.set_xticks([])
+    else:
+        colors = table["stability_class"].map({"robust": "#087E8B", "moderate": "#F3A712", "unstable": "#C44536"})
+        ax.bar(table["module"], table["validation_score"], color=colors, edgecolor="#17324D")
     ax.axhline(settings.robust_jaccard, color="#087E8B", linestyle="--", linewidth=1.2, label="robust threshold")
     ax.axhline(settings.moderate_jaccard, color="#F3A712", linestyle="--", linewidth=1.2, label="moderate threshold")
     ax.set_ylim(0, 1.02)
@@ -321,10 +407,34 @@ def render_validation_plots(result: ValidationResult, output_dir: Path, settings
     plt.close(fig)
     generated.append(path)
 
-    sensitivity = result.parameter_sensitivity.pivot(index="community_resolution", columns="knn_neighbors", values="adjusted_rand_index")
+    if (
+        "parameter_type" in result.parameter_sensitivity
+        and result.parameter_sensitivity["parameter_type"]
+        .eq("tom_cut_height")
+        .all()
+    ):
+        sensitivity = (
+            result.parameter_sensitivity.set_index("module_cut_height")[
+                "adjusted_rand_index"
+            ]
+            .to_frame()
+            .T
+        )
+        sensitivity.index = ["TOM"]
+        sensitivity_title = "Module sensitivity to TOM cut height"
+        sensitivity_xlabel = "TOM dissimilarity cut height"
+    else:
+        sensitivity = result.parameter_sensitivity.pivot(
+            index="community_resolution",
+            columns="knn_neighbors",
+            values="adjusted_rand_index",
+        )
+        sensitivity_title = "Module sensitivity to graph parameters"
+        sensitivity_xlabel = "kNN neighbors"
     fig, ax = plt.subplots(figsize=(8.5, 5.5))
     sns.heatmap(sensitivity, annot=True, fmt=".2f", cmap="YlGnBu", vmin=0, vmax=1, ax=ax, cbar_kws={"label": "ARI vs. active network"})
-    ax.set_title("Module sensitivity to graph parameters", fontweight="bold")
+    ax.set_title(sensitivity_title, fontweight="bold")
+    ax.set_xlabel(sensitivity_xlabel)
     fig.tight_layout()
     path = output_dir / "parameter_sensitivity_heatmap.png"
     fig.savefig(path, dpi=180)

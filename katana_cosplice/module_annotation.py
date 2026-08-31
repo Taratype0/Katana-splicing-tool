@@ -179,6 +179,7 @@ def annotate_modules(
     events["gene_id"] = events["gene_id"].map(normalize_gene_id)
     events["gene_symbol"] = events["gene_symbol"].fillna("").astype(str).str.strip()
     events["gene_key"] = [_gene_key(gene_id, symbol) for gene_id, symbol in zip(events["gene_id"], events["gene_symbol"], strict=False)]
+    events["gene_key"] = events["gene_key"].astype("string")
     events = events.loc[events["gene_key"].ne("")].copy()
     support, support_sources = _read_candidate_support(support_root)
     rbp_sets, rbp_sources = _load_rbp_sets(rbp_gene_set)
@@ -192,6 +193,8 @@ def annotate_modules(
             event_types=("event_type", lambda values: ";".join(sorted(set(map(str, values))))),
         )
     )
+    genes["gene_key"] = genes["gene_key"].astype("string")
+    support["gene_key"] = support["gene_key"].astype("string")
     genes = genes.merge(support, on=["gene_key"], how="left", suffixes=("", "_support"))
     for name in ("gene_id", "gene_symbol"):
         fallback = f"{name}_support"
@@ -257,6 +260,8 @@ def annotate_modules(
             row[f"{key}_enrichment_pvalue"] = _enrichment_pvalue(len(universe), len(selected), len(module_genes), len(overlap))
         summary_rows.append(row)
     module_summary = pd.DataFrame(summary_rows)
+    if "module" not in module_summary:
+        module_summary["module"] = pd.Series(dtype="string")
     for label in evidence_sets:
         column = f"{label.lower()}_enrichment_pvalue"
         module_summary[f"{label.lower()}_enrichment_FDR"] = bh_adjust(module_summary[column]) if column in module_summary else np.nan

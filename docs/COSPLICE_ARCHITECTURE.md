@@ -13,10 +13,10 @@ Both adapters consume the same stage registry and pipeline. They do not maintain
 2. **No hidden chaining**: a stage may read an existing upstream artifact, but it never runs a missing upstream stage.
 3. **Auditable artifacts**: every stage declares expected outputs and records actual outputs in `artifact_manifest.json`.
 4. **Algorithm isolation**: matrix construction, QC, networking, association, and validation remain separate computational modules.
-5. **Auditable WGCNA-style refinement**: sparse community discovery is followed by module-program merging and kME-style membership rejection; original and final assignments are both exported.
-6. **Resampling-selected consensus**: outer bootstrap co-assignment is partitioned by sparse Leiden parameter search, and core/peripheral/grey membership remains explicit.
+5. **Official WGCNA/TOM production backbone**: R WGCNA signed adjacency, exact TOM, Dynamic Tree Cut and eigengene merging define each partition.
+6. **Backbone confidence annotation**: condition-stratified bootstrap estimates event co-assignment and confidence without changing WGCNA membership; low-confidence events remain assigned and are explicitly flagged.
 7. **Extension without fabrication**: DEG, DTU, RBP, motif, and GO/KEGG support use provider contracts. An unavailable provider reports that it is not configured; it does not emit placeholder evidence.
-8. **Leakage-safe multi-objective selection**: when explicitly enabled, final consensus parameters are selected jointly for internal bootstrap stability, preservation in predeclared tuning cohorts, and tuning-GMT functional coherence. Untouched holdout cohorts never enter selection.
+8. **Leakage-safe validation**: preservation and functional enrichment are downstream validation endpoints and do not define production module membership. Historical multi-objective runs remain reproducible as research ablations.
 
 ## Layers
 
@@ -63,7 +63,7 @@ The only chained entry point is the user-invoked `katana-cosplice run` command. 
 | `stable_qc` | `matrix` | Select stable, read-supported events |
 | `network_observed` | `stable_qc` | Discover observed co-splicing modules |
 | `network_residual` | `stable_qc` | Discover covariate-residualized modules |
-| `consensus_modules` | `network_observed`; optional predeclared tuning inputs | Define final modules from bootstrap event co-assignment, optionally using the leakage-safe multi-objective selector |
+| `consensus_modules` | `network_observed`; optional predeclared tuning inputs | Preserve the WGCNA partition and annotate event/module bootstrap confidence; historical repartitioning modes remain reproducible only by explicit configuration |
 | `hybrid_programs` | legacy benchmark only | Deprecated compatibility implementation; hidden from the production UI and default pipeline |
 | `associate_observed` | `network_observed` | Associate observed program scores with metadata |
 | `associate_residual` | `network_residual` | Associate residual program scores with metadata |
@@ -120,11 +120,11 @@ union. It does not rank validation events or tune network parameters. Preservati
 association and functional-theme replication are separate evidence layers and are never collapsed
 into a causal claim.
 
-## Multi-objective module selection
+## Multi-objective validation audit
 
-The optional `multiobjective_selection` configuration changes how the final
-`consensus_modules` partition is chosen. It does not add a downstream evidence label after module
-selection. Every graph-parameter candidate is scored on three objectives:
+In the production `backbone_confidence_only` mode, WGCNA alone defines the
+partition. The optional `multiobjective_selection` configuration evaluates the
+fixed partition on three objectives but cannot change membership:
 
 1. internal stability from the lower-tail-aware bootstrap ARI composite;
 2. external preservation across predeclared tuning cohorts, combining module density,
@@ -132,13 +132,14 @@ selection. Every graph-parameter candidate is scored on three objectives:
 3. functional coherence from module-level hypergeometric enrichment against a versioned tuning
    GMT, with within-module BH-FDR and annotation coverage.
 
-The final score is a weighted geometric mean, not an arithmetic sum. A near-zero objective therefore
-cannot be hidden by a high value in another objective. Structural constraints on grey fraction,
-largest-module fraction and module count remain mandatory, and Pareto-optimal candidates are marked
-before the highest-scoring feasible partition is selected.
+The combined score is retained as an audit metric, not a production-selection
+target. A near-zero objective therefore remains visible rather than being
+hidden by another metric. Historical `backbone_refined_consensus` and legacy
+candidate-partition modes may still use the selector when explicitly requested
+to reproduce an older run.
 
 `tuning_cohorts` and `holdout_cohorts` must be disjoint. Only tuning PSI matrices are loaded by
-`consensus_modules`; holdout paths are not read. The selected partition, all candidate objective
+`consensus_modules`; holdout paths are not read. The fixed partition, objective
 values and per-module/cohort contributions are exported in
 `consensus_parameter_search.tsv`, `multiobjective_selection_audit.tsv` and `parameters.json`.
 Using a GMT during selection makes enrichment against that same GMT a tuning result, not independent

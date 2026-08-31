@@ -82,14 +82,26 @@ class StableASConfig:
 
 @dataclass
 class NetworkConfig:
-    engine: str = "sparse_knn"
+    engine: str = "tom_hierarchical"
+    module_detection: str = "wgcna_blockwise"
     method: str = "bicor"
     signed: bool = True
     soft_power: int = 6
     edge_threshold: float = 0.10
-    module_cut_height: float = 0.70
+    module_cut_height: float = 0.80
     min_module_size: int = 20
     max_events: int | None = None
+    tom_dense_max_events: int = 3_000
+    tom_cut_heights: list[float] = field(
+        default_factory=lambda: [0.70, 0.75, 0.80, 0.85, 0.90]
+    )
+    tom_cut_selection_bootstraps: int = 10
+    dynamic_cut_height: float = 0.995
+    dynamic_deep_split: int = 2
+    dynamic_deep_splits: list[int] = field(default_factory=lambda: [1, 2, 3, 4])
+    dynamic_pam_respects_dendro: bool = False
+    wgcna_rscript: str | None = None
+    wgcna_merge_cut_height: float = 0.25
     knn_neighbors: int = 50
     edge_smoothing: str = "shared_neighbor"
     shared_neighbor_weight: float = 0.50
@@ -119,12 +131,14 @@ class NetworkConfig:
 
 @dataclass
 class UncertaintyConfig:
-    enabled: bool = False
-    network_mode: str = "diagnostic_only"
+    enabled: bool = True
+    network_mode: str = "posterior"
     prior_strength: float = 1.0
     reliability_read_scale: float = 20.0
     reliability_floor: float = 0.10
     reliability_power: float = 0.50
+    filter_low_reliability: bool = True
+    min_network_reliability: float = 0.15
 
 
 @dataclass
@@ -192,7 +206,13 @@ class ConsensusConfig:
     bootstrap_iterations: int = 20
     min_coassignment: float = 0.70
     min_module_size: int | None = None
-    clustering_method: str = "leiden_graph"
+    clustering_method: str = "backbone_confidence_only"
+    dynamic_cut_height: float = 0.995
+    dynamic_deep_splits: list[int] = field(default_factory=lambda: [1, 2, 3, 4])
+    dynamic_pam_respects_dendro: bool = False
+    hierarchical_thresholds: list[float] = field(
+        default_factory=lambda: [0.50, 0.60, 0.70, 0.80]
+    )
     graph_edge_thresholds: list[float] = field(
         default_factory=lambda: [0.50, 0.60, 0.70, 0.80]
     )
@@ -215,7 +235,7 @@ class ConsensusConfig:
 
 @dataclass
 class MultiObjectiveSelectionConfig:
-    """Leakage-safe objectives used to select the final consensus partition."""
+    """Leakage-safe validation objectives; legacy modes may use them for selection."""
 
     enabled: bool = False
     tuning_cohorts: list[str] = field(default_factory=list)
@@ -470,8 +490,15 @@ class CoSpliceConfig:
             raise ValueError("stable_as.min_sample_psi_range must be within [0, 1]")
         if self.network.method not in {"bicor", "spearman", "pearson"}:
             raise ValueError("network.method must be bicor, spearman or pearson")
-        if self.network.engine not in {"sparse_knn", "exact_hierarchical"}:
-            raise ValueError("network.engine must be sparse_knn or exact_hierarchical")
+        if self.network.engine not in {
+            "tom_hierarchical",
+            "sparse_knn",
+            "exact_hierarchical",
+        }:
+            raise ValueError(
+                "network.engine must be tom_hierarchical, sparse_knn or "
+                "exact_hierarchical"
+            )
         if self.network.soft_power < 1:
             raise ValueError("network.soft_power must be positive")
         if self.network.min_module_size < 2:
@@ -480,6 +507,46 @@ class CoSpliceConfig:
             raise ValueError("exact_hierarchical requires an explicit network.max_events memory cap")
         if self.network.max_events is not None and self.network.max_events < self.network.min_module_size * 2:
             raise ValueError("network.max_events must be at least twice min_module_size")
+        if self.network.tom_dense_max_events < self.network.min_module_size * 2:
+            raise ValueError(
+                "network.tom_dense_max_events must be at least twice min_module_size"
+            )
+        if not self.network.tom_cut_heights or any(
+            not 0.0 < value < 1.0 for value in self.network.tom_cut_heights
+        ):
+            raise ValueError(
+                "network.tom_cut_heights must contain values within (0, 1)"
+            )
+        if self.network.tom_cut_selection_bootstraps < 2:
+            raise ValueError(
+                "network.tom_cut_selection_bootstraps must be at least 2"
+            )
+        if self.network.module_detection not in {
+            "wgcna_blockwise",
+            "dynamic_tree_cut",
+            "static_cut",
+        }:
+            raise ValueError(
+                "network.module_detection must be wgcna_blockwise, "
+                "dynamic_tree_cut or static_cut"
+            )
+        if not 0.0 < self.network.wgcna_merge_cut_height < 1.0:
+            raise ValueError(
+                "network.wgcna_merge_cut_height must be within (0, 1)"
+            )
+        if not 0.0 < self.network.dynamic_cut_height <= 1.0:
+            raise ValueError(
+                "network.dynamic_cut_height must be within (0, 1]"
+            )
+        if self.network.dynamic_deep_split not in {0, 1, 2, 3, 4}:
+            raise ValueError("network.dynamic_deep_split must be within 0..4")
+        if not self.network.dynamic_deep_splits or any(
+            value not in {0, 1, 2, 3, 4}
+            for value in self.network.dynamic_deep_splits
+        ):
+            raise ValueError(
+                "network.dynamic_deep_splits must contain values within 0..4"
+            )
         if self.network.knn_neighbors < 2:
             raise ValueError("network.knn_neighbors must be at least 2")
         if self.network.edge_smoothing not in {"none", "shared_neighbor"}:
@@ -549,6 +616,10 @@ class CoSpliceConfig:
             raise ValueError("uncertainty.reliability_floor must be within [0, 1]")
         if self.uncertainty.reliability_power <= 0:
             raise ValueError("uncertainty.reliability_power must be positive")
+        if not 0.0 <= self.uncertainty.min_network_reliability <= 1.0:
+            raise ValueError(
+                "uncertainty.min_network_reliability must be within [0, 1]"
+            )
         if self.gene_prior.enabled and self.gene_prior.exon_count_matrix is None:
             raise ValueError("Enabled gene_prior requires exon_count_matrix")
         if self.gene_prior.encoded_gene_rule not in {
@@ -644,8 +715,38 @@ class CoSpliceConfig:
             raise ValueError("consensus.min_coassignment must be within (0, 1]")
         if self.consensus.min_module_size is not None and self.consensus.min_module_size < 2:
             raise ValueError("consensus.min_module_size must be at least 2 when provided")
-        if self.consensus.clustering_method not in {"leiden_graph", "hierarchical"}:
-            raise ValueError("consensus.clustering_method must be leiden_graph or hierarchical")
+        if self.consensus.clustering_method not in {
+            "backbone_confidence_only",
+            "backbone_refined_consensus",
+            "dynamic_tree_consensus",
+            "hierarchical_consensus",
+            "leiden_graph",
+            "hierarchical",
+        }:
+            raise ValueError(
+                "consensus.clustering_method must be backbone_confidence_only, "
+                "backbone_refined_consensus, "
+                "dynamic_tree_consensus, hierarchical_consensus, leiden_graph "
+                "or hierarchical"
+            )
+        if not 0.0 < self.consensus.dynamic_cut_height <= 1.0:
+            raise ValueError(
+                "consensus.dynamic_cut_height must be within (0, 1]"
+            )
+        if not self.consensus.dynamic_deep_splits or any(
+            value not in {0, 1, 2, 3, 4}
+            for value in self.consensus.dynamic_deep_splits
+        ):
+            raise ValueError(
+                "consensus.dynamic_deep_splits must contain values within 0..4"
+            )
+        if not self.consensus.hierarchical_thresholds or any(
+            not 0.0 < value <= 1.0
+            for value in self.consensus.hierarchical_thresholds
+        ):
+            raise ValueError(
+                "consensus.hierarchical_thresholds must contain values within (0, 1]"
+            )
         if not self.consensus.graph_edge_thresholds or any(
             not 0.0 <= value <= 1.0 for value in self.consensus.graph_edge_thresholds
         ):

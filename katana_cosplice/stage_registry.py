@@ -131,11 +131,12 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
     ),
     StageSpec(
         key="consensus_modules",
-        title="4C. Bootstrap consensus modules",
+        title="4C. Bootstrap module confidence",
         order=45,
         description=(
-            "Build final modules from sample-stratified bootstrap event co-assignment probabilities; "
-            "this is internal consensus, not external preservation."
+            "Annotate the fixed WGCNA modules with sample-stratified bootstrap "
+            "co-assignment confidence; this does not change membership and is "
+            "not external preservation."
         ),
         dependencies=("network_observed",),
         cli_command="consensus-modules",
@@ -163,7 +164,7 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
         order=46,
         description=(
             "Deprecated benchmark-only compatibility stage. Production CoSplice uses the single "
-            "bootstrap-consensus partition from 4C."
+            "WGCNA partition with confidence annotations from 4C."
         ),
         dependencies=("stable_qc", "network_observed"),
         optional_dependencies=("network_residual", "consensus_modules"),

@@ -15,8 +15,8 @@ Katana-CoSplice is not presented as an already proven replacement for every publ
 method. WGCNA provides the established weighted-network/module-eigengene framework, and published
 co-splicing studies have applied WGCNA with Mantel correlations or graphical-model selection to
 exon/splicing profiles. Katana's current practical advantages are rMATS-native sample PSI/IJC/SJC
-ingestion, explicit read/replicate Stable-AS QC, scalable signed sparse networks, observed/residual
-network separation, factorial metadata association, bootstrap/sensitivity validation, and
+ingestion, explicit read/replicate Stable-AS QC, an official R WGCNA signed adjacency/TOM backbone,
+condition-stratified bootstrap consensus, observed/residual network separation, factorial metadata association, and
 parameter-fingerprinted standalone/UI stages. Katana now provides an internal same-input recovery
 benchmark, but general statistical superiority still requires independent-cohort preservation;
 feature completeness or one discovery cohort alone is not that proof.
@@ -26,11 +26,11 @@ Primary references: [WGCNA](https://pubmed.ncbi.nlm.nih.gov/19114008/),
 [graphical-model splicing networks](https://pubmed.ncbi.nlm.nih.gov/26449793/), and
 [cross-species coregulated splicing networks](https://genome.cshlp.org/content/27/10/1759).
 The outer consensus implementation additionally follows the resampling/co-association rationale of
-[consensus clustering](https://link.springer.com/article/10.1023/A:1023949509487), uses
-[Leiden](https://www.nature.com/articles/s41598-019-41695-z) for connected graph communities, and
-borrows the sparse multiscale-network motivation of
-[MEGENA](https://pmc.ncbi.nlm.nih.gov/articles/PMC4664553/). This combination is a Katana workflow;
-those references do not by themselves validate it as a new universally superior method.
+[consensus clustering](https://link.springer.com/article/10.1023/A:1023949509487). Production
+modules use official Dynamic Tree Cut on exact TOM. Bootstrap co-assignment filters unstable event boundaries without reclustering the WGCNA backbone. Leiden and
+the sparse multiscale-network implementation remain available only for historical cache and
+comparator compatibility. This combination is a Katana workflow; those references do not by
+themselves validate it as a new universally superior method.
 
 The network is therefore fit across all selected samples, not independently inside an `n=3` comparison. A separate residual network can remove explicitly configured covariates before calculating event-event similarity.
 
@@ -39,13 +39,13 @@ The network is therefore fit across all selected samples, not independently insi
 1. **Input audit** resolves sample identity, conditions, rMATS bamlists, BAM/BAI coverage, quant coverage and references.
 2. **Sample-level matrix** either extracts exact rMATS event PSI/IJC/SJC or builds competing-junction usage directly from BAM CIGAR `N` operations.
 3. **Stable-AS QC** filters events using condition coverage, junction-read support, informative PSI range and replicate repeatability.
-4. **Observed network** finds a sparse graph of robust signed PSI relationships across the full cohort, merges redundant module programs, and assigns weak or ambiguous events to `grey` using auditable module-membership criteria.
+4. **Observed network** uses official R WGCNA signed adjacency, exact TOM, Dynamic Tree Cut and eigengene merging across the full cohort.
 5. **Residual network** optionally removes configured covariates and repeats network discovery.
-6. **Bootstrap co-assignment consensus** resamples samples within conditions, searches sparse Leiden co-assignment graphs, and defines final core/peripheral modules from how often event pairs return to the same non-grey module.
-7. **Hybrid tight/diffuse programs** retain both sparse CoSplice modules and diffuse WGCNA-style soft-adjacency/TOM modules. Confidence combines bootstrap co-assignment, absolute program membership and replicate repeatability; configured independent cohorts add external preservation evidence.
+6. **Bootstrap co-assignment confidence** resamples samples within conditions and annotates confidence in the full-data WGCNA assignment without changing that assignment.
+7. **Legacy compatibility** can reproduce former sparse/Leiden, tight/diffuse, and boundary-rejecting consensus outputs, but production emits one WGCNA partition with confidence annotations.
 8. **Program scores** summarize each module by the first principal component of standardized event PSI.
 9. **Association** relates program scores to configured metadata factors and can fit a balanced factorial model with interaction terms and an optional batch covariate.
-10. **Module validation** evaluates baseline-module bootstrap recovery, graph-parameter sensitivity and observed/residual preservation.
+10. **Module validation** evaluates baseline-module bootstrap recovery, TOM/consensus-parameter sensitivity and observed/residual preservation.
 11. **External preservation** projects final consensus modules into explicitly configured independent cohorts and measures density, connectivity, membership and program preservation.
 12. **Module evidence annotation** overlays cached DEG, rMATS, DEXSeq, DTU and RBP gene-set support without changing PSI-defined modules.
 13. **Method benchmark** compares methods on the same predeclared stable-event universe and records unavailable or degenerate methods explicitly.
@@ -56,12 +56,10 @@ The network is therefore fit across all selected samples, not independently insi
 18. **Report** summarizes cached outputs, warnings and provenance.
 
 The read-count uncertainty stage estimates beta-binomial overdispersion, posterior PSI and
-measurement reliability from replicate IJC/SJC. It is optional and parameter-fingerprinted.
-The default network continues to use Stable-AS PSI because the current Setd2 ablation found no
-edge-stability improvement from posterior replacement or uncertainty weighting. See
+measurement reliability from replicate IJC/SJC. It is enabled and parameter-fingerprinted by default: low-reliability events are removed before networking and posterior PSI supplies the production matrix. Reliability is retained as event-level evidence and is not multiplied directly into TOM adjacency, because that can collapse otherwise valid modules. PSI-only public cohorts use unmodified `WGCNA::blockwiseModules`; the software never invents read uncertainty. See
 [COSPLICE_METHOD_EXTENSIONS.md](COSPLICE_METHOD_EXTENSIONS.md).
 
-The default engine is a signed robust-correlation k-nearest-neighbor graph with sparse weighted-topological-overlap smoothing, followed by Louvain community discovery. A WGCNA-style refinement layer then merges highly correlated module programs and rejects events with weak kME-style membership. It deliberately reuses established weighted-network principles, but it is not the exact R WGCNA or graphical-lasso implementation.
+The default engine uses official R WGCNA signed bicor adjacency, exact TOM, Dynamic Tree Cut and eigengene merging. CoSplice's method layer is read uncertainty, condition-stratified bootstrap confidence, differential topology, cross-cohort validation and event-level interpretation, not a replacement for WGCNA.
 
 ## Stable-AS rationale
 
@@ -80,18 +78,21 @@ The condition-coverage and PSI-range criteria adapt the unsupervised event selec
 - Every event passing stable-AS QC enters the default network; there is no fixed Top-N truncation.
 - `max_events` is optional and only applies when the user explicitly requests an engineering cap.
 - A robust biweight-style correlation is used by default.
-- The scalable default builds a signed soft-thresholded k-nearest-neighbor graph. Sparse shared-neighbor smoothing uses weighted topological overlap only among local graph candidates; it does not materialize a dense TOM matrix.
-- Multiple neighborhood scales are combined into a consensus edge set. The maximum-k neighbor query is computed once, nested k-scales vote on raw-edge reproducibility, and shared-neighbor smoothing is applied once only after scale consensus. This preserves the declared edge semantics while avoiding redundant nearest-neighbor/TOM passes. Candidate edges are weighted by PSI-column bootstrap support, edges below `consensus_bootstrap_min_support` are rejected, and repeated Louvain runs downweight unstable community bridges.
+- Production materializes the exact dense TOM for every Stable-AS event. `tom_dense_max_events`
+  is an explicit memory-safety limit, not a ranking cutoff: larger inputs stop with an actionable
+  error instead of silently dropping low-ranked events.
+- WGCNA parameters are declared before bootstrap and holdout access; production does not select module boundaries using functional enrichment.
 - Stability-first mode uses the complete declared `consensus_bootstrap_iterations`; there is no event-count shortcut. Both configured and effective iteration counts are exported, and downstream validation bootstrap remains a separate module-preservation test.
 - Module programs correlated at or above `module_merge_correlation` are merged before final assignment.
 - Adaptive membership uses a robust lower bound estimated inside each current module. The lower bound is constrained by `max(adaptive_membership_floor, 1/sqrt(n_samples))` and the fixed `min_module_membership` ceiling. This is a sample-size-aware heuristic, not a significance threshold.
 - Adaptive relaxation can retain an event in its current module. Assignment from `grey` or reassignment across modules still requires the original fixed `min_module_membership`, preventing weak bridge events from merging programs.
 - Events below the active membership cutoff, or below the optional membership margin, become `grey` instead of being forced into a community.
 - `event_module_assignments.tsv` records the original community, final module, membership values, `membership_cutoff_used`, margin and refinement action for every selected event.
-- `network_edges.tsv` records raw correlation, final adjacency, `shared_neighbor_overlap`, multi-k support and internal graph-bootstrap support; `network_diagnostics.tsv` records all smoothing and adaptive-cutoff settings.
+- `network_edges.tsv` records raw correlation, signed adjacency and TOM-derived retained edges;
+  `network_diagnostics.tsv` records the TOM backbone, cut height, power, memory cap and membership settings.
 - Bootstrap resampling is performed **within condition**, preserving group structure while resampling replicates.
-- `bootstrap_support` reports how often each retained edge passes the configured network edge threshold.
-- `module_resolution_sensitivity.tsv` reports module count, grey events and largest-module fraction over multiple community resolutions.
+- `bootstrap_support` reports how often each retained relationship survives the configured bootstrap procedure.
+- `module_resolution_sensitivity.tsv` reports module count, grey events and largest-module fraction over configured TOM cut heights.
 - A largest module containing at least 60% of selected events triggers a warning rather than being silently presented as a definitive program.
 
 ## Installation
@@ -332,21 +333,22 @@ Interactions are labelled as attenuated same-direction, enhanced same-direction,
 - Event membership stability is the fraction of bootstrap networks in which an event returns to its optimally matched baseline module.
 - Module Jaccard measures event-set recovery; whole-network adjusted Rand index measures recovery of the complete partition.
 - Default labels are `robust` at validation score >=0.75, `moderate` at >=0.50 and `unstable` below 0.50. The score is the lower of mean matched-module Jaccard and mean event-membership stability.
-- Parameter sensitivity compares configured kNN and Louvain-resolution values without changing the active cached network.
+- Parameter sensitivity compares configured TOM cut heights without changing the active cached network.
 - Observed/residual preservation uses event-set Jaccard plus hypergeometric FDR. Low preservation can indicate covariate-dependent structure and is not automatically a software failure.
 - These are internal robustness checks. Independent cohorts are still required for external module preservation.
 
-## Bootstrap co-assignment consensus
+## Bootstrap co-assignment confidence
 
 - Samples are resampled with replacement within each condition, preserving the cohort design and replicate count.
 - Each outer bootstrap performs one network partition; inner edge/community bootstraps are disabled to avoid nested resampling.
 - Pairwise co-assignment is the fraction of bootstraps in which two events occupy the same non-grey module.
-- A top-k sparse co-assignment graph is evaluated over configured edge thresholds and Leiden resolutions. The legacy average-linkage method remains available only through `clustering_method: hierarchical`.
-- Candidate partitions are scored using mean, median and worst-case bootstrap ARI, module membership confidence, retained-event coverage, module-size balance, confidence margin and graph modularity. Explicit limits on grey fraction, largest-module fraction and module count are evaluated before selecting the highest-scoring feasible candidate.
-- Events strongly supported by their graph community are labelled `core`. Events with sufficient mean co-assignment and separation from the next-best module are labelled `peripheral`. Events with a graph candidate but insufficient consensus confidence are labelled `uncertain`: their candidate assignment remains auditable in `candidate_graph_module` / `analysis_module`, but conservative downstream analysis continues to use `consensus_module=grey`. Events without a retained graph candidate remain `grey`.
+- Production keeps the full-data WGCNA partition exactly. Co-assignment is not cut into a second partition and does not send a WGCNA-assigned event to grey.
+- Events with strong within-module co-assignment are labelled `core`; moderately supported events are `peripheral`; weak or ambiguous events are `uncertain` but remain in their WGCNA module. `grey` only means WGCNA itself did not assign the event.
+- `partition_source=full_data_wgcna_backbone` and `confidence_action=annotation_only` make this contract machine-readable. `adjusted_rand_index_observed_vs_consensus` must equal 1 in production mode.
+- Historical average-linkage, Dynamic Tree Cut, Leiden, and boundary-rejecting modes remain available only through explicit non-default configuration for reproducibility.
 - The default uses 20 stratified sample bootstraps. Higher values such as 50 or 100 are optional sensitivity analyses, not a requirement for routine discovery.
 - Event confidence is mean co-assignment to the selected module; the confidence margin compares that value with the next-best module. `assignment_uncertainty` is one minus confidence.
-- `consensus_parameter_search.tsv` records every candidate and the selected row. No Setd2 labels, conditions or expected biological answer enter the selection score.
+- `consensus_parameter_search.tsv` records the fixed production partition and its audit metrics. No Setd2 labels, conditions or expected biological answer enter confidence estimation.
 - The complete matrix is stored as compressed NPZ (`event_keys`, `coassignment`); the TSV edge view is intentionally capped for preview.
 - This is internal consensus in the discovery cohort, not independent validation.
 
@@ -363,7 +365,7 @@ follow familiar WGCNA interpretation bands, but this statistic is explicitly not
 
 ## Head-to-head benchmark
 
-The independent `benchmark_methods` stage compares Katana's **tight sparse branch** with a fixed-cut
+The independent `benchmark_methods` stage compares Katana's **TOM-first consensus partition** with a fixed-cut
 Pearson hierarchical baseline, a Ledoit-Wolf shrinkage graphical-lasso partial-correlation baseline,
 and the exact R `WGCNA::blockwiseModules` implementation when Rscript and WGCNA are installed. If R
 or WGCNA is absent, the method is marked unavailable; no Python approximation is presented as WGCNA.
@@ -392,19 +394,16 @@ metrics are internal; external module preservation is still required for a gener
 
 ### Consensus-network benchmark boundary
 
-On the repository's fixed benchmark universes, the stability-first default preserved perfect recovery
-of the three planted simulation modules. In a same-input 1,000-event GSE141633 comparison, Katana's
-mean/minimum condition-stratified bootstrap ARI was `0.842/0.780`, versus `0.825/0.616` for exact
-WGCNA. WGCNA still produced higher cosine silhouette (`0.221` versus `0.187`) and neutral graph
-modularity (`0.143` versus `0.069`). Katana therefore prioritizes resampling reproducibility over
-assigning more events or maximizing within-module compactness. On the full 6,853-event Setd2
-Stable-AS matrix, Katana retained three programs with 1,237 grey events, rejected 20,599 unstable
-candidate edges, and had mean internal graph-bootstrap edge support `0.955`; the fit took about
-200 seconds. On the independent GSE85908 single-cell PSI benchmark, Katana returned four modules
-but mean/minimum bootstrap ARI was only `0.201/0.124`; exact WGCNA returned an all-grey degenerate
-partition. Katana was more sensitive on that dataset, but neither result supports a stable biological
-module claim. These are regression observations, not proof of universal biological superiority;
-independent-cohort preservation remains required.
+The current frozen public panel contains 11 same-input runs across seven AS event types, three ES
+event-universe sizes and three holdout cohorts. The unified-seed paired rerun
+gave mean bootstrap ARI `0.867` for TOM-first CoSplice and `0.871` for exact
+WGCNA, with 3 CoSplice wins, 7 ties and 1 loss. Mean holdout program-score
+preservation was `0.497` versus `0.472`; both methods recovered non-empty
+partitions in 11/11 runs and strict valid multi-module partitions in 2/11.
+No tuning-GMT functional objective passed the predeclared FDR gate. These
+results support WGCNA-level internal stability and a modest average preservation
+gain; they do not establish universal or functional superiority.
+See [COSPLICE_LOCKED_PANEL_VALIDATION.md](COSPLICE_LOCKED_PANEL_VALIDATION.md).
 
 ### Public reciprocal external validation
 
@@ -415,28 +414,25 @@ then projects both partitions into the untouched external cohort. The command wr
 bootstrap tables, module assignments, permutation-calibrated preservation results, plots,
 `parameters.json`, and `PUBLIC_VALIDATION_REPORT.md`.
 
-In the fixed primary-tumor-only TCGA SpliceSeq regression (150 discovery-selected ES events,
-20 matched bootstraps, 1,000 preservation permutations per module), exact WGCNA was more internally
-stable but collapsed to one broad module in both directions. CoSplice retained two finer modules.
-For KIRC discovery to KIRP validation, the 2026-07-29 upgraded rerun produced a best external
-`Zsummary_wgcna_like` of 2.250 (partially preserved); in the reciprocal direction it was 1.800
-(not preserved by the configured
-2.0 boundary). These results support the intended granularity/stability trade-off, but do not show
-universal superiority. The public files are obtained from the official TCGA SpliceSeq download and
-the benchmark remains a validation workflow rather than a production-network stage.
+The latest primary TCGA SpliceSeq regression uses 500 discovery-selected ES events, KIRC discovery,
+KIRP tuning and untouched KICH holdout. In the paired rerun, CoSplice and exact
+WGCNA were identical: one broad module, bootstrap ARI `0.883`, KICH
+Zsummary-like preservation `0.281`, and program-score preservation `0.582`.
+The public files are obtained from the official TCGA SpliceSeq download and the benchmark
+remains a validation workflow rather than a production-network stage.
 
 ### Publication head-to-head aggregation
 
 `scripts/run_publication_benchmark.py` combines completed public benchmark tracks without changing
 their underlying module assignments. A JSON manifest identifies each accession, design, input
 contract, validation role, citation and result directory. It writes dataset/method metrics, paired
-CoSplice-tight-versus-WGCNA contrasts, hybrid tight/diffuse coverage and overlap, tight incremental
-programs, external preservation, comparator scope, a claim audit, a PNG scorecard, Markdown/HTML
+CoSplice-versus-WGCNA contrasts, consensus coverage and overlap, external preservation, comparator
+scope, a claim audit, a PNG scorecard, Markdown/HTML
 reports and `parameters.json` with SHA-256 source fingerprints.
 
-Only the CoSplice tight branch, exact R WGCNA and fixed same-PSI baselines are pooled into
-single-partition numerical comparisons. The complete hybrid is evaluated as parallel tight/diffuse
-views rather than assigned a synthetic ARI. WGCNA/Mantel co-splicing, CoSpliceNet, Spycone and MAJIQ
+Only the production CoSplice partition, exact R WGCNA and fixed same-PSI baselines are pooled into
+single-partition numerical comparisons. Legacy tight/diffuse outputs are historical views rather
+than a second production result. WGCNA/Mantel co-splicing, CoSpliceNet, Spycone and MAJIQ
 HET remain domain-specific published references because they use different biological units or
 experimental designs.
 

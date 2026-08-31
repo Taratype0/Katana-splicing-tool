@@ -28,16 +28,47 @@ stable_as:
   min_total_junction_reads: null
   min_psi_variance: null
   min_repeatability: null
+uncertainty:
+  # Production default: use beta-binomial posterior PSI for the WGCNA network
+  # and use replicate/read reliability to remove low-confidence events.
+  # Reliability is not multiplied directly into TOM adjacency.
+  enabled: true
+  network_mode: posterior
+  prior_strength: 1.0
+  reliability_read_scale: 20.0
+  reliability_floor: 0.10
+  reliability_power: 0.50
+  filter_low_reliability: true
+  min_network_reliability: 0.15
 network:
-  engine: sparse_knn
+  # Production default: signed soft adjacency -> exact TOM -> hierarchical
+  # modules. sparse_knn and exact_hierarchical are legacy compatibility modes.
+  engine: tom_hierarchical
+  module_detection: wgcna_blockwise
   method: bicor
   signed: true
   soft_power: 6
   edge_threshold: 0.10
-  module_cut_height: 0.70
+  module_cut_height: 0.80
   min_module_size: 20
   # null means every event passing stable-AS QC enters the network.
   max_events: null
+  # Dense TOM is never silently truncated. Larger inputs fail with an explicit
+  # instruction to raise this audited memory cap or use exact R blockwise WGCNA.
+  tom_dense_max_events: 3000
+  # Static cut settings are retained only for historical configurations.
+  tom_cut_heights: [0.70, 0.75, 0.80, 0.85, 0.90]
+  tom_cut_selection_bootstraps: 10
+  # Published hybrid Dynamic Tree Cut settings used by production.
+  dynamic_cut_height: 0.995
+  dynamic_deep_split: 2
+  dynamic_deep_splits: [1, 2, 3, 4]
+  dynamic_pam_respects_dendro: false
+  wgcna_rscript: null
+  wgcna_merge_cut_height: 0.25
+  # The remaining kNN/community/refinement fields are accepted only for
+  # historical sparse/Leiden and Python compatibility modes. The production
+  # wgcna_blockwise path ignores them.
   knn_neighbors: 50
   # Sparse weighted-TOM-like smoothing. Use none to reproduce the original graph.
   edge_smoothing: shared_neighbor
@@ -82,13 +113,18 @@ validation:
   community_resolutions: [0.75, 1.0, 1.25]
   random_seed: 29
 consensus:
-  # Outer sample-stratified bootstrap. Co-assignment, not aligned module names,
-  # defines the final C01/C02/... consensus modules.
+  # Outer sample-stratified bootstrap estimates event-level module confidence.
+  # The final C01/C02/... partition remains the full-data WGCNA partition.
   bootstrap_iterations: 100
   min_coassignment: 0.70
-  # Final partition uses a sparse co-assignment graph and Leiden parameter
-  # search. hierarchical retains the legacy fixed-threshold behavior.
-  clustering_method: leiden_graph
+  # Production default: preserve the WGCNA partition and annotate bootstrap
+  # confidence. Use backbone_refined_consensus only to reproduce historical
+  # runs that rejected low-confidence boundary events.
+  clustering_method: backbone_confidence_only
+  dynamic_cut_height: 0.995
+  dynamic_deep_splits: [1, 2, 3, 4]
+  dynamic_pam_respects_dendro: false
+  hierarchical_thresholds: [0.50, 0.60, 0.70, 0.80]
   graph_edge_thresholds: [0.50, 0.60, 0.70, 0.80]
   graph_resolutions: [0.50, 0.80, 1.10, 1.40]
   graph_top_k: 50
@@ -121,11 +157,11 @@ external_cohorts: []
 #   genome_build: GRCm39
 #   annotation_version: gencode.vM34
 multiobjective_selection:
-  # Publication-oriented partition selection. Disabled by default so legacy
-  # projects retain their exact internal-consensus behavior.
+  # Optional validation audit of the fixed WGCNA partition. Explicit legacy
+  # consensus modes may still use these objectives for historical reproduction.
   enabled: false
-  # Only tuning cohorts may influence the selected partition. Holdout cohorts
-  # are recorded but never loaded by consensus_modules.
+  # Tuning cohorts contribute audit evidence. Holdout cohorts are recorded but
+  # never loaded by consensus_modules.
   tuning_cohorts: []
   holdout_cohorts: []
   # Use a versioned local GMT reserved for tuning. Confirmatory functional
@@ -134,9 +170,9 @@ multiobjective_selection:
   stability_weight: 0.40
   preservation_weight: 0.35
   functional_weight: 0.25
-  # Functional evidence affects selection only when a candidate reaches the
-  # formal enrichment gate. Otherwise its weight is redistributed over the
-  # internal-quality and preservation objectives.
+  # Functional evidence contributes to the audit only when the formal
+  # enrichment gate is reached. Otherwise its weight is redistributed over
+  # internal-quality and preservation evidence.
   functional_weight_mode: auto_significance
   min_significant_functional_modules: 1
   min_shared_events_per_module: 10

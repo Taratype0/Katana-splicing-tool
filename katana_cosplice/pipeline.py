@@ -386,6 +386,7 @@ class CoSplicePipeline:
             samples = pd.read_csv(required[3], sep="\t")
             result = stable_as_qc(psi, ijc, sjc, samples, self.config.stable_as)
             uncertainty = None
+            n_pre_uncertainty = len(result.stable_psi)
             if self.config.uncertainty.enabled:
                 uncertainty = estimate_beta_binomial_uncertainty(
                     ijc,
@@ -399,6 +400,86 @@ class CoSplicePipeline:
                     uncertainty.event_metrics,
                     how="left",
                     rsuffix="_uncertainty",
+                )
+                result.metrics["stable_as_before_uncertainty"] = result.metrics[
+                    "stable_as"
+                ].astype(bool)
+                result.metrics["passes_uncertainty_reliability"] = (
+                    pd.to_numeric(
+                        result.metrics["network_reliability"], errors="coerce"
+                    )
+                    .fillna(0.0)
+                    .ge(self.config.uncertainty.min_network_reliability)
+                )
+                if self.config.uncertainty.filter_low_reliability:
+                    result.metrics["stable_as"] = (
+                        result.metrics["stable_as_before_uncertainty"]
+                        & result.metrics["passes_uncertainty_reliability"]
+                    )
+                    failed_uncertainty = (
+                        result.metrics["stable_as_before_uncertainty"]
+                        & ~result.metrics["passes_uncertainty_reliability"]
+                    )
+                    result.metrics.loc[failed_uncertainty, "failed_rules"] = (
+                        result.metrics.loc[failed_uncertainty, "failed_rules"]
+                        .astype(str)
+                        .str.strip(",")
+                        .replace("", "read_uncertainty")
+                    )
+                    has_existing = (
+                        failed_uncertainty
+                        & result.metrics["failed_rules"].ne("read_uncertainty")
+                    )
+                    result.metrics.loc[has_existing, "failed_rules"] = (
+                        result.metrics.loc[has_existing, "failed_rules"]
+                        + ",read_uncertainty"
+                    )
+                    retained = result.metrics.index[result.metrics["stable_as"]]
+                    result.stable_psi = result.stable_psi.loc[
+                        result.stable_psi.index.intersection(retained, sort=False)
+                    ]
+                    result.condition_metrics = result.condition_metrics.loc[
+                        result.condition_metrics["event_key"].isin(retained)
+                    ].copy()
+                result.summary = pd.concat(
+                    [
+                        result.summary,
+                        pd.DataFrame(
+                            [
+                                {
+                                    "rule": "passes_uncertainty_reliability",
+                                    "n_passed": int(
+                                        result.metrics[
+                                            "passes_uncertainty_reliability"
+                                        ].sum()
+                                    ),
+                                    "n_failed": int(
+                                        (~result.metrics[
+                                            "passes_uncertainty_reliability"
+                                        ]).sum()
+                                    ),
+                                    "pass_fraction": float(
+                                        result.metrics[
+                                            "passes_uncertainty_reliability"
+                                        ].mean()
+                                    ),
+                                },
+                                {
+                                    "rule": "stable_as_after_uncertainty",
+                                    "n_passed": int(
+                                        result.metrics["stable_as"].sum()
+                                    ),
+                                    "n_failed": int(
+                                        (~result.metrics["stable_as"]).sum()
+                                    ),
+                                    "pass_fraction": float(
+                                        result.metrics["stable_as"].mean()
+                                    ),
+                                },
+                            ]
+                        ),
+                    ],
+                    ignore_index=True,
                 )
             out_dir.mkdir(parents=True, exist_ok=True)
             result.metrics.to_csv(outputs["metrics"], sep="\t", float_format="%.6g")
@@ -427,6 +508,7 @@ class CoSplicePipeline:
                     "fingerprint": stage_fp,
                     "thresholds": thresholds,
                     "n_input_events": len(result.metrics),
+                    "n_stable_events_before_uncertainty": n_pre_uncertainty,
                     "n_stable_events": len(result.stable_psi),
                     "condition_detail_scope": "stable_events_only",
                     "uncertainty": self.config.uncertainty.__dict__,
@@ -647,6 +729,18 @@ class CoSplicePipeline:
         observed_path = self.output / "04_network" / "observed" / "event_module_assignments.tsv"
         samples_path = self.output / "02_matrix" / "sample_metadata_resolved.tsv"
         required = [matrix_path, observed_path, samples_path]
+        uncertainty_path = (
+            self.output
+            / "03_stable_as_qc"
+            / "beta_binomial_event_uncertainty.tsv"
+        )
+        use_reliability = (
+            self.config.uncertainty.enabled
+            and self.config.uncertainty.network_mode
+            in {"raw_reliability_weighted", "posterior_reliability_weighted"}
+        )
+        if use_reliability:
+            required.append(uncertainty_path)
         event_metadata_path = self.output / "02_matrix" / "event_metadata.tsv"
         multiobjective = self.config.multiobjective_selection
         gene_prior_path = (
@@ -706,6 +800,7 @@ class CoSplicePipeline:
             "network_partition": self.config.network.__dict__,
             "consensus": self.config.consensus.__dict__,
             "gene_prior": self.config.gene_prior.__dict__,
+            "uncertainty": self.config.uncertainty.__dict__,
             "multiobjective_selection": multiobjective.__dict__,
             "cohort_roles": {
                 "tuning": list(multiobjective.tuning_cohorts),
@@ -740,12 +835,22 @@ class CoSplicePipeline:
                 if self.config.gene_prior.enabled
                 else None
             )
+            event_reliability = (
+                pd.read_csv(uncertainty_path, sep="\t", index_col=0)[
+                    "network_reliability"
+                ]
+                if use_reliability
+                else None
+            )
             result = build_bootstrap_coassignment_consensus(
                 matrix,
                 observed,
                 samples,
                 self.config.network,
                 self.config.consensus,
+                event_reliability=event_reliability,
+                reliability_floor=self.config.uncertainty.reliability_floor,
+                reliability_power=self.config.uncertainty.reliability_power,
                 gene_prior=gene_prior,
                 gene_prior_weight=self.config.gene_prior.weight,
                 candidate_scorer=candidate_scorer,
@@ -775,6 +880,12 @@ class CoSplicePipeline:
                     "fingerprint": stage_fp,
                     **settings,
                     "generated_plots": [str(path) for path in plots],
+                    "production_partition_policy": (
+                        "wgcna_backbone_with_confidence_annotation"
+                        if self.config.consensus.clustering_method
+                        == "backbone_confidence_only"
+                        else "explicit_legacy_consensus_mode"
+                    ),
                     "selected_partition_parameters": result.parameter_search.loc[
                         result.parameter_search["selected"]
                     ].iloc[0].to_dict(),
@@ -784,16 +895,25 @@ class CoSplicePipeline:
                     },
                     "interpretation_limit": (
                         (
-                            "The partition was selected using internal stability, "
-                            "external preservation in predeclared tuning cohorts and "
-                            "functional coherence from the tuning GMT. Holdout cohorts "
-                            "were not read during selection and remain confirmatory."
+                            "The fixed WGCNA partition was audited using internal "
+                            "stability, external preservation in predeclared tuning "
+                            "cohorts and functional coherence from the tuning GMT. "
+                            "These metrics did not change membership. Holdout cohorts "
+                            "were not read and remain confirmatory."
+                        )
+                        if multiobjective.enabled
+                        and self.config.consensus.clustering_method
+                        == "backbone_confidence_only"
+                        else (
+                            "This explicit legacy consensus mode selected a partition "
+                            "using internal stability and configured tuning evidence. "
+                            "Holdout cohorts were not read and remain confirmatory."
                         )
                         if multiobjective.enabled
                         else (
-                            "Consensus confidence is internal resampling evidence from "
-                            "the discovery cohort. It improves module reproducibility "
-                            "but is not external preservation."
+                            "Bootstrap confidence is internal resampling evidence from "
+                            "the discovery cohort. It annotates the fixed WGCNA "
+                            "partition and is not external preservation."
                         )
                     ),
                 },
@@ -805,7 +925,7 @@ class CoSplicePipeline:
             self._mark(
                 stage,
                 "finished",
-                f"Bootstrap co-assignment consensus finished with {modules} retained modules.",
+                f"Bootstrap confidence finished for {modules} fixed WGCNA modules.",
                 stage_fp,
                 written,
             )

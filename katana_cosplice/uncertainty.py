@@ -104,7 +104,12 @@ def estimate_beta_binomial_uncertainty(
     repeatability = np.ones(len(ijc), dtype=float)
     if qc_metrics is not None:
         aligned = qc_metrics.reindex(ijc.index)
-        for column in ("repeatability", "condition_repeatability", "stability_score"):
+        for column in (
+            "replicate_repeatability",
+            "repeatability",
+            "condition_repeatability",
+            "stability_score",
+        ):
             if column in aligned:
                 candidate = pd.to_numeric(aligned[column], errors="coerce").fillna(0.0)
                 repeatability = candidate.clip(0.0, 1.0).to_numpy(dtype=float)

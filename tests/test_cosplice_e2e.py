@@ -94,6 +94,7 @@ def _full_project(tmp_path: Path) -> CoSpliceConfig:
         batch_column="batch",
         stable_as=StableASConfig(),
         network=NetworkConfig(
+            module_detection="dynamic_tree_cut",
             min_module_size=8,
             knn_neighbors=10,
             bootstrap_iterations=2,
