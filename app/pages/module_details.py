@@ -506,9 +506,17 @@ Purpose:
 CoSplice discovers groups of alternative-splicing events whose sample-level PSI profiles vary together across a sufficiently large multi-condition cohort. It is intended for projects such as Setd2 with many total samples; it is not fit separately inside a single n=3 comparison.
 
 Inputs:
-- rMATS sample-level IncLevel, IJC and SJC values.
+- Matrix source is explicit and fingerprinted:
+  * rMATS event matrix uses sample-level IncLevel, IJC and SJC for compound SE/RI/A3SS/A5SS/MXE events.
+  * BAM competing-junction matrix reads CIGAR N junctions, groups junctions that share a donor or acceptor, and defines usage as junction reads / total reads in that competitor cluster. IJC is the selected junction count and SJC is the cluster total minus that junction.
+- BAM mode requires BAM+BAI for every sample and a project-specific GTF. It retains annotation-independent observed junctions; rMATS is then used as an annotation/differential-evidence layer rather than the matrix universe.
 - Sample metadata with sample_id and condition; optional batch/covariates for a residual network.
 - Stable-AS thresholds for condition coverage, junction-read support, informative PSI range and replicate repeatability.
+
+Interpretation boundary:
+- A BAM junction is not the same statistical unit as one rMATS compound event, so raw event counts from the two modes must not be compared as if they were identical.
+- BAM mode broadens discovery beyond the rMATS event catalogue, but stable-AS QC must still remove low-read, low-dynamic-range and replicate-inconsistent junctions.
+- Network fitting requires at least 15 total samples. Smaller projects can validate matrix construction and stable-AS QC, but should not force a module network.
 
 Independent stages:
 1. Audit resolves sample identity and file coverage.

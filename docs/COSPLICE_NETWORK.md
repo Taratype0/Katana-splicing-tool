@@ -1,6 +1,6 @@
 # Katana-CoSplice
 
-Katana-CoSplice is a standalone Python workflow and an embedded Katana module for discovering **replicate-supported co-splicing programs** from sample-level rMATS outputs.
+Katana-CoSplice is a standalone Python workflow and an embedded Katana module for discovering **replicate-supported co-splicing programs**. Its matrix source is explicit: either sample-level rMATS events or annotation-independent competing junction usage extracted directly from BAM files.
 
 Implementation boundaries, stage contracts, artifact provenance, and annotation extension points are documented in [COSPLICE_ARCHITECTURE.md](COSPLICE_ARCHITECTURE.md).
 
@@ -36,8 +36,8 @@ The network is therefore fit across all selected samples, not independently insi
 
 ## Scientific workflow
 
-1. **Input audit** resolves sample identity, conditions, rMATS bamlists, quant coverage and references.
-2. **Sample-level matrix** extracts PSI, IJC and SJC for exact event identities from rMATS.
+1. **Input audit** resolves sample identity, conditions, rMATS bamlists, BAM/BAI coverage, quant coverage and references.
+2. **Sample-level matrix** either extracts exact rMATS event PSI/IJC/SJC or builds competing-junction usage directly from BAM CIGAR `N` operations.
 3. **Stable-AS QC** filters events using condition coverage, junction-read support, informative PSI range and replicate repeatability.
 4. **Observed network** finds a sparse graph of robust signed PSI relationships across the full cohort, merges redundant module programs, and assigns weak or ambiguous events to `grey` using auditable module-membership criteria.
 5. **Residual network** optionally removes configured covariates and repeats network discovery.
@@ -50,13 +50,22 @@ The network is therefore fit across all selected samples, not independently insi
 12. **Module evidence annotation** overlays cached DEG, rMATS, DEXSeq, DTU and RBP gene-set support without changing PSI-defined modules.
 13. **Method benchmark** compares methods on the same predeclared stable-event universe and records unavailable or degenerate methods explicitly.
 14. **Configured factor contrasts** optionally test a predeclared target-reference effect, reference and target perturbation effects, and their difference-in-differences on stable PSI and cached program scores.
-15. **Report** summarizes cached outputs, warnings and provenance.
+15. **Differential network** compares fixed consensus-module density and edge topology across declared sample conditions with permutation tests and global FDR.
+16. **AS-primary multi-view fusion** optionally reweights existing AS edges with mapped RBP/DTU/isoform evidence; auxiliary evidence cannot create an edge.
+17. **Bayesian preservation** combines density, connectivity, membership and program preservation across external cohorts into conservative module posterior probabilities.
+18. **Report** summarizes cached outputs, warnings and provenance.
+
+The read-count uncertainty stage estimates beta-binomial overdispersion, posterior PSI and
+measurement reliability from replicate IJC/SJC. It is optional and parameter-fingerprinted.
+The default network continues to use Stable-AS PSI because the current Setd2 ablation found no
+edge-stability improvement from posterior replacement or uncertainty weighting. See
+[COSPLICE_METHOD_EXTENSIONS.md](COSPLICE_METHOD_EXTENSIONS.md).
 
 The default engine is a signed robust-correlation k-nearest-neighbor graph with sparse weighted-topological-overlap smoothing, followed by Louvain community discovery. A WGCNA-style refinement layer then merges highly correlated module programs and rejects events with weak kME-style membership. It deliberately reuses established weighted-network principles, but it is not the exact R WGCNA or graphical-lasso implementation.
 
 ## Stable-AS rationale
 
-An rMATS FDR alone does not establish that an event is suitable for a sample-level network. CoSplice also requires that an event:
+An rMATS FDR or an observed BAM junction alone does not establish that an event is suitable for a sample-level network. CoSplice also requires that an event:
 
 - is measured in a sufficient fraction of samples;
 - has sufficient IJC+SJC support;
@@ -72,7 +81,7 @@ The condition-coverage and PSI-range criteria adapt the unsupervised event selec
 - `max_events` is optional and only applies when the user explicitly requests an engineering cap.
 - A robust biweight-style correlation is used by default.
 - The scalable default builds a signed soft-thresholded k-nearest-neighbor graph. Sparse shared-neighbor smoothing uses weighted topological overlap only among local graph candidates; it does not materialize a dense TOM matrix.
-- Multiple neighborhood scales are combined into a consensus edge set. Candidate edges are weighted by PSI-column bootstrap support, edges below `consensus_bootstrap_min_support` are rejected, and repeated Louvain runs downweight unstable community bridges.
+- Multiple neighborhood scales are combined into a consensus edge set. The maximum-k neighbor query is computed once, nested k-scales vote on raw-edge reproducibility, and shared-neighbor smoothing is applied once only after scale consensus. This preserves the declared edge semantics while avoiding redundant nearest-neighbor/TOM passes. Candidate edges are weighted by PSI-column bootstrap support, edges below `consensus_bootstrap_min_support` are rejected, and repeated Louvain runs downweight unstable community bridges.
 - Stability-first mode uses the complete declared `consensus_bootstrap_iterations`; there is no event-count shortcut. Both configured and effective iteration counts are exported, and downstream validation bootstrap remains a separate module-preservation test.
 - Module programs correlated at or above `module_merge_correlation` are merged before final assignment.
 - Adaptive membership uses a robust lower bound estimated inside each current module. The lower bound is constrained by `max(adaptive_membership_floor, 1/sqrt(n_samples))` and the fixed `min_module_membership` ceiling. This is a sample-size-aware heuristic, not a significance threshold.
@@ -131,10 +140,60 @@ katana-cosplice report --config cosplice_config.yaml
 ## Required inputs
 
 - Sample metadata containing `sample` or `sample_id`, plus `condition`.
-- rMATS event tables (`SE`, `RI`, `A3SS`, `A5SS`, `MXE`) with replicate-level `IncLevel1/2`, IJC and SJC fields.
-- rMATS bamlist files or equivalent sample ordering information.
+- `matrix_input.input_mode: rmats_events`: rMATS event tables (`SE`, `RI`, `A3SS`, `A5SS`, `MXE`) with replicate-level `IncLevel1/2`, IJC and SJC fields, plus bamlist files or equivalent sample ordering.
+- `matrix_input.input_mode: bam_junctions`: coordinate-sorted BAM+BAI for every metadata sample and the current project's GTF. rMATS remains required as an event annotation and differential-evidence layer.
 
-Optional inputs include `quant.sf`, GTF, genome FASTA and transcript FASTA. They support downstream mechanism annotation but are not required to build the PSI network.
+In BAM mode, junctions sharing a splice donor or acceptor are connected into competing clusters. For each sample:
+
+```text
+usage = reads supporting one junction / reads supporting all junctions in its competitor cluster
+IJC = reads supporting that junction
+SJC = competitor-cluster reads excluding that junction
+```
+
+This is a LeafCutter-like annotation-independent junction-usage representation, not a reimplementation of LeafCutter differential testing. One BAM junction and one compound rMATS event are different statistical units; their raw event counts must not be compared directly. BAM mode adds observed junctions outside the tested rMATS catalogue, while stable-AS QC controls read support, missingness, dynamic range and replicate consistency before network fitting.
+
+Example configuration:
+
+```yaml
+matrix_input:
+  input_mode: bam_junctions
+  backend: auto
+  min_mapping_quality: 1
+  min_anchor_bp: 8
+  max_intron_length: 500000
+  min_total_junction_reads: 20
+  min_samples_with_reads: 2
+  min_cluster_fraction: 0.001
+  exclude_duplicates: true
+  max_parallel_samples: 3
+```
+
+`backend: auto` prefers local `pysam`, then Ubuntu WSL with `python3-pysam`, then the bundled pure-Python `bamnostic` fallback. Linux/HPC installations should normally use `pysam`; Windows users without WSL can use `bamnostic`, but large BAM scans are slower. Per-sample count caches make unchanged rebuilds fast.
+
+In rMATS mode, `quant.sf`, GTF, genome FASTA and transcript FASTA are optional mechanism-annotation inputs. In BAM mode, GTF is required for project-specific junction annotation; `quant.sf` and the FASTA files remain optional for downstream interpretation.
+
+### BAM-junction versus rMATS functional benchmark
+
+The input-mode benchmark reads completed CoSplice caches and does not rescan BAMs or run a
+network. It compares stable-feature QC, sample structure, within-condition replicate
+similarity, and leave-one-replicate-out condition effects. For significant SE events it also
+compares rMATS dPSI with role-adjusted inclusion/skipping junction usage re-extracted from the
+same BAM alignments. This is orthogonal computational support, not an independent biological
+validation cohort. Compound rMATS events and individual BAM junctions remain different units,
+so their raw event counts are never treated as a direct performance score.
+
+```powershell
+katana-cosplice-input-benchmark `
+  --bam-root E:\results\katana_output\09_cosplice_bam `
+  --rmats-root E:\results\katana_output\09_cosplice_rmats `
+  --output-dir E:\results\katana_output\09_cosplice_input_benchmark `
+  --setd2-method-summary E:\setd2\06c_method_benchmark\method_benchmark_summary.tsv
+```
+
+The optional method summary keeps the input-layer question separate from the network-method
+question: the Ythdc1 track tests BAM versus rMATS representations on the same samples, while a
+sample-rich cohort such as Setd2 tests CoSplice versus exact WGCNA on the same event universe.
 
 For module evidence annotation, `support_root` may point to cached per-comparison
 `gene_level_integrated_candidates.tsv` files and `rbp_gene_set` may point to a custom TSV/CSV. The
@@ -161,7 +220,7 @@ This fits `genotype * DP_status * treatment + batch` using sum contrasts and Typ
 02_matrix/sample_level_sjc_matrix.tsv
 02_matrix/event_metadata.tsv
 02_matrix/sample_metadata_resolved.tsv
-02_matrix/rmats_source_selection.tsv
+02_matrix/matrix_source_selection.tsv
 02_matrix/matrix_integrity_summary.tsv
 03_stable_as_qc/stable_as_event_qc.tsv
 03_stable_as_qc/stable_as_condition_qc.tsv
@@ -283,8 +342,9 @@ Interactions are labelled as attenuated same-direction, enhanced same-direction,
 - Each outer bootstrap performs one network partition; inner edge/community bootstraps are disabled to avoid nested resampling.
 - Pairwise co-assignment is the fraction of bootstraps in which two events occupy the same non-grey module.
 - A top-k sparse co-assignment graph is evaluated over configured edge thresholds and Leiden resolutions. The legacy average-linkage method remains available only through `clustering_method: hierarchical`.
-- Candidate partitions are scored using bootstrap ARI, module membership confidence, retained-event coverage, module-size balance, confidence margin and graph modularity. Explicit limits on grey fraction, largest-module fraction and module count are evaluated before selecting the highest-scoring feasible candidate.
-- Events strongly supported by their graph community are labelled `core`. Events with sufficient mean co-assignment and separation from the next-best module are labelled `peripheral`; ambiguous events remain `grey`.
+- Candidate partitions are scored using mean, median and worst-case bootstrap ARI, module membership confidence, retained-event coverage, module-size balance, confidence margin and graph modularity. Explicit limits on grey fraction, largest-module fraction and module count are evaluated before selecting the highest-scoring feasible candidate.
+- Events strongly supported by their graph community are labelled `core`. Events with sufficient mean co-assignment and separation from the next-best module are labelled `peripheral`. Events with a graph candidate but insufficient consensus confidence are labelled `uncertain`: their candidate assignment remains auditable in `candidate_graph_module` / `analysis_module`, but conservative downstream analysis continues to use `consensus_module=grey`. Events without a retained graph candidate remain `grey`.
+- The default uses 20 stratified sample bootstraps. Higher values such as 50 or 100 are optional sensitivity analyses, not a requirement for routine discovery.
 - Event confidence is mean co-assignment to the selected module; the confidence margin compares that value with the next-best module. `assignment_uncertainty` is one minus confidence.
 - `consensus_parameter_search.tsv` records every candidate and the selected row. No Setd2 labels, conditions or expected biological answer enter the selection score.
 - The complete matrix is stored as compressed NPZ (`event_keys`, `coassignment`); the TSV edge view is intentionally capped for preview.
@@ -303,10 +363,15 @@ follow familiar WGCNA interpretation bands, but this statistic is explicitly not
 
 ## Head-to-head benchmark
 
-The independent `benchmark_methods` stage compares Katana's sparse signed network with a fixed-cut
+The independent `benchmark_methods` stage compares Katana's **tight sparse branch** with a fixed-cut
 Pearson hierarchical baseline, a Ledoit-Wolf shrinkage graphical-lasso partial-correlation baseline,
 and the exact R `WGCNA::blockwiseModules` implementation when Rscript and WGCNA are installed. If R
 or WGCNA is absent, the method is marked unavailable; no Python approximation is presented as WGCNA.
+When a completed `04c_consensus_modules` cache already exists, the benchmark includes the final
+CoSplice bootstrap-consensus modules only if its event universe exactly matches the benchmark
+universe. It never runs consensus automatically and never subsets full-universe modules into a
+top-N benchmark, because module metrics from different discovery universes are not directly
+comparable. A missing or mismatched cache is reported explicitly.
 
 Katana searches `KATANA_RSCRIPT`, `PATH`, the active Python/Conda prefix and sibling Conda
 environments for an R installation containing WGCNA. The benchmark also writes
@@ -353,11 +418,38 @@ bootstrap tables, module assignments, permutation-calibrated preservation result
 In the fixed primary-tumor-only TCGA SpliceSeq regression (150 discovery-selected ES events,
 20 matched bootstraps, 1,000 preservation permutations per module), exact WGCNA was more internally
 stable but collapsed to one broad module in both directions. CoSplice retained two finer modules.
-For KIRC discovery to KIRP validation, its best external `Zsummary_wgcna_like` was 2.190
-(partially preserved); in the reciprocal direction it was 1.798 (not preserved by the configured
+For KIRC discovery to KIRP validation, the 2026-07-29 upgraded rerun produced a best external
+`Zsummary_wgcna_like` of 2.250 (partially preserved); in the reciprocal direction it was 1.800
+(not preserved by the configured
 2.0 boundary). These results support the intended granularity/stability trade-off, but do not show
 universal superiority. The public files are obtained from the official TCGA SpliceSeq download and
 the benchmark remains a validation workflow rather than a production-network stage.
+
+### Publication head-to-head aggregation
+
+`scripts/run_publication_benchmark.py` combines completed public benchmark tracks without changing
+their underlying module assignments. A JSON manifest identifies each accession, design, input
+contract, validation role, citation and result directory. It writes dataset/method metrics, paired
+CoSplice-tight-versus-WGCNA contrasts, hybrid tight/diffuse coverage and overlap, tight incremental
+programs, external preservation, comparator scope, a claim audit, a PNG scorecard, Markdown/HTML
+reports and `parameters.json` with SHA-256 source fingerprints.
+
+Only the CoSplice tight branch, exact R WGCNA and fixed same-PSI baselines are pooled into
+single-partition numerical comparisons. The complete hybrid is evaluated as parallel tight/diffuse
+views rather than assigned a synthetic ARI. WGCNA/Mantel co-splicing, CoSpliceNet, Spycone and MAJIQ
+HET remain domain-specific published references because they use different biological units or
+experimental designs.
+
+```powershell
+python scripts/run_publication_benchmark.py `
+  --manifest configs/publication_benchmark.example.json `
+  --output E:\benchmark_results\publication_head_to_head
+```
+
+The aggregation layer rejects universal-superiority wording. A zero- or one-module partition is
+degenerate and cannot win a stability comparison merely by assigning every event to the same label.
+Direct claims require the identical discovery-selected event universe, valid partitions from both
+methods, matched resampling and, where available, untouched external-cohort preservation.
 
 ## Katana integration
 

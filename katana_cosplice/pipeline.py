@@ -17,10 +17,17 @@ from katana_cosplice.association import (
     summarize_program_scores,
 )
 from katana_cosplice.artifacts import ArtifactManifestStore
-from katana_cosplice.audit import audit_inputs, resolve_rmats_root
+from katana_cosplice.audit import audit_inputs, load_sample_metadata, resolve_rmats_root
 from katana_cosplice.benchmark import render_benchmark_plots, render_benchmark_report, run_method_benchmark
+from katana_cosplice.bayesian_preservation import bayesian_multi_cohort_preservation
 from katana_cosplice.config import CoSpliceConfig
+from katana_cosplice.differential_network import compare_condition_networks
 from katana_cosplice.factor_contrasts import analyze_factor_contrasts, render_factor_contrast_plots
+from katana_cosplice.gene_prior import (
+    build_gene_mantel_prior,
+    load_gene_mantel_prior,
+    save_gene_mantel_prior,
+)
 from katana_cosplice.consensus import (
     build_bootstrap_coassignment_consensus,
     render_consensus_plots,
@@ -31,11 +38,16 @@ from katana_cosplice.hybrid_programs import (
     build_hybrid_programs,
     render_hybrid_program_plots,
 )
+from katana_cosplice.junction_matrix import build_bam_junction_matrices, resolve_bam_sources
 from katana_cosplice.matrix import build_sample_matrices
 from katana_cosplice.meta_analysis import meta_analyze_modules, render_meta_analysis_plots
 from katana_cosplice.module_annotation import annotate_modules, render_module_annotation_plot
 from katana_cosplice.module_interpretation import interpret_modules, render_module_interpretation_plots
 from katana_cosplice.module_models import fit_replicate_aware_models, render_module_statistics_plots
+from katana_cosplice.multiview import fuse_event_edge_views
+from katana_cosplice.multiobjective_selection import (
+    build_multiobjective_candidate_scorer,
+)
 from katana_cosplice.network import fit_network, render_network_plots, residualize_matrix
 from katana_cosplice.qc import stable_as_qc
 from katana_cosplice.preservation import (
@@ -45,6 +57,7 @@ from katana_cosplice.preservation import (
 )
 from katana_cosplice.reporting import build_module_browser, build_validation_pdf, read_cached_table
 from katana_cosplice.stage_registry import stage_spec
+from katana_cosplice.uncertainty import estimate_beta_binomial_uncertainty
 from katana_cosplice.utils import file_signature, fingerprint, write_json
 from katana_cosplice.validation import render_validation_plots, render_validation_report, validate_network_modules
 
@@ -113,6 +126,9 @@ class CoSplicePipeline:
             "fit_module_models": lambda: self.fit_module_models(force=force),
             "meta_analyze_modules": lambda: self.meta_analyze_modules(force=force),
             "factor_contrasts": lambda: self.factor_contrasts(force=force),
+            "differential_network": lambda: self.differential_network(force=force),
+            "multiview_fusion": lambda: self.multiview_fusion(force=force),
+            "bayesian_preservation": lambda: self.bayesian_preservation(force=force),
             "report": self.report,
         }
         return actions[stage]()
@@ -157,25 +173,71 @@ class CoSplicePipeline:
             "sjc": out_dir / "sample_level_sjc_matrix.tsv",
             "events": out_dir / "event_metadata.tsv",
             "samples": out_dir / "sample_metadata_resolved.tsv",
-            "sources": out_dir / "rmats_source_selection.tsv",
+            "sources": out_dir / "matrix_source_selection.tsv",
+            "legacy_sources": out_dir / "rmats_source_selection.tsv",
             "integrity": out_dir / "matrix_integrity_summary.tsv",
             "parameters": out_dir / "parameters.json",
         }
         rmats_root = resolve_rmats_root(self.config.rmats_root)
         tables = list(rmats_root.glob(f"**/*.MATS.{self.config.rmats_mode}.txt"))
         bamlists = list((rmats_root / "bamlist").glob("*_bamlist.txt"))
+        matrix_inputs: list[Path] = [
+            self.config.sample_metadata,
+            *sorted(tables),
+            *sorted(bamlists),
+        ]
+        if self.config.matrix_input.input_mode == "bam_junctions":
+            if self.config.bam_root is None or self.config.gtf is None:
+                raise ValueError("BAM junction matrix mode requires bam_root and gtf")
+            samples = load_sample_metadata(
+                self.config.sample_metadata,
+                self.config.selected_conditions,
+            )
+            bam_sources = resolve_bam_sources(samples, self.config.bam_root)
+            matrix_inputs.extend(Path(value) for value in bam_sources["bam_path"])
+            matrix_inputs.extend(Path(value) for value in bam_sources["bai_path"])
+            matrix_inputs.append(self.config.gtf)
+            outputs.update(
+                {
+                    "junction_counts": out_dir / "junction_count_matrix.tsv",
+                    "junction_clusters": out_dir / "junction_cluster_metadata.tsv",
+                    "rmats_mapping": out_dir / "rmats_junction_annotation.tsv",
+                }
+            )
         stage_fp = self._fingerprint(
             stage,
-            [self.config.sample_metadata, *sorted(tables), *sorted(bamlists)],
-            {"mode": self.config.rmats_mode, "conditions": self.config.selected_conditions},
+            matrix_inputs,
+            {
+                "rmats_mode": self.config.rmats_mode,
+                "conditions": self.config.selected_conditions,
+                "matrix_input": self.config.matrix_input.__dict__,
+            },
         )
         state = self._state().get("stages", {}).get(stage, {})
         if not force and state.get("fingerprint") == stage_fp and all(path.exists() for path in outputs.values()):
             self._mark(stage, "cache_hit", "Loaded existing sample-level matrix cache.", stage_fp, list(outputs.values()))
             return outputs
-        self._mark(stage, "running", "Building sample-level PSI/IJC/SJC matrices.", stage_fp)
+        self._mark(
+            stage,
+            "running",
+            (
+                "Building sample-level BAM junction-usage/read-count matrices."
+                if self.config.matrix_input.input_mode == "bam_junctions"
+                else "Building sample-level rMATS PSI/IJC/SJC matrices."
+            ),
+            stage_fp,
+        )
         try:
-            result = build_sample_matrices(self.config)
+            bam_result = None
+            if self.config.matrix_input.input_mode == "bam_junctions":
+                bam_result = build_bam_junction_matrices(
+                    self.config,
+                    cache_dir=out_dir / "bam_junction_cache",
+                    progress=self._emit,
+                )
+                result = bam_result.matrix
+            else:
+                result = build_sample_matrices(self.config)
             out_dir.mkdir(parents=True, exist_ok=True)
             result.psi.to_csv(outputs["psi"], sep="\t", float_format="%.6g")
             result.ijc.to_csv(outputs["ijc"], sep="\t", float_format="%.6g")
@@ -183,6 +245,18 @@ class CoSplicePipeline:
             result.events.to_csv(outputs["events"], sep="\t", index=False)
             result.samples.to_csv(outputs["samples"], sep="\t", index=False)
             result.sources.to_csv(outputs["sources"], sep="\t", index=False)
+            # Keep the v1 filename so older report readers can open new outputs.
+            result.sources.to_csv(outputs["legacy_sources"], sep="\t", index=False)
+            if bam_result is not None:
+                bam_result.junction_counts.to_csv(
+                    outputs["junction_counts"], sep="\t", float_format="%.6g"
+                )
+                bam_result.clusters.to_csv(
+                    outputs["junction_clusters"], sep="\t", index=False
+                )
+                bam_result.rmats_mapping.to_csv(
+                    outputs["rmats_mapping"], sep="\t", index=False
+                )
             integrity = pd.DataFrame(
                 [
                     {"metric": "n_events", "value": result.psi.shape[0]},
@@ -195,14 +269,66 @@ class CoSplicePipeline:
                     {"metric": "sjc_min", "value": float(result.sjc.min(skipna=True).min(skipna=True))},
                     {"metric": "unique_event_keys", "value": bool(result.psi.index.is_unique)},
                     {"metric": "unique_sample_ids", "value": bool(result.psi.columns.is_unique)},
+                    {
+                        "metric": "matrix_input_mode",
+                        "value": self.config.matrix_input.input_mode,
+                    },
+                    {
+                        "metric": "rmats_annotated_events",
+                        "value": (
+                            int(result.events["rmats_event_count"].fillna(0).gt(0).sum())
+                            if "rmats_event_count" in result.events
+                            else result.psi.shape[0]
+                        ),
+                    },
                 ]
             )
+            if self.config.matrix_input.input_mode == "bam_junctions":
+                rmats_linked = result.events["rmats_event_count"].fillna(0).gt(0)
+                integrity = pd.concat(
+                    [
+                        integrity,
+                        pd.DataFrame(
+                            [
+                                {
+                                    "metric": "bam_only_junctions",
+                                    "value": int((~rmats_linked).sum()),
+                                },
+                                {
+                                    "metric": "gtf_direct_junctions",
+                                    "value": int(
+                                        result.events["annotated_direct_junction"]
+                                        .fillna(False)
+                                        .sum()
+                                    ),
+                                },
+                                {
+                                    "metric": "gene_annotated_junctions",
+                                    "value": int(
+                                        result.events["gene_symbol"].fillna("").ne("").sum()
+                                    ),
+                                },
+                                {
+                                    "metric": "competing_junction_clusters",
+                                    "value": int(result.events["cluster_id"].nunique()),
+                                },
+                            ]
+                        ),
+                    ],
+                    ignore_index=True,
+                )
             integrity.to_csv(outputs["integrity"], sep="\t", index=False)
             write_json(
                 outputs["parameters"],
                 {
                     "fingerprint": stage_fp,
                     "rmats_mode": self.config.rmats_mode,
+                    "matrix_input": self.config.matrix_input.__dict__,
+                    "matrix_semantics": (
+                        "junction reads / donor-or-acceptor competing-cluster reads"
+                        if self.config.matrix_input.input_mode == "bam_junctions"
+                        else "rMATS compound-event IncLevel with IJC/SJC support"
+                    ),
                     "n_events": result.psi.shape[0],
                     "n_samples": result.psi.shape[1],
                     "selected_conditions": self.config.selected_conditions,
@@ -228,8 +354,26 @@ class CoSplicePipeline:
             "matrix": out_dir / "stable_psi_matrix.tsv",
             "parameters": out_dir / "parameters.json",
         }
+        if self.config.uncertainty.enabled:
+            outputs.update(
+                {
+                    "posterior_matrix": out_dir
+                    / "stable_posterior_psi_matrix.tsv",
+                    "uncertainty_events": out_dir
+                    / "beta_binomial_event_uncertainty.tsv",
+                    "uncertainty_samples": out_dir
+                    / "beta_binomial_sample_uncertainty.tsv",
+                }
+            )
         thresholds = self.config.stable_as.resolved()
-        stage_fp = self._fingerprint(stage, required, thresholds)
+        stage_fp = self._fingerprint(
+            stage,
+            required,
+            {
+                "thresholds": thresholds,
+                "uncertainty": self.config.uncertainty.__dict__,
+            },
+        )
         state = self._state().get("stages", {}).get(stage, {})
         if not force and state.get("fingerprint") == stage_fp and all(path.exists() for path in outputs.values()):
             self._mark(stage, "cache_hit", "Loaded existing stable-AS QC cache.", stage_fp, list(outputs.values()))
@@ -241,11 +385,42 @@ class CoSplicePipeline:
             sjc = pd.read_csv(required[2], sep="\t", index_col=0)
             samples = pd.read_csv(required[3], sep="\t")
             result = stable_as_qc(psi, ijc, sjc, samples, self.config.stable_as)
+            uncertainty = None
+            if self.config.uncertainty.enabled:
+                uncertainty = estimate_beta_binomial_uncertainty(
+                    ijc,
+                    sjc,
+                    samples,
+                    result.metrics,
+                    prior_strength=self.config.uncertainty.prior_strength,
+                    reliability_read_scale=self.config.uncertainty.reliability_read_scale,
+                )
+                result.metrics = result.metrics.join(
+                    uncertainty.event_metrics,
+                    how="left",
+                    rsuffix="_uncertainty",
+                )
             out_dir.mkdir(parents=True, exist_ok=True)
             result.metrics.to_csv(outputs["metrics"], sep="\t", float_format="%.6g")
             result.condition_metrics.to_csv(outputs["condition_metrics"], sep="\t", index=False, float_format="%.6g")
             result.summary.to_csv(outputs["summary"], sep="\t", index=False, float_format="%.6g")
             result.stable_psi.to_csv(outputs["matrix"], sep="\t", float_format="%.6g")
+            if uncertainty is not None:
+                stable_keys = result.stable_psi.index
+                uncertainty.posterior_psi.loc[stable_keys].to_csv(
+                    outputs["posterior_matrix"], sep="\t", float_format="%.6g"
+                )
+                uncertainty.event_metrics.loc[stable_keys].to_csv(
+                    outputs["uncertainty_events"], sep="\t", float_format="%.6g"
+                )
+                uncertainty.sample_metrics.loc[
+                    uncertainty.sample_metrics["event_key"].isin(stable_keys)
+                ].to_csv(
+                    outputs["uncertainty_samples"],
+                    sep="\t",
+                    index=False,
+                    float_format="%.6g",
+                )
             write_json(
                 outputs["parameters"],
                 {
@@ -254,6 +429,7 @@ class CoSplicePipeline:
                     "n_input_events": len(result.metrics),
                     "n_stable_events": len(result.stable_psi),
                     "condition_detail_scope": "stable_events_only",
+                    "uncertainty": self.config.uncertainty.__dict__,
                 },
             )
             self._mark(stage, "finished", f"Stable-AS QC retained {len(result.stable_psi)} events.", stage_fp, list(outputs.values()))
@@ -268,9 +444,22 @@ class CoSplicePipeline:
         stage = f"network_{network_name}"
         qc_dir = self.output / "03_stable_as_qc"
         matrix_path = qc_dir / "stable_psi_matrix.tsv"
+        posterior_path = qc_dir / "stable_posterior_psi_matrix.tsv"
+        uncertainty_path = qc_dir / "beta_binomial_event_uncertainty.tsv"
         metrics_path = qc_dir / "stable_as_event_qc.tsv"
         samples_path = self.output / "02_matrix" / "sample_metadata_resolved.tsv"
         required = [matrix_path, metrics_path, samples_path]
+        uncertainty_enabled = self.config.uncertainty.enabled
+        uncertainty_mode = self.config.uncertainty.network_mode
+        if uncertainty_enabled:
+            required.extend([posterior_path, uncertainty_path])
+        gene_prior_enabled = self.config.gene_prior.enabled
+        if gene_prior_enabled:
+            if self.config.gene_prior.exon_count_matrix is None:
+                raise ValueError("Enabled gene_prior requires exon_count_matrix.")
+            required.append(self.config.gene_prior.exon_count_matrix)
+            if self.config.gene_prior.feature_gene_map is not None:
+                required.append(self.config.gene_prior.feature_gene_map)
         if not all(path.exists() for path in required):
             raise FileNotFoundError("Missing input: stable-AS QC not run. Run qc first.")
         out_dir = self.output / "04_network" / network_name
@@ -283,7 +472,25 @@ class CoSplicePipeline:
             "selected": out_dir / "selected_event_matrix.tsv",
             "parameters": out_dir / "parameters.json",
         }
-        settings = self.config.network.__dict__ | {"network_name": network_name, "residual_covariates": self.config.residual_covariates}
+        if gene_prior_enabled:
+            outputs |= {
+                "gene_prior_matrix": out_dir / "gene_mantel_prior_matrix.npz",
+                "gene_prior_genes": out_dir / "gene_mantel_prior_gene_audit.tsv",
+                "gene_prior_events": out_dir / "gene_mantel_prior_event_audit.tsv",
+            }
+        settings = self.config.network.__dict__ | {
+            "network_name": network_name,
+            "residual_covariates": self.config.residual_covariates,
+            "uncertainty": self.config.uncertainty.__dict__,
+            "gene_prior": self.config.gene_prior.__dict__,
+            "matrix_source": (
+                "beta_binomial_posterior_psi"
+                if uncertainty_enabled
+                and uncertainty_mode
+                in {"posterior", "posterior_reliability_weighted"}
+                else "stable_observed_psi"
+            ),
+        }
         stage_fp = self._fingerprint(stage, required, settings)
         state = self._state().get("stages", {}).get(stage, {})
         if not force and state.get("fingerprint") == stage_fp and all(path.exists() for path in outputs.values()):
@@ -291,13 +498,59 @@ class CoSplicePipeline:
             return outputs
         self._mark(stage, "running", f"Fitting {network_name} co-splicing network.", stage_fp)
         try:
-            matrix = pd.read_csv(matrix_path, sep="\t", index_col=0)
+            use_posterior = uncertainty_enabled and uncertainty_mode in {
+                "posterior",
+                "posterior_reliability_weighted",
+            }
+            matrix = pd.read_csv(
+                posterior_path if use_posterior else matrix_path,
+                sep="\t",
+                index_col=0,
+            )
             metrics = pd.read_csv(metrics_path, sep="\t", index_col=0)
             samples = pd.read_csv(samples_path, sep="\t")
             if network_name == "residual":
                 matrix = residualize_matrix(matrix, samples, self.config.residual_covariates)
-            result = fit_network(matrix, metrics, self.config.network, samples=samples)
+            reliability = None
+            use_reliability = uncertainty_enabled and uncertainty_mode in {
+                "raw_reliability_weighted",
+                "posterior_reliability_weighted",
+            }
+            if use_reliability:
+                uncertainty_metrics = pd.read_csv(
+                    uncertainty_path, sep="\t", index_col=0
+                )
+                reliability = uncertainty_metrics["network_reliability"]
+            gene_prior = None
+            if gene_prior_enabled:
+                self._emit(
+                    "Building gene-level Mantel prior from mapped exon profiles; "
+                    "the prior can reinforce existing AS edges only."
+                )
+                gene_prior = build_gene_mantel_prior(
+                    matrix.index,
+                    matrix.columns,
+                    self.config.gene_prior,
+                )
+            result = fit_network(
+                matrix,
+                metrics,
+                self.config.network,
+                samples=samples,
+                event_reliability=reliability,
+                reliability_floor=self.config.uncertainty.reliability_floor,
+                reliability_power=self.config.uncertainty.reliability_power,
+                gene_prior=gene_prior,
+                gene_prior_weight=self.config.gene_prior.weight,
+            )
             out_dir.mkdir(parents=True, exist_ok=True)
+            if gene_prior is not None:
+                save_gene_mantel_prior(
+                    gene_prior,
+                    outputs["gene_prior_matrix"],
+                    outputs["gene_prior_genes"],
+                    outputs["gene_prior_events"],
+                )
             result.assignments.to_csv(outputs["assignments"], sep="\t", index=False)
             result.edges.to_csv(outputs["edges"], sep="\t", index=False, float_format="%.6g")
             result.program_scores.to_csv(outputs["scores"], sep="\t", float_format="%.6g")
@@ -394,11 +647,48 @@ class CoSplicePipeline:
         observed_path = self.output / "04_network" / "observed" / "event_module_assignments.tsv"
         samples_path = self.output / "02_matrix" / "sample_metadata_resolved.tsv"
         required = [matrix_path, observed_path, samples_path]
-        if not all(path.exists() for path in required):
+        event_metadata_path = self.output / "02_matrix" / "event_metadata.tsv"
+        multiobjective = self.config.multiobjective_selection
+        gene_prior_path = (
+            self.output
+            / "04_network"
+            / "observed"
+            / "gene_mantel_prior_matrix.npz"
+        )
+        if self.config.gene_prior.enabled:
+            required.append(gene_prior_path)
+        missing_required = [path for path in required if not path.exists()]
+        if missing_required:
             raise FileNotFoundError(
-                "Missing input: observed network cache is incomplete. Run network_observed first; "
-                "consensus_modules will not run it automatically."
+                "Missing consensus input(s). Run network_observed first; "
+                "consensus_modules will not run it automatically. Missing: "
+                + "; ".join(str(path) for path in missing_required)
             )
+        if multiobjective.enabled:
+            tuning_required = [event_metadata_path]
+            cohort_lookup = {
+                cohort.name: cohort for cohort in self.config.external_cohorts
+            }
+            for cohort_name in multiobjective.tuning_cohorts:
+                cohort = cohort_lookup[cohort_name]
+                tuning_required.extend(
+                    [cohort.psi_matrix, cohort.sample_metadata]
+                )
+            if multiobjective.functional_gene_sets_gmt is not None:
+                tuning_required.append(
+                    multiobjective.functional_gene_sets_gmt
+                )
+            missing_tuning = [
+                path for path in tuning_required if not path.exists()
+            ]
+            if missing_tuning:
+                raise FileNotFoundError(
+                    "Missing multi-objective tuning input(s): "
+                    + "; ".join(str(path) for path in missing_tuning)
+                    + ". consensus_modules will not substitute discovery or "
+                    "holdout data and will not run another stage automatically."
+                )
+            required.extend(tuning_required)
         out_dir = self.output / "04c_consensus_modules"
         outputs = {
             "assignments": out_dir / "consensus_event_module_assignments.tsv",
@@ -409,11 +699,18 @@ class CoSplicePipeline:
             "matrix": out_dir / "bootstrap_coassignment_matrix.npz",
             "diagnostics": out_dir / "consensus_diagnostics.tsv",
             "parameter_search": out_dir / "consensus_parameter_search.tsv",
+            "selection_audit": out_dir / "multiobjective_selection_audit.tsv",
             "parameters": out_dir / "parameters.json",
         }
         settings = {
             "network_partition": self.config.network.__dict__,
             "consensus": self.config.consensus.__dict__,
+            "gene_prior": self.config.gene_prior.__dict__,
+            "multiobjective_selection": multiobjective.__dict__,
+            "cohort_roles": {
+                "tuning": list(multiobjective.tuning_cohorts),
+                "holdout": list(multiobjective.holdout_cohorts),
+            },
             "semantics": "outer_sample_stratified_bootstrap_coassignment",
         }
         stage_fp = self._fingerprint(stage, required, settings)
@@ -427,12 +724,31 @@ class CoSplicePipeline:
             matrix = pd.read_csv(matrix_path, sep="\t", index_col=0)
             observed = pd.read_csv(observed_path, sep="\t", low_memory=False)
             samples = pd.read_csv(samples_path, sep="\t", low_memory=False)
+            candidate_scorer = None
+            if multiobjective.enabled:
+                event_metadata = pd.read_csv(
+                    event_metadata_path, sep="\t", low_memory=False
+                )
+                candidate_scorer = build_multiobjective_candidate_scorer(
+                    matrix,
+                    event_metadata,
+                    self.config.external_cohorts,
+                    multiobjective,
+                )
+            gene_prior = (
+                load_gene_mantel_prior(gene_prior_path, matrix.index)
+                if self.config.gene_prior.enabled
+                else None
+            )
             result = build_bootstrap_coassignment_consensus(
                 matrix,
                 observed,
                 samples,
                 self.config.network,
                 self.config.consensus,
+                gene_prior=gene_prior,
+                gene_prior_weight=self.config.gene_prior.weight,
+                candidate_scorer=candidate_scorer,
                 progress=self._emit,
             )
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -444,6 +760,12 @@ class CoSplicePipeline:
             result.diagnostics.to_csv(outputs["diagnostics"], sep="\t", index=False, float_format="%.6g")
             result.parameter_search.to_csv(
                 outputs["parameter_search"], sep="\t", index=False, float_format="%.6g"
+            )
+            result.selection_audit.to_csv(
+                outputs["selection_audit"],
+                sep="\t",
+                index=False,
+                float_format="%.6g",
             )
             save_coassignment_matrix(result, outputs["matrix"])
             plots = render_consensus_plots(result, out_dir / "plots")
@@ -461,8 +783,18 @@ class CoSplicePipeline:
                         "arrays": ["event_keys", "coassignment"],
                     },
                     "interpretation_limit": (
-                        "Consensus confidence is internal resampling evidence from the discovery cohort. "
-                        "It improves module reproducibility but is not external preservation."
+                        (
+                            "The partition was selected using internal stability, "
+                            "external preservation in predeclared tuning cohorts and "
+                            "functional coherence from the tuning GMT. Holdout cohorts "
+                            "were not read during selection and remain confirmatory."
+                        )
+                        if multiobjective.enabled
+                        else (
+                            "Consensus confidence is internal resampling evidence from "
+                            "the discovery cohort. It improves module reproducibility "
+                            "but is not external preservation."
+                        )
                     ),
                 },
             )
@@ -1879,11 +2211,350 @@ class CoSplicePipeline:
             self._mark(stage, "failed", str(exc), stage_fp)
             raise
 
+    def differential_network(self, force: bool = False) -> dict[str, Path]:
+        """Compare cached module topology across sample conditions."""
+        stage = "differential_network"
+        settings = self.config.differential_network
+        if not settings.enabled:
+            raise ValueError(
+                "Differential co-splicing network is disabled. Set "
+                "differential_network.enabled=true before running 6I."
+            )
+        matrix_path = (
+            self.output / "04_network" / "observed" / "selected_event_matrix.tsv"
+        )
+        samples_path = self.output / "02_matrix" / "sample_metadata_resolved.tsv"
+        assignments_path = (
+            self.output
+            / "04c_consensus_modules"
+            / "consensus_event_module_assignments.tsv"
+        )
+        required = [matrix_path, samples_path, assignments_path]
+        missing = [str(path) for path in required if not path.exists()]
+        if missing:
+            raise FileNotFoundError(
+                "Missing cached input for 6I differential network: "
+                + "; ".join(missing)
+                + ". Run the observed network and consensus modules first. "
+                "6I will not run upstream stages automatically."
+            )
+        out_dir = self.output / "06i_differential_network"
+        outputs = {
+            "modules": out_dir / "module_differential_network.tsv",
+            "events": out_dir / "event_network_rewiring.tsv",
+            "edges": out_dir / "condition_network_edges.tsv",
+            "parameters": out_dir / "parameters.json",
+        }
+        stage_settings = {
+            "differential_network": settings.__dict__,
+            "soft_power": self.config.network.soft_power,
+            "module_source": "bootstrap_coassignment_consensus",
+            "scientific_scope": (
+                "Fixed consensus modules are compared across condition-specific "
+                "networks; this is topology rewiring, not differential mean dPSI."
+            ),
+        }
+        stage_fp = self._fingerprint(stage, required, stage_settings)
+        state = self._state().get("stages", {}).get(stage, {})
+        if (
+            not force
+            and state.get("fingerprint") == stage_fp
+            and all(path.exists() for path in outputs.values())
+        ):
+            self._mark(
+                stage,
+                "cache_hit",
+                "Loaded existing differential co-splicing network cache.",
+                stage_fp,
+                list(outputs.values()),
+            )
+            return outputs
+        self._mark(
+            stage,
+            "running",
+            "Comparing condition-specific network topology from cached modules; "
+            "no upstream analysis is being run.",
+            stage_fp,
+        )
+        try:
+            result = compare_condition_networks(
+                pd.read_csv(matrix_path, sep="\t", index_col=0),
+                pd.read_csv(samples_path, sep="\t", low_memory=False),
+                pd.read_csv(assignments_path, sep="\t", low_memory=False),
+                condition_column=settings.condition_column,
+                min_samples_per_condition=settings.min_samples_per_condition,
+                soft_power=self.config.network.soft_power,
+                shrinkage=settings.shrinkage,
+                permutations=settings.permutations,
+                max_output_edges_per_module_pair=(
+                    settings.max_output_edges_per_module_pair
+                ),
+                random_seed=settings.random_seed,
+            )
+            out_dir.mkdir(parents=True, exist_ok=True)
+            result.module_changes.to_csv(
+                outputs["modules"], sep="\t", index=False, float_format="%.6g"
+            )
+            result.event_rewiring.to_csv(
+                outputs["events"], sep="\t", index=False, float_format="%.6g"
+            )
+            result.condition_edges.to_csv(
+                outputs["edges"], sep="\t", index=False, float_format="%.6g"
+            )
+            write_json(
+                outputs["parameters"],
+                {
+                    "fingerprint": stage_fp,
+                    **stage_settings,
+                    "classification": {
+                        "gained_in_B": "module density is significantly higher in condition B",
+                        "lost_in_B": "module density is significantly lower in condition B",
+                        "rewired": "edge topology changes significantly without a density requirement",
+                        "density_changed_and_rewired": (
+                            "density and edge topology are both significant; inspect "
+                            "the independent boolean columns for direction"
+                        ),
+                        "stable_or_underpowered": "no configured permutation test passed FDR",
+                    },
+                    "multiple_testing": (
+                        "density_FDR and topology_FDR are global across all "
+                        "condition-pair/module tests; *_pairwise_FDR columns are "
+                        "exploratory within-pair diagnostics only"
+                    ),
+                },
+            )
+            self._mark(
+                stage,
+                "finished",
+                f"Differential network finished: {len(result.module_changes):,} "
+                "module-pair tests.",
+                stage_fp,
+                list(outputs.values()),
+            )
+            return outputs
+        except Exception as exc:
+            self._mark(stage, "failed", str(exc), stage_fp)
+            raise
+
+    def multiview_fusion(self, force: bool = False) -> dict[str, Path]:
+        """Reweight cached AS edges with optional event-level evidence layers."""
+        stage = "multiview_fusion"
+        settings = self.config.multiview
+        if not settings.enabled:
+            raise ValueError(
+                "Multi-view graph fusion is disabled. Configure an event feature "
+                "table and auxiliary columns before running 6J."
+            )
+        if settings.event_feature_table is None:
+            raise ValueError("multiview.event_feature_table is required.")
+        edge_path = self.output / "04_network" / "observed" / "network_edges.tsv"
+        required = [edge_path, settings.event_feature_table]
+        missing = [str(path) for path in required if not path.exists()]
+        if missing:
+            raise FileNotFoundError(
+                "Missing cached input for 6J multi-view fusion: "
+                + "; ".join(missing)
+                + ". 6J will not run the AS network or evidence modules automatically."
+            )
+        out_dir = self.output / "06j_multiview_fusion"
+        outputs = {
+            "edges": out_dir / "fused_network_edges.tsv",
+            "assignments": out_dir / "multiview_module_assignments.tsv",
+            "audit": out_dir / "view_audit.tsv",
+            "parameters": out_dir / "parameters.json",
+        }
+        stage_settings = {
+            "multiview": {
+                **settings.__dict__,
+                "event_feature_table": str(settings.event_feature_table),
+            },
+            "fusion_constraint": (
+                "Auxiliary evidence may only reweight an existing AS edge and "
+                "cannot create an edge unsupported by sample-level splice usage."
+            ),
+        }
+        stage_fp = self._fingerprint(stage, required, stage_settings)
+        state = self._state().get("stages", {}).get(stage, {})
+        if (
+            not force
+            and state.get("fingerprint") == stage_fp
+            and all(path.exists() for path in outputs.values())
+        ):
+            self._mark(
+                stage,
+                "cache_hit",
+                "Loaded existing multi-view graph-fusion cache.",
+                stage_fp,
+                list(outputs.values()),
+            )
+            return outputs
+        self._mark(
+            stage,
+            "running",
+            "Reweighting cached AS edges with configured auxiliary views; no "
+            "upstream analysis is being run.",
+            stage_fp,
+        )
+        try:
+            result = fuse_event_edge_views(
+                pd.read_csv(edge_path, sep="\t", low_memory=False),
+                pd.read_csv(settings.event_feature_table, sep="\t", low_memory=False),
+                auxiliary_columns=settings.auxiliary_columns,
+                as_weight=settings.as_weight,
+                auxiliary_weights=settings.auxiliary_weights,
+                edge_threshold=settings.edge_threshold,
+                min_module_size=settings.min_module_size,
+                resolution=settings.resolution,
+            )
+            out_dir.mkdir(parents=True, exist_ok=True)
+            result.fused_edges.to_csv(
+                outputs["edges"], sep="\t", index=False, float_format="%.6g"
+            )
+            result.assignments.to_csv(
+                outputs["assignments"], sep="\t", index=False, float_format="%.6g"
+            )
+            result.view_audit.to_csv(
+                outputs["audit"], sep="\t", index=False, float_format="%.6g"
+            )
+            write_json(
+                outputs["parameters"],
+                {
+                    "fingerprint": stage_fp,
+                    **stage_settings,
+                    "n_fused_edges": len(result.fused_edges),
+                    "n_retained_fused_edges": int(
+                        result.fused_edges["retained_for_clustering"].sum()
+                    )
+                    if "retained_for_clustering" in result.fused_edges
+                    else 0,
+                    "n_non_grey_modules": int(
+                        result.assignments["multiview_module"]
+                        .loc[
+                            result.assignments["multiview_module"].ne("grey")
+                        ]
+                        .nunique()
+                    )
+                    if not result.assignments.empty
+                    else 0,
+                },
+            )
+            self._mark(
+                stage,
+                "finished",
+                f"Multi-view fusion finished: {len(result.fused_edges):,} cached "
+                "AS edges evaluated.",
+                stage_fp,
+                list(outputs.values()),
+            )
+            return outputs
+        except Exception as exc:
+            self._mark(stage, "failed", str(exc), stage_fp)
+            raise
+
+    def bayesian_preservation(self, force: bool = False) -> dict[str, Path]:
+        """Combine cached external-cohort preservation evidence hierarchically."""
+        stage = "bayesian_preservation"
+        settings = self.config.bayesian_preservation
+        if not settings.enabled:
+            raise ValueError(
+                "Bayesian cross-cohort preservation is disabled. Set "
+                "bayesian_preservation.enabled=true before running 6K."
+            )
+        preservation_path = (
+            self.output
+            / "06d_external_preservation"
+            / "external_module_preservation.tsv"
+        )
+        required = [preservation_path]
+        if not preservation_path.exists():
+            raise FileNotFoundError(
+                "Missing cached input for 6K Bayesian preservation. Run 6D "
+                "external preservation first; 6K will not run it automatically."
+            )
+        out_dir = self.output / "06k_bayesian_preservation"
+        outputs = {
+            "modules": out_dir / "module_preservation_posterior.tsv",
+            "metrics": out_dir / "metric_preservation_posterior.tsv",
+            "parameters": out_dir / "parameters.json",
+        }
+        stage_settings = {
+            "bayesian_preservation": settings.__dict__,
+            "input_scope": "cached external module-preservation statistics",
+        }
+        stage_fp = self._fingerprint(stage, required, stage_settings)
+        state = self._state().get("stages", {}).get(stage, {})
+        if (
+            not force
+            and state.get("fingerprint") == stage_fp
+            and all(path.exists() for path in outputs.values())
+        ):
+            self._mark(
+                stage,
+                "cache_hit",
+                "Loaded existing Bayesian preservation cache.",
+                stage_fp,
+                list(outputs.values()),
+            )
+            return outputs
+        self._mark(
+            stage,
+            "running",
+            "Combining cached cross-cohort preservation evidence; no cohort "
+            "projection is being rerun.",
+            stage_fp,
+        )
+        try:
+            preservation = pd.read_csv(
+                preservation_path, sep="\t", low_memory=False
+            )
+            result = bayesian_multi_cohort_preservation(
+                preservation,
+                prior_sd=settings.prior_sd,
+                tau_scale=settings.tau_scale,
+                grid_size=settings.grid_size,
+            )
+            out_dir.mkdir(parents=True, exist_ok=True)
+            result.module_posteriors.to_csv(
+                outputs["modules"], sep="\t", index=False, float_format="%.6g"
+            )
+            result.metric_posteriors.to_csv(
+                outputs["metrics"], sep="\t", index=False, float_format="%.6g"
+            )
+            write_json(
+                outputs["parameters"],
+                {
+                    "fingerprint": stage_fp,
+                    **stage_settings,
+                    "classification_scope": (
+                        "Posterior preservation probability integrates density, "
+                        "connectivity, membership and program support. It does not "
+                        "replace inspection of cohort-specific effects."
+                    ),
+                },
+            )
+            self._mark(
+                stage,
+                "finished",
+                f"Bayesian preservation finished for "
+                f"{len(result.module_posteriors):,} modules.",
+                stage_fp,
+                list(outputs.values()),
+            )
+            return outputs
+        except Exception as exc:
+            self._mark(stage, "failed", str(exc), stage_fp)
+            raise
+
     def benchmark_methods(self, force: bool = False) -> dict[str, Path]:
         stage = "benchmark_methods"
         matrix_path = self.output / "03_stable_as_qc" / "stable_psi_matrix.tsv"
         qc_path = self.output / "03_stable_as_qc" / "stable_as_event_qc.tsv"
         samples_path = self.output / "02_matrix" / "sample_metadata_resolved.tsv"
+        consensus_path = (
+            self.output
+            / "04c_consensus_modules"
+            / "consensus_event_module_assignments.tsv"
+        )
         required = [matrix_path, qc_path, samples_path]
         if not all(path.exists() for path in required):
             raise FileNotFoundError("Missing input: Stable-AS QC cache is incomplete. Run matrix and stable_qc first.")
@@ -1904,8 +2575,15 @@ class CoSplicePipeline:
             "network": self.config.network.__dict__,
             "benchmark": self.config.benchmark.__dict__,
             "comparison_semantics": "same_input_internal_head_to_head",
+            "final_consensus_cache": (
+                str(consensus_path) if consensus_path.exists() else "not_available"
+            ),
         }
-        stage_fp = self._fingerprint(stage, required, settings)
+        fingerprint_inputs = [
+            *required,
+            *([consensus_path] if consensus_path.exists() else []),
+        ]
+        stage_fp = self._fingerprint(stage, fingerprint_inputs, settings)
         state = self._state().get("stages", {}).get(stage, {})
         if not force and state.get("fingerprint") == stage_fp and all(path.exists() for path in outputs.values()):
             cached = [*outputs.values(), *sorted((out_dir / "plots").glob("*.png"))]
@@ -1916,12 +2594,18 @@ class CoSplicePipeline:
             matrix = pd.read_csv(matrix_path, sep="\t", index_col=0)
             qc = pd.read_csv(qc_path, sep="\t", low_memory=False)
             samples = pd.read_csv(samples_path, sep="\t", low_memory=False)
+            consensus_assignments = (
+                pd.read_csv(consensus_path, sep="\t", low_memory=False)
+                if consensus_path.exists()
+                else None
+            )
             result = run_method_benchmark(
                 matrix,
                 qc,
                 samples,
                 self.config.network,
                 self.config.benchmark,
+                consensus_assignments=consensus_assignments,
                 progress=self._emit,
             )
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -1947,6 +2631,13 @@ class CoSplicePipeline:
                         "Internal same-cohort benchmark only. Higher internal stability or separation does not prove "
                         "external biological superiority; independent-cohort module preservation remains required."
                     ),
+                    "consensus_semantics": (
+                        "Cached final consensus is ranked only when 04c exists and its event "
+                        "universe exactly matches the benchmark universe. A full-universe "
+                        "consensus is not scored on a top-N subset because the resulting module "
+                        "metrics are not comparable. This benchmark never triggers "
+                        "consensus_modules automatically."
+                    ),
                 },
             )
             written = [*outputs.values(), *plots]
@@ -1968,7 +2659,6 @@ class CoSplicePipeline:
         if include_residual and self.config.residual_covariates:
             self.run_stage("network_residual", force=force)
             self.run_stage("associate_residual", force=force)
-        self.run_stage("hybrid_programs", force=force)
         self.run_stage("validate_modules", force=force)
         self.run_stage("annotate_modules", force=force)
         self.run_stage("benchmark_methods", force=force)
@@ -1978,4 +2668,10 @@ class CoSplicePipeline:
         self.run_stage("meta_analyze_modules", force=force)
         if self.config.factor_contrasts.enabled:
             self.run_stage("factor_contrasts", force=force)
+        if self.config.differential_network.enabled:
+            self.run_stage("differential_network", force=force)
+        if self.config.multiview.enabled:
+            self.run_stage("multiview_fusion", force=force)
+        if self.config.bayesian_preservation.enabled:
+            self.run_stage("bayesian_preservation", force=force)
         self.run_stage("report")

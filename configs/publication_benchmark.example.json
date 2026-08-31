@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "benchmark_title": "Katana CoSplice publication head-to-head benchmark",
+  "datasets": [
+    {
+      "dataset_id": "public_bulk_psi",
+      "accession": "GSE-or-TCGA-accession",
+      "result_dir": "../benchmark_results/public_bulk_psi",
+      "data_type": "bulk RNA-seq event-by-sample PSI",
+      "design": "public discovery cohort",
+      "validation_role": "same-input method comparison",
+      "citation_url": "https://www.ncbi.nlm.nih.gov/geo/",
+      "notes": "Run scripts/benchmark_external_cosplice.py first."
+    },
+    {
+      "dataset_id": "public_discovery_to_external",
+      "accession": "TCGA-SpliceSeq",
+      "result_dir": "../benchmark_results/public_discovery_to_external",
+      "data_type": "bulk RNA-seq event-by-sample PSI",
+      "design": "discovery cohort projected into an untouched external cohort",
+      "validation_role": "external module preservation",
+      "citation_url": "https://bioinformatics.mdanderson.org/TCGASpliceSeq/",
+      "notes": "Run scripts/benchmark_public_spliceseq.py first."
+    }
+  ]
+}

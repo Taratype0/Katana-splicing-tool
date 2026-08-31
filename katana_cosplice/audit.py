@@ -165,10 +165,27 @@ def audit_inputs(config: CoSpliceConfig) -> AuditResult:
     for key, path in [("gtf", config.gtf), ("genome_fasta", config.genome_fasta), ("transcript_fasta", config.transcript_fasta)]:
         add(key, bool(path and path.exists()), "info", str(path or "not configured"))
 
-    local_bams = []
+    local_bams: list[Path] = []
     if config.bam_root and config.bam_root.exists():
         local_bams = list(config.bam_root.glob("**/*.bam"))
-    add("local_bam_coverage", len(local_bams) >= len(samples), "info", f"local_bams={len(local_bams)}; not required for PSI-network fitting")
+    local_bam_ids = {normalize_sample_id(path.name) for path in local_bams}
+    missing_local_bams = sorted(metadata_samples.difference(local_bam_ids))
+    bam_mode = config.matrix_input.input_mode == "bam_junctions"
+    add(
+        "local_bam_coverage",
+        not missing_local_bams,
+        "error" if bam_mode else "info",
+        (
+            f"input_mode={config.matrix_input.input_mode}; local_bams={len(local_bams)}; "
+            f"missing={missing_local_bams}"
+        ),
+    )
+    add(
+        "bam_junction_gtf",
+        bool(config.gtf and config.gtf.exists()),
+        "error" if bam_mode else "info",
+        str(config.gtf or "not configured"),
+    )
 
     missing_covariates = [column for column in config.residual_covariates if column not in samples.columns]
     add("residual_covariates", not missing_covariates, "error", f"configured={config.residual_covariates}, missing={missing_covariates}")

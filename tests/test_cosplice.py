@@ -398,9 +398,24 @@ def test_bootstrap_coassignment_builds_confident_consensus_modules() -> None:
     assert len(result.bootstrap_runs) == 4
     assert "consensus_membership_confidence" in result.assignments
     assert "membership_role" in result.assignments
-    assert set(result.assignments["membership_role"]).issubset({"core", "peripheral", "grey"})
+    assert set(result.assignments["membership_role"]).issubset(
+        {"core", "peripheral", "uncertain", "grey"}
+    )
+    assert {
+        "candidate_graph_module",
+        "analysis_module",
+        "analysis_assignment_scope",
+    }.issubset(result.assignments)
+    assert set(result.assignments["analysis_assignment_scope"]).issubset(
+        {"conservative_consensus", "exploratory_uncertain", "unassigned"}
+    )
     assert result.parameter_search["selected"].sum() == 1
-    assert {"edge_threshold", "resolution", "selection_score"}.issubset(result.parameter_search)
+    assert {
+        "edge_threshold",
+        "resolution",
+        "selection_score",
+        "robust_bootstrap_stability",
+    }.issubset(result.parameter_search)
 
 
 def test_hybrid_programs_retain_tight_and_diffuse_assignments() -> None:
@@ -802,6 +817,164 @@ def test_method_benchmark_uses_one_shared_event_universe() -> None:
     assert "claim_scope" in result.method_interpretation
     assert len(result.bootstrap_stability) == 2 * 3
     assert not result.module_matching.empty
+
+
+def test_method_benchmark_accepts_read_only_dataframe_storage() -> None:
+    rng = np.random.default_rng(190)
+    sample_ids = [f"S{index:02d}" for index in range(12)]
+    values = rng.uniform(0.05, 0.95, size=(24, 12))
+    values.setflags(write=False)
+    matrix = pd.DataFrame(
+        values,
+        index=[f"E{index:03d}" for index in range(24)],
+        columns=sample_ids,
+        copy=False,
+    )
+    qc = pd.DataFrame(
+        {
+            "event_key": matrix.index,
+            "stability_score": np.linspace(1.0, 0.1, len(matrix)),
+        }
+    )
+    samples = pd.DataFrame(
+        {
+            "sample_id": sample_ids,
+            "condition": np.repeat(["A", "B", "C", "D"], 3),
+        }
+    )
+
+    result = run_method_benchmark(
+        matrix,
+        qc,
+        samples,
+        NetworkConfig(
+            min_module_size=4,
+            knn_neighbors=5,
+            edge_threshold=0.05,
+            bootstrap_iterations=0,
+        ),
+        BenchmarkConfig(
+            methods=["katana_sparse"],
+            max_events=24,
+            bootstrap_iterations=0,
+            neutral_knn_neighbors=5,
+        ),
+    )
+
+    assert result.method_summary.iloc[0]["status"] in {"finished", "degenerate"}
+
+
+def test_method_benchmark_includes_cached_final_consensus_without_rebuilding() -> None:
+    rng = np.random.default_rng(191)
+    sample_ids = [f"S{index:02d}" for index in range(18)]
+    conditions = np.repeat(["A", "B", "C", "D", "E", "F"], 3)
+    latent_a = np.repeat(np.linspace(0.15, 0.85, 6), 3)
+    latent_b = np.repeat(np.linspace(0.85, 0.15, 6), 3)
+    matrix = pd.DataFrame(
+        np.clip(
+            np.vstack(
+                [latent_a + rng.normal(0, 0.02, 18) for _ in range(20)]
+                + [latent_b + rng.normal(0, 0.02, 18) for _ in range(20)]
+            ),
+            0.01,
+            0.99,
+        ),
+        index=[f"E{index:03d}" for index in range(40)],
+        columns=sample_ids,
+    )
+    qc = pd.DataFrame(
+        {
+            "event_key": matrix.index,
+            "stability_score": np.linspace(1.0, 0.1, len(matrix)),
+        }
+    )
+    samples = pd.DataFrame({"sample_id": sample_ids, "condition": conditions})
+    consensus = pd.DataFrame(
+        {
+            "event_key": matrix.index,
+            "consensus_module": ["C01"] * 20 + ["C02"] * 20,
+        }
+    )
+    result = run_method_benchmark(
+        matrix,
+        qc,
+        samples,
+        NetworkConfig(
+            min_module_size=5,
+            knn_neighbors=8,
+            consensus_knn_neighbors=[6, 8],
+            consensus_bootstrap_iterations=0,
+            community_consensus_runs=1,
+            edge_threshold=0.05,
+            bootstrap_iterations=0,
+        ),
+        BenchmarkConfig(
+            methods=["katana_sparse"],
+            max_events=40,
+            bootstrap_iterations=2,
+            neutral_knn_neighbors=8,
+        ),
+        consensus_assignments=consensus,
+    )
+
+    assert "module_katana_consensus" in result.assignments
+    consensus_summary = result.method_summary.set_index("method").loc["katana_consensus"]
+    assert consensus_summary["status"] == "finished"
+    assert np.isfinite(consensus_summary["mean_bootstrap_ARI"])
+    assert set(result.bootstrap_stability["method"]) == {
+        "katana_sparse",
+        "katana_consensus",
+    }
+    audit = result.method_audit.set_index("method").loc["katana_consensus"]
+    assert "loaded from cache" in audit["message"]
+
+
+def test_method_benchmark_rejects_consensus_from_different_event_universe() -> None:
+    sample_ids = [f"S{index}" for index in range(12)]
+    matrix = pd.DataFrame(
+        np.random.default_rng(17).normal(size=(20, 12)),
+        index=[f"E{index:03d}" for index in range(20)],
+        columns=sample_ids,
+    )
+    qc = pd.DataFrame(
+        {"event_key": matrix.index, "stability_score": np.arange(20, 0, -1)}
+    )
+    samples = pd.DataFrame(
+        {"sample_id": sample_ids, "condition": ["A"] * 6 + ["B"] * 6}
+    )
+    consensus = pd.DataFrame(
+        {
+            "event_key": [*matrix.index, "EXTRA_EVENT"],
+            "consensus_module": ["C01"] * 10 + ["C02"] * 11,
+        }
+    )
+    result = run_method_benchmark(
+        matrix,
+        qc,
+        samples,
+        NetworkConfig(
+            min_module_size=3,
+            knn_neighbors=5,
+            consensus_knn_neighbors=[5],
+            consensus_bootstrap_iterations=0,
+            community_consensus_runs=1,
+            bootstrap_iterations=0,
+        ),
+        BenchmarkConfig(
+            methods=["katana_sparse"],
+            max_events=20,
+            bootstrap_iterations=1,
+            neutral_knn_neighbors=5,
+        ),
+        consensus_assignments=consensus,
+    )
+
+    consensus_summary = result.method_summary.set_index("method").loc[
+        "katana_consensus"
+    ]
+    assert consensus_summary["status"] == "unavailable"
+    audit = result.method_audit.set_index("method").loc["katana_consensus"]
+    assert "different event universe" in audit["message"]
 
 
 def test_shared_neighbor_smoothing_is_sparse_and_auditable() -> None:

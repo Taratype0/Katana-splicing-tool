@@ -222,10 +222,31 @@ def annotate_modules(
     summary_rows: list[dict[str, object]] = []
     for module, module_events in events.groupby("module", sort=True):
         module_genes = set(module_events["gene_key"])
+        per_gene_events = (
+            module_events.groupby("gene_key", observed=True)["event_key"]
+            .nunique()
+            .sort_values(ascending=False)
+        )
+        event_count = int(per_gene_events.sum())
+        gene_count = int(len(per_gene_events))
+        gene_event_shares = per_gene_events.to_numpy(float) / max(event_count, 1)
+        positive_shares = gene_event_shares[gene_event_shares > 0]
+        effective_gene_count = float(
+            np.exp(-(positive_shares * np.log(positive_shares)).sum())
+        )
         row: dict[str, object] = {
             "module": module,
-            "n_events": module_events["event_key"].nunique(),
-            "n_genes": len(module_genes),
+            "n_events": event_count,
+            "n_genes": gene_count,
+            "events_per_unique_gene": event_count / max(gene_count, 1),
+            "top_gene_event_fraction": (
+                float(gene_event_shares[0]) if len(gene_event_shares) else np.nan
+            ),
+            "effective_gene_count": effective_gene_count,
+            "effective_gene_fraction": effective_gene_count / max(gene_count, 1),
+            "multi_event_gene_fraction": (
+                float(per_gene_events.gt(1).mean()) if gene_count else np.nan
+            ),
             "event_types": ";".join(sorted(set(module_events["event_type"].astype(str)))),
         }
         for label, selected in evidence_sets.items():

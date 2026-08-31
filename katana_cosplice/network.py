@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import matplotlib
 matplotlib.use("Agg")
@@ -16,6 +17,9 @@ from scipy.spatial.distance import squareform
 from sklearn.neighbors import NearestNeighbors
 
 from katana_cosplice.config import NetworkConfig
+
+if TYPE_CHECKING:
+    from katana_cosplice.gene_prior import GeneMantelPrior
 
 
 @dataclass
@@ -102,11 +106,40 @@ def _sparse_knn_edges(
     model = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine", algorithm="brute", n_jobs=-1)
     model.fit(profiles)
     distances, indices = model.kneighbors(profiles, return_distance=True)
+    negative_queries: tuple[np.ndarray, np.ndarray] | None = None
+    if not settings.signed:
+        negative_queries = model.kneighbors(-profiles, return_distance=True)
+    rows, cols, correlations, adjacencies = _raw_knn_edges_from_queries(
+        distances,
+        indices,
+        settings,
+        negative_queries,
+    )
+    overlaps = np.zeros(len(rows), dtype=float)
+    if settings.edge_smoothing == "shared_neighbor" and len(rows):
+        rows, cols, correlations, adjacencies, overlaps = _shared_neighbor_smoothing(
+            profiles,
+            rows,
+            cols,
+            correlations,
+            adjacencies,
+            settings,
+        )
+    return rows, cols, correlations, adjacencies, overlaps
+
+
+def _raw_knn_edges_from_queries(
+    distances: np.ndarray,
+    indices: np.ndarray,
+    settings: NetworkConfig,
+    negative_queries: tuple[np.ndarray, np.ndarray] | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Build raw sparse edges from a reusable nearest-neighbor query."""
 
     edge_map: dict[tuple[int, int], tuple[float, float]] = {}
 
     def collect(query_distances: np.ndarray, query_indices: np.ndarray, negate: bool = False) -> None:
-        for source in range(n_events):
+        for source in range(len(query_distances)):
             for distance, target in zip(query_distances[source], query_indices[source], strict=True):
                 target = int(target)
                 if source == target:
@@ -124,29 +157,19 @@ def _sparse_knn_edges(
                     edge_map[pair] = (correlation, adjacency)
 
     collect(distances, indices)
-    if not settings.signed:
-        negative_distances, negative_indices = model.kneighbors(-profiles, return_distance=True)
+    if negative_queries is not None:
+        negative_distances, negative_indices = negative_queries
         collect(negative_distances, negative_indices, negate=True)
 
     if not edge_map:
         empty_int = np.asarray([], dtype=int)
         empty_float = np.asarray([], dtype=float)
-        return empty_int, empty_int, empty_float, empty_float, empty_float
+        return empty_int, empty_int, empty_float, empty_float
     pairs = np.asarray(list(edge_map), dtype=int)
     values = np.asarray(list(edge_map.values()), dtype=float)
     rows, cols = pairs[:, 0], pairs[:, 1]
     correlations, adjacencies = values[:, 0], values[:, 1]
-    overlaps = np.zeros(len(rows), dtype=float)
-    if settings.edge_smoothing == "shared_neighbor" and len(rows):
-        rows, cols, correlations, adjacencies, overlaps = _shared_neighbor_smoothing(
-            profiles,
-            rows,
-            cols,
-            correlations,
-            adjacencies,
-            settings,
-        )
-    return rows, cols, correlations, adjacencies, overlaps
+    return rows, cols, correlations, adjacencies
 
 
 def _multi_k_consensus_edges(
@@ -160,20 +183,47 @@ def _multi_k_consensus_edges(
             for value in settings.consensus_knn_neighbors
         }
     )
-    edge_values: dict[tuple[int, int], list[tuple[float, float, float]]] = {}
+    profiles = _standardized_profiles(matrix, settings.method)
+    max_neighbors = max(neighbor_values)
+    model = NearestNeighbors(
+        n_neighbors=min(len(matrix), max_neighbors + 1),
+        metric="cosine",
+        algorithm="brute",
+        n_jobs=-1,
+    ).fit(profiles)
+    all_distances, all_indices = model.kneighbors(profiles, return_distance=True)
+    all_negative: tuple[np.ndarray, np.ndarray] | None = None
+    if not settings.signed:
+        all_negative = model.kneighbors(-profiles, return_distance=True)
+    edge_values: dict[tuple[int, int], list[tuple[float, float]]] = {}
     for neighbors in neighbor_values:
-        variant = replace(settings, knn_neighbors=neighbors, multi_k_consensus=False)
-        rows, cols, correlations, adjacencies, overlaps = _sparse_knn_edges(matrix, variant)
-        for row, col, correlation, adjacency, overlap in zip(
+        query_width = min(all_distances.shape[1], neighbors + 1)
+        negative = (
+            (all_negative[0][:, :query_width], all_negative[1][:, :query_width])
+            if all_negative is not None
+            else None
+        )
+        variant = replace(
+            settings,
+            knn_neighbors=neighbors,
+            multi_k_consensus=False,
+            edge_smoothing="none",
+        )
+        rows, cols, correlations, adjacencies = _raw_knn_edges_from_queries(
+            all_distances[:, :query_width],
+            all_indices[:, :query_width],
+            variant,
+            negative,
+        )
+        for row, col, correlation, adjacency in zip(
             rows,
             cols,
             correlations,
             adjacencies,
-            overlaps,
             strict=True,
         ):
             edge_values.setdefault((int(row), int(col)), []).append(
-                (float(correlation), float(adjacency), float(overlap))
+                (float(correlation), float(adjacency))
             )
     retained: list[tuple[int, int, float, float, float, float]] = []
     n_scales = len(neighbor_values)
@@ -191,7 +241,7 @@ def _multi_k_consensus_edges(
                 col,
                 float(array[:, 0].mean()),
                 adjacency,
-                float(array[:, 2].mean()),
+                0.0,
                 support,
             )
         )
@@ -200,13 +250,39 @@ def _multi_k_consensus_edges(
         empty_float = np.asarray([], dtype=float)
         return empty_int, empty_int, empty_float, empty_float, empty_float, empty_float
     values = np.asarray(retained, dtype=float)
+    rows = values[:, 0].astype(int)
+    cols = values[:, 1].astype(int)
+    correlations = values[:, 2]
+    adjacencies = values[:, 3]
+    overlaps = values[:, 4]
+    support_lookup = {
+        (int(row), int(col)): float(support)
+        for row, col, support in zip(rows, cols, values[:, 5], strict=True)
+    }
+    if settings.edge_smoothing == "shared_neighbor" and len(rows):
+        rows, cols, correlations, adjacencies, overlaps = _shared_neighbor_smoothing(
+            profiles,
+            rows,
+            cols,
+            correlations,
+            adjacencies,
+            settings,
+            allow_new_edges=False,
+        )
+    support = np.asarray(
+        [
+            support_lookup[(min(int(row), int(col)), max(int(row), int(col)))]
+            for row, col in zip(rows, cols, strict=True)
+        ],
+        dtype=float,
+    )
     return (
-        values[:, 0].astype(int),
-        values[:, 1].astype(int),
-        values[:, 2],
-        values[:, 3],
-        values[:, 4],
-        values[:, 5],
+        rows,
+        cols,
+        correlations,
+        adjacencies,
+        overlaps,
+        support,
     )
 
 
@@ -227,6 +303,8 @@ def _shared_neighbor_smoothing(
     correlations: np.ndarray,
     adjacencies: np.ndarray,
     settings: NetworkConfig,
+    *,
+    allow_new_edges: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Add sparse weighted topological-overlap edges without materializing dense TOM."""
     n_events = len(profiles)
@@ -275,6 +353,8 @@ def _shared_neighbor_smoothing(
                 target = int(candidates[index])
                 pair = (source, target) if source < target else (target, source)
                 previous = edge_map.get(pair)
+                if previous is None and not allow_new_edges:
+                    continue
                 candidate_value = (float(smoothed[index]), float(overlap[index]))
                 if previous is None or candidate_value[0] > previous[0]:
                     edge_map[pair] = candidate_value
@@ -302,6 +382,8 @@ def _sparse_edge_table(
     graph_bootstrap_support: np.ndarray,
     event_keys: list[str],
     max_edges: int,
+    base_as_adjacencies: np.ndarray | None = None,
+    gene_prior_values: np.ndarray | None = None,
 ) -> pd.DataFrame:
     if len(rows) == 0:
         return pd.DataFrame(
@@ -330,7 +412,39 @@ def _sparse_edge_table(
             "graph_bootstrap_support": graph_bootstrap_support[selected],
         }
     )
+    if base_as_adjacencies is not None:
+        result["base_AS_adjacency"] = base_as_adjacencies[selected]
+    if gene_prior_values is not None:
+        result["gene_mantel_prior"] = gene_prior_values[selected]
+        result["gene_prior_adjacency_boost"] = (
+            result["adjacency"] - result.get("base_AS_adjacency", result["adjacency"])
+        )
     return result.sort_values("adjacency", ascending=False).reset_index(drop=True)
+
+
+def _reinforce_with_gene_prior(
+    adjacencies: np.ndarray,
+    matrix_index: pd.Index,
+    rows: np.ndarray,
+    cols: np.ndarray,
+    gene_prior: GeneMantelPrior | None,
+    weight: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Apply a bounded prior boost without creating a non-AS edge.
+
+    The base AS adjacency remains unchanged when no gene-level support exists.
+    A fully supported prior can add at most ``weight * a * (1-a)`` to an
+    existing AS adjacency ``a``.
+    """
+    base = np.asarray(adjacencies, dtype=float).copy()
+    values = np.zeros(len(base), dtype=float)
+    if gene_prior is None or weight <= 0 or not len(base):
+        return base, values
+    from katana_cosplice.gene_prior import edge_gene_prior
+
+    values = edge_gene_prior(gene_prior, matrix_index, rows, cols)
+    reinforced = base + float(weight) * base * (1.0 - base) * values
+    return np.clip(reinforced, 0.0, 1.0), values
 
 
 def _module_labels(raw_labels: np.ndarray, min_size: int) -> tuple[np.ndarray, dict[int, str]]:
@@ -795,6 +909,8 @@ def discover_module_labels(
     matrix: pd.DataFrame,
     settings: NetworkConfig,
     community_resolution: float | None = None,
+    gene_prior: GeneMantelPrior | None = None,
+    gene_prior_weight: float = 0.0,
 ) -> np.ndarray:
     """Discover module labels without program scores, edge bootstrap or sensitivity sweeps."""
     if settings.engine == "sparse_knn":
@@ -815,6 +931,14 @@ def discover_module_labels(
             rows = rows[retained]
             cols = cols[retained]
             adjacencies = adjacencies[retained]
+        adjacencies, _ = _reinforce_with_gene_prior(
+            adjacencies,
+            matrix.index,
+            rows,
+            cols,
+            gene_prior,
+            gene_prior_weight,
+        )
         raw_labels, _ = _graph_communities(
             len(matrix),
             rows,
@@ -825,7 +949,23 @@ def discover_module_labels(
         )
     else:
         correlation = correlation_matrix(matrix, settings.method)
-        distance = 1.0 - correlation if settings.signed else 1.0 - np.abs(correlation)
+        if gene_prior is not None and gene_prior_weight > 0:
+            base = (1.0 + correlation) / 2.0 if settings.signed else np.abs(correlation)
+            upper_rows, upper_cols = np.triu_indices(len(matrix), k=1)
+            reinforced, _ = _reinforce_with_gene_prior(
+                base[upper_rows, upper_cols],
+                matrix.index,
+                upper_rows,
+                upper_cols,
+                gene_prior,
+                gene_prior_weight,
+            )
+            fused = base.copy()
+            fused[upper_rows, upper_cols] = reinforced
+            fused[upper_cols, upper_rows] = reinforced
+            distance = 1.0 - fused
+        else:
+            distance = 1.0 - correlation if settings.signed else 1.0 - np.abs(correlation)
         distance = np.clip((distance + distance.T) / 2.0, 0.0, 2.0)
         np.fill_diagonal(distance, 0.0)
         hierarchy = linkage(squareform(distance, checks=False), method="average")
@@ -841,6 +981,11 @@ def fit_network(
     qc_metrics: pd.DataFrame,
     settings: NetworkConfig,
     samples: pd.DataFrame | None = None,
+    event_reliability: pd.Series | None = None,
+    reliability_floor: float = 0.10,
+    reliability_power: float = 0.50,
+    gene_prior: GeneMantelPrior | None = None,
+    gene_prior_weight: float = 0.0,
 ) -> NetworkResult:
     if not matrix.index.is_unique or not matrix.columns.is_unique:
         raise ValueError("Network matrix event and sample labels must be unique.")
@@ -861,7 +1006,19 @@ def fit_network(
     if matrix.shape[0] < settings.min_module_size * 2:
         raise ValueError(f"Too few stable events for network fitting: {matrix.shape[0]}")
 
-    ranking = qc_metrics.reindex(matrix.index)["stability_score"].fillna(0.0).sort_values(ascending=False)
+    stability = qc_metrics.reindex(matrix.index)["stability_score"].fillna(0.0)
+    reliability: pd.Series | None = None
+    if event_reliability is not None:
+        reliability = (
+            pd.to_numeric(event_reliability.reindex(matrix.index), errors="coerce")
+            .fillna(0.0)
+            .clip(reliability_floor, 1.0)
+        )
+        ranking = (stability * reliability.pow(reliability_power)).sort_values(
+            ascending=False
+        )
+    else:
+        ranking = stability.sort_values(ascending=False)
     selected_keys = ranking.index if settings.max_events is None else ranking.index[: settings.max_events]
     selected = matrix.loc[selected_keys].copy()
     linkage_matrix: np.ndarray | None = None
@@ -869,8 +1026,31 @@ def fit_network(
         correlation = correlation_matrix(selected, settings.method)
         base = (1.0 + correlation) / 2.0 if settings.signed else np.abs(correlation)
         adjacency = np.power(np.clip(base, 0.0, 1.0), settings.soft_power)
+        if reliability is not None:
+            selected_reliability = reliability.reindex(selected.index).to_numpy(dtype=float)
+            reliability_factor = np.power(
+                np.outer(selected_reliability, selected_reliability),
+                reliability_power / 2.0,
+            )
+            adjacency *= reliability_factor
+        upper_rows, upper_cols = np.triu_indices(len(selected), k=1)
+        reinforced, gene_prior_values = _reinforce_with_gene_prior(
+            adjacency[upper_rows, upper_cols],
+            selected.index,
+            upper_rows,
+            upper_cols,
+            gene_prior,
+            gene_prior_weight,
+        )
+        if len(reinforced):
+            adjacency[upper_rows, upper_cols] = reinforced
+            adjacency[upper_cols, upper_rows] = reinforced
         np.fill_diagonal(adjacency, 0.0)
-        distance = 1.0 - correlation if settings.signed else 1.0 - np.abs(correlation)
+        distance = (
+            1.0 - adjacency
+            if gene_prior is not None and gene_prior_weight > 0
+            else (1.0 - correlation if settings.signed else 1.0 - np.abs(correlation))
+        )
         distance = np.clip((distance + distance.T) / 2.0, 0.0, 2.0)
         np.fill_diagonal(distance, 0.0)
         linkage_matrix = linkage(squareform(distance, checks=False), method="average")
@@ -891,6 +1071,20 @@ def fit_network(
             selected,
             settings,
         )
+        if reliability is not None and len(rows):
+            selected_reliability = reliability.reindex(selected.index).to_numpy(dtype=float)
+            reliability_factor = np.power(
+                selected_reliability[rows] * selected_reliability[cols],
+                reliability_power / 2.0,
+            )
+            adjacencies *= reliability_factor
+            retained_reliability = adjacencies >= settings.edge_threshold
+            rows = rows[retained_reliability]
+            cols = cols[retained_reliability]
+            correlations = correlations[retained_reliability]
+            adjacencies = adjacencies[retained_reliability]
+            overlaps = overlaps[retained_reliability]
+            consensus_support = consensus_support[retained_reliability]
         adjacencies, graph_bootstrap_support = _bootstrap_weighted_edges(
             selected,
             rows,
@@ -898,6 +1092,15 @@ def fit_network(
             adjacencies,
             settings,
             samples,
+        )
+        base_as_adjacencies = adjacencies.copy()
+        adjacencies, gene_prior_values = _reinforce_with_gene_prior(
+            adjacencies,
+            selected.index,
+            rows,
+            cols,
+            gene_prior,
+            gene_prior_weight,
         )
         n_unstable_graph_edges_removed = 0
         if len(graph_bootstrap_support) and np.isfinite(graph_bootstrap_support).any():
@@ -910,6 +1113,8 @@ def fit_network(
             overlaps = overlaps[retained]
             consensus_support = consensus_support[retained]
             graph_bootstrap_support = graph_bootstrap_support[retained]
+            base_as_adjacencies = base_as_adjacencies[retained]
+            gene_prior_values = gene_prior_values[retained]
         raw_labels, graph = _graph_communities(len(selected), rows, cols, adjacencies, settings)
         module_labels, _ = _module_labels(raw_labels, settings.min_module_size)
         connectivity = np.asarray([graph.degree(index, weight="weight") for index in range(len(selected))], dtype=float)
@@ -923,6 +1128,8 @@ def fit_network(
             graph_bootstrap_support,
             selected.index.tolist(),
             settings.max_output_edges,
+            base_as_adjacencies,
+            gene_prior_values,
         )
         sensitivity = _community_resolution_sensitivity(len(selected), rows, cols, adjacencies, settings)
         n_graph_edges = len(rows)
@@ -941,9 +1148,24 @@ def fit_network(
             "event_key": selected.index,
             "module": module_labels,
             "network_connectivity": connectivity,
-            "stability_score": ranking.reindex(selected.index).to_numpy(),
+            "stability_score": stability.reindex(selected.index).to_numpy(),
         }
     )
+    assignments["network_priority_score"] = ranking.reindex(selected.index).to_numpy()
+    assignments["network_reliability"] = (
+        reliability.reindex(selected.index).to_numpy()
+        if reliability is not None
+        else np.nan
+    )
+    if gene_prior is not None:
+        selected_genes = gene_prior.event_genes.reindex(selected.index.astype(str))
+        assignments["gene_prior_gene_id"] = selected_genes.to_numpy()
+        assignments["gene_prior_available"] = selected_genes.isin(
+            gene_prior.gene_adjacency.index
+        ).to_numpy()
+    else:
+        assignments["gene_prior_gene_id"] = ""
+        assignments["gene_prior_available"] = False
     assignments = assignments.join(
         membership[
             [
@@ -978,7 +1200,37 @@ def fit_network(
     diagnostics["n_samples"] = selected.shape[1]
     diagnostics["n_input_stable_events"] = matrix.shape[0]
     diagnostics["n_selected_events"] = selected.shape[0]
-    diagnostics["selection_rule"] = "all_qc_passed" if settings.max_events is None else f"top_{settings.max_events}_by_stability_score"
+    diagnostics["selection_rule"] = (
+        "all_qc_passed"
+        if settings.max_events is None
+        else (
+            f"top_{settings.max_events}_by_stability_x_reliability"
+            if reliability is not None
+            else f"top_{settings.max_events}_by_stability_score"
+        )
+    )
+    diagnostics["uncertainty_weighting"] = reliability is not None
+    diagnostics["reliability_floor"] = reliability_floor if reliability is not None else np.nan
+    diagnostics["reliability_power"] = reliability_power if reliability is not None else np.nan
+    diagnostics["median_network_reliability"] = (
+        float(reliability.reindex(selected.index).median())
+        if reliability is not None
+        else np.nan
+    )
+    diagnostics["gene_mantel_prior_enabled"] = gene_prior is not None
+    diagnostics["gene_mantel_prior_weight"] = (
+        gene_prior_weight if gene_prior is not None else 0.0
+    )
+    diagnostics["gene_mantel_prior_event_coverage"] = (
+        float(assignments["gene_prior_available"].mean())
+        if gene_prior is not None
+        else 0.0
+    )
+    diagnostics["gene_mantel_prior_edge_coverage"] = (
+        float(np.mean(gene_prior_values > 0))
+        if gene_prior is not None and len(gene_prior_values)
+        else 0.0
+    )
     diagnostics["engine"] = settings.engine
     diagnostics["method"] = settings.method
     diagnostics["soft_power"] = settings.soft_power

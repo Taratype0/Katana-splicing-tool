@@ -1,0 +1,41 @@
+{
+  "panel_id": "TCGA_SpliceSeq_ES_10_cohort_locked_v1",
+  "cohorts": [
+    {"cohort": "KIRC", "family": "kidney"},
+    {"cohort": "KIRP", "family": "kidney"},
+    {"cohort": "KICH", "family": "kidney"},
+    {"cohort": "LUAD", "family": "lung"},
+    {"cohort": "LUSC", "family": "lung"},
+    {"cohort": "COAD", "family": "colorectal"},
+    {"cohort": "READ", "family": "colorectal"},
+    {"cohort": "BRCA", "family": "other"},
+    {"cohort": "PRAD", "family": "other"},
+    {"cohort": "LIHC", "family": "other"}
+  ],
+  "primary_event_type": "ES",
+  "discovery_event_selection": {
+    "minimum_non_missing_fraction": 0.75,
+    "minimum_standard_deviation": 1e-08,
+    "ranking": "within-discovery variance only",
+    "top_events": 500
+  },
+  "primary_comparator": "Exact R WGCNA on the identical discovery event universe",
+  "primary_metrics": [
+    "minimum bootstrap adjusted Rand index",
+    "median bootstrap adjusted Rand index",
+    "valid multi-module partition fraction",
+    "external module Zsummary",
+    "density ratio",
+    "connectivity correlation",
+    "membership profile correlation",
+    "program-score preservation",
+    "GO/KEGG term replication",
+    "module gene replication"
+  ],
+  "claim_boundary": {
+    "cohort_independence": "Independent TCGA disease cohorts, not independent sequencing consortia or studies.",
+    "confirmatory_rule": "A strongest-program claim requires at least 70% paired best-Zsummary wins, a positive median best-Zsummary difference, and one-sided paired Wilcoxon P < 0.05. A complete-module-set claim additionally requires positive median-Zsummary and program-score preservation differences. No universal superiority claim is allowed unless locked metrics also favor CoSplice across at least three cross-study datasets.",
+    "event_matching": "Exact TCGA SpliceSeq event key only; no fuzzy coordinate matching.",
+    "external_selection": "External cohorts retain all eligible events; top-event selection is discovery-only."
+  }
+}

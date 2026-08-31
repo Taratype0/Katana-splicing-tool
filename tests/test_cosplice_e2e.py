@@ -9,7 +9,10 @@ import pandas as pd
 from katana_cosplice.config import (
     ConsensusConfig,
     CoSpliceConfig,
+    ExternalCohortConfig,
+    GenePriorConfig,
     HybridProgramConfig,
+    MultiObjectiveSelectionConfig,
     NetworkConfig,
     StableASConfig,
     ValidationConfig,
@@ -121,6 +124,191 @@ def _full_project(tmp_path: Path) -> CoSpliceConfig:
     )
 
 
+def _write_gene_prior_exon_counts(
+    path: Path,
+    metadata_path: Path,
+    n_genes: int = 60,
+) -> None:
+    samples = pd.read_csv(metadata_path, sep="\t")
+    condition_codes = {
+        condition: index
+        for index, condition in enumerate(
+            samples["condition"].drop_duplicates().astype(str)
+        )
+    }
+    sample_signal = np.asarray(
+        [
+            condition_codes[str(condition)] + int(str(sample_id).rsplit("_", 1)[-1]) / 10
+            for sample_id, condition in zip(
+                samples["sample_id"],
+                samples["condition"],
+                strict=True,
+            )
+        ],
+        dtype=float,
+    )
+    rows: dict[str, np.ndarray] = {}
+    for gene_index in range(n_genes):
+        gene_id = f"ENSMUSG{gene_index:011d}.1"
+        program = gene_index % 3
+        for exon_index in range(3):
+            scale = 8.0 + program * 2.0 + exon_index
+            phase = (gene_index % 5) * 0.15 + exon_index * 0.35
+            rows[f"{gene_id}_exon{exon_index + 1}"] = (
+                100.0
+                + gene_index
+                + scale * sample_signal
+                + 4.0 * np.sin(sample_signal + phase)
+            )
+    pd.DataFrame(
+        rows,
+        index=samples["sample_id"].astype(str),
+    ).T.to_csv(path, sep="\t")
+
+
+def test_gene_prior_runs_through_network_consensus_and_cache(tmp_path: Path) -> None:
+    config = _full_project(tmp_path)
+    exon_counts = tmp_path / "exon_counts.tsv"
+    _write_gene_prior_exon_counts(exon_counts, config.sample_metadata)
+    config.gene_prior = GenePriorConfig(
+        enabled=True,
+        exon_count_matrix=exon_counts,
+        weight=0.10,
+        scaffold_knn_neighbors=8,
+        scaffold_min_module_size=4,
+        random_seed=23,
+    )
+    config.validate()
+    pipeline = CoSplicePipeline(config)
+
+    pipeline.run_stage("audit")
+    pipeline.run_stage("matrix")
+    pipeline.run_stage("stable_qc")
+    pipeline.run_stage("network_observed")
+
+    network_dir = config.output_dir / "04_network" / "observed"
+    assert (network_dir / "gene_mantel_prior_matrix.npz").exists()
+    assert (network_dir / "gene_mantel_prior_gene_audit.tsv").exists()
+    assert (network_dir / "gene_mantel_prior_event_audit.tsv").exists()
+    edges = pd.read_csv(network_dir / "network_edges.tsv", sep="\t")
+    assert {
+        "base_AS_adjacency",
+        "gene_mantel_prior",
+        "gene_prior_adjacency_boost",
+    }.issubset(edges)
+    assert edges["gene_prior_adjacency_boost"].ge(0).all()
+
+    pipeline.run_stage("consensus_modules")
+    consensus_dir = config.output_dir / "04c_consensus_modules"
+    assert (consensus_dir / "consensus_event_module_assignments.tsv").exists()
+    assert (consensus_dir / "bootstrap_coassignment_matrix.npz").exists()
+
+    pipeline.run_stage("network_observed")
+    assert pipeline.status()["stages"]["network_observed"]["status"] == "cache_hit"
+    pipeline.run_stage("consensus_modules")
+    assert pipeline.status()["stages"]["consensus_modules"]["status"] == "cache_hit"
+
+
+def test_multiobjective_consensus_pipeline_uses_tuning_not_holdout(
+    tmp_path: Path,
+) -> None:
+    config = _full_project(tmp_path)
+    tuning_matrix = tmp_path / "tuning_psi.tsv"
+    tuning_samples = tmp_path / "tuning_samples.tsv"
+    tuning_gmt = tmp_path / "tuning_terms.gmt"
+    config.external_cohorts = [
+        ExternalCohortConfig("tuning", tuning_matrix, tuning_samples),
+        ExternalCohortConfig(
+            "untouched_holdout",
+            tmp_path / "missing_holdout.tsv",
+            tmp_path / "missing_holdout_samples.tsv",
+        ),
+    ]
+    config.multiobjective_selection = MultiObjectiveSelectionConfig(
+        enabled=True,
+        tuning_cohorts=["tuning"],
+        holdout_cohorts=["untouched_holdout"],
+        functional_gene_sets_gmt=tuning_gmt,
+        min_shared_events_per_module=3,
+        min_module_genes=2,
+    )
+    config.validate()
+    pipeline = CoSplicePipeline(config)
+    for stage in ("audit", "matrix", "stable_qc", "network_observed"):
+        pipeline.run_stage(stage)
+
+    reference = pd.read_csv(
+        config.output_dir
+        / "04_network"
+        / "observed"
+        / "selected_event_matrix.tsv",
+        sep="\t",
+        index_col=0,
+    )
+    rng = np.random.default_rng(991)
+    target = reference.copy()
+    target.columns = [f"T{index:02d}" for index in range(target.shape[1])]
+    target += rng.normal(0, 0.002, target.shape)
+    target.to_csv(tuning_matrix, sep="\t")
+    pd.DataFrame(
+        {
+            "sample_id": target.columns,
+            "condition": ["A"] * (len(target.columns) // 2)
+            + ["B"] * (len(target.columns) - len(target.columns) // 2),
+        }
+    ).to_csv(tuning_samples, sep="\t", index=False)
+    event_metadata = pd.read_csv(
+        config.output_dir / "02_matrix" / "event_metadata.tsv",
+        sep="\t",
+    )
+    genes = (
+        event_metadata["gene_symbol"]
+        .dropna()
+        .astype(str)
+        .drop_duplicates()
+        .tolist()
+    )
+    midpoint = max(2, len(genes) // 2)
+    tuning_gmt.write_text(
+        "TERM_A\tdescription\t"
+        + "\t".join(genes[:midpoint])
+        + "\nTERM_B\tdescription\t"
+        + "\t".join(genes[midpoint:])
+        + "\n",
+        encoding="utf-8",
+    )
+
+    pipeline.run_stage("consensus_modules")
+    out_dir = config.output_dir / "04c_consensus_modules"
+    search = pd.read_csv(
+        out_dir / "consensus_parameter_search.tsv", sep="\t"
+    )
+    audit = pd.read_csv(
+        out_dir / "multiobjective_selection_audit.tsv", sep="\t"
+    )
+    assert {
+        "objective_internal_stability",
+        "objective_external_preservation",
+        "objective_functional_coherence",
+        "multiobjective_selection_score",
+        "pareto_optimal",
+    }.issubset(search)
+    assert search["selected"].sum() == 1
+    assert not audit.empty
+    assert set(
+        audit.loc[
+            audit["audit_type"].eq("external_preservation"), "cohort"
+        ]
+    ) == {"tuning"}
+    assert (out_dir / "plots" / "multiobjective_candidate_tradeoff.png").exists()
+
+    pipeline.run_stage("consensus_modules")
+    assert (
+        pipeline.status()["stages"]["consensus_modules"]["status"]
+        == "cache_hit"
+    )
+
+
 def test_full_explicit_pipeline_produces_contract_artifacts(tmp_path: Path) -> None:
     config = _full_project(tmp_path)
     config.validate()
@@ -131,7 +319,14 @@ def test_full_explicit_pipeline_produces_contract_artifacts(tmp_path: Path) -> N
     expected = {
         spec.key
         for spec in stage_specs(visible_only=True)
-        if spec.key != "factor_contrasts" or config.factor_contrasts.enabled
+        if (
+            spec.key != "factor_contrasts"
+            or config.factor_contrasts.enabled
+        )
+        and (
+            spec.key != "multiview_fusion"
+            or config.multiview.enabled
+        )
     }
     assert set(state) == expected
     assert all(details["status"] == "finished" for details in state.values())
@@ -147,16 +342,6 @@ def test_full_explicit_pipeline_produces_contract_artifacts(tmp_path: Path) -> N
         config.output_dir / "04c_consensus_modules" / "consensus_event_module_assignments.tsv",
         sep="\t",
     )
-    hybrid_events = pd.read_csv(
-        config.output_dir
-        / "04d_hybrid_programs"
-        / "hybrid_event_program_assignments.tsv",
-        sep="\t",
-    )
-    hybrid_programs = pd.read_csv(
-        config.output_dir / "04d_hybrid_programs" / "hybrid_program_summary.tsv",
-        sep="\t",
-    )
 
     assert psi.shape == (60, 18)
     assert stable.shape == (60, 18)
@@ -168,20 +353,9 @@ def test_full_explicit_pipeline_produces_contract_artifacts(tmp_path: Path) -> N
     assert list(association_design.columns).count("batch") == 1
     assert not validation.empty
     assert consensus["event_key"].is_unique
-    assert hybrid_events["event_key"].is_unique
-    assert {"tight_program", "diffuse_program", "program_scope"}.issubset(
-        hybrid_events
-    )
-    assert set(hybrid_programs["program_type"]) == {"tight", "diffuse"}
-    assert hybrid_programs["overall_confidence"].between(0, 1).all()
     assert (config.output_dir / "04c_consensus_modules" / "bootstrap_coassignment_matrix.npz").exists()
     assert (config.output_dir / "04c_consensus_modules" / "consensus_parameter_search.tsv").exists()
-    assert (
-        config.output_dir
-        / "04d_hybrid_programs"
-        / "plots"
-        / "tight_diffuse_program_confidence.png"
-    ).exists()
+    assert not (config.output_dir / "04d_hybrid_programs").exists()
     assert (config.output_dir / "07_report" / "katana_cosplice_report.html").exists()
 
     manifest = json.loads((config.output_dir / "artifact_manifest.json").read_text(encoding="utf-8"))
@@ -196,6 +370,35 @@ def test_full_explicit_pipeline_produces_contract_artifacts(tmp_path: Path) -> N
     pipeline.run_stage("matrix")
     assert pipeline.status()["stages"]["matrix"]["status"] == "cache_hit"
     assert pipeline.status()["stages"]["stable_qc"]["status"] == "finished"
+
+    # The historical hybrid stage remains explicitly callable for benchmark
+    # compatibility, but it is no longer part of the production run-all path.
+    pipeline.run_stage("hybrid_programs")
+    assert pipeline.status()["stages"]["hybrid_programs"]["status"] == "finished"
+    assert pipeline.status()["stages"]["network_observed"]["status"] == "finished"
+
+    hybrid_events = pd.read_csv(
+        config.output_dir
+        / "04d_hybrid_programs"
+        / "hybrid_event_program_assignments.tsv",
+        sep="\t",
+    )
+    hybrid_programs = pd.read_csv(
+        config.output_dir / "04d_hybrid_programs" / "hybrid_program_summary.tsv",
+        sep="\t",
+    )
+    assert hybrid_events["event_key"].is_unique
+    assert {"tight_program", "diffuse_program", "program_scope"}.issubset(
+        hybrid_events
+    )
+    assert set(hybrid_programs["program_type"]) == {"tight", "diffuse"}
+    assert hybrid_programs["overall_confidence"].between(0, 1).all()
+    assert (
+        config.output_dir
+        / "04d_hybrid_programs"
+        / "plots"
+        / "tight_diffuse_program_confidence.png"
+    ).exists()
+
     pipeline.run_stage("hybrid_programs")
     assert pipeline.status()["stages"]["hybrid_programs"]["status"] == "cache_hit"
-    assert pipeline.status()["stages"]["network_observed"]["status"] == "finished"

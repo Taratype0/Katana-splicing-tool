@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "katana-splicing-tool"
-version = "1.0.1"
+version = "1.0.2"
 description = "Interactive local RNA splicing and transcriptome integration tool."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,9 +26,13 @@ dependencies = [
 
 [project.scripts]
 katana-cosplice = "katana_cosplice.cli:main"
+katana-cosplice-publication-benchmark = "katana_cosplice.publication_benchmark:main"
+katana-cosplice-input-benchmark = "katana_cosplice.input_mode_benchmark:main"
+katana-cosplice-locked-ablation = "scripts.run_locked_three_arm_ablation:main"
+katana-cosplice-locked-panel-report = "katana_cosplice.locked_panel_report:main"
 
 [tool.setuptools]
-packages = ["app", "app.pages", "app.widgets", "katana_cosplice", "src", "src.analysis", "src.adapters", "src.domain", "src.domain.models", "src.domain.rules", "src.io", "src.io.loaders", "src.services", "src.visualization"]
+packages = ["app", "app.pages", "app.widgets", "katana_cosplice", "scripts", "src", "src.analysis", "src.adapters", "src.domain", "src.domain.models", "src.domain.rules", "src.io", "src.io.loaders", "src.services", "src.visualization"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -6,6 +6,7 @@ import pandas as pd
 
 from katana_cosplice.audit import resolve_rmats_root
 from katana_cosplice.config import CoSpliceConfig
+from katana_cosplice.utils import normalize_sample_id
 
 
 def _metadata_candidate(project_root: Path) -> Path:
@@ -37,6 +38,22 @@ def _find_reference(search_root: Path, names: tuple[str, ...]) -> Path | None:
     return None
 
 
+def _find_bam_root(project_root: Path, metadata: Path) -> Path | None:
+    frame = pd.read_csv(metadata, low_memory=False)
+    sample_column = "sample_id" if "sample_id" in frame.columns else "sample"
+    expected = {normalize_sample_id(value) for value in frame[sample_column]}
+    by_parent: dict[Path, set[str]] = {}
+    for path in project_root.glob("**/*.bam"):
+        by_parent.setdefault(path.parent, set()).add(normalize_sample_id(path.name))
+    if not by_parent:
+        return None
+    parent, matched = max(
+        by_parent.items(),
+        key=lambda item: (len(expected.intersection(item[1])), -len(item[1] - expected)),
+    )
+    return parent if expected.issubset(matched) else None
+
+
 def discover_config(project_root: str | Path, output_dir: str | Path | None = None) -> CoSpliceConfig:
     root = Path(project_root).resolve()
     rmats_root = resolve_rmats_root(root)
@@ -65,5 +82,6 @@ def discover_config(project_root: str | Path, output_dir: str | Path | None = No
         gtf=_find_reference(reference_root, ("gencode.vM34.annotation.gtf", "gencode.annotation.gtf")),
         genome_fasta=_find_reference(reference_root, ("GRCm39.primary_assembly.genome.fa",)),
         transcript_fasta=_find_reference(reference_root, ("gencode.vM34.transcripts.fa",)),
+        bam_root=_find_bam_root(root, metadata),
         support_root=support_root if support_root.exists() else None,
     )

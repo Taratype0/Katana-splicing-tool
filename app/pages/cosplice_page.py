@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QThread, Signal, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QFileDialog,
     QDialog,
     QGridLayout,
@@ -88,6 +89,21 @@ class CoSplicePage(QWidget):
         config_row.addWidget(detail)
         config_row.addWidget(open_output)
 
+        self.matrix_source = QComboBox()
+        self.matrix_source.addItem("rMATS event matrix", "rmats_events")
+        self.matrix_source.addItem("BAM competing-junction matrix", "bam_junctions")
+        save_matrix_source = QPushButton("Save matrix source")
+        save_matrix_source.clicked.connect(self._save_matrix_source)
+        self.matrix_source_status = QLabel(
+            "Matrix source is stored in the config. Changing it invalidates Stage 2 and downstream caches."
+        )
+        self.matrix_source_status.setWordWrap(True)
+        matrix_row = QHBoxLayout()
+        matrix_row.addWidget(QLabel("Matrix source"))
+        matrix_row.addWidget(self.matrix_source)
+        matrix_row.addWidget(save_matrix_source)
+        matrix_row.addWidget(self.matrix_source_status, 1)
+
         run_grid = QGridLayout()
         self.run_buttons: list[QPushButton] = []
         for index, spec in enumerate(stage_specs(visible_only=True)):
@@ -151,6 +167,7 @@ class CoSplicePage(QWidget):
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addLayout(config_row)
+        layout.addLayout(matrix_row)
         layout.addLayout(run_grid)
         layout.addWidget(tabs, 1)
         layout.addWidget(self.log)
@@ -178,12 +195,50 @@ class CoSplicePage(QWidget):
         output_dir = output_root / "09_cosplice_network"
         try:
             config = discover_config(project.project_root, output_dir=output_dir)
+            config.matrix_input.input_mode = str(self.matrix_source.currentData())
+            self._validate_matrix_source(config)
             path = config.write(output_dir / "cosplice_config.yaml")
         except Exception as exc:
             QMessageBox.critical(self, "Config discovery failed", str(exc))
             return
         self.config_path.setText(str(path))
         self.log.setPlainText(f"Config initialized: {path}\nNo analysis was run.")
+        self.refresh()
+
+    @staticmethod
+    def _validate_matrix_source(config) -> None:
+        if config.matrix_input.input_mode != "bam_junctions":
+            return
+        missing = []
+        if config.bam_root is None or not config.bam_root.exists():
+            missing.append("BAM root")
+        if config.gtf is None or not config.gtf.exists():
+            missing.append("GTF")
+        if missing:
+            raise RuntimeError(
+                "BAM competing-junction matrix requires: "
+                + ", ".join(missing)
+                + ". Keep rMATS event matrix selected or configure these inputs first."
+            )
+
+    def _save_matrix_source(self) -> None:
+        path = self._resolved_config_path()
+        if path is None or not path.exists():
+            QMessageBox.information(self, "Missing config", "Choose or initialize cosplice_config.yaml first.")
+            return
+        try:
+            config = load_config(path)
+            config.matrix_input.input_mode = str(self.matrix_source.currentData())
+            self._validate_matrix_source(config)
+            config.validate()
+            config.write(path)
+        except Exception as exc:
+            QMessageBox.critical(self, "Matrix source not saved", str(exc))
+            return
+        self.log.setPlainText(
+            f"Saved matrix source: {config.matrix_input.input_mode}\n"
+            "No analysis was run. Run Stage 2 explicitly to rebuild the matrix."
+        )
         self.refresh()
 
     def _run_stage(self, stage: str) -> None:
@@ -257,6 +312,18 @@ class CoSplicePage(QWidget):
         except Exception as exc:
             self.log.setPlainText(f"Config error: {exc}")
             return
+        source_index = self.matrix_source.findData(config.matrix_input.input_mode)
+        if source_index >= 0:
+            self.matrix_source.setCurrentIndex(source_index)
+        if config.matrix_input.input_mode == "bam_junctions":
+            self.matrix_source_status.setText(
+                "BAM competing-junction usage: junction reads / reads in the donor-or-acceptor competitor cluster. "
+                f"Backend: {config.matrix_input.backend}; BAM root: {config.bam_root or 'missing'}"
+            )
+        else:
+            self.matrix_source_status.setText(
+                "rMATS event usage: sample-level IncLevel/IJC/SJC from the selected rMATS result files."
+            )
         state_path = config.output_dir / "state.json"
         state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {"stages": {}}
         cached_stages = state.get("stages", {})

@@ -4,6 +4,23 @@ Katana is a desktop GUI workflow for **comparison-first**, **direction-aware** R
 
 It is designed to work across projects, not only one specific dataset. Each project is scanned locally, each comparison keeps its own direction/configuration, and each analysis module runs independently instead of chaining downstream modules automatically.
 
+For methods development, CoSplice provides a same-input head-to-head benchmark of its single
+bootstrap-consensus production partition against exact R WGCNA and classical baselines. The
+benchmark evaluates valid partition recovery, matched-bootstrap stability, known-truth recovery,
+independent-cohort preservation, locked module-score projection, paired phenotype association,
+resistance to single-gene pseudo-modules, GO/KEGG annotation and cross-cohort gene/function
+replication. Biological annotations validate and explain a module after discovery; they never define
+modules or tune network parameters. A publication aggregation command builds a traceable
+multi-dataset report with source fingerprints and explicit claim limits. An untouched fourth
+TCGA SpliceSeq cohort is supported as a confirmatory target without validation-set event ranking or
+parameter tuning; see
+[`docs/COSPLICE_NETWORK.md`](docs/COSPLICE_NETWORK.md) and the
+[`publication benchmark protocol`](docs/PUBLICATION_BENCHMARK.md).
+Completed BAM-junction and rMATS caches can additionally be compared with
+`katana-cosplice-input-benchmark`. It audits stable-feature reproducibility, sample structure,
+leave-one-replicate-out condition effects, significant-SE junction support, and BAM-only discovery
+without rescanning BAMs or conflating compound rMATS events with individual junctions.
+
 ## Core design principles
 
 - **Comparison-first**: each comparison keeps its own pages, outputs, cache, and logs
@@ -37,7 +54,11 @@ Katana currently supports:
 
 ### Katana-CoSplice network discovery
 
-`katana-cosplice` is also installed as a command-line program. It builds exact sample-level PSI/IJC/SJC matrices from rMATS, audits source/sample identity, applies condition-coverage and PSI-range QC plus read/replicate safeguards, and includes every passing event in a signed sparse co-splicing network by default. Its stability-first defaults combine multi-k topology, complete sample bootstrap, rejection of low-support edges, and repeated community consensus; runtime is deliberately secondary to reproducibility. Sparse shared-neighbor weighted-overlap smoothing strengthens local topology without constructing a dense TOM matrix. WGCNA-style module-program merging plus bounded, sample-size-aware kME refinement keeps weak events in `grey` while preventing relaxed thresholds from freely bridging modules. A hybrid stage now retains both tight sparse programs and diffuse WGCNA-style soft-adjacency/TOM programs, with separate bootstrap co-assignment, replicate-consistency and optional external-preservation confidence. A dedicated outer bootstrap stage builds event-event co-assignment probabilities, searches sparse Leiden graph thresholds/resolutions, and selects a constrained final partition using resampling agreement, coverage, balance, separation and modularity. Stable graph members are labelled `core`; confidently attached events are retained as `peripheral` rather than automatically discarded as `grey`. It calculates module program scores, performs condition/covariate association, and validates modules through condition-stratified bootstrap recovery, graph-parameter sensitivity, and observed/residual preservation. Module interpretation can scan official ATtRACT or compatible PWM motifs against indexed genome FASTA, correlate RBP expression, query local GMT or g:Profiler GO/KEGG, quantify dominant isoform switches from Salmon/GTF, and separate descriptive from DTU-supported switch enrichment. Replicate-aware beta-binomial models support an optional donor/block random intercept and are benchmarked against simple delta PSI. Annotation-aware cross-cohort projection, conservative multi-cohort preservation/rewiring states, and random-effects effect-size meta-analysis are available for independent cohorts. An optional predeclared factor-contrast stage tests target/reference, perturbation and difference-in-differences effects on stable PSI and cached program scores; it reports phenocopy/occlusion support without treating RNA similarity as proof of LOF/GOF. A cached HTML/PDF report and self-contained module browser support review without recomputation. An independent same-input benchmark compares Katana-CoSplice with Pearson hierarchical, shrinkage graphical-lasso and exact R WGCNA. Every UI action and `stage --name` command runs exactly one stage; unchanged inputs return a parameter-fingerprinted cache hit. The same stages are available in `9. CoSplice Network`. See [docs/COSPLICE_NETWORK.md](docs/COSPLICE_NETWORK.md) and [docs/COSPLICE_METHODS_3_5.md](docs/COSPLICE_METHODS_3_5.md).
+`katana-cosplice` is also installed as a command-line program. It builds sample-level splice-usage matrices from either exact rMATS events or BAM-derived competing junction clusters. BAM mode extracts observed CIGAR `N` junctions, uses the current project's GTF for annotation, and keeps rMATS as an event/differential-evidence layer rather than limiting discovery to the rMATS catalogue. Both modes feed the same parameter-fingerprinted stable-AS QC, which applies condition coverage, PSI-range, read-support and replicate-consistency safeguards before network fitting. Its stability-first defaults combine multi-k topology, complete sample bootstrap, rejection of low-support edges, and repeated community consensus; runtime is deliberately secondary to reproducibility. Sparse shared-neighbor weighted-overlap smoothing strengthens local topology without constructing a dense TOM matrix. WGCNA-style module-program merging plus bounded, sample-size-aware kME refinement keeps weak events in `grey` while preventing relaxed thresholds from freely bridging modules. A dedicated outer bootstrap stage builds event-event co-assignment probabilities, searches sparse Leiden graph thresholds/resolutions, and produces the single final production partition. Stable graph members are labelled `core`; confidently attached events are retained as `peripheral`; low-confidence graph candidates remain auditable as `uncertain` without entering conservative consensus-based downstream analysis. It calculates module program scores, performs condition/covariate association, and validates modules through condition-stratified bootstrap recovery, graph-parameter sensitivity, observed/residual preservation, unique-gene diversity, RBP/splicing-factor support, GO/KEGG enrichment, and cross-cohort gene/function replication. Biological annotations validate and explain modules but never define or tune membership. Module interpretation can scan official ATtRACT or compatible PWM motifs against indexed genome FASTA, correlate RBP expression, query local GMT or g:Profiler GO/KEGG, quantify dominant isoform switches from Salmon/GTF, and separate descriptive from DTU-supported switch enrichment. Replicate-aware beta-binomial models support an optional donor/block random intercept and are benchmarked against simple delta PSI. Optional method extensions add beta-binomial read-count uncertainty diagnostics, fixed-module differential topology testing, AS-primary multi-view edge reweighting, hierarchical Bayesian cross-cohort preservation, and a bounded gene-level Mantel scaffold built from mapped exon profiles. Their roles and ablation limits are documented in [docs/COSPLICE_METHOD_EXTENSIONS.md](docs/COSPLICE_METHOD_EXTENSIONS.md); auxiliary evidence never creates an AS edge. Uncertainty weighting and the gene scaffold remain disabled by default because current ablations support diagnostic or cohort-specific use rather than universal improvement. Annotation-aware cross-cohort projection, conservative multi-cohort preservation/rewiring states, and random-effects effect-size meta-analysis are available for independent cohorts. An optional predeclared factor-contrast stage tests target/reference, perturbation and difference-in-differences effects on stable PSI and cached program scores; it reports phenocopy/occlusion support without treating RNA similarity as proof of LOF/GOF. A cached HTML/PDF report and self-contained module browser support review without recomputation. An independent same-input benchmark compares Katana-CoSplice with Pearson hierarchical, shrinkage graphical-lasso and exact R WGCNA; the deprecated tight/diffuse hybrid implementation remains available only for historical benchmark compatibility and is not shown or run by the production workflow. Every UI action and `stage --name` command runs exactly one stage; unchanged inputs return a parameter-fingerprinted cache hit. The same stages are available in `9. CoSplice Network`. See [docs/COSPLICE_NETWORK.md](docs/COSPLICE_NETWORK.md) and [docs/COSPLICE_METHODS_3_5.md](docs/COSPLICE_METHODS_3_5.md).
+
+**Benchmark scope clarification:** a cached final consensus is ranked only when its discovery
+event universe exactly matches the benchmark universe. A full-universe consensus is never
+silently subsetted into a top-N comparison; mismatched caches are reported as non-comparable.
 
 For the exact WGCNA comparator, create/update the Conda environment and install the official R package once:
 
@@ -45,6 +66,20 @@ For the exact WGCNA comparator, create/update the Conda environment and install 
 conda env update -n katana-splicing-tool -f configs/environment.yml
 conda run -n katana-splicing-tool Rscript scripts/install_wgcna.R
 ```
+
+For a leakage-safe publication ablation, freeze discovery/tuning selection before the holdout is
+loaded, then aggregate completed runs into one auditable panel:
+
+```powershell
+katana-cosplice-locked-ablation --help
+katana-cosplice-locked-panel-report --root <completed-run-root>
+```
+
+The locked runner compares stability-only CoSplice, adaptive multi-objective CoSplice and exact R
+WGCNA on the same event universe. The functional objective is activated only when predeclared
+tuning-GMT enrichment passes its FDR gate; otherwise its weight is set to zero and the negative
+result is retained. See
+[`docs/COSPLICE_LOCKED_PANEL_VALIDATION.md`](docs/COSPLICE_LOCKED_PANEL_VALIDATION.md).
 
 Optional / project-dependent:
 

@@ -25,7 +25,10 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
         key="matrix",
         title="2. Build PSI matrix",
         order=20,
-        description="Build sample-level PSI, inclusion-read, skipping-read, and event metadata matrices.",
+        description=(
+            "Build sample-level splice-usage and read-count matrices from either rMATS events "
+            "or annotation-independent BAM junction clusters."
+        ),
         cli_command="build-matrix",
         artifacts=(
             _artifact("psi", "02_matrix/sample_level_psi_matrix.tsv", ArtifactKind.MATRIX),
@@ -33,9 +36,18 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
             _artifact("sjc", "02_matrix/sample_level_sjc_matrix.tsv", ArtifactKind.MATRIX),
             _artifact("events", "02_matrix/event_metadata.tsv", ArtifactKind.TABLE),
             _artifact("samples", "02_matrix/sample_metadata_resolved.tsv", ArtifactKind.TABLE),
-            _artifact("sources", "02_matrix/rmats_source_selection.tsv", ArtifactKind.TABLE),
+            _artifact("sources", "02_matrix/matrix_source_selection.tsv", ArtifactKind.TABLE),
+            _artifact(
+                "legacy_sources",
+                "02_matrix/rmats_source_selection.tsv",
+                ArtifactKind.TABLE,
+                False,
+            ),
             _artifact("integrity", "02_matrix/matrix_integrity_summary.tsv", ArtifactKind.TABLE),
             _artifact("parameters", "02_matrix/parameters.json", ArtifactKind.PARAMETERS),
+            _artifact("junction_counts", "02_matrix/junction_count_matrix.tsv", ArtifactKind.MATRIX, False),
+            _artifact("junction_clusters", "02_matrix/junction_cluster_metadata.tsv", ArtifactKind.TABLE, False),
+            _artifact("rmats_mapping", "02_matrix/rmats_junction_annotation.tsv", ArtifactKind.TABLE, False),
         ),
     ),
     StageSpec(
@@ -50,6 +62,24 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
             _artifact("condition_metrics", "03_stable_as_qc/stable_as_condition_qc.tsv", ArtifactKind.TABLE),
             _artifact("summary", "03_stable_as_qc/stable_as_qc_summary.tsv", ArtifactKind.TABLE),
             _artifact("matrix", "03_stable_as_qc/stable_psi_matrix.tsv", ArtifactKind.MATRIX),
+            _artifact(
+                "posterior_matrix",
+                "03_stable_as_qc/stable_posterior_psi_matrix.tsv",
+                ArtifactKind.MATRIX,
+                False,
+            ),
+            _artifact(
+                "uncertainty_events",
+                "03_stable_as_qc/beta_binomial_event_uncertainty.tsv",
+                ArtifactKind.TABLE,
+                False,
+            ),
+            _artifact(
+                "uncertainty_samples",
+                "03_stable_as_qc/beta_binomial_sample_uncertainty.tsv",
+                ArtifactKind.TABLE,
+                False,
+            ),
             _artifact("parameters", "03_stable_as_qc/parameters.json", ArtifactKind.PARAMETERS),
         ),
     ),
@@ -68,6 +98,9 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
             _artifact("sensitivity", "04_network/observed/module_resolution_sensitivity.tsv", ArtifactKind.TABLE),
             _artifact("selected", "04_network/observed/selected_event_matrix.tsv", ArtifactKind.MATRIX),
             _artifact("parameters", "04_network/observed/parameters.json", ArtifactKind.PARAMETERS),
+            _artifact("gene_prior_matrix", "04_network/observed/gene_mantel_prior_matrix.npz", ArtifactKind.OTHER, False),
+            _artifact("gene_prior_genes", "04_network/observed/gene_mantel_prior_gene_audit.tsv", ArtifactKind.TABLE, False),
+            _artifact("gene_prior_events", "04_network/observed/gene_mantel_prior_event_audit.tsv", ArtifactKind.TABLE, False),
             _artifact("module_sizes_plot", "04_network/observed/plots/observed_module_sizes.png", ArtifactKind.PLOT, False),
             _artifact("score_heatmap", "04_network/observed/plots/observed_program_score_heatmap.png", ArtifactKind.PLOT, False),
             _artifact("dendrogram", "04_network/observed/plots/observed_event_dendrogram.png", ArtifactKind.PLOT, False),
@@ -88,6 +121,9 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
             _artifact("sensitivity", "04_network/residual/module_resolution_sensitivity.tsv", ArtifactKind.TABLE),
             _artifact("selected", "04_network/residual/selected_event_matrix.tsv", ArtifactKind.MATRIX),
             _artifact("parameters", "04_network/residual/parameters.json", ArtifactKind.PARAMETERS),
+            _artifact("gene_prior_matrix", "04_network/residual/gene_mantel_prior_matrix.npz", ArtifactKind.OTHER, False),
+            _artifact("gene_prior_genes", "04_network/residual/gene_mantel_prior_gene_audit.tsv", ArtifactKind.TABLE, False),
+            _artifact("gene_prior_events", "04_network/residual/gene_mantel_prior_event_audit.tsv", ArtifactKind.TABLE, False),
             _artifact("module_sizes_plot", "04_network/residual/plots/residual_module_sizes.png", ArtifactKind.PLOT, False),
             _artifact("score_heatmap", "04_network/residual/plots/residual_program_score_heatmap.png", ArtifactKind.PLOT, False),
             _artifact("dendrogram", "04_network/residual/plots/residual_event_dendrogram.png", ArtifactKind.PLOT, False),
@@ -112,25 +148,27 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
             _artifact("matrix", "04c_consensus_modules/bootstrap_coassignment_matrix.npz", ArtifactKind.OTHER),
             _artifact("diagnostics", "04c_consensus_modules/consensus_diagnostics.tsv", ArtifactKind.TABLE),
             _artifact("parameter_search", "04c_consensus_modules/consensus_parameter_search.tsv", ArtifactKind.TABLE),
+            _artifact("selection_audit", "04c_consensus_modules/multiobjective_selection_audit.tsv", ArtifactKind.TABLE),
             _artifact("parameters", "04c_consensus_modules/parameters.json", ArtifactKind.PARAMETERS),
             _artifact("heatmap", "04c_consensus_modules/plots/bootstrap_coassignment_heatmap.png", ArtifactKind.PLOT, False),
             _artifact("confidence", "04c_consensus_modules/plots/event_consensus_confidence.png", ArtifactKind.PLOT, False),
             _artifact("sizes", "04c_consensus_modules/plots/consensus_module_sizes.png", ArtifactKind.PLOT, False),
             _artifact("search", "04c_consensus_modules/plots/consensus_parameter_search.png", ArtifactKind.PLOT, False),
+            _artifact("multiobjective_tradeoff", "04c_consensus_modules/plots/multiobjective_candidate_tradeoff.png", ArtifactKind.PLOT, False),
         ),
     ),
     StageSpec(
         key="hybrid_programs",
-        title="4D. Tight and diffuse programs",
+        title="Legacy: tight and diffuse programs",
         order=46,
         description=(
-            "Retain tight sparse CoSplice programs and diffuse WGCNA-style soft-adjacency/TOM "
-            "programs, then score bootstrap co-assignment, replicate consistency and optional "
-            "external preservation confidence."
+            "Deprecated benchmark-only compatibility stage. Production CoSplice uses the single "
+            "bootstrap-consensus partition from 4C."
         ),
         dependencies=("stable_qc", "network_observed"),
         optional_dependencies=("network_residual", "consensus_modules"),
         cli_command="hybrid-programs",
+        visible=False,
         artifacts=(
             _artifact("events", "04d_hybrid_programs/hybrid_event_program_assignments.tsv", ArtifactKind.TABLE),
             _artifact("programs", "04d_hybrid_programs/hybrid_program_summary.tsv", ArtifactKind.TABLE),
@@ -370,6 +408,100 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
         ),
     ),
     StageSpec(
+        key="differential_network",
+        title="6I. Differential co-splicing network",
+        order=73,
+        description=(
+            "Compare module density and edge topology across condition-specific "
+            "networks while retaining one fixed consensus event universe."
+        ),
+        dependencies=("network_observed", "consensus_modules"),
+        cli_command="differential-network",
+        artifacts=(
+            _artifact(
+                "modules",
+                "06i_differential_network/module_differential_network.tsv",
+                ArtifactKind.TABLE,
+            ),
+            _artifact(
+                "events",
+                "06i_differential_network/event_network_rewiring.tsv",
+                ArtifactKind.TABLE,
+            ),
+            _artifact(
+                "edges",
+                "06i_differential_network/condition_network_edges.tsv",
+                ArtifactKind.TABLE,
+            ),
+            _artifact(
+                "parameters",
+                "06i_differential_network/parameters.json",
+                ArtifactKind.PARAMETERS,
+            ),
+        ),
+    ),
+    StageSpec(
+        key="multiview_fusion",
+        title="6J. AS-primary multi-view graph fusion",
+        order=74,
+        description=(
+            "Reweight existing AS edges with configured RBP, DEG, DTU or isoform "
+            "features without allowing auxiliary evidence to create new AS edges."
+        ),
+        dependencies=("network_observed",),
+        cli_command="multiview-fusion",
+        artifacts=(
+            _artifact(
+                "edges",
+                "06j_multiview_fusion/fused_network_edges.tsv",
+                ArtifactKind.TABLE,
+            ),
+            _artifact(
+                "assignments",
+                "06j_multiview_fusion/multiview_module_assignments.tsv",
+                ArtifactKind.TABLE,
+            ),
+            _artifact(
+                "audit",
+                "06j_multiview_fusion/view_audit.tsv",
+                ArtifactKind.TABLE,
+            ),
+            _artifact(
+                "parameters",
+                "06j_multiview_fusion/parameters.json",
+                ArtifactKind.PARAMETERS,
+            ),
+        ),
+    ),
+    StageSpec(
+        key="bayesian_preservation",
+        title="6K. Bayesian cross-cohort preservation",
+        order=75,
+        description=(
+            "Combine cached density, connectivity, membership and program-score "
+            "preservation across independent cohorts into posterior probabilities."
+        ),
+        dependencies=("preserve_modules",),
+        cli_command="bayesian-preservation",
+        artifacts=(
+            _artifact(
+                "modules",
+                "06k_bayesian_preservation/module_preservation_posterior.tsv",
+                ArtifactKind.TABLE,
+            ),
+            _artifact(
+                "metrics",
+                "06k_bayesian_preservation/metric_preservation_posterior.tsv",
+                ArtifactKind.TABLE,
+            ),
+            _artifact(
+                "parameters",
+                "06k_bayesian_preservation/parameters.json",
+                ArtifactKind.PARAMETERS,
+            ),
+        ),
+    ),
+    StageSpec(
         key="report",
         title="7. Build report",
         order=80,
@@ -381,7 +513,6 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
             "network_observed",
             "network_residual",
             "consensus_modules",
-            "hybrid_programs",
             "associate_observed",
             "associate_residual",
             "validate_modules",
@@ -392,6 +523,9 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
             "fit_module_models",
             "meta_analyze_modules",
             "factor_contrasts",
+            "differential_network",
+            "multiview_fusion",
+            "bayesian_preservation",
         ),
         cli_command="report",
         accepts_force=False,

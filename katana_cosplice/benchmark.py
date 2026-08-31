@@ -32,6 +32,7 @@ from katana_cosplice.network import correlation_matrix, discover_module_labels
 
 METHOD_LABELS = {
     "katana_sparse": "Katana-CoSplice sparse signed network",
+    "katana_consensus": "Katana-CoSplice bootstrap consensus (final modules)",
     "pearson_hierarchical": "Pearson signed hierarchical baseline",
     "graphical_lasso": "Graphical lasso partial-correlation network",
     "wgcna_exact": "WGCNA blockwiseModules (exact R package)",
@@ -309,7 +310,9 @@ def _fit_method(
 
 
 def _neutral_graph(matrix: pd.DataFrame, neighbors: int) -> nx.Graph:
-    values = matrix.to_numpy(dtype=float)
+    # pandas may expose a read-only view (notably with copy-on-write enabled).
+    # The benchmark centers rows in place, so always request an owned array.
+    values = matrix.to_numpy(dtype=float, copy=True)
     values -= values.mean(axis=1, keepdims=True)
     norms = np.sqrt(np.sum(values**2, axis=1, keepdims=True))
     profiles = values / np.where(norms < 1e-12, 1.0, norms)
@@ -453,7 +456,16 @@ BENCHMARK_SCORE_METRICS = {
 
 def _metric_ranking(summary: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     rows: list[dict[str, object]] = []
-    valid = summary.loc[summary.get("valid_partition", False).fillna(False).astype(bool)].copy()
+    if "valid_partition" in summary:
+        valid_mask = (
+            summary["valid_partition"]
+            .astype("boolean")
+            .fillna(False)
+            .to_numpy(dtype=bool)
+        )
+    else:
+        valid_mask = np.zeros(len(summary), dtype=bool)
+    valid = summary.loc[valid_mask].copy()
     for metric, higher_is_better in BENCHMARK_SCORE_METRICS.items():
         if metric not in valid:
             continue
@@ -541,6 +553,7 @@ def run_method_benchmark(
     samples: pd.DataFrame,
     network: NetworkConfig,
     settings: BenchmarkConfig,
+    consensus_assignments: pd.DataFrame | None = None,
     progress=None,
 ) -> BenchmarkResult:
     matrix, universe = select_benchmark_universe(stable_psi, qc_metrics, settings.max_events)
@@ -617,6 +630,75 @@ def run_method_benchmark(
 
     if "katana_sparse" not in method_labels:
         raise RuntimeError("Katana-CoSplice benchmark method failed; comparison cannot continue.")
+    if consensus_assignments is not None and not consensus_assignments.empty:
+        try:
+            if "event_key" not in consensus_assignments or "consensus_module" not in consensus_assignments:
+                raise ValueError(
+                    "Consensus assignments require event_key and consensus_module columns."
+                )
+            cached_event_keys = set(
+                consensus_assignments["event_key"].dropna().astype(str)
+            )
+            benchmark_event_keys = set(matrix.index.astype(str))
+            if cached_event_keys != benchmark_event_keys:
+                raise ValueError(
+                    "Cached final consensus was discovered on a different event universe "
+                    f"({len(cached_event_keys)} cached vs {len(benchmark_event_keys)} benchmark events). "
+                    "Subset metrics are not ranked because module structure depends on the "
+                    "discovery universe. Set benchmark.max_events=null and rebuild the matching "
+                    "consensus, or run an explicit same-universe sensitivity benchmark."
+                )
+            consensus = (
+                consensus_assignments.drop_duplicates("event_key")
+                .set_index("event_key")["consensus_module"]
+                .astype(str)
+                .reindex(matrix.index)
+            )
+            if consensus.isna().any():
+                raise ValueError(
+                    "Cached consensus assignments do not cover the shared benchmark universe."
+                )
+            labels = consensus.to_numpy(dtype=object)
+            method_labels["katana_consensus"] = labels
+            metrics = _method_metrics(matrix, labels, samples, neutral_graph)
+            method_status = "finished" if int(metrics["n_modules"]) >= 2 else "degenerate"
+            summary_rows.append(
+                {
+                    "method": "katana_consensus",
+                    "status": method_status,
+                    "valid_partition": method_status == "finished",
+                    "n_events": len(matrix),
+                    "n_samples": matrix.shape[1],
+                    "runtime_seconds": np.nan,
+                    **metrics,
+                }
+            )
+            audit_rows.append(
+                {
+                    "method": "katana_consensus",
+                    "display_name": METHOD_LABELS["katana_consensus"],
+                    "status": method_status,
+                    "implementation": "cached sample-stratified bootstrap co-assignment consensus",
+                    "message": (
+                        "Final CoSplice module output loaded from cache on an exactly matching "
+                        "event universe. Bootstrap ARI compares this final consensus backbone "
+                        "with matched sparse partitions."
+                    ),
+                    "runtime_seconds": np.nan,
+                }
+            )
+        except Exception as exc:
+            audit_rows.append(
+                {
+                    "method": "katana_consensus",
+                    "display_name": METHOD_LABELS["katana_consensus"],
+                    "status": "unavailable",
+                    "implementation": "cached sample-stratified bootstrap co-assignment consensus",
+                    "message": str(exc),
+                    "runtime_seconds": np.nan,
+                }
+            )
+            summary_rows.append({"method": "katana_consensus", "status": "unavailable"})
     assignments = pd.DataFrame({"event_key": matrix.index})
     for method, labels in method_labels.items():
         assignments[f"module_{method}"] = labels
@@ -648,7 +730,18 @@ def run_method_benchmark(
                 )
                 continue
             try:
-                labels, _ = _fit_method(method, bootstrap_matrix, network, settings, wgcna_executable)
+                if method == "katana_consensus":
+                    partition_settings = replace(
+                        network,
+                        consensus_bootstrap_iterations=0,
+                        community_consensus_runs=1,
+                        bootstrap_iterations=0,
+                    )
+                    labels = discover_module_labels(bootstrap_matrix, partition_settings)
+                else:
+                    labels, _ = _fit_method(
+                        method, bootstrap_matrix, network, settings, wgcna_executable
+                    )
                 bootstrap_rows.append(
                     {
                         "iteration": iteration,

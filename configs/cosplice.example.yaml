@@ -120,6 +120,29 @@ external_cohorts: []
 #   effect_table: null
 #   genome_build: GRCm39
 #   annotation_version: gencode.vM34
+multiobjective_selection:
+  # Publication-oriented partition selection. Disabled by default so legacy
+  # projects retain their exact internal-consensus behavior.
+  enabled: false
+  # Only tuning cohorts may influence the selected partition. Holdout cohorts
+  # are recorded but never loaded by consensus_modules.
+  tuning_cohorts: []
+  holdout_cohorts: []
+  # Use a versioned local GMT reserved for tuning. Confirmatory functional
+  # validation should use an independent source or untouched cohort.
+  functional_gene_sets_gmt: null
+  stability_weight: 0.40
+  preservation_weight: 0.35
+  functional_weight: 0.25
+  # Functional evidence affects selection only when a candidate reaches the
+  # formal enrichment gate. Otherwise its weight is redistributed over the
+  # internal-quality and preservation objectives.
+  functional_weight_mode: auto_significance
+  min_significant_functional_modules: 1
+  min_shared_events_per_module: 10
+  min_module_genes: 3
+  functional_fdr_cutoff: 0.10
+  score_floor: 0.01
 preservation:
   permutations: 100
   min_shared_events: 20

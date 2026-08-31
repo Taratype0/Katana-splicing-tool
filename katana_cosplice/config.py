@@ -118,6 +118,66 @@ class NetworkConfig:
 
 
 @dataclass
+class UncertaintyConfig:
+    enabled: bool = False
+    network_mode: str = "diagnostic_only"
+    prior_strength: float = 1.0
+    reliability_read_scale: float = 20.0
+    reliability_floor: float = 0.10
+    reliability_power: float = 0.50
+
+
+@dataclass
+class GenePriorConfig:
+    enabled: bool = False
+    exon_count_matrix: Path | None = None
+    feature_gene_map: Path | None = None
+    feature_id_column: str = "feature_id"
+    gene_id_column: str = "gene_id"
+    encoded_gene_rule: str = "prefix_before_last_underscore"
+    min_exons: int = 2
+    max_genes: int | None = None
+    soft_power: float = 6.0
+    weight: float = 0.10
+    prior_mode: str = "scaffold_reinforcement"
+    scaffold_knn_neighbors: int = 25
+    scaffold_min_module_size: int = 10
+    scaffold_resolution: float = 1.0
+    random_seed: int = 73
+
+
+@dataclass
+class DifferentialNetworkConfig:
+    enabled: bool = True
+    condition_column: str = "condition"
+    min_samples_per_condition: int = 3
+    shrinkage: float = 5.0
+    permutations: int = 200
+    max_output_edges_per_module_pair: int = 5_000
+    random_seed: int = 71
+
+
+@dataclass
+class MultiViewConfig:
+    enabled: bool = False
+    event_feature_table: Path | None = None
+    auxiliary_columns: list[str] = field(default_factory=list)
+    as_weight: float = 0.80
+    auxiliary_weights: dict[str, float] = field(default_factory=dict)
+    edge_threshold: float = 0.10
+    min_module_size: int = 20
+    resolution: float = 1.0
+
+
+@dataclass
+class BayesianPreservationConfig:
+    enabled: bool = True
+    prior_sd: float = 5.0
+    tau_scale: float = 2.0
+    grid_size: int = 301
+
+
+@dataclass
 class ValidationConfig:
     bootstrap_iterations: int = 20
     robust_jaccard: float = 0.75
@@ -129,7 +189,7 @@ class ValidationConfig:
 
 @dataclass
 class ConsensusConfig:
-    bootstrap_iterations: int = 100
+    bootstrap_iterations: int = 20
     min_coassignment: float = 0.70
     min_module_size: int | None = None
     clustering_method: str = "leiden_graph"
@@ -151,6 +211,25 @@ class ConsensusConfig:
     output_edge_threshold: float = 0.50
     max_output_edges: int = 200_000
     random_seed: int = 37
+
+
+@dataclass
+class MultiObjectiveSelectionConfig:
+    """Leakage-safe objectives used to select the final consensus partition."""
+
+    enabled: bool = False
+    tuning_cohorts: list[str] = field(default_factory=list)
+    holdout_cohorts: list[str] = field(default_factory=list)
+    functional_gene_sets_gmt: Path | None = None
+    stability_weight: float = 0.40
+    preservation_weight: float = 0.35
+    functional_weight: float = 0.25
+    functional_weight_mode: str = "auto_significance"
+    min_significant_functional_modules: int = 1
+    min_shared_events_per_module: int = 10
+    min_module_genes: int = 3
+    functional_fdr_cutoff: float = 0.10
+    score_floor: float = 0.01
 
 
 @dataclass
@@ -268,6 +347,22 @@ class BenchmarkConfig:
 
 
 @dataclass
+class MatrixInputConfig:
+    """Controls the sample-level splice-usage matrix source."""
+
+    input_mode: str = "rmats_events"
+    backend: str = "auto"
+    min_mapping_quality: int = 1
+    min_anchor_bp: int = 8
+    max_intron_length: int = 500_000
+    min_total_junction_reads: int = 20
+    min_samples_with_reads: int = 2
+    min_cluster_fraction: float = 0.001
+    exclude_duplicates: bool = True
+    max_parallel_samples: int = 1
+
+
+@dataclass
 class CoSpliceConfig:
     project_name: str
     rmats_root: Path
@@ -288,10 +383,23 @@ class CoSpliceConfig:
     association_factors: list[str] = field(default_factory=lambda: ["condition"])
     factorial_factors: list[str] = field(default_factory=list)
     batch_column: str | None = None
+    matrix_input: MatrixInputConfig = field(default_factory=MatrixInputConfig)
     stable_as: StableASConfig = field(default_factory=StableASConfig)
     network: NetworkConfig = field(default_factory=NetworkConfig)
+    uncertainty: UncertaintyConfig = field(default_factory=UncertaintyConfig)
+    gene_prior: GenePriorConfig = field(default_factory=GenePriorConfig)
+    differential_network: DifferentialNetworkConfig = field(
+        default_factory=DifferentialNetworkConfig
+    )
+    multiview: MultiViewConfig = field(default_factory=MultiViewConfig)
+    bayesian_preservation: BayesianPreservationConfig = field(
+        default_factory=BayesianPreservationConfig
+    )
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     consensus: ConsensusConfig = field(default_factory=ConsensusConfig)
+    multiobjective_selection: MultiObjectiveSelectionConfig = field(
+        default_factory=MultiObjectiveSelectionConfig
+    )
     external_cohorts: list[ExternalCohortConfig] = field(default_factory=list)
     preservation: PreservationConfig = field(default_factory=PreservationConfig)
     hybrid_programs: HybridProgramConfig = field(default_factory=HybridProgramConfig)
@@ -306,6 +414,26 @@ class CoSpliceConfig:
             raise ValueError("rmats_mode must be JC or JCEC")
         if not self.project_name.strip():
             raise ValueError("project_name is required")
+        if self.matrix_input.input_mode not in {"rmats_events", "bam_junctions"}:
+            raise ValueError("matrix_input.input_mode must be rmats_events or bam_junctions")
+        if self.matrix_input.backend not in {"auto", "pysam", "wsl_pysam", "bamnostic"}:
+            raise ValueError(
+                "matrix_input.backend must be auto, pysam, wsl_pysam or bamnostic"
+            )
+        if self.matrix_input.min_mapping_quality < 0:
+            raise ValueError("matrix_input.min_mapping_quality cannot be negative")
+        if self.matrix_input.min_anchor_bp < 1:
+            raise ValueError("matrix_input.min_anchor_bp must be positive")
+        if self.matrix_input.max_intron_length < 1:
+            raise ValueError("matrix_input.max_intron_length must be positive")
+        if self.matrix_input.min_total_junction_reads < 1:
+            raise ValueError("matrix_input.min_total_junction_reads must be positive")
+        if self.matrix_input.min_samples_with_reads < 1:
+            raise ValueError("matrix_input.min_samples_with_reads must be positive")
+        if not 0.0 <= self.matrix_input.min_cluster_fraction < 1.0:
+            raise ValueError("matrix_input.min_cluster_fraction must be within [0, 1)")
+        if self.matrix_input.max_parallel_samples < 1:
+            raise ValueError("matrix_input.max_parallel_samples must be positive")
         for name, values in (
             ("selected_conditions", self.selected_conditions),
             ("residual_covariates", self.residual_covariates),
@@ -402,6 +530,104 @@ class CoSpliceConfig:
             raise ValueError("network.bootstrap_edge_threshold must be between 0 and 1")
         if self.network.bootstrap_iterations < 0:
             raise ValueError("network.bootstrap_iterations cannot be negative")
+        if self.uncertainty.prior_strength <= 0:
+            raise ValueError("uncertainty.prior_strength must be positive")
+        if self.uncertainty.network_mode not in {
+            "diagnostic_only",
+            "raw_reliability_weighted",
+            "posterior",
+            "posterior_reliability_weighted",
+        }:
+            raise ValueError(
+                "uncertainty.network_mode must be diagnostic_only, "
+                "raw_reliability_weighted, posterior or "
+                "posterior_reliability_weighted"
+            )
+        if self.uncertainty.reliability_read_scale <= 0:
+            raise ValueError("uncertainty.reliability_read_scale must be positive")
+        if not 0.0 <= self.uncertainty.reliability_floor <= 1.0:
+            raise ValueError("uncertainty.reliability_floor must be within [0, 1]")
+        if self.uncertainty.reliability_power <= 0:
+            raise ValueError("uncertainty.reliability_power must be positive")
+        if self.gene_prior.enabled and self.gene_prior.exon_count_matrix is None:
+            raise ValueError("Enabled gene_prior requires exon_count_matrix")
+        if self.gene_prior.encoded_gene_rule not in {
+            "prefix_before_last_underscore",
+            "exact_feature_id",
+        }:
+            raise ValueError(
+                "gene_prior.encoded_gene_rule must be "
+                "prefix_before_last_underscore or exact_feature_id"
+            )
+        if self.gene_prior.min_exons < 2:
+            raise ValueError("gene_prior.min_exons must be at least 2")
+        if self.gene_prior.max_genes is not None and self.gene_prior.max_genes < 2:
+            raise ValueError("gene_prior.max_genes must be at least 2 when configured")
+        if self.gene_prior.soft_power <= 0:
+            raise ValueError("gene_prior.soft_power must be positive")
+        if not 0.0 <= self.gene_prior.weight <= 0.5:
+            raise ValueError(
+                "gene_prior.weight must be within [0, 0.5] so AS remains primary"
+            )
+        if self.gene_prior.prior_mode not in {
+            "continuous_adjacency",
+            "scaffold_reinforcement",
+        }:
+            raise ValueError(
+                "gene_prior.prior_mode must be continuous_adjacency or "
+                "scaffold_reinforcement"
+            )
+        if self.gene_prior.scaffold_knn_neighbors < 2:
+            raise ValueError("gene_prior.scaffold_knn_neighbors must be at least 2")
+        if self.gene_prior.scaffold_min_module_size < 2:
+            raise ValueError("gene_prior.scaffold_min_module_size must be at least 2")
+        if self.gene_prior.scaffold_resolution <= 0:
+            raise ValueError("gene_prior.scaffold_resolution must be positive")
+        if not self.gene_prior.feature_id_column.strip():
+            raise ValueError("gene_prior.feature_id_column is required")
+        if not self.gene_prior.gene_id_column.strip():
+            raise ValueError("gene_prior.gene_id_column is required")
+        if self.differential_network.min_samples_per_condition < 3:
+            raise ValueError(
+                "differential_network.min_samples_per_condition must be at least 3"
+            )
+        if self.differential_network.shrinkage < 0:
+            raise ValueError("differential_network.shrinkage cannot be negative")
+        if self.differential_network.permutations < 19:
+            raise ValueError("differential_network.permutations must be at least 19")
+        if self.differential_network.max_output_edges_per_module_pair < 1:
+            raise ValueError(
+                "differential_network.max_output_edges_per_module_pair must be positive"
+            )
+        if not self.differential_network.condition_column.strip():
+            raise ValueError("differential_network.condition_column is required")
+        if not 0.5 <= self.multiview.as_weight <= 1.0:
+            raise ValueError("multiview.as_weight must be within [0.5, 1.0]")
+        if len(self.multiview.auxiliary_columns) != len(
+            set(self.multiview.auxiliary_columns)
+        ):
+            raise ValueError("multiview.auxiliary_columns cannot contain duplicates")
+        if self.multiview.enabled and (
+            self.multiview.event_feature_table is None
+            or not self.multiview.auxiliary_columns
+        ):
+            raise ValueError(
+                "Enabled multiview fusion requires event_feature_table and auxiliary_columns"
+            )
+        if any(value < 0 for value in self.multiview.auxiliary_weights.values()):
+            raise ValueError("multiview auxiliary weights cannot be negative")
+        if not 0.0 <= self.multiview.edge_threshold <= 1.0:
+            raise ValueError("multiview.edge_threshold must be within [0, 1]")
+        if self.multiview.min_module_size < 2:
+            raise ValueError("multiview.min_module_size must be at least 2")
+        if self.multiview.resolution <= 0:
+            raise ValueError("multiview.resolution must be positive")
+        if self.bayesian_preservation.prior_sd <= 0:
+            raise ValueError("bayesian_preservation.prior_sd must be positive")
+        if self.bayesian_preservation.tau_scale <= 0:
+            raise ValueError("bayesian_preservation.tau_scale must be positive")
+        if self.bayesian_preservation.grid_size < 51:
+            raise ValueError("bayesian_preservation.grid_size must be at least 51")
         if self.validation.bootstrap_iterations < 1:
             raise ValueError("validation.bootstrap_iterations must be positive")
         if not 0.0 <= self.validation.moderate_jaccard <= self.validation.robust_jaccard <= 1.0:
@@ -455,6 +681,79 @@ class CoSpliceConfig:
             raise ValueError("external_cohorts names cannot be blank")
         if len(cohort_names) != len(set(cohort_names)):
             raise ValueError("external_cohorts names must be unique")
+        multiobjective = self.multiobjective_selection
+        for label, values in (
+            ("tuning_cohorts", multiobjective.tuning_cohorts),
+            ("holdout_cohorts", multiobjective.holdout_cohorts),
+        ):
+            if any(not str(value).strip() for value in values):
+                raise ValueError(f"multiobjective_selection.{label} cannot contain blanks")
+            if len(values) != len(set(values)):
+                raise ValueError(f"multiobjective_selection.{label} cannot contain duplicates")
+        unknown_selection_cohorts = (
+            set(multiobjective.tuning_cohorts)
+            | set(multiobjective.holdout_cohorts)
+        ).difference(cohort_names)
+        if unknown_selection_cohorts:
+            raise ValueError(
+                "multiobjective_selection references unknown external cohorts: "
+                f"{sorted(unknown_selection_cohorts)}"
+            )
+        overlap = set(multiobjective.tuning_cohorts) & set(
+            multiobjective.holdout_cohorts
+        )
+        if overlap:
+            raise ValueError(
+                "multiobjective_selection tuning and holdout cohorts must be disjoint: "
+                f"{sorted(overlap)}"
+            )
+        objective_weights = (
+            multiobjective.stability_weight,
+            multiobjective.preservation_weight,
+            multiobjective.functional_weight,
+        )
+        if any(value <= 0 for value in objective_weights):
+            raise ValueError(
+                "multiobjective_selection objective weights must all be positive"
+            )
+        if multiobjective.functional_weight_mode not in {
+            "auto_significance",
+            "always",
+            "disabled",
+        }:
+            raise ValueError(
+                "multiobjective_selection.functional_weight_mode must be "
+                "auto_significance, always, or disabled"
+            )
+        if multiobjective.min_significant_functional_modules < 1:
+            raise ValueError(
+                "multiobjective_selection.min_significant_functional_modules must be at least 1"
+            )
+        if multiobjective.min_shared_events_per_module < 3:
+            raise ValueError(
+                "multiobjective_selection.min_shared_events_per_module must be at least 3"
+            )
+        if multiobjective.min_module_genes < 2:
+            raise ValueError(
+                "multiobjective_selection.min_module_genes must be at least 2"
+            )
+        if not 0.0 < multiobjective.functional_fdr_cutoff <= 1.0:
+            raise ValueError(
+                "multiobjective_selection.functional_fdr_cutoff must be within (0, 1]"
+            )
+        if not 0.0 < multiobjective.score_floor < 1.0:
+            raise ValueError(
+                "multiobjective_selection.score_floor must be within (0, 1)"
+            )
+        if multiobjective.enabled:
+            if not multiobjective.tuning_cohorts:
+                raise ValueError(
+                    "Enabled multiobjective_selection requires at least one tuning cohort"
+                )
+            if multiobjective.functional_gene_sets_gmt is None:
+                raise ValueError(
+                    "Enabled multiobjective_selection requires functional_gene_sets_gmt"
+                )
         if self.preservation.permutations < 10:
             raise ValueError("preservation.permutations must be at least 10")
         if self.preservation.min_shared_events < 3:
@@ -593,6 +892,21 @@ class CoSpliceConfig:
         ]:
             value = mapping.get(key)
             mapping[key] = str(value) if value is not None else None
+        mapping["multiview"]["event_feature_table"] = (
+            str(self.multiview.event_feature_table)
+            if self.multiview.event_feature_table is not None
+            else None
+        )
+        mapping["gene_prior"]["exon_count_matrix"] = (
+            str(self.gene_prior.exon_count_matrix)
+            if self.gene_prior.exon_count_matrix is not None
+            else None
+        )
+        mapping["gene_prior"]["feature_gene_map"] = (
+            str(self.gene_prior.feature_gene_map)
+            if self.gene_prior.feature_gene_map is not None
+            else None
+        )
         mapping["external_cohorts"] = [
             {
                 "name": cohort.name,
@@ -608,6 +922,11 @@ class CoSpliceConfig:
             }
             for cohort in self.external_cohorts
         ]
+        mapping["multiobjective_selection"]["functional_gene_sets_gmt"] = (
+            str(self.multiobjective_selection.functional_gene_sets_gmt)
+            if self.multiobjective_selection.functional_gene_sets_gmt is not None
+            else None
+        )
         for section in ("interpretation",):
             for key, value in mapping[section].items():
                 if key.endswith("_matrix") or key.endswith("_hits") or key.endswith("_gmt") or key.endswith("_database"):
@@ -633,9 +952,37 @@ def load_config(path: str | Path) -> CoSpliceConfig:
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     base = config_path.parent
     stable = StableASConfig(**(raw.get("stable_as") or {}))
+    matrix_input = MatrixInputConfig(**(raw.get("matrix_input") or {}))
     network = NetworkConfig(**(raw.get("network") or {}))
+    uncertainty = UncertaintyConfig(**(raw.get("uncertainty") or {}))
+    gene_prior_raw = dict(raw.get("gene_prior") or {})
+    gene_prior_raw["exon_count_matrix"] = _path(
+        gene_prior_raw.get("exon_count_matrix"), base
+    )
+    gene_prior_raw["feature_gene_map"] = _path(
+        gene_prior_raw.get("feature_gene_map"), base
+    )
+    gene_prior = GenePriorConfig(**gene_prior_raw)
+    differential_network = DifferentialNetworkConfig(
+        **(raw.get("differential_network") or {})
+    )
+    multiview_raw = dict(raw.get("multiview") or {})
+    multiview_raw["event_feature_table"] = _path(
+        multiview_raw.get("event_feature_table"), base
+    )
+    multiview = MultiViewConfig(**multiview_raw)
+    bayesian_preservation = BayesianPreservationConfig(
+        **(raw.get("bayesian_preservation") or {})
+    )
     validation = ValidationConfig(**(raw.get("validation") or {}))
     consensus = ConsensusConfig(**(raw.get("consensus") or {}))
+    multiobjective_raw = dict(raw.get("multiobjective_selection") or {})
+    multiobjective_raw["functional_gene_sets_gmt"] = _path(
+        multiobjective_raw.get("functional_gene_sets_gmt"), base
+    )
+    multiobjective_selection = MultiObjectiveSelectionConfig(
+        **multiobjective_raw
+    )
     external_cohorts = [
         ExternalCohortConfig(
             name=str(item.get("name", "")).strip(),
@@ -681,10 +1028,17 @@ def load_config(path: str | Path) -> CoSpliceConfig:
         association_factors=[str(value) for value in raw.get("association_factors", ["condition"])],
         factorial_factors=[str(value) for value in raw.get("factorial_factors", [])],
         batch_column=str(raw["batch_column"]) if raw.get("batch_column") else None,
+        matrix_input=matrix_input,
         stable_as=stable,
         network=network,
+        uncertainty=uncertainty,
+        gene_prior=gene_prior,
+        differential_network=differential_network,
+        multiview=multiview,
+        bayesian_preservation=bayesian_preservation,
         validation=validation,
         consensus=consensus,
+        multiobjective_selection=multiobjective_selection,
         external_cohorts=external_cohorts,
         preservation=preservation,
         hybrid_programs=hybrid_programs,
