@@ -37,6 +37,12 @@ its high ARI coincided with an over-dominant module. Full CoSplice therefore
 keeps posterior-mean WGCNA and uses posterior draws only for event, module, kME,
 hub and edge-confidence reporting.
 
+From v1.2.1, confidence annotation combines label-invariant co-assignment with
+fixed-module bootstrap kME. Final `core` and `peripheral` labels must reproduce
+in two disjoint bootstrap halves. This corrects the large-module penalty of
+pairwise co-assignment without changing the WGCNA partition or lowering the
+predeclared evidence thresholds.
+
 Scientific basis: beta-binomial read-count uncertainty is established in
 replicate-aware splicing models such as FRASER and Bisbee. CoSplice uses it for
 measurement weighting rather than claiming a new differential-AS p-value.

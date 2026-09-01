@@ -1,6 +1,6 @@
 """Sample-level co-splicing network analysis for Katana projects."""
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 from katana_cosplice.annotations import AnnotationRegistry
 from katana_cosplice.architecture import (

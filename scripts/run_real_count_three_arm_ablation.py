@@ -13,9 +13,18 @@ import seaborn as sns
 from sklearn.metrics import adjusted_rand_score
 
 from katana_cosplice.config import ConsensusConfig, NetworkConfig, UncertaintyConfig
-from katana_cosplice.consensus import _confidence_tables, _select_final_modules
+from katana_cosplice.consensus import (
+    _bootstrap_kme_values,
+    _confidence_tables,
+    _event_kme,
+    _integrate_kme_membership_evidence,
+    _kme_stability_table,
+    _select_final_modules,
+    _split_half_membership_confirmation,
+)
 from katana_cosplice.ensemble_network import posterior_ensemble_correlation
 from katana_cosplice.network import discover_module_labels
+from katana_cosplice.network import _program_scores
 from katana_cosplice.r_wgcna import exact_wgcna_labels
 from katana_cosplice.uncertainty import estimate_beta_binomial_uncertainty
 
@@ -174,6 +183,82 @@ def _render_plot(
     plt.close(fig)
 
 
+def _render_membership_confidence(
+    assignments: pd.DataFrame,
+    output: Path,
+) -> None:
+    visible = assignments.loc[assignments["consensus_module"].ne("grey")].copy()
+    module_order = sorted(visible["consensus_module"].astype(str).unique())
+    role_order = ["core", "peripheral", "uncertain"]
+    role_colors = {
+        "core": "#0072B2",
+        "peripheral": "#56B4E9",
+        "uncertain": "#B8B8B8",
+    }
+    counts = (
+        visible.groupby(["consensus_module", "membership_role"], observed=True)
+        .size()
+        .unstack(fill_value=0)
+        .reindex(index=module_order, columns=role_order, fill_value=0)
+    )
+    sns.set_theme(style="ticks", context="talk")
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6.2))
+    bottom = np.zeros(len(counts), dtype=float)
+    for role in role_order:
+        values = counts[role].to_numpy(dtype=float)
+        axes[0].bar(
+            counts.index,
+            values,
+            bottom=bottom,
+            color=role_colors[role],
+            label=role,
+        )
+        bottom += values
+    axes[0].set_title("Confidence composition within fixed WGCNA modules", loc="left", fontweight="bold")
+    axes[0].set_ylabel("AS events")
+    axes[0].set_xlabel("")
+    axes[0].legend(frameon=False)
+
+    for role in role_order:
+        subset = visible.loc[visible["membership_role"].eq(role)]
+        axes[1].scatter(
+            subset["consensus_membership_confidence"],
+            subset["bootstrap_mean_abs_kME"],
+            s=20,
+            alpha=0.65,
+            color=role_colors[role],
+            edgecolors="none",
+            label=role,
+        )
+    axes[1].axvline(0.70, color="#333333", linestyle="--", linewidth=1)
+    axes[1].axhline(0.70, color="#333333", linestyle="--", linewidth=1)
+    axes[1].set_xlim(-0.02, 1.02)
+    axes[1].set_ylim(-0.02, 1.02)
+    axes[1].set_title("Complementary membership signals", loc="left", fontweight="bold")
+    axes[1].set_xlabel("Bootstrap co-assignment to own module")
+    axes[1].set_ylabel("Mean absolute bootstrap kME")
+    axes[1].legend(frameon=False, loc="lower right")
+    sns.despine(fig=fig)
+    fig.suptitle(
+        "Setd2 CoSplice membership confidence",
+        x=0.02,
+        ha="left",
+        fontsize=20,
+        fontweight="bold",
+    )
+    fig.text(
+        0.02,
+        0.01,
+        "Core membership requires confirmation in two disjoint bootstrap halves. "
+        "The WGCNA partition is fixed; confidence labels do not move events between modules.",
+        fontsize=10,
+        color="#4B5563",
+    )
+    fig.tight_layout(rect=[0, 0.06, 1, 0.93])
+    fig.savefig(output, dpi=240, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Matched-bootstrap WGCNA/posterior-ensemble/full-CoSplice ablation."
@@ -290,6 +375,16 @@ def main(argv: list[str] | None = None) -> int:
     bootstrap_rows: list[dict[str, object]] = []
     ensemble_run_labels: list[np.ndarray] = []
     full_run_labels: list[np.ndarray] = []
+    full_bootstrap_kme: list[np.ndarray] = []
+    full_reference_scores = _program_scores(
+        weighted_matrix,
+        uncertainty_labels,
+    )
+    full_baseline_kme = _event_kme(
+        weighted_matrix,
+        uncertainty_labels,
+        full_reference_scores,
+    )
     coassignment_counts = np.zeros((len(retained), len(retained)), dtype=np.uint16)
     for iteration in range(1, args.bootstraps + 1):
         indices = _bootstrap_indices(samples, raw.columns, rng)
@@ -334,6 +429,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         boot_full_labels = discover_module_labels(posterior_draw_boot, network)
         full_run_labels.append(boot_full_labels.copy())
+        full_bootstrap_kme.append(
+            _bootstrap_kme_values(
+                posterior_draw_boot,
+                uncertainty_labels,
+                full_reference_scores,
+                indices,
+            )
+        )
         for module in set(boot_full_labels).difference({"grey"}):
             module_indices = np.flatnonzero(boot_full_labels == module)
             coassignment_counts[np.ix_(module_indices, module_indices)] += 1
@@ -369,6 +472,39 @@ def main(argv: list[str] | None = None) -> int:
         full_run_labels,
         backbone_labels=np.asarray(uncertainty_labels, dtype=object),
     )
+    full_kme_stability = _kme_stability_table(
+        retained.astype(str).to_numpy(),
+        full_baseline_kme,
+        full_bootstrap_kme,
+    )
+    membership_role, membership_evidence = _integrate_kme_membership_evidence(
+        full_label_values,
+        membership_role,
+        confidence_margin,
+        full_kme_stability,
+        consensus_cfg,
+    )
+    (
+        membership_role,
+        membership_evidence,
+        split_half_role_a,
+        split_half_role_b,
+    ) = _split_half_membership_confirmation(
+        np.asarray(uncertainty_labels, dtype=object),
+        membership_role,
+        membership_evidence,
+        full_run_labels,
+        full_baseline_kme,
+        full_bootstrap_kme,
+        retained.astype(str).to_numpy(),
+        args.min_module_size,
+        consensus_cfg,
+    )
+    full_kme_stability["split_half_membership_role_a"] = split_half_role_a
+    full_kme_stability["split_half_membership_role_b"] = split_half_role_b
+    full_kme_stability["split_half_core_confirmed"] = (
+        (split_half_role_a == "core") & (split_half_role_b == "core")
+    )
     baseline = pd.Series(uncertainty_labels, index=retained, dtype=str)
     full_assignments, full_module_summary = _confidence_tables(
         coassignment,
@@ -380,6 +516,8 @@ def main(argv: list[str] | None = None) -> int:
         confidence,
         second_best,
         confidence_margin,
+        membership_evidence=membership_evidence,
+        kme_stability=full_kme_stability,
     )
     references[ARM_FULL] = _expanded_labels(
         universe, retained, np.asarray(full_label_values, dtype=object)
@@ -400,6 +538,22 @@ def main(argv: list[str] | None = None) -> int:
             _arm_summary(arm, references[arm], len(universe), bootstrap)
             for arm in (ARM_RAW, ARM_UNCERTAINTY, ARM_ENSEMBLE, ARM_FULL)
         ]
+    )
+    role_counts = full_assignments["membership_role"].value_counts()
+    full_mask = summary["arm"].eq(ARM_FULL)
+    summary["n_core_events"] = np.nan
+    summary["n_peripheral_events"] = np.nan
+    summary["n_uncertain_assigned_events"] = np.nan
+    summary["core_fraction_of_assigned"] = np.nan
+    summary.loc[full_mask, "n_core_events"] = int(role_counts.get("core", 0))
+    summary.loc[full_mask, "n_peripheral_events"] = int(
+        role_counts.get("peripheral", 0)
+    )
+    summary.loc[full_mask, "n_uncertain_assigned_events"] = int(
+        role_counts.get("uncertain", 0)
+    )
+    summary.loc[full_mask, "core_fraction_of_assigned"] = float(
+        role_counts.get("core", 0) / max(np.count_nonzero(full_label_values != "grey"), 1)
     )
     assignments = pd.DataFrame(index=universe)
     assignments.index.name = "event_key"
@@ -463,8 +617,26 @@ def main(argv: list[str] | None = None) -> int:
     uncertainty.event_metrics.to_csv(output / "setd2_uncertainty_event_metrics.tsv", sep="\t")
     full_assignments.to_csv(output / "setd2_full_cosplice_confidence.tsv", sep="\t", index=False)
     full_module_summary.to_csv(output / "setd2_full_cosplice_module_summary.tsv", sep="\t", index=False)
+    evidence_summary = (
+        full_assignments.groupby(
+            ["consensus_module", "membership_role", "membership_evidence"],
+            observed=True,
+        )
+        .size()
+        .rename("n_events")
+        .reset_index()
+    )
+    evidence_summary.to_csv(
+        output / "setd2_membership_confidence_summary.tsv",
+        sep="\t",
+        index=False,
+    )
     parameter_search.to_csv(output / "setd2_consensus_parameter_search.tsv", sep="\t", index=False)
     _render_plot(summary, bootstrap, reliability, output / "setd2_four_arm_ablation.png")
+    _render_membership_confidence(
+        full_assignments,
+        output / "setd2_membership_confidence.png",
+    )
 
     parameters = {
         "design": "real replicate IJC/SJC four-arm ablation",
@@ -478,6 +650,16 @@ def main(argv: list[str] | None = None) -> int:
         "n_starting_events": len(universe),
         "n_uncertainty_pass_events": len(retained),
         "max_events_predeclared": args.max_events,
+        "membership_confidence": {
+            "partition": "fixed posterior-mean WGCNA",
+            "evidence": "bootstrap co-assignment OR fixed-module bootstrap kME",
+            "confirmation": "both disjoint bootstrap halves",
+            "thresholds": {
+                key: value
+                for key, value in asdict(consensus_cfg).items()
+                if "membership" in key or "kme" in key
+            },
+        },
     }
     (output / "parameters.json").write_text(
         json.dumps(parameters, indent=2, default=str), encoding="utf-8"
@@ -511,6 +693,17 @@ def main(argv: list[str] | None = None) -> int:
         "## Production decision",
         "",
         decision.to_markdown(index=False, floatfmt=".4f"),
+        "",
+        "## Membership confidence",
+        "",
+        f"- Split-half confirmed core events: {int(role_counts.get('core', 0))} "
+        f"of {int(np.count_nonzero(full_label_values != 'grey'))} fixed-partition events "
+        f"({float(role_counts.get('core', 0) / max(np.count_nonzero(full_label_values != 'grey'), 1)):.1%}).",
+        f"- Split-half supported peripheral events: {int(role_counts.get('peripheral', 0))}.",
+        f"- Assigned but unconfirmed events: {int(role_counts.get('uncertain', 0))}.",
+        "- A core label requires either strong label-invariant co-assignment or strong "
+        "fixed-module kME, plus confirmation in both disjoint bootstrap halves. "
+        "This confidence layer never changes the WGCNA module assignment.",
         "",
         "## Interpretation boundary",
         "",

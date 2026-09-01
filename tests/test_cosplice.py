@@ -30,6 +30,7 @@ from katana_cosplice.config import (
 )
 from katana_cosplice.consensus import (
     _backbone_confidence_only_membership,
+    _integrate_kme_membership_evidence,
     build_bootstrap_coassignment_consensus,
 )
 from katana_cosplice.hybrid_programs import build_hybrid_programs
@@ -413,6 +414,14 @@ def test_bootstrap_coassignment_builds_confident_consensus_modules() -> None:
         "analysis_assignment_scope",
         "partition_source",
         "confidence_action",
+        "membership_evidence",
+        "full_data_kME",
+        "bootstrap_mean_abs_kME",
+        "bootstrap_q10_abs_kME",
+        "bootstrap_kME_sign_consistency",
+        "split_half_membership_role_a",
+        "split_half_membership_role_b",
+        "split_half_core_confirmed",
     }.issubset(result.assignments)
     assert set(result.assignments["analysis_assignment_scope"]).issubset(
         {
@@ -502,6 +511,39 @@ def test_confidence_only_keeps_low_confidence_backbone_events_assigned() -> None
     assert np.allclose(second, 0.40)
     assert np.allclose(margin, 0.20)
     assert np.array_equal(labels, candidates)
+
+
+def test_bootstrap_kme_can_rescue_stable_diffuse_backbone_membership() -> None:
+    labels = np.asarray(["C01", "C01", "C02", "C02", "grey"], dtype=object)
+    coassignment_roles = np.asarray(
+        ["uncertain", "core", "uncertain", "uncertain", "grey"],
+        dtype=object,
+    )
+    margins = np.asarray([0.12, 0.20, -0.05, 0.10, 0.0])
+    kme = pd.DataFrame(
+        {
+            "bootstrap_mean_abs_kME": [0.82, 0.84, 0.90, 0.58, np.nan],
+            "bootstrap_q10_abs_kME": [0.66, 0.68, 0.72, 0.38, np.nan],
+            "bootstrap_kME_sign_consistency": [0.90, 0.95, 0.95, 0.80, np.nan],
+        }
+    )
+
+    roles, evidence = _integrate_kme_membership_evidence(
+        labels,
+        coassignment_roles,
+        margins,
+        kme,
+        ConsensusConfig(),
+    )
+
+    assert roles.tolist() == ["core", "core", "uncertain", "peripheral", "grey"]
+    assert evidence.tolist() == [
+        "bootstrap_kME",
+        "coassignment_and_bootstrap_kME",
+        "insufficient_confidence",
+        "bootstrap_kME",
+        "unassigned",
+    ]
 
 
 def test_hybrid_programs_retain_tight_and_diffuse_assignments() -> None:

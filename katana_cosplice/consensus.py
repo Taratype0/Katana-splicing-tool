@@ -51,6 +51,242 @@ class ConsensusResult:
     selection_audit: pd.DataFrame
 
 
+def _row_correlation(values: np.ndarray, target: np.ndarray) -> np.ndarray:
+    """Pearson correlation of every row with one module score vector."""
+
+    x = np.asarray(values, dtype=float)
+    y = np.asarray(target, dtype=float)
+    x = x - np.nanmean(x, axis=1, keepdims=True)
+    y = y - np.nanmean(y)
+    x = np.nan_to_num(x, nan=0.0)
+    y = np.nan_to_num(y, nan=0.0)
+    denominator = np.sqrt(np.sum(x * x, axis=1) * np.sum(y * y))
+    return np.divide(
+        x @ y,
+        denominator,
+        out=np.zeros(x.shape[0], dtype=float),
+        where=denominator > 1e-12,
+    )
+
+
+def _event_kme(
+    matrix: pd.DataFrame,
+    module_labels: np.ndarray,
+    scores: pd.DataFrame,
+) -> np.ndarray:
+    """Return each event's membership correlation with its fixed module score."""
+
+    labels = np.asarray(module_labels, dtype=object).astype(str)
+    output = np.zeros(len(labels), dtype=float)
+    for module in sorted(set(labels).difference({"grey"})):
+        members = np.flatnonzero(labels == module)
+        if not len(members) or module not in scores:
+            continue
+        output[members] = _row_correlation(
+            matrix.iloc[members].to_numpy(dtype=float),
+            scores[module].to_numpy(dtype=float),
+        )
+    return output
+
+
+def _bootstrap_kme_values(
+    bootstrap: pd.DataFrame,
+    baseline_labels: np.ndarray,
+    reference_scores: pd.DataFrame,
+    sampled_indices: np.ndarray,
+) -> np.ndarray:
+    """Estimate fixed-module kME after one stratified bootstrap perturbation."""
+
+    scores = _program_scores(bootstrap, baseline_labels)
+    for module in scores.columns.intersection(reference_scores.columns):
+        reference = reference_scores[module].to_numpy(dtype=float)[sampled_indices]
+        candidate = scores[module].to_numpy(dtype=float)
+        if len(candidate) > 1 and np.corrcoef(candidate, reference)[0, 1] < 0:
+            scores[module] = -candidate
+    return _event_kme(bootstrap, baseline_labels, scores)
+
+
+def _kme_stability_table(
+    event_keys: np.ndarray,
+    baseline_kme: np.ndarray,
+    bootstrap_kme: list[np.ndarray],
+) -> pd.DataFrame:
+    runs = (
+        np.vstack(bootstrap_kme)
+        if bootstrap_kme
+        else np.empty((0, len(event_keys)), dtype=float)
+    )
+    if len(runs):
+        absolute = np.abs(runs)
+        mean_absolute = absolute.mean(axis=0)
+        lower_absolute = np.quantile(absolute, 0.10, axis=0)
+        baseline_sign = np.sign(baseline_kme)
+        sign_consistency = np.mean(np.sign(runs) == baseline_sign[None, :], axis=0)
+    else:
+        mean_absolute = np.full(len(event_keys), np.nan)
+        lower_absolute = np.full(len(event_keys), np.nan)
+        sign_consistency = np.full(len(event_keys), np.nan)
+    return pd.DataFrame(
+        {
+            "event_key": event_keys.astype(str),
+            "full_data_kME": baseline_kme,
+            "bootstrap_mean_abs_kME": mean_absolute,
+            "bootstrap_q10_abs_kME": lower_absolute,
+            "bootstrap_kME_sign_consistency": sign_consistency,
+        }
+    )
+
+
+def _integrate_kme_membership_evidence(
+    labels: np.ndarray,
+    coassignment_roles: np.ndarray,
+    confidence_margin: np.ndarray,
+    kme_stability: pd.DataFrame,
+    settings: ConsensusConfig,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Combine label-invariant co-assignment and fixed-module kME evidence.
+
+    The WGCNA partition is never changed. Stable kME can rescue membership
+    confidence when a diffuse module repeatedly splits into submodules during
+    bootstrap, while a positive co-assignment margin prevents cross-module
+    ambiguity from being relabeled as a core member.
+    """
+
+    roles = np.asarray(coassignment_roles, dtype=object).copy()
+    assigned = np.asarray(labels, dtype=object).astype(str) != "grey"
+    mean_abs = kme_stability["bootstrap_mean_abs_kME"].to_numpy(dtype=float)
+    lower_abs = kme_stability["bootstrap_q10_abs_kME"].to_numpy(dtype=float)
+    sign = kme_stability["bootstrap_kME_sign_consistency"].to_numpy(dtype=float)
+    unambiguous = confidence_margin > 0.0
+    kme_core = (
+        assigned
+        & unambiguous
+        & (mean_abs >= settings.core_kme_mean_min)
+        & (lower_abs >= settings.core_kme_lower_quantile_min)
+        & (sign >= settings.core_kme_sign_consistency_min)
+    )
+    kme_peripheral = (
+        assigned
+        & unambiguous
+        & ~kme_core
+        & (mean_abs >= settings.peripheral_kme_mean_min)
+        & (lower_abs >= settings.peripheral_kme_lower_quantile_min)
+        & (sign >= settings.peripheral_kme_sign_consistency_min)
+    )
+    coassignment_core = roles == "core"
+    coassignment_peripheral = roles == "peripheral"
+    roles[kme_peripheral & ~coassignment_core] = "peripheral"
+    roles[kme_core] = "core"
+    roles[~assigned] = "grey"
+    basis = np.full(len(labels), "insufficient_confidence", dtype=object)
+    basis[~assigned] = "unassigned"
+    basis[coassignment_peripheral] = "coassignment"
+    basis[kme_peripheral] = "bootstrap_kME"
+    basis[coassignment_peripheral & kme_peripheral] = "coassignment_and_bootstrap_kME"
+    basis[coassignment_core] = "coassignment"
+    basis[kme_core] = "bootstrap_kME"
+    basis[coassignment_core & kme_core] = "coassignment_and_bootstrap_kME"
+    return roles, basis
+
+
+def _coassignment_from_label_runs(
+    run_labels: list[np.ndarray],
+    n_events: int,
+) -> np.ndarray:
+    counts = np.zeros((n_events, n_events), dtype=np.uint16)
+    for labels in run_labels:
+        for module in set(labels).difference({"grey"}):
+            members = np.flatnonzero(labels == module)
+            counts[np.ix_(members, members)] += 1
+    result = counts.astype(np.float32) / max(len(run_labels), 1)
+    np.fill_diagonal(result, 1.0)
+    return result
+
+
+def _split_half_membership_confirmation(
+    baseline_labels: np.ndarray,
+    all_roles: np.ndarray,
+    all_evidence: np.ndarray,
+    run_labels: list[np.ndarray],
+    baseline_kme: np.ndarray,
+    bootstrap_kme: list[np.ndarray],
+    event_keys: np.ndarray,
+    min_module_size: int,
+    settings: ConsensusConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Confirm membership confidence on disjoint bootstrap halves.
+
+    This confirmation is deliberately applied only to confidence labels. The
+    full-data WGCNA partition remains fixed and every assigned event remains
+    available for downstream sensitivity analyses.
+    """
+
+    n_runs = min(len(run_labels), len(bootstrap_kme))
+    not_evaluated = np.full(len(event_keys), "not_evaluated", dtype=object)
+    if n_runs < 4:
+        return all_roles, all_evidence, not_evaluated, not_evaluated.copy()
+    split = n_runs // 2
+    half_roles: list[np.ndarray] = []
+    for start, stop in ((0, split), (split, n_runs)):
+        coassignment = _coassignment_from_label_runs(
+            run_labels[start:stop],
+            len(event_keys),
+        )
+        labels, roles, _own, _second, margin, _candidate = (
+            _backbone_confidence_only_membership(
+                coassignment,
+                baseline_labels,
+                min_module_size,
+                settings,
+            )
+        )
+        stability = _kme_stability_table(
+            event_keys,
+            baseline_kme,
+            bootstrap_kme[start:stop],
+        )
+        roles, _basis = _integrate_kme_membership_evidence(
+            labels,
+            roles,
+            margin,
+            stability,
+            settings,
+        )
+        half_roles.append(roles)
+    first, second = half_roles
+    output = np.asarray(all_roles, dtype=object).copy()
+    assigned = np.asarray(baseline_labels, dtype=object).astype(str) != "grey"
+    first_supported = np.isin(first, ["core", "peripheral"])
+    second_supported = np.isin(second, ["core", "peripheral"])
+    core_confirmed = (
+        (output == "core") & (first == "core") & (second == "core")
+    )
+    peripheral_confirmed = (
+        assigned
+        & ~core_confirmed
+        & np.isin(output, ["core", "peripheral"])
+        & first_supported
+        & second_supported
+    )
+    output[assigned] = "uncertain"
+    output[peripheral_confirmed] = "peripheral"
+    output[core_confirmed] = "core"
+    output[~assigned] = "grey"
+    evidence = np.asarray(all_evidence, dtype=object).copy()
+    evidence[assigned & ~peripheral_confirmed & ~core_confirmed] = (
+        "split_half_not_confirmed"
+    )
+    evidence[peripheral_confirmed] = np.asarray(
+        [f"{value};split_half_supported" for value in evidence[peripheral_confirmed]],
+        dtype=object,
+    )
+    evidence[core_confirmed] = np.asarray(
+        [f"{value};split_half_core_confirmed" for value in evidence[core_confirmed]],
+        dtype=object,
+    )
+    return output, evidence, first, second
+
+
 def _bootstrap_indices(samples: pd.DataFrame, columns: pd.Index, rng: np.random.Generator) -> np.ndarray:
     ordered = samples.set_index("sample_id").reindex(columns)
     if "condition" not in ordered:
@@ -217,6 +453,8 @@ def _confidence_tables(
     second_best: np.ndarray | None = None,
     margin: np.ndarray | None = None,
     assignment_policy: str = "consensus_partition",
+    membership_evidence: np.ndarray | None = None,
+    kme_stability: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     modules = sorted(set(labels).difference({"grey"}))
     indices = {module: np.flatnonzero(labels == module) for module in modules}
@@ -250,6 +488,11 @@ def _confidence_tables(
                 "membership_role": (
                     str(membership_role[event_index]) if membership_role is not None else "core"
                 ),
+                "membership_evidence": (
+                    str(membership_evidence[event_index])
+                    if membership_evidence is not None
+                    else "coassignment"
+                ),
                 "consensus_membership_confidence": own_mean,
                 "next_best_module_coassignment": second,
                 "consensus_confidence_margin": (
@@ -259,6 +502,13 @@ def _confidence_tables(
             }
         )
     assignments = pd.DataFrame(rows)
+    if kme_stability is not None:
+        assignments = assignments.merge(
+            kme_stability,
+            on="event_key",
+            how="left",
+            validate="one_to_one",
+        )
     assignments["analysis_module"] = assignments["consensus_module"]
     if assignment_policy == "backbone_confidence_only":
         assignments["partition_source"] = "full_data_wgcna_backbone"
@@ -327,6 +577,28 @@ def _confidence_tables(
                         "membership_role",
                     ].eq("uncertain").sum()
                 ),
+                "mean_bootstrap_abs_kME": float(
+                    pd.to_numeric(
+                        assignments.loc[
+                            assignments["consensus_module"].eq(module),
+                            "bootstrap_mean_abs_kME",
+                        ],
+                        errors="coerce",
+                    ).mean()
+                )
+                if "bootstrap_mean_abs_kME" in assignments
+                else np.nan,
+                "mean_bootstrap_kME_sign_consistency": float(
+                    pd.to_numeric(
+                        assignments.loc[
+                            assignments["consensus_module"].eq(module),
+                            "bootstrap_kME_sign_consistency",
+                        ],
+                        errors="coerce",
+                    ).mean()
+                )
+                if "bootstrap_kME_sign_consistency" in assignments
+                else np.nan,
             }
         )
     return assignments, pd.DataFrame(module_rows)
@@ -1316,6 +1588,7 @@ def build_bootstrap_coassignment_consensus(
     counts = np.zeros((n_events, n_events), dtype=np.uint16)
     run_rows: list[dict[str, object]] = []
     run_labels: list[np.ndarray] = []
+    bootstrap_kme: list[np.ndarray] = []
     rng = np.random.default_rng(settings.random_seed)
     # Outer co-assignment bootstrap is the stability estimator. Disable the
     # expensive inner edge/community bootstraps to avoid nested resampling.
@@ -1366,6 +1639,12 @@ def build_bootstrap_coassignment_consensus(
                 }
             ]
         )
+    baseline_scores = _program_scores(matrix, baseline.to_numpy(dtype=object))
+    baseline_kme = _event_kme(
+        matrix,
+        baseline.to_numpy(dtype=object),
+        baseline_scores,
+    )
     for iteration in range(1, settings.bootstrap_iterations + 1):
         indices = _bootstrap_indices(samples, matrix.columns, rng)
         bootstrap = matrix.iloc[:, indices].copy()
@@ -1387,6 +1666,14 @@ def build_bootstrap_coassignment_consensus(
             gene_prior_weight=gene_prior_weight,
         )
         run_labels.append(labels.copy())
+        bootstrap_kme.append(
+            _bootstrap_kme_values(
+                bootstrap,
+                baseline.to_numpy(dtype=object),
+                baseline_scores,
+                indices,
+            )
+        )
         for module in set(labels).difference({"grey"}):
             module_indices = np.flatnonzero(labels == module)
             counts[np.ix_(module_indices, module_indices)] += 1
@@ -1430,6 +1717,43 @@ def build_bootstrap_coassignment_consensus(
         candidate_scorer=candidate_scorer,
         backbone_labels=baseline.to_numpy(dtype=object),
     )
+    kme_stability = _kme_stability_table(
+        event_keys,
+        baseline_kme,
+        bootstrap_kme,
+    )
+    membership_evidence = np.full(
+        len(event_keys), "coassignment", dtype=object
+    )
+    if settings.clustering_method == "backbone_confidence_only":
+        membership_role, membership_evidence = _integrate_kme_membership_evidence(
+            labels,
+            membership_role,
+            confidence_margin,
+            kme_stability,
+            settings,
+        )
+        (
+            membership_role,
+            membership_evidence,
+            split_half_role_a,
+            split_half_role_b,
+        ) = _split_half_membership_confirmation(
+            baseline.to_numpy(dtype=object),
+            membership_role,
+            membership_evidence,
+            run_labels,
+            baseline_kme,
+            bootstrap_kme,
+            event_keys,
+            min_module_size,
+            settings,
+        )
+        kme_stability["split_half_membership_role_a"] = split_half_role_a
+        kme_stability["split_half_membership_role_b"] = split_half_role_b
+        kme_stability["split_half_core_confirmed"] = (
+            (split_half_role_a == "core") & (split_half_role_b == "core")
+        )
     if settings.clustering_method in {
         "backbone_confidence_only",
         "backbone_refined_consensus",
@@ -1460,6 +1784,8 @@ def build_bootstrap_coassignment_consensus(
             if settings.clustering_method == "backbone_confidence_only"
             else "consensus_partition"
         ),
+        membership_evidence=membership_evidence,
+        kme_stability=kme_stability,
     )
     scores = _program_scores(matrix, labels)
     bootstrap_runs = pd.DataFrame(run_rows)
@@ -1549,6 +1875,12 @@ def build_bootstrap_coassignment_consensus(
                 "core_membership_min": settings.core_membership_min,
                 "peripheral_membership_min": settings.peripheral_membership_min,
                 "peripheral_membership_margin": settings.peripheral_membership_margin,
+                "core_kme_mean_min": settings.core_kme_mean_min,
+                "core_kme_lower_quantile_min": settings.core_kme_lower_quantile_min,
+                "core_kme_sign_consistency_min": settings.core_kme_sign_consistency_min,
+                "peripheral_kme_mean_min": settings.peripheral_kme_mean_min,
+                "peripheral_kme_lower_quantile_min": settings.peripheral_kme_lower_quantile_min,
+                "peripheral_kme_sign_consistency_min": settings.peripheral_kme_sign_consistency_min,
                 "n_consensus_modules": len(set(labels).difference({"grey"})),
                 "n_grey_events": int(np.count_nonzero(labels == "grey")),
                 "grey_fraction": float(np.mean(labels == "grey")),
@@ -1578,6 +1910,11 @@ def build_bootstrap_coassignment_consensus(
                 ),
                 "read_uncertainty_weighting": event_reliability is not None,
                 "posterior_measurement_uncertainty_bootstrap": posterior_bootstrap,
+                "membership_confidence_model": (
+                    "coassignment_or_fixed_module_bootstrap_kME"
+                    if settings.clustering_method == "backbone_confidence_only"
+                    else "coassignment_only"
+                ),
                 "median_event_reliability": (
                     float(
                         pd.to_numeric(

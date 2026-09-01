@@ -230,6 +230,12 @@ class ConsensusConfig:
     core_membership_min: float = 0.70
     peripheral_membership_min: float = 0.45
     peripheral_membership_margin: float = 0.05
+    core_kme_mean_min: float = 0.70
+    core_kme_lower_quantile_min: float = 0.50
+    core_kme_sign_consistency_min: float = 0.80
+    peripheral_kme_mean_min: float = 0.50
+    peripheral_kme_lower_quantile_min: float = 0.30
+    peripheral_kme_sign_consistency_min: float = 0.70
     max_grey_fraction: float = 0.25
     max_largest_module_fraction: float = 0.60
     dense_max_events: int = 8_000
@@ -783,6 +789,36 @@ class CoSpliceConfig:
             )
         if not 0.0 <= self.consensus.peripheral_membership_margin <= 1.0:
             raise ValueError("consensus.peripheral_membership_margin must be within [0, 1]")
+        for name in (
+            "core_kme_mean_min",
+            "core_kme_lower_quantile_min",
+            "core_kme_sign_consistency_min",
+            "peripheral_kme_mean_min",
+            "peripheral_kme_lower_quantile_min",
+            "peripheral_kme_sign_consistency_min",
+        ):
+            if not 0.0 <= getattr(self.consensus, name) <= 1.0:
+                raise ValueError(f"consensus.{name} must be within [0, 1]")
+        if self.consensus.peripheral_kme_mean_min > self.consensus.core_kme_mean_min:
+            raise ValueError(
+                "consensus.peripheral_kme_mean_min cannot exceed core_kme_mean_min"
+            )
+        if (
+            self.consensus.peripheral_kme_lower_quantile_min
+            > self.consensus.core_kme_lower_quantile_min
+        ):
+            raise ValueError(
+                "consensus.peripheral_kme_lower_quantile_min cannot exceed "
+                "core_kme_lower_quantile_min"
+            )
+        if (
+            self.consensus.peripheral_kme_sign_consistency_min
+            > self.consensus.core_kme_sign_consistency_min
+        ):
+            raise ValueError(
+                "consensus.peripheral_kme_sign_consistency_min cannot exceed "
+                "core_kme_sign_consistency_min"
+            )
         if not 0.0 <= self.consensus.max_grey_fraction < 1.0:
             raise ValueError("consensus.max_grey_fraction must be within [0, 1)")
         if not 0.0 < self.consensus.max_largest_module_fraction <= 1.0:

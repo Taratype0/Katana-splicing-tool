@@ -343,11 +343,12 @@ Interactions are labelled as attenuated same-direction, enhanced same-direction,
 - Each outer bootstrap performs one network partition; inner edge/community bootstraps are disabled to avoid nested resampling.
 - Pairwise co-assignment is the fraction of bootstraps in which two events occupy the same non-grey module.
 - Production keeps the full-data WGCNA partition exactly. Co-assignment is not cut into a second partition and does not send a WGCNA-assigned event to grey.
-- Events with strong within-module co-assignment are labelled `core`; moderately supported events are `peripheral`; weak or ambiguous events are `uncertain` but remain in their WGCNA module. `grey` only means WGCNA itself did not assign the event.
+- Membership confidence uses two complementary, label-invariant signals on the fixed WGCNA partition: within-module co-assignment and fixed-module eigengene membership (`kME`) across posterior-draw bootstraps. A diffuse module may split into smaller bootstrap branches while an event remains strongly related to its fixed module eigengene, so co-assignment alone is not sufficient.
+- `core` requires strong co-assignment or strong bootstrap kME, a positive own-versus-next-module margin, and confirmation in two disjoint bootstrap halves. `peripheral` requires moderate evidence confirmed in both halves. Weak or ambiguous events are `uncertain` but remain in their WGCNA module. `grey` only means WGCNA itself did not assign the event.
 - `partition_source=full_data_wgcna_backbone` and `confidence_action=annotation_only` make this contract machine-readable. `adjusted_rand_index_observed_vs_consensus` must equal 1 in production mode.
 - Historical average-linkage, Dynamic Tree Cut, Leiden, and boundary-rejecting modes remain available only through explicit non-default configuration for reproducibility.
 - The default uses 20 stratified sample bootstraps. Higher values such as 50 or 100 are optional sensitivity analyses, not a requirement for routine discovery.
-- Event confidence is mean co-assignment to the selected module; the confidence margin compares that value with the next-best module. `assignment_uncertainty` is one minus confidence.
+- Event confidence is mean co-assignment to the selected module; the confidence margin compares that value with the next-best module. `assignment_uncertainty` is one minus co-assignment confidence. Separate columns report full-data kME, mean absolute bootstrap kME, its 10th percentile, sign consistency, both split-half roles and the final evidence basis.
 - `consensus_parameter_search.tsv` records the fixed production partition and its audit metrics. No Setd2 labels, conditions or expected biological answer enter confidence estimation.
 - The complete matrix is stored as compressed NPZ (`event_keys`, `coassignment`); the TSV edge view is intentionally capped for preview.
 - This is internal consensus in the discovery cohort, not independent validation.
