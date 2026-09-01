@@ -32,6 +32,7 @@ katana-cosplice-input-benchmark = "katana_cosplice.input_mode_benchmark:main"
 katana-cosplice-locked-ablation = "scripts.run_locked_three_arm_ablation:main"
 katana-cosplice-locked-panel-report = "katana_cosplice.locked_panel_report:main"
 katana-cosplice-real-count-ablation = "scripts.run_real_count_four_arm_ablation:main"
+katana-cosplice-membership-validation = "scripts.validate_membership_confidence_panel:main"
 
 [tool.setuptools]
 packages = ["app", "app.pages", "app.widgets", "katana_cosplice", "scripts", "src", "src.analysis", "src.adapters", "src.domain", "src.domain.models", "src.domain.rules", "src.io", "src.io.loaders", "src.services", "src.visualization"]

@@ -77,6 +77,7 @@ loaded, then aggregate completed runs into one auditable panel:
 ```powershell
 katana-cosplice-locked-ablation --help
 katana-cosplice-locked-panel-report --root <completed-run-root>
+katana-cosplice-membership-validation --help
 ```
 
 The locked runner compares stability-only CoSplice, adaptive multi-objective CoSplice and exact R
@@ -84,6 +85,12 @@ WGCNA on the same event universe. The functional objective is activated only whe
 tuning-GMT enrichment passes its FDR gate; otherwise its weight is set to zero and the negative
 result is retained. See
 [`docs/COSPLICE_LOCKED_PANEL_VALIDATION.md`](docs/COSPLICE_LOCKED_PANEL_VALIDATION.md).
+
+The membership-validation runner tests split-half core labels against a
+per-module, count-matched top-kME control across independent public cohorts.
+This prevents a smaller core set from receiving automatic credit and retains
+negative external results. See
+[`docs/COSPLICE_V121_MEMBERSHIP_EXTERNAL_VALIDATION.md`](docs/COSPLICE_V121_MEMBERSHIP_EXTERNAL_VALIDATION.md).
 
 Optional / project-dependent:
 
