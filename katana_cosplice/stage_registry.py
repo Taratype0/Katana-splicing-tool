@@ -149,7 +149,8 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
         order=45,
         description=(
             "Annotate the fixed WGCNA modules with sample-stratified bootstrap "
-            "co-assignment confidence; this does not change membership and is "
+            "co-assignment, fixed-module kME, split-half confirmation and optional "
+            "read-reliability confidence; this does not change membership and is "
             "not external preservation."
         ),
         dependencies=("network_observed",),

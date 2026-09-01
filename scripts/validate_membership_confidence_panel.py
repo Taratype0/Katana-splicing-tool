@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from katana_cosplice.config import (
     PreservationConfig,
 )
 from katana_cosplice.consensus import build_bootstrap_coassignment_consensus
+from katana_cosplice.formal_preservation import run_formal_preservation
 from katana_cosplice.locked_ablation import (
     combine_gmt_files,
     file_record,
@@ -37,6 +39,7 @@ from katana_cosplice.locked_ablation import (
     write_json,
 )
 from katana_cosplice.membership_validation import (
+    ARM_CONFIDENCE,
     ARM_CORE,
     ARM_FULL,
     ARM_MATCHED,
@@ -51,6 +54,13 @@ PALETTE = {
     ARM_FULL: "#9CA3AF",
     ARM_MATCHED: "#D97706",
     ARM_CORE: "#087E8B",
+    ARM_CONFIDENCE: "#7C3AED",
+}
+ARM_DISPLAY = {
+    ARM_FULL: "All WGCNA members",
+    ARM_MATCHED: "Top-kME matched",
+    ARM_CORE: "Split-half core",
+    ARM_CONFIDENCE: "Continuous confidence",
 }
 
 
@@ -244,13 +254,22 @@ def phenotype_association(
     return result
 
 
-def paired_core_test(table: pd.DataFrame, metric: str) -> dict[str, object]:
-    subset = table.loc[table["arm"].isin([ARM_MATCHED, ARM_CORE])]
+def paired_confidence_test(table: pd.DataFrame, metric: str) -> dict[str, object]:
+    subset = table.loc[table["arm"].isin([ARM_MATCHED, ARM_CONFIDENCE])]
     pivot = subset.pivot_table(index=["cohort", "consensus_module"], columns="arm", values=metric)
-    pivot = pivot.dropna(subset=[ARM_MATCHED, ARM_CORE])
+    pivot = pivot.dropna(subset=[ARM_MATCHED, ARM_CONFIDENCE])
     if pivot.empty:
-        return {"metric": metric, "n_pairs": 0, "median_core_minus_matched": np.nan, "wilcoxon_pvalue": np.nan}
-    delta = pivot[ARM_CORE] - pivot[ARM_MATCHED]
+        return {
+            "metric": metric,
+            "n_pairs": 0,
+            "median_confidence_minus_matched": np.nan,
+            "mean_confidence_minus_matched": np.nan,
+            "confidence_wins": 0,
+            "ties": 0,
+            "matched_wins": 0,
+            "wilcoxon_pvalue": np.nan,
+        }
+    delta = pivot[ARM_CONFIDENCE] - pivot[ARM_MATCHED]
     try:
         pvalue = float(wilcoxon(delta, zero_method="zsplit").pvalue)
     except ValueError:
@@ -258,9 +277,9 @@ def paired_core_test(table: pd.DataFrame, metric: str) -> dict[str, object]:
     return {
         "metric": metric,
         "n_pairs": len(delta),
-        "median_core_minus_matched": float(delta.median()),
-        "mean_core_minus_matched": float(delta.mean()),
-        "core_wins": int((delta > 0).sum()),
+        "median_confidence_minus_matched": float(delta.median()),
+        "mean_confidence_minus_matched": float(delta.mean()),
+        "confidence_wins": int((delta > 0).sum()),
         "ties": int((delta == 0).sum()),
         "matched_wins": int((delta < 0).sum()),
         "wilcoxon_pvalue": pvalue,
@@ -294,7 +313,7 @@ def render_plots(
     axes[1].tick_params(axis="x", rotation=20)
     sns.despine(fig=fig)
     fig.tight_layout()
-    path = plot_dir / "external_preservation_three_arm.png"
+    path = plot_dir / "external_preservation_four_arm.png"
     fig.savefig(path, dpi=240, bbox_inches="tight")
     plt.close(fig)
     generated.append(path)
@@ -326,10 +345,89 @@ def render_plots(
     return generated
 
 
+def render_formal_preservation_plots(
+    output: Path,
+    wgcna: pd.DataFrame,
+    netrep: pd.DataFrame,
+) -> list[Path]:
+    plot_dir = output / "plots"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    wgcna = wgcna.assign(arm_display=wgcna["arm"].map(ARM_DISPLAY))
+    netrep = netrep.assign(arm_display=netrep["arm"].map(ARM_DISPLAY))
+    display_palette = {
+        ARM_DISPLAY[arm]: color for arm, color in PALETTE.items()
+    }
+    sns.set_theme(style="ticks", context="talk")
+    fig, axes = plt.subplots(1, 2, figsize=(14.5, 5.6))
+    sns.boxplot(
+        data=wgcna,
+        x="arm_display",
+        y="Zsummary.pres",
+        hue="arm_display",
+        palette=display_palette,
+        legend=False,
+        ax=axes[0],
+    )
+    sns.stripplot(
+        data=wgcna,
+        x="arm_display",
+        y="Zsummary.pres",
+        color="#111827",
+        alpha=0.55,
+        size=3,
+        ax=axes[0],
+    )
+    axes[0].axhline(2, color="#6B7280", linestyle="--", linewidth=1)
+    axes[0].axhline(10, color="#111827", linestyle="--", linewidth=1)
+    axes[0].set_title("Official WGCNA preservation", loc="left", fontweight="bold")
+    axes[0].set_xlabel("")
+    axes[0].set_ylabel("WGCNA Zsummary.pres")
+
+    sns.boxplot(
+        data=netrep,
+        x="arm_display",
+        y="significant_statistics_FDR05",
+        hue="arm_display",
+        palette=display_palette,
+        legend=False,
+        ax=axes[1],
+    )
+    sns.stripplot(
+        data=netrep,
+        x="arm_display",
+        y="significant_statistics_FDR05",
+        color="#111827",
+        alpha=0.55,
+        size=3,
+        ax=axes[1],
+    )
+    axes[1].set_ylim(-0.3, 7.3)
+    axes[1].set_yticks(range(8))
+    axes[1].set_title("NetRep seven-statistic support", loc="left", fontweight="bold")
+    axes[1].set_xlabel("")
+    axes[1].set_ylabel("Statistics significant at FDR <= 0.05")
+    for axis in axes:
+        axis.tick_params(axis="x", rotation=20)
+    sns.despine(fig=fig)
+    fig.suptitle(
+        "Count-matched external module preservation",
+        x=0.02,
+        ha="left",
+        fontweight="bold",
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    path = plot_dir / "official_wgcna_netrep_preservation.png"
+    fig.savefig(path, dpi=240, bbox_inches="tight")
+    plt.close(fig)
+    return [path]
+
+
 def write_report(
     output: Path,
     summary: pd.DataFrame,
     paired: pd.DataFrame,
+    formal_summary: pd.DataFrame,
+    formal_paired: pd.DataFrame,
     design: dict[str, object],
 ) -> Path:
     preservation_test = paired.loc[
@@ -339,45 +437,65 @@ def write_report(
         paired["metric"].eq("program_score_preservation")
     ].iloc[0]
     preservation_delta = float(
-        preservation_test["median_core_minus_matched"]
+        preservation_test["median_confidence_minus_matched"]
     )
-    score_delta = float(score_test["median_core_minus_matched"])
+    score_delta = float(score_test["median_confidence_minus_matched"])
     preservation_fdr = float(preservation_test["FDR"])
     score_fdr = float(score_test["FDR"])
+    official_test = formal_paired.loc[
+        formal_paired["metric"].eq("Zsummary.pres")
+    ].iloc[0]
+    netrep_test = formal_paired.loc[
+        formal_paired["metric"].eq("significant_statistics_FDR05")
+    ].iloc[0]
+    official_delta = float(official_test["median_confidence_minus_matched"])
+    official_fdr = float(official_test["FDR"])
+    netrep_delta = float(netrep_test["median_confidence_minus_matched"])
+    netrep_fdr = float(netrep_test["FDR"])
     verdict = (
-        "CoSplice core selection adds external value beyond count-matched kME selection."
-        if preservation_delta > 0
-        and score_delta > 0
-        and preservation_fdr <= 0.05
-        and score_fdr <= 0.05
-        else "CoSplice core selection does not consistently exceed the count-matched kME baseline; publication claims must remain limited."
+        "Continuous CoSplice confidence adds externally replicated preservation value beyond count-matched kME selection."
+        if official_delta > 0
+        and netrep_delta > 0
+        and official_fdr <= 0.05
+        and netrep_fdr <= 0.05
+        else "Official WGCNA and NetRep tests do not establish consistent superiority over count-matched kME selection; the confidence score remains an auditable prioritization layer."
     )
-    report = output / "V121_MEMBERSHIP_EXTERNAL_VALIDATION.md"
+    report = output / "V122_MEMBERSHIP_EXTERNAL_VALIDATION.md"
     report.write_text(
         "\n".join(
             [
-                "# CoSplice v1.2.1 membership-confidence external validation",
+                "# CoSplice continuous membership-confidence external validation",
                 "",
                 "## Conclusion",
                 "",
                 verdict,
                 "",
                 f"- Discovery cohort: `{design['discovery']}`; independent evaluation cohorts: `{', '.join(design['holdouts'])}`.",
-                f"- Paired core minus matched top-kME median Zsummary: `{preservation_delta:.3f}` (FDR `{preservation_fdr:.3g}`).",
-                f"- Paired core minus matched top-kME median program-score preservation: `{score_delta:.3f}` (FDR `{score_fdr:.3g}`).",
+                f"- Official WGCNA confidence-minus-kME median Zsummary: `{official_delta:.3f}` (FDR `{official_fdr:.3g}`).",
+                f"- NetRep confidence-minus-kME median number of supported statistics: `{netrep_delta:.3f}` (FDR `{netrep_fdr:.3g}`).",
+                "- The official WGCNA/NetRep endpoints determine the verdict; the custom endpoints below are secondary diagnostics.",
+                f"- Paired confidence minus matched top-kME median Zsummary: `{preservation_delta:.3f}` (FDR `{preservation_fdr:.3g}`).",
+                f"- Paired confidence minus matched top-kME median program-score preservation: `{score_delta:.3f}` (FDR `{score_fdr:.3g}`).",
                 "- Public SpliceSeq supplies PSI but not replicate IJC/SJC. This run validates sample-bootstrap membership confidence, not read-count uncertainty.",
                 "",
-                "## Three-arm control",
+                "## Four-arm control",
                 "",
                 "1. `wgcna_all_members`: the complete frozen WGCNA partition.",
                 "2. `wgcna_top_kme_matched`: per-module top-|kME| events, matched exactly to the CoSplice core count.",
                 "3. `cosplice_split_half_core`: events confirmed as core in both split halves after bootstrap kME/co-assignment assessment.",
+                "4. `cosplice_confidence_matched`: the same per-module count, ranked by continuous co-assignment, kME, split-half and optional read-reliability evidence.",
                 "",
                 summary.to_markdown(index=False),
                 "",
-                "## Paired core-versus-matched tests",
+                "## Paired confidence-versus-kME tests",
                 "",
                 paired.to_markdown(index=False),
+                "",
+                "## Official WGCNA and NetRep preservation",
+                "",
+                formal_summary.to_markdown(index=False),
+                "",
+                formal_paired.to_markdown(index=False),
                 "",
                 "## Interpretation boundary",
                 "",
@@ -391,7 +509,7 @@ def write_report(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate v1.2.1 split-half membership confidence across independent public cohorts.")
+    parser = argparse.ArgumentParser(description="Validate continuous CoSplice membership confidence across independent public cohorts.")
     parser.add_argument("--panel-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--discovery", default="KIRC")
@@ -402,6 +520,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--events", type=int, default=500)
     parser.add_argument("--bootstraps", type=int, default=20)
     parser.add_argument("--permutations", type=int, default=200)
+    parser.add_argument(
+        "--formal-permutations",
+        type=int,
+        default=1_000,
+        help="Permutations for official WGCNA modulePreservation and NetRep.",
+    )
+    parser.add_argument(
+        "--formal-workers",
+        type=int,
+        default=4,
+        help="Parallel formal-preservation arms within one external cohort.",
+    )
+    parser.add_argument(
+        "--formal-threads-per-arm",
+        type=int,
+        default=1,
+        help="NetRep worker threads used by each formal-preservation arm.",
+    )
+    parser.add_argument(
+        "--formal-cohort-workers",
+        type=int,
+        default=1,
+        help="Independent external cohorts evaluated in parallel.",
+    )
     parser.add_argument("--min-module-size", type=int, default=15)
     parser.add_argument("--functional-fdr", type=float, default=0.10)
     parser.add_argument("--random-seed", type=int, default=20260901)
@@ -416,12 +558,12 @@ def main(argv: list[str] | None = None) -> int:
     discovery_paths = cohort_paths(args.panel_root.resolve(), args.discovery, event_type)
     design = {
         "registered_at_utc": utc_now(),
-        "software_claim": "Katana-CoSplice v1.2.1 membership-confidence validation",
+        "software_claim": "Katana-CoSplice continuous membership-confidence validation",
         "discovery": args.discovery,
         "holdouts": args.holdouts,
         "event_type": event_type,
         "arms": list(ARMS),
-        "primary_comparison": f"{ARM_CORE} versus {ARM_MATCHED}",
+        "primary_comparison": f"{ARM_CONFIDENCE} versus {ARM_MATCHED}",
         "historical_use_caveat": "These public cohorts existed in prior development. This is a frozen rerun, not a globally untouched preregistered holdout experiment.",
         "read_uncertainty_boundary": "TCGA SpliceSeq PSI matrices do not contain replicate IJC/SJC; read-count uncertainty is not evaluated here.",
     }
@@ -519,8 +661,12 @@ def main(argv: list[str] | None = None) -> int:
     enrichment_parts: list[pd.DataFrame] = []
     functional_parts: list[pd.DataFrame] = []
     phenotype_parts: list[pd.DataFrame] = []
+    formal_wgcna_parts: list[pd.DataFrame] = []
+    formal_netrep_parts: list[pd.DataFrame] = []
+    formal_audit_parts: list[pd.DataFrame] = []
     holdout_records: list[dict[str, object]] = []
-    for cohort in args.holdouts:
+
+    def evaluate_cohort(cohort: str) -> dict[str, object]:
         paths = cohort_paths(args.panel_root.resolve(), cohort, event_type)
         print(f"Evaluating {cohort}", flush=True)
         target_tumor_raw = read_psi_matrix(paths["psi_tumor"])
@@ -535,6 +681,7 @@ def main(argv: list[str] | None = None) -> int:
         holdout_labels, _ = _fit_method("wgcna_exact", target_tumor, network, benchmark, rscript)
         holdout_assignment = assignment_frame(target_tumor.index, holdout_labels)
         holdout_assignment.to_csv(evaluation / f"{cohort}_independent_wgcna_assignments.tsv", sep="\t", index=False)
+        cohort_preservation: list[pd.DataFrame] = []
         for arm, frame in arms.items():
             external = ExternalCohortConfig(cohort, paths["psi_tumor"], paths["samples"])
             result = evaluate_external_module_preservation(
@@ -542,33 +689,106 @@ def main(argv: list[str] | None = None) -> int:
             )
             detail = result.module_preservation.copy()
             detail.insert(0, "arm", arm)
-            preservation_parts.append(detail)
+            cohort_preservation.append(detail)
+
+        def formal_for_arm(item: tuple[str, pd.DataFrame]):
+            arm, frame = item
+            return run_formal_preservation(
+                discovery,
+                target_tumor_raw,
+                frame,
+                cohort=cohort,
+                arm=arm,
+                rscript=rscript,
+                permutations=args.formal_permutations,
+                soft_power=network.soft_power,
+                min_module_size=preservation_cfg.min_shared_events,
+                random_seed=args.random_seed,
+                n_threads=args.formal_threads_per_arm,
+            )
+
+        workers = max(1, min(args.formal_workers, len(arms)))
+        print(
+            f"Running formal WGCNA/NetRep preservation for {cohort} "
+            f"with {workers} parallel arm(s)",
+            flush=True,
+        )
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            formal_results = executor.map(formal_for_arm, arms.items())
+            formal_results = list(formal_results)
         enrichment, functional = functional_replication_by_overlap(
             cohort, arms, holdout_assignment, gene_sets, args.functional_fdr
         )
-        enrichment_parts.append(enrichment)
-        functional_parts.append(functional)
         target_full = read_psi_matrix(paths["psi_full"]).reindex(discovery.index)
-        phenotype_parts.append(
-            phenotype_association(
-                cohort,
-                discovery,
-                target_full,
-                paths["samples"],
-                arms,
-                preservation_cfg.min_shared_events,
-            )
+        phenotype = phenotype_association(
+            cohort,
+            discovery,
+            target_full,
+            paths["samples"],
+            arms,
+            preservation_cfg.min_shared_events,
         )
-        holdout_records.extend(file_record(paths[key], role=f"external_{cohort}") for key in ("psi_tumor", "psi_full", "events", "samples"))
+        records = [
+            file_record(paths[key], role=f"external_{cohort}")
+            for key in ("psi_tumor", "psi_full", "events", "samples")
+        ]
+        return {
+            "preservation": cohort_preservation,
+            "enrichment": enrichment,
+            "functional": functional,
+            "phenotype": phenotype,
+            "formal": formal_results,
+            "records": records,
+        }
+
+    cohort_workers = max(
+        1,
+        min(args.formal_cohort_workers, len(args.holdouts)),
+    )
+    print(
+        f"Evaluating {len(args.holdouts)} external cohort(s) with "
+        f"{cohort_workers} cohort worker(s)",
+        flush=True,
+    )
+    with ThreadPoolExecutor(max_workers=cohort_workers) as cohort_executor:
+        cohort_results = cohort_executor.map(evaluate_cohort, args.holdouts)
+        for cohort_result in cohort_results:
+            preservation_parts.extend(cohort_result["preservation"])
+            enrichment_parts.append(cohort_result["enrichment"])
+            functional_parts.append(cohort_result["functional"])
+            phenotype_parts.append(cohort_result["phenotype"])
+            for formal in cohort_result["formal"]:
+                formal_wgcna_parts.append(formal.wgcna)
+                formal_netrep_parts.append(formal.netrep)
+                formal_audit_parts.append(formal.audit)
+            holdout_records.extend(cohort_result["records"])
 
     preservation = pd.concat(preservation_parts, ignore_index=True)
     enrichment = pd.concat(enrichment_parts, ignore_index=True)
     functional = pd.concat(functional_parts, ignore_index=True)
     phenotype = pd.concat(phenotype_parts, ignore_index=True)
+    formal_wgcna = pd.concat(formal_wgcna_parts, ignore_index=True)
+    formal_netrep = pd.concat(formal_netrep_parts, ignore_index=True)
+    formal_audit = pd.concat(formal_audit_parts, ignore_index=True)
     preservation.to_csv(evaluation / "external_module_preservation.tsv", sep="\t", index=False)
     enrichment.to_csv(evaluation / "independent_GO_KEGG_enrichment.tsv", sep="\t", index=False)
     functional.to_csv(evaluation / "functional_replication.tsv", sep="\t", index=False)
     phenotype.to_csv(evaluation / "projected_phenotype_association.tsv", sep="\t", index=False)
+    formal_wgcna.to_csv(
+        evaluation / "official_wgcna_module_preservation.tsv",
+        sep="\t",
+        index=False,
+    )
+    formal_netrep.to_csv(
+        evaluation / "netrep_seven_statistic_preservation.tsv",
+        sep="\t",
+        index=False,
+    )
+    formal_audit.to_csv(
+        evaluation / "formal_preservation_audit.tsv",
+        sep="\t",
+        index=False,
+    )
 
     summary = preservation.groupby("arm", observed=True).agg(
         tested_module_cohort_pairs=("consensus_module", "size"),
@@ -586,15 +806,66 @@ def main(argv: list[str] | None = None) -> int:
         median_abs_phenotype_effect=("cohens_d", lambda x: float(np.median(np.abs(x)))),
     ).reset_index()
     summary = summary.merge(functional_summary, on="arm", how="left").merge(phenotype_summary, on="arm", how="left")
-    summary.to_csv(output / "three_arm_external_validation_summary.tsv", sep="\t", index=False)
+    summary.to_csv(output / "four_arm_external_validation_summary.tsv", sep="\t", index=False)
     paired = pd.DataFrame([
-        paired_core_test(preservation, "Zsummary_wgcna_like"),
-        paired_core_test(preservation, "program_score_preservation"),
+        paired_confidence_test(preservation, "Zsummary_wgcna_like"),
+        paired_confidence_test(preservation, "program_score_preservation"),
     ])
     paired["FDR"] = bh_adjust(paired["wilcoxon_pvalue"])
-    paired.to_csv(output / "paired_core_vs_top_kme.tsv", sep="\t", index=False)
+    paired.to_csv(output / "paired_confidence_vs_top_kme.tsv", sep="\t", index=False)
+    formal_summary = formal_wgcna.groupby("arm", observed=True).agg(
+        official_module_cohort_pairs=("module", "size"),
+        median_official_Zsummary=("Zsummary.pres", "median"),
+        strong_official_preservation=("Zsummary.pres", lambda x: int((x >= 10).sum())),
+        moderate_or_strong_official_preservation=("Zsummary.pres", lambda x: int((x >= 2).sum())),
+    ).reset_index()
+    netrep_summary = formal_netrep.groupby("arm", observed=True).agg(
+        median_significant_NetRep_statistics=("significant_statistics_FDR05", "median"),
+        modules_all_seven_NetRep_FDR05=("all_seven_statistics_FDR05", "sum"),
+    ).reset_index()
+    formal_summary = formal_summary.merge(netrep_summary, on="arm", how="left")
+    formal_summary.to_csv(
+        output / "formal_preservation_summary.tsv", sep="\t", index=False
+    )
+    formal_wgcna_for_pair = formal_wgcna.rename(
+        columns={"module": "consensus_module"}
+    )
+    formal_netrep_for_pair = formal_netrep.rename(
+        columns={"module": "consensus_module"}
+    )
+    formal_paired = pd.DataFrame(
+        [
+            paired_confidence_test(
+                formal_wgcna_for_pair, "Zsummary.pres"
+            ),
+            paired_confidence_test(
+                formal_netrep_for_pair,
+                "significant_statistics_FDR05",
+            ),
+        ]
+    )
+    formal_paired["FDR"] = bh_adjust(formal_paired["wilcoxon_pvalue"])
+    formal_paired.to_csv(
+        output / "formal_paired_confidence_vs_top_kme.tsv",
+        sep="\t",
+        index=False,
+    )
     generated = render_plots(output, preservation, functional, phenotype)
-    report = write_report(output, summary, paired, design)
+    generated.extend(
+        render_formal_preservation_plots(
+            output,
+            formal_wgcna,
+            formal_netrep,
+        )
+    )
+    report = write_report(
+        output,
+        summary,
+        paired,
+        formal_summary,
+        formal_paired,
+        design,
+    )
     write_json(
         output / "parameters.json",
         {
@@ -602,6 +873,10 @@ def main(argv: list[str] | None = None) -> int:
             "completed_at_utc": utc_now(),
             "holdout_inputs": holdout_records,
             "generated_plots": [str(path.resolve()) for path in generated],
+            "formal_preservation_permutations": args.formal_permutations,
+            "formal_preservation_workers": args.formal_workers,
+            "formal_preservation_threads_per_arm": args.formal_threads_per_arm,
+            "formal_preservation_cohort_workers": args.formal_cohort_workers,
             "report": str(report.resolve()),
         },
     )

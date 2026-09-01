@@ -25,6 +25,10 @@ from katana_cosplice.consensus import (
 from katana_cosplice.ensemble_network import posterior_ensemble_correlation
 from katana_cosplice.network import discover_module_labels
 from katana_cosplice.network import _program_scores
+from katana_cosplice.membership_validation import (
+    add_continuous_membership_confidence,
+    build_membership_arms,
+)
 from katana_cosplice.r_wgcna import exact_wgcna_labels
 from katana_cosplice.uncertainty import estimate_beta_binomial_uncertainty
 
@@ -202,7 +206,7 @@ def _render_membership_confidence(
         .reindex(index=module_order, columns=role_order, fill_value=0)
     )
     sns.set_theme(style="ticks", context="talk")
-    fig, axes = plt.subplots(1, 2, figsize=(15, 6.2))
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6.2))
     bottom = np.zeros(len(counts), dtype=float)
     for role in role_order:
         values = counts[role].to_numpy(dtype=float)
@@ -214,7 +218,7 @@ def _render_membership_confidence(
             label=role,
         )
         bottom += values
-    axes[0].set_title("Confidence composition within fixed WGCNA modules", loc="left", fontweight="bold")
+    axes[0].set_title("Fixed WGCNA module membership", loc="left", fontweight="bold")
     axes[0].set_ylabel("AS events")
     axes[0].set_xlabel("")
     axes[0].legend(frameon=False)
@@ -234,10 +238,35 @@ def _render_membership_confidence(
     axes[1].axhline(0.70, color="#333333", linestyle="--", linewidth=1)
     axes[1].set_xlim(-0.02, 1.02)
     axes[1].set_ylim(-0.02, 1.02)
-    axes[1].set_title("Complementary membership signals", loc="left", fontweight="bold")
+    axes[1].set_title("Co-assignment vs bootstrap kME", loc="left", fontweight="bold")
     axes[1].set_xlabel("Bootstrap co-assignment to own module")
     axes[1].set_ylabel("Mean absolute bootstrap kME")
     axes[1].legend(frameon=False, loc="lower right")
+
+    sns.boxplot(
+        data=visible,
+        x="membership_role",
+        y="continuous_membership_confidence",
+        order=role_order,
+        palette=role_colors,
+        hue="membership_role",
+        legend=False,
+        ax=axes[2],
+    )
+    sns.stripplot(
+        data=visible,
+        x="membership_role",
+        y="continuous_membership_confidence",
+        order=role_order,
+        color="#111827",
+        alpha=0.35,
+        size=2.5,
+        ax=axes[2],
+    )
+    axes[2].set_ylim(-0.02, 1.02)
+    axes[2].set_title("Continuous four-domain confidence", loc="left", fontweight="bold")
+    axes[2].set_xlabel("")
+    axes[2].set_ylabel("Continuous membership confidence")
     sns.despine(fig=fig)
     fig.suptitle(
         "Setd2 CoSplice membership confidence",
@@ -519,6 +548,45 @@ def main(argv: list[str] | None = None) -> int:
         membership_evidence=membership_evidence,
         kme_stability=full_kme_stability,
     )
+    full_assignments = add_continuous_membership_confidence(
+        full_assignments,
+        event_reliability=retained_reliability,
+    )
+    membership_arms, membership_count_audit = build_membership_arms(
+        full_assignments
+    )
+    membership_selection_rows: list[dict[str, object]] = []
+    indexed_confidence = full_assignments.set_index("event_key")
+    for membership_arm, selected in membership_arms.items():
+        selected_evidence = indexed_confidence.reindex(
+            selected["event_key"].astype(str)
+        )
+        membership_selection_rows.append(
+            {
+                "membership_arm": membership_arm,
+                "selected_events": len(selected),
+                "median_continuous_confidence": pd.to_numeric(
+                    selected_evidence["continuous_membership_confidence"],
+                    errors="coerce",
+                ).median(),
+                "median_read_reliability": pd.to_numeric(
+                    selected_evidence["confidence_read_component"],
+                    errors="coerce",
+                ).median(),
+                "median_coassignment_component": pd.to_numeric(
+                    selected_evidence["confidence_coassignment_component"],
+                    errors="coerce",
+                ).median(),
+                "median_kme_component": pd.to_numeric(
+                    selected_evidence["confidence_kme_component"],
+                    errors="coerce",
+                ).median(),
+                "split_half_core_fraction": selected_evidence[
+                    "membership_role"
+                ].astype(str).eq("core").mean(),
+            }
+        )
+    membership_selection = pd.DataFrame(membership_selection_rows)
     references[ARM_FULL] = _expanded_labels(
         universe, retained, np.asarray(full_label_values, dtype=object)
     )
@@ -617,6 +685,22 @@ def main(argv: list[str] | None = None) -> int:
     uncertainty.event_metrics.to_csv(output / "setd2_uncertainty_event_metrics.tsv", sep="\t")
     full_assignments.to_csv(output / "setd2_full_cosplice_confidence.tsv", sep="\t", index=False)
     full_module_summary.to_csv(output / "setd2_full_cosplice_module_summary.tsv", sep="\t", index=False)
+    membership_count_audit.to_csv(
+        output / "setd2_membership_arm_count_matching.tsv",
+        sep="\t",
+        index=False,
+    )
+    membership_selection.to_csv(
+        output / "setd2_membership_selection_audit.tsv",
+        sep="\t",
+        index=False,
+    )
+    for membership_arm, selected in membership_arms.items():
+        selected.to_csv(
+            output / f"setd2_{membership_arm}_assignments.tsv",
+            sep="\t",
+            index=False,
+        )
     evidence_summary = (
         full_assignments.groupby(
             ["consensus_module", "membership_role", "membership_evidence"],
@@ -654,6 +738,7 @@ def main(argv: list[str] | None = None) -> int:
             "partition": "fixed posterior-mean WGCNA",
             "evidence": "bootstrap co-assignment OR fixed-module bootstrap kME",
             "confirmation": "both disjoint bootstrap halves",
+            "continuous_score": "equal-domain geometric mean of co-assignment, kME, split-half confirmation and read reliability",
             "thresholds": {
                 key: value
                 for key, value in asdict(consensus_cfg).items()
@@ -704,6 +789,10 @@ def main(argv: list[str] | None = None) -> int:
         "- A core label requires either strong label-invariant co-assignment or strong "
         "fixed-module kME, plus confirmation in both disjoint bootstrap halves. "
         "This confidence layer never changes the WGCNA module assignment.",
+        "",
+        "### Count-matched member-selection audit",
+        "",
+        membership_selection.to_markdown(index=False, floatfmt=".4f"),
         "",
         "## Interpretation boundary",
         "",

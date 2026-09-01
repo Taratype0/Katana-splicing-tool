@@ -1787,6 +1787,14 @@ def build_bootstrap_coassignment_consensus(
         membership_evidence=membership_evidence,
         kme_stability=kme_stability,
     )
+    from katana_cosplice.membership_validation import (
+        add_continuous_membership_confidence,
+    )
+
+    assignments = add_continuous_membership_confidence(
+        assignments,
+        event_reliability=event_reliability,
+    )
     scores = _program_scores(matrix, labels)
     bootstrap_runs = pd.DataFrame(run_rows)
     edges = _edge_table(
@@ -1911,7 +1919,7 @@ def build_bootstrap_coassignment_consensus(
                 "read_uncertainty_weighting": event_reliability is not None,
                 "posterior_measurement_uncertainty_bootstrap": posterior_bootstrap,
                 "membership_confidence_model": (
-                    "coassignment_or_fixed_module_bootstrap_kME"
+                    "continuous_coassignment_kME_split_half_read_reliability"
                     if settings.clustering_method == "backbone_confidence_only"
                     else "coassignment_only"
                 ),

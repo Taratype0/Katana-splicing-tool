@@ -349,6 +349,7 @@ Interactions are labelled as attenuated same-direction, enhanced same-direction,
 - Historical average-linkage, Dynamic Tree Cut, Leiden, and boundary-rejecting modes remain available only through explicit non-default configuration for reproducibility.
 - The default uses 20 stratified sample bootstraps. Higher values such as 50 or 100 are optional sensitivity analyses, not a requirement for routine discovery.
 - Event confidence is mean co-assignment to the selected module; the confidence margin compares that value with the next-best module. `assignment_uncertainty` is one minus co-assignment confidence. Separate columns report full-data kME, mean absolute bootstrap kME, its 10th percentile, sign consistency, both split-half roles and the final evidence basis.
+- `continuous_membership_confidence` combines co-assignment, bootstrap kME, split-half confirmation and optional read reliability as an equal-domain geometric mean. Component columns are retained so the score is auditable. It ranks members within a fixed module and never changes the WGCNA label.
 - `consensus_parameter_search.tsv` records the fixed production partition and its audit metrics. No Setd2 labels, conditions or expected biological answer enter confidence estimation.
 - The complete matrix is stored as compressed NPZ (`event_keys`, `coassignment`); the TSV edge view is intentionally capped for preview.
 - This is internal consensus in the discovery cohort, not independent validation.
@@ -363,6 +364,13 @@ same size calibrate `Zdensity` and `Zconnectivity`; their mean is exported as
 `Zsummary_wgcna_like`. The labels preserved (>=10), partially preserved (>=2), and not preserved (<2)
 follow familiar WGCNA interpretation bands, but this statistic is explicitly not the exact
 `WGCNA::modulePreservation` implementation.
+
+For publication validation, `katana-cosplice-membership-validation` additionally runs
+official `WGCNA::modulePreservation` and NetRep's seven module-preservation statistics on
+the same discovery/target matrices and common event background. Each CoSplice arm is
+compared with a per-module, count-matched top-kME arm. NetRep p-values are FDR-adjusted
+within each cohort/arm/statistic family. These formal outputs determine the validation
+verdict; the WGCNA-like table above remains useful for routine project diagnostics.
 
 ## Head-to-head benchmark
 

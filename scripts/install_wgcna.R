@@ -15,4 +15,11 @@ if (!requireNamespace("WGCNA", quietly = TRUE)) {
 if (!requireNamespace("WGCNA", quietly = TRUE)) {
   stop("WGCNA installation did not complete successfully.")
 }
+if (!requireNamespace("NetRep", quietly = TRUE)) {
+  install.packages("NetRep", type = "binary")
+}
+if (!requireNamespace("NetRep", quietly = TRUE)) {
+  stop("NetRep installation did not complete successfully.")
+}
 cat("WGCNA_OK ", as.character(packageVersion("WGCNA")), "\n", sep = "")
+cat("NETREP_OK ", as.character(packageVersion("NetRep")), "\n", sep = "")

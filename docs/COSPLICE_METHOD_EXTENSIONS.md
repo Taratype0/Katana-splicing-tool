@@ -43,6 +43,15 @@ in two disjoint bootstrap halves. This corrects the large-module penalty of
 pairwise co-assignment without changing the WGCNA partition or lowering the
 predeclared evidence thresholds.
 
+From v1.2.2, every assigned event also receives a continuous membership-confidence
+score. It is the equal-domain geometric mean of co-assignment confidence, bootstrap
+kME stability, split-half support and, when IJC/SJC are available, read/replicate
+reliability. Missing read evidence is omitted rather than imputed. The score is an
+auditable prioritization measure and never changes the official WGCNA partition.
+External evaluation compares it with a per-module, count-matched top-kME control.
+Formal preservation uses official `WGCNA::modulePreservation` and NetRep's seven
+permutation statistics; custom preservation metrics remain secondary diagnostics.
+
 Scientific basis: beta-binomial read-count uncertainty is established in
 replicate-aware splicing models such as FRASER and Bisbee. CoSplice uses it for
 measurement weighting rather than claiming a new differential-AS p-value.

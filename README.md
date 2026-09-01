@@ -86,11 +86,15 @@ tuning-GMT enrichment passes its FDR gate; otherwise its weight is set to zero a
 result is retained. See
 [`docs/COSPLICE_LOCKED_PANEL_VALIDATION.md`](docs/COSPLICE_LOCKED_PANEL_VALIDATION.md).
 
-The membership-validation runner tests split-half core labels against a
-per-module, count-matched top-kME control across independent public cohorts.
-This prevents a smaller core set from receiving automatic credit and retains
-negative external results. See
-[`docs/COSPLICE_V121_MEMBERSHIP_EXTERNAL_VALIDATION.md`](docs/COSPLICE_V121_MEMBERSHIP_EXTERNAL_VALIDATION.md).
+The membership-validation runner tests four fixed-partition member sets across
+independent public cohorts: all WGCNA members, per-module count-matched top-kME,
+split-half core, and count-matched continuous CoSplice confidence. The continuous
+score combines co-assignment, bootstrap kME, split-half confirmation and optional
+read reliability without changing module labels. Official
+`WGCNA::modulePreservation` and NetRep's seven statistics are the formal endpoints;
+the historical WGCNA-like score remains diagnostic. This design prevents a smaller
+event set from receiving automatic credit and retains negative external results. See
+[`docs/COSPLICE_V122_MEMBERSHIP_EXTERNAL_VALIDATION.md`](docs/COSPLICE_V122_MEMBERSHIP_EXTERNAL_VALIDATION.md).
 
 Optional / project-dependent:
 
