@@ -88,6 +88,92 @@ def resolve_bam_sources(samples: pd.DataFrame, bam_root: Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def resolve_precomputed_junction_sources(
+    samples: pd.DataFrame,
+    root: Path,
+) -> pd.DataFrame:
+    if not root.exists():
+        raise FileNotFoundError(f"Junction-count root does not exist: {root}")
+    candidates = sorted(root.glob("**/*.junction_counts.tsv.gz"))
+    by_sample: dict[str, Path] = {}
+    for path in candidates:
+        normalized = normalize_sample_id(
+            path.name.removesuffix(".junction_counts.tsv.gz")
+        )
+        previous = by_sample.get(normalized)
+        if previous is not None:
+            raise ValueError(
+                "Multiple precomputed junction tables normalize to "
+                f"sample_id={normalized}: {previous}; {path}"
+            )
+        by_sample[normalized] = path
+    rows: list[dict[str, object]] = []
+    for row in samples.itertuples(index=False):
+        sample_id = str(row.sample_id)
+        source = by_sample.get(sample_id)
+        if source is None:
+            raise FileNotFoundError(
+                f"No precomputed junction table matched sample_id={sample_id} under {root}"
+            )
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "condition": str(row.condition),
+                "source_path": str(source),
+                "source_size": source.stat().st_size,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def load_precomputed_junctions(
+    path: Path,
+    sample_id: str,
+) -> tuple[Counter[Junction], dict[str, object]]:
+    table = pd.read_csv(path, sep="\t")
+    required = {
+        "chrom",
+        "intron_start_0based",
+        "intron_end_0based",
+        "read_count",
+    }
+    missing = sorted(required.difference(table.columns))
+    if missing:
+        raise ValueError(f"Precomputed junction table is missing {missing}: {path}")
+    counts: Counter[Junction] = Counter()
+    for row in table.itertuples(index=False):
+        start = int(row.intron_start_0based)
+        end = int(row.intron_end_0based)
+        read_count = int(row.read_count)
+        if start < 0 or end <= start:
+            raise ValueError(
+                f"Invalid zero-based intron coordinates in {path}: "
+                f"{row.chrom}:{start}-{end}"
+            )
+        if read_count < 0:
+            raise ValueError(f"Negative read_count in {path}: {read_count}")
+        if read_count:
+            counts[(str(row.chrom), start, end)] += read_count
+    summary_path = path.with_name(
+        path.name.removesuffix(".junction_counts.tsv.gz") + ".alignment_summary.json"
+    )
+    alignment_summary = (
+        json.loads(summary_path.read_text(encoding="utf-8"))
+        if summary_path.exists()
+        else {}
+    )
+    return counts, {
+        **alignment_summary,
+        "fingerprint": fingerprint({"schema": 1, "source": file_signature(path)}),
+        "cache_status": "precomputed_input",
+        "sample_id": sample_id,
+        "backend": "precomputed_junctions",
+        "source_path": str(path),
+        "unique_junctions": len(counts),
+        "junction_read_observations": int(sum(counts.values())),
+    }
+
+
 def _backend_name(requested: str) -> str:
     if requested in {"auto", "pysam"}:
         try:
@@ -546,12 +632,17 @@ def _rmats_row_junctions(
 
 def map_rmats_to_junctions(
     junctions: set[Junction],
-    rmats_root: Path,
+    rmats_root: Path | None,
     mode: str,
 ) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     junction_lookup = set(junctions)
-    for path in sorted(rmats_root.glob(f"*/rmats_post/*.MATS.{mode}.txt")):
+    paths = (
+        sorted(rmats_root.glob(f"*/rmats_post/*.MATS.{mode}.txt"))
+        if rmats_root is not None
+        else []
+    )
+    for path in paths:
         event_type = path.name.split(".", 1)[0]
         if event_type not in EVENT_TYPES:
             continue
@@ -616,23 +707,34 @@ def build_bam_junction_matrices(
         raise ValueError("matrix_input.input_mode=bam_junctions requires gtf")
 
     samples = load_sample_metadata(config.sample_metadata, config.selected_conditions)
-    sources = resolve_bam_sources(samples, config.bam_root)
-    backend = _backend_name(config.matrix_input.backend)
+    precomputed = config.matrix_input.backend == "precomputed_junctions"
+    sources = (
+        resolve_precomputed_junction_sources(samples, config.bam_root)
+        if precomputed
+        else resolve_bam_sources(samples, config.bam_root)
+    )
+    backend = "precomputed_junctions" if precomputed else _backend_name(config.matrix_input.backend)
     counters: dict[str, Counter[Junction]] = {}
     source_parameters: list[dict[str, object]] = []
     source_rows = list(sources.itertuples(index=False))
 
     def run_sample(row: object) -> tuple[str, Counter[Junction], dict[str, object]]:
         sample_id = str(row.sample_id)
-        counts, parameters = count_sample_junctions(
-            bam=Path(row.bam_path),
-            bai=Path(row.bai_path),
-            settings=config.matrix_input,
-            backend=backend,
-            cache_dir=cache_dir,
-            sample_id=sample_id,
-            progress=progress,
-        )
+        if precomputed:
+            _emit(progress, f"Loading precomputed junction counts: {sample_id}")
+            counts, parameters = load_precomputed_junctions(
+                Path(row.source_path), sample_id
+            )
+        else:
+            counts, parameters = count_sample_junctions(
+                bam=Path(row.bam_path),
+                bai=Path(row.bai_path),
+                settings=config.matrix_input,
+                backend=backend,
+                cache_dir=cache_dir,
+                sample_id=sample_id,
+                progress=progress,
+            )
         return sample_id, counts, parameters
 
     max_workers = min(config.matrix_input.max_parallel_samples, len(source_rows))
@@ -712,9 +814,20 @@ def build_bam_junction_matrices(
         axis=1,
     )
 
-    rmats_root = resolve_rmats_root(config.rmats_root)
-    _emit(progress, "Mapping retained BAM junctions to rMATS event annotations")
-    rmats_mapping = map_rmats_to_junctions(retained_junctions, rmats_root, config.rmats_mode)
+    try:
+        rmats_root = resolve_rmats_root(config.rmats_root)
+    except FileNotFoundError:
+        rmats_root = None
+    if rmats_root is None:
+        _emit(progress, "No rMATS root configured; retaining GTF-annotated BAM junction events")
+        rmats_mapping = map_rmats_to_junctions(retained_junctions, None, config.rmats_mode)
+    else:
+        _emit(progress, "Mapping retained BAM junctions to rMATS event annotations")
+        rmats_mapping = map_rmats_to_junctions(
+            retained_junctions,
+            rmats_root,
+            config.rmats_mode,
+        )
     if not rmats_mapping.empty:
         aggregate = (
             rmats_mapping.groupby("event_key", observed=True)
@@ -793,7 +906,7 @@ def build_bam_junction_matrices(
     sources["unique_junctions"] = sources["sample_id"].map(
         lambda sample: parameters_by_sample[str(sample)].get("unique_junctions", np.nan)
     )
-    sources["source_kind"] = "bam"
+    sources["source_kind"] = "precomputed_junction_counts" if precomputed else "bam"
     matrix = MatrixResult(
         psi=psi,
         ijc=raw_counts,

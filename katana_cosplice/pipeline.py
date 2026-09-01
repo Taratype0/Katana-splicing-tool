@@ -46,7 +46,11 @@ from katana_cosplice.hybrid_programs import (
     build_hybrid_programs,
     render_hybrid_program_plots,
 )
-from katana_cosplice.junction_matrix import build_bam_junction_matrices, resolve_bam_sources
+from katana_cosplice.junction_matrix import (
+    build_bam_junction_matrices,
+    resolve_bam_sources,
+    resolve_precomputed_junction_sources,
+)
 from katana_cosplice.matrix import build_sample_matrices
 from katana_cosplice.meta_analysis import meta_analyze_modules, render_meta_analysis_plots
 from katana_cosplice.module_annotation import annotate_modules, render_module_annotation_plot
@@ -186,9 +190,22 @@ class CoSplicePipeline:
             "integrity": out_dir / "matrix_integrity_summary.tsv",
             "parameters": out_dir / "parameters.json",
         }
-        rmats_root = resolve_rmats_root(self.config.rmats_root)
-        tables = list(rmats_root.glob(f"**/*.MATS.{self.config.rmats_mode}.txt"))
-        bamlists = list((rmats_root / "bamlist").glob("*_bamlist.txt"))
+        rmats_root = None
+        try:
+            rmats_root = resolve_rmats_root(self.config.rmats_root)
+        except FileNotFoundError:
+            if self.config.matrix_input.input_mode != "bam_junctions":
+                raise
+        tables = (
+            list(rmats_root.glob(f"**/*.MATS.{self.config.rmats_mode}.txt"))
+            if rmats_root is not None
+            else []
+        )
+        bamlists = (
+            list((rmats_root / "bamlist").glob("*_bamlist.txt"))
+            if rmats_root is not None
+            else []
+        )
         matrix_inputs: list[Path] = [
             self.config.sample_metadata,
             *sorted(tables),
@@ -201,9 +218,15 @@ class CoSplicePipeline:
                 self.config.sample_metadata,
                 self.config.selected_conditions,
             )
-            bam_sources = resolve_bam_sources(samples, self.config.bam_root)
-            matrix_inputs.extend(Path(value) for value in bam_sources["bam_path"])
-            matrix_inputs.extend(Path(value) for value in bam_sources["bai_path"])
+            if self.config.matrix_input.backend == "precomputed_junctions":
+                bam_sources = resolve_precomputed_junction_sources(
+                    samples, self.config.bam_root
+                )
+                matrix_inputs.extend(Path(value) for value in bam_sources["source_path"])
+            else:
+                bam_sources = resolve_bam_sources(samples, self.config.bam_root)
+                matrix_inputs.extend(Path(value) for value in bam_sources["bam_path"])
+                matrix_inputs.extend(Path(value) for value in bam_sources["bai_path"])
             matrix_inputs.append(self.config.gtf)
             outputs.update(
                 {
@@ -219,6 +242,7 @@ class CoSplicePipeline:
                 "rmats_mode": self.config.rmats_mode,
                 "conditions": self.config.selected_conditions,
                 "matrix_input": self.config.matrix_input.__dict__,
+                "rmats_annotation": str(rmats_root) if rmats_root is not None else None,
             },
         )
         state = self._state().get("stages", {}).get(stage, {})
@@ -332,6 +356,7 @@ class CoSplicePipeline:
                     "fingerprint": stage_fp,
                     "rmats_mode": self.config.rmats_mode,
                     "matrix_input": self.config.matrix_input.__dict__,
+                    "rmats_annotation": str(rmats_root) if rmats_root is not None else None,
                     "matrix_semantics": (
                         "junction reads / donor-or-acceptor competing-cluster reads"
                         if self.config.matrix_input.input_mode == "bam_junctions"

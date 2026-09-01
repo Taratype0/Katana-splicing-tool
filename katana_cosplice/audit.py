@@ -20,7 +20,9 @@ class AuditResult:
         return bool(blocking.empty or blocking["passed"].all())
 
 
-def resolve_rmats_root(path: Path) -> Path:
+def resolve_rmats_root(path: Path | None) -> Path:
+    if path is None:
+        raise FileNotFoundError("rMATS root is not configured")
     candidates = [path, path / "rmats", path / "star_salmon" / "rmats"]
     for candidate in candidates:
         if (candidate / "bamlist").is_dir() and any(candidate.glob("*/rmats_post")):
@@ -79,9 +81,16 @@ def audit_inputs(config: CoSpliceConfig) -> AuditResult:
     def add(name: str, passed: bool, severity: str, detail: str) -> None:
         rows.append({"check": name, "passed": bool(passed), "severity": severity, "detail": detail})
 
+    bam_mode = config.matrix_input.input_mode == "bam_junctions"
     add("sample_metadata_exists", config.sample_metadata.exists(), "error", str(config.sample_metadata))
-    add("rmats_root_exists", config.rmats_root.exists(), "error", str(config.rmats_root))
-    if not config.sample_metadata.exists() or not config.rmats_root.exists():
+    rmats_exists = bool(config.rmats_root and config.rmats_root.exists())
+    add(
+        "rmats_root_exists",
+        rmats_exists,
+        "info" if bam_mode else "error",
+        str(config.rmats_root or "not configured; BAM junctions will remain rMATS-unannotated"),
+    )
+    if not config.sample_metadata.exists() or (not bam_mode and not rmats_exists):
         return AuditResult(pd.DataFrame(rows), pd.DataFrame())
 
     try:
@@ -100,29 +109,42 @@ def audit_inputs(config: CoSpliceConfig) -> AuditResult:
         "; ".join(f"{condition}={count}" for condition, count in condition_counts.items()),
     )
 
-    try:
-        rmats_root = resolve_rmats_root(config.rmats_root)
-    except FileNotFoundError as exc:
-        add("rmats_layout", False, "error", str(exc))
-        return AuditResult(pd.DataFrame(rows), samples)
-
-    bamlist_dir = rmats_root / "bamlist"
-    bamlist_samples: set[str] = set()
-    for path in bamlist_dir.glob("*_bamlist.txt"):
-        bamlist_samples.update(_bamlist_samples(path))
     metadata_samples = set(samples["sample_id"])
-    add(
-        "metadata_matches_rmats_bamlists",
-        metadata_samples == bamlist_samples if not config.selected_conditions else metadata_samples.issubset(bamlist_samples),
-        "error",
-        f"metadata={len(metadata_samples)}, bamlist={len(bamlist_samples)}, missing={sorted(metadata_samples-bamlist_samples)}",
-    )
+    rmats_root: Path | None = None
+    if rmats_exists:
+        try:
+            rmats_root = resolve_rmats_root(config.rmats_root)
+        except FileNotFoundError as exc:
+            add("rmats_layout", False, "info" if bam_mode else "error", str(exc))
+            if not bam_mode:
+                return AuditResult(pd.DataFrame(rows), samples)
+        else:
+            add("rmats_layout", True, "info" if bam_mode else "error", str(rmats_root))
+    else:
+        add(
+            "rmats_layout",
+            False,
+            "info" if bam_mode else "error",
+            "BAM-only mode: canonical rMATS event annotation is unavailable",
+        )
 
-    comparisons = [path for path in rmats_root.glob("*/rmats_post") if path.is_dir()]
-    add("rmats_comparison_outputs", bool(comparisons), "error", f"comparison_dirs={len(comparisons)}")
-    expected = [f"{event}.MATS.{config.rmats_mode}.txt" for event in ("SE", "RI", "A3SS", "A5SS", "MXE")]
-    complete = sum(all((path / name).exists() for name in expected) for path in comparisons)
-    add("complete_rmats_event_sets", complete == len(comparisons), "error", f"complete={complete}/{len(comparisons)}")
+    if rmats_root is not None:
+        bamlist_dir = rmats_root / "bamlist"
+        bamlist_samples: set[str] = set()
+        for path in bamlist_dir.glob("*_bamlist.txt"):
+            bamlist_samples.update(_bamlist_samples(path))
+        add(
+            "metadata_matches_rmats_bamlists",
+            metadata_samples == bamlist_samples if not config.selected_conditions else metadata_samples.issubset(bamlist_samples),
+            "info" if bam_mode else "error",
+            f"metadata={len(metadata_samples)}, bamlist={len(bamlist_samples)}, missing={sorted(metadata_samples-bamlist_samples)}",
+        )
+
+        comparisons = [path for path in rmats_root.glob("*/rmats_post") if path.is_dir()]
+        add("rmats_comparison_outputs", bool(comparisons), "info" if bam_mode else "error", f"comparison_dirs={len(comparisons)}")
+        expected = [f"{event}.MATS.{config.rmats_mode}.txt" for event in ("SE", "RI", "A3SS", "A5SS", "MXE")]
+        complete = sum(all((path / name).exists() for name in expected) for path in comparisons)
+        add("complete_rmats_event_sets", complete == len(comparisons), "info" if bam_mode else "error", f"complete={complete}/{len(comparisons)}")
 
     if config.quant_root:
         quant_files = list(config.quant_root.glob("**/quant.sf")) if config.quant_root.exists() else []
@@ -166,17 +188,29 @@ def audit_inputs(config: CoSpliceConfig) -> AuditResult:
         add(key, bool(path and path.exists()), "info", str(path or "not configured"))
 
     local_bams: list[Path] = []
+    junction_tables: list[Path] = []
     if config.bam_root and config.bam_root.exists():
         local_bams = list(config.bam_root.glob("**/*.bam"))
-    local_bam_ids = {normalize_sample_id(path.name) for path in local_bams}
-    missing_local_bams = sorted(metadata_samples.difference(local_bam_ids))
-    bam_mode = config.matrix_input.input_mode == "bam_junctions"
+        junction_tables = list(
+            config.bam_root.glob("**/*.junction_counts.tsv.gz")
+        )
+    precomputed = config.matrix_input.backend == "precomputed_junctions"
+    local_source_ids = {
+        normalize_sample_id(
+            path.name.removesuffix(".junction_counts.tsv.gz")
+            if precomputed
+            else path.name
+        )
+        for path in (junction_tables if precomputed else local_bams)
+    }
+    missing_local_bams = sorted(metadata_samples.difference(local_source_ids))
     add(
         "local_bam_coverage",
         not missing_local_bams,
         "error" if bam_mode else "info",
         (
-            f"input_mode={config.matrix_input.input_mode}; local_bams={len(local_bams)}; "
+            f"input_mode={config.matrix_input.input_mode}; backend={config.matrix_input.backend}; "
+            f"local_bams={len(local_bams)}; junction_tables={len(junction_tables)}; "
             f"missing={missing_local_bams}"
         ),
     )

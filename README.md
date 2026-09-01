@@ -96,6 +96,13 @@ the historical WGCNA-like score remains diagnostic. This design prevents a small
 event set from receiving automatic credit and retains negative external results. See
 [`docs/COSPLICE_V122_MEMBERSHIP_EXTERNAL_VALIDATION.md`](docs/COSPLICE_V122_MEMBERSHIP_EXTERNAL_VALIDATION.md).
 
+The disease-matched GSE297044 workflow validates frozen TCGA KIRC programs in an
+independent SETD2 WT/KO ccRCC RNA-seq experiment. It reconstructs splice-junction
+usage and read uncertainty from BAM or audited aligner-stream junction counts,
+does not require an rMATS directory in junction mode, and explicitly separates exact-event evidence from gene/program
+projection when source coordinate systems cannot be harmonized. See
+[`docs/COSPLICE_GSE297044_LOCKED_VALIDATION.md`](docs/COSPLICE_GSE297044_LOCKED_VALIDATION.md).
+
 Optional / project-dependent:
 
 - Jutils heatmap / PCA outputs

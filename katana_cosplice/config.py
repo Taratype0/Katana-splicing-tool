@@ -396,7 +396,7 @@ class MatrixInputConfig:
 @dataclass
 class CoSpliceConfig:
     project_name: str
-    rmats_root: Path
+    rmats_root: Path | None
     sample_metadata: Path
     output_dir: Path
     quant_root: Path | None = None
@@ -447,9 +447,16 @@ class CoSpliceConfig:
             raise ValueError("project_name is required")
         if self.matrix_input.input_mode not in {"rmats_events", "bam_junctions"}:
             raise ValueError("matrix_input.input_mode must be rmats_events or bam_junctions")
-        if self.matrix_input.backend not in {"auto", "pysam", "wsl_pysam", "bamnostic"}:
+        if self.matrix_input.backend not in {
+            "auto",
+            "pysam",
+            "wsl_pysam",
+            "bamnostic",
+            "precomputed_junctions",
+        }:
             raise ValueError(
-                "matrix_input.backend must be auto, pysam, wsl_pysam or bamnostic"
+                "matrix_input.backend must be auto, pysam, wsl_pysam, bamnostic "
+                "or precomputed_junctions"
             )
         if self.matrix_input.min_mapping_quality < 0:
             raise ValueError("matrix_input.min_mapping_quality cannot be negative")
@@ -1163,7 +1170,7 @@ def load_config(path: str | Path) -> CoSpliceConfig:
     factor_contrasts = FactorContrastConfig(**(raw.get("factor_contrasts") or {}))
     config = CoSpliceConfig(
         project_name=str(raw.get("project_name", "")).strip(),
-        rmats_root=_path(raw.get("rmats_root"), base) or Path(),
+        rmats_root=_path(raw.get("rmats_root"), base),
         sample_metadata=_path(raw.get("sample_metadata"), base) or Path(),
         output_dir=_path(raw.get("output_dir"), base) or (base / "katana_cosplice_output"),
         quant_root=_path(raw.get("quant_root"), base),
