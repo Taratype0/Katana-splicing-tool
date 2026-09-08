@@ -47,6 +47,9 @@ workspaces, typed artifacts, explicit jobs, and a shared responsive viewer.
 - Contrast selectors appear only on workflows that consume contrast subsets;
   an explicit all-selection is canonicalized to the same cache identity as the
   default full run, while empty or unknown selections fail explicitly.
+- Numeric workflow parameters are canonicalized by their declared type before
+  fingerprinting, preventing browser JSON values such as `1` from diverging
+  from an equivalent Python default such as `1.0`.
 - UI results, parent artifacts, saved selections, and reports are all bound to
   the current project snapshot, preventing stale cross-project reuse.
 

@@ -98,6 +98,33 @@ class WorkflowBase:
             for definition in self.definition.parameters
         }
         values.update(supplied or {})
+        for definition in self.definition.parameters:
+            value = values.get(definition.key)
+            if value is None:
+                continue
+            try:
+                if definition.kind == "number":
+                    if isinstance(definition.default, int) and not isinstance(
+                        definition.default, bool
+                    ):
+                        numeric = float(value)
+                        if not numeric.is_integer():
+                            raise ValueError("must be an integer")
+                        values[definition.key] = int(numeric)
+                    else:
+                        values[definition.key] = float(value)
+                elif definition.kind == "boolean":
+                    if isinstance(value, str):
+                        normalized = value.strip().casefold()
+                        if normalized not in {"true", "false"}:
+                            raise ValueError("must be true or false")
+                        values[definition.key] = normalized == "true"
+                    else:
+                        values[definition.key] = bool(value)
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    f"Invalid value for {definition.label}: {value!r} ({error})."
+                ) from error
         return values
 
     def validate_assets(self, context: ProjectContext) -> None:

@@ -99,6 +99,20 @@ def test_generic_run_is_isolated_cached_and_downloadable(tmp_path: Path) -> None
     assert compatible.json()["cache_hit"] is True
     assert len(compatible.json()["artifacts"]) == 3
 
+    integer_encoded_float = client.post(
+        f"/api/projects/{project_id}/workflows/differential.deg/cache",
+        json={
+            "parameters": {"fdr": 0.05, "min_abs_log2fc": 1},
+            "force": False,
+        },
+    )
+    assert integer_encoded_float.status_code == 200
+    assert (
+        integer_encoded_float.json()["run_fingerprint"]
+        == compatible.json()["run_fingerprint"]
+    )
+    assert integer_encoded_float.json()["cache_hit"] is True
+
     all_contrasts = [
         contrast["contrast_id"] for contrast in opened.json()["manifest"]["contrasts"]
     ]

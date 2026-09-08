@@ -13,7 +13,7 @@ single-cell method already outperforms published methods on independent data.
 The final acceptance run is stored outside the repository:
 
 ```text
-E:\Project\katana-next-runs\v2-final-acceptance-20260908-r9
+E:\Project\katana-next-runs\v2-final-acceptance-20260908-r10
 ```
 
 The fixture contains 15 bulk samples, three declared contrasts, five rMATS
@@ -85,6 +85,12 @@ detail, run configuration, horizontally wrapped comparison chips, artifacts,
 responsive Vega plots, and real PNG previews stay within the workspace without
 manual window refresh. Table pages are limited to 50 rows and use server-side
 search, sorting, and pagination.
+
+The final browser pass also reopened the real Ythdc1 project, changed
+workspaces, and resolved the candidate-evidence cache to two artifacts and the
+isoform cache to five artifacts without submitting a job. API numeric values
+are canonicalized by their declared parameter type, so semantically identical
+JSON values such as `1` and `1.0` share one exact cache identity.
 
 The PySide6 QtWebEngine desktop host starts the loopback API, verifies health,
 loads the same production web bundle, and shuts the server down with the

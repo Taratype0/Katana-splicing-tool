@@ -90,22 +90,32 @@ export default function App() {
   const requiresComparisons = Boolean(
     activeWorkflow?.supports_contrast_selection && project?.manifest.contrasts.length,
   );
+  const allComparisonsSelected = Boolean(
+    project?.manifest.contrasts.length
+      && selectedContrasts.size === project.manifest.contrasts.length
+      && project.manifest.contrasts.every((contrast) => selectedContrasts.has(contrast.contrast_id)),
+  );
   const resolvedParameters = useMemo(
     () => ({
       ...activeParameters,
-      ...(requiresComparisons ? { contrast_ids: [...selectedContrasts].sort() } : {}),
+      ...(requiresComparisons && !allComparisonsSelected
+        ? { contrast_ids: [...selectedContrasts].sort() }
+        : {}),
     }),
-    [activeParameters, requiresComparisons, selectedContrasts],
+    [activeParameters, allComparisonsSelected, requiresComparisons, selectedContrasts],
   );
   const deferredParameterSignature = useDeferredValue(JSON.stringify(resolvedParameters));
-  const deferredParameters = useMemo(
-    () => JSON.parse(deferredParameterSignature) as Record<string, unknown>,
-    [deferredParameterSignature],
-  );
 
   const artifactQuery = useQuery({
     queryKey: ["workflow-cache", projectId, activeWorkflowId, deferredParameterSignature],
-    queryFn: () => api.workflowCache(projectId, activeWorkflowId, deferredParameters),
+    queryFn: ({ queryKey }) => {
+      const [, cacheProjectId, cacheWorkflowId, parameterSignature] = queryKey as [string, string, string, string];
+      return api.workflowCache(
+        cacheProjectId,
+        cacheWorkflowId,
+        JSON.parse(parameterSignature) as Record<string, unknown>,
+      );
+    },
     enabled: Boolean(projectId && activeWorkflowId),
   });
   const jobsQuery = useQuery({
@@ -274,6 +284,7 @@ export default function App() {
 
                 {requiresComparisons && selectedContrasts.size === 0 && <div className="warning-strip">Select at least one comparison. An empty selection never silently means all.</div>}
                 {(runWorkflow.error || lastWorkflowJob?.error) && <div className="warning-strip error-strip">{runWorkflow.error?.message ?? lastWorkflowJob?.error}</div>}
+                {artifactQuery.error && <div className="warning-strip error-strip">Could not read compatible cache: {artifactQuery.error.message}</div>}
 
                 <WorkflowControls
                   workflow={activeWorkflow}
@@ -290,7 +301,7 @@ export default function App() {
                 />
 
                 <div className="metric-strip">
-                  <article><Archive size={18} /><div><small>Cached outputs</small><strong>{latestArtifacts.length}</strong></div></article>
+                  <article><Archive size={18} /><div><small>Cached outputs</small><strong>{artifactQuery.isFetching ? "..." : latestArtifacts.length}</strong></div></article>
                   <article><DatabaseZap size={18} /><div><small>Last access</small><strong>{lastWorkflowJob?.cache_status === "hit" ? "Compatible cache hit" : lastWorkflowJob?.status ?? "Not run this session"}</strong></div></article>
                   <article><Rows3 size={18} /><div><small>Analysis unit</small><strong>{activeWorkflow.analysis_unit}</strong></div></article>
                 </div>
