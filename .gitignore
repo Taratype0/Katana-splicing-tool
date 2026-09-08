@@ -4,8 +4,19 @@ __pycache__/
 
 # Local environments
 .venv/
+.venv-next/
 venv/
 .python-version
+
+# Node / frontend artifacts
+node_modules/
+apps/web/dist/
+apps/web/.vite/
+.pnpm-store/
+coverage/
+*.tsbuildinfo
+apps/web/vite.config.js
+apps/web/vite.config.d.ts
 
 # Build / packaging artifacts
 build/
@@ -36,6 +47,7 @@ noDP_KOvsWT.tsv
 
 # Local outputs
 katana_output/
+katana-next-output/
 *.log
 docs/mockups/
 docs/run_examples/

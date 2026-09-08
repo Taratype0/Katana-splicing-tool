@@ -11,6 +11,10 @@ module has a question, input, output, analysis unit, and validation plan.
 
 ## Phase 1: Platform foundation
 
+Status: **Passed on 2026-09-08.** See
+[`PHASE1_ACCEPTANCE.md`](PHASE1_ACCEPTANCE.md) for automated and real-process
+evidence.
+
 - Implement typed project manifest, contrast model, artifact registry, cache
   fingerprint, job queue, and progress/event API.
 - Implement DuckDB/Parquet result storage and user-selected output roots.

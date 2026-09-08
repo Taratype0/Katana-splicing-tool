@@ -26,3 +26,22 @@ The implementation is governed by:
 No legacy analysis is copied into production merely because it already exists.
 Each module must have a defined biological question, valid experimental unit,
 explicit output contract, test fixture, and downstream destination.
+
+## Current status
+
+Phase 1 is implemented as a runnable vertical slice. It includes the typed
+manifest and contrast domain, file/workflow fingerprints, a DuckDB artifact and
+selection catalog, Parquet result paging, explicit background jobs, cache-hit
+semantics, FastAPI endpoints, and the modern React workspace shell.
+
+Bootstrap and launch the development build:
+
+```powershell
+cd E:\Project\katana-next
+.\scripts\bootstrap_katana_next.ps1
+.\scripts\launch_katana_next.ps1
+```
+
+The Phase 1 fixture validates platform behavior only and is intentionally not a
+biological analysis. Phase 2 replaces that fixture with the first verified bulk
+splicing vertical slice.
