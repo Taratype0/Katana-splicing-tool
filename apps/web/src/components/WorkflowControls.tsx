@@ -15,15 +15,6 @@ type Props = {
   onReset: () => void;
 };
 
-const COMPARISON_WORKSPACES = new Set([
-  "quality",
-  "landscape",
-  "differential",
-  "prioritize",
-  "validate",
-  "programs",
-]);
-
 export function WorkflowControls({
   workflow,
   contrasts,
@@ -37,7 +28,7 @@ export function WorkflowControls({
   onParameterChange,
   onReset,
 }: Props) {
-  const showComparisons = contrasts.length > 0 && COMPARISON_WORKSPACES.has(workflow.workspace_id);
+  const showComparisons = contrasts.length > 0 && workflow.supports_contrast_selection;
 
   return (
     <section className="workflow-controls" aria-label="Workflow parameters">

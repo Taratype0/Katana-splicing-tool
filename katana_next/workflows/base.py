@@ -41,6 +41,7 @@ class WorkflowDefinition:
     parameters: tuple[ParameterDefinition, ...] = ()
     required_asset_kinds: tuple[str, ...] = ()
     optional_asset_kinds: tuple[str, ...] = ()
+    supports_contrast_selection: bool = False
     enabled: bool = True
     limitations: str = ""
 

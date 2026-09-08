@@ -35,6 +35,19 @@ def test_registry_exposes_all_nine_workspaces_and_production_workflows() -> None
     }
     assert all(item["enabled"] for item in definitions)
     assert all(item["question"] and item["method"] for item in definitions)
+    assert {
+        item["workflow_id"]
+        for item in definitions
+        if item["supports_contrast_selection"]
+    } == {
+        "quality.stable_as",
+        "landscape.bulk",
+        "differential.as",
+        "differential.deg",
+        "differential.dtu",
+        "differential.cross_comparison",
+        "prioritize.evidence",
+    }
 
 
 def test_generic_run_is_isolated_cached_and_downloadable(tmp_path: Path) -> None:
@@ -85,6 +98,43 @@ def test_generic_run_is_isolated_cached_and_downloadable(tmp_path: Path) -> None
     assert compatible.status_code == 200
     assert compatible.json()["cache_hit"] is True
     assert len(compatible.json()["artifacts"]) == 3
+
+    all_contrasts = [
+        contrast["contrast_id"] for contrast in opened.json()["manifest"]["contrasts"]
+    ]
+    explicit_all = client.post(
+        f"/api/projects/{project_id}/workflows/differential.deg/cache",
+        json={
+            "parameters": {
+                "fdr": 0.05,
+                "min_abs_log2fc": 1.0,
+                "contrast_ids": list(reversed(all_contrasts)),
+            },
+            "force": False,
+        },
+    )
+    assert explicit_all.status_code == 200
+    assert explicit_all.json()["run_fingerprint"] == compatible.json()["run_fingerprint"]
+    assert explicit_all.json()["cache_hit"] is True
+
+    empty_scope = client.post(
+        f"/api/projects/{project_id}/workflows/differential.deg/cache",
+        json={
+            "parameters": {
+                "fdr": 0.05,
+                "min_abs_log2fc": 1.0,
+                "contrast_ids": [],
+            },
+            "force": False,
+        },
+    )
+    assert empty_scope.status_code == 422
+
+    unsupported_scope = client.post(
+        f"/api/projects/{project_id}/workflows/prioritize.isoform_support/cache",
+        json={"parameters": {"contrast_ids": all_contrasts}, "force": False},
+    )
+    assert unsupported_scope.status_code == 422
 
     changed = client.post(
         f"/api/projects/{project_id}/workflows/differential.deg/cache",

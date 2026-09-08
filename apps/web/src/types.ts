@@ -31,6 +31,7 @@ export type WorkflowDefinition = {
   parameters: WorkflowParameter[];
   required_asset_kinds: string[];
   optional_asset_kinds: string[];
+  supports_contrast_selection: boolean;
   enabled: boolean;
   limitations: string;
 };

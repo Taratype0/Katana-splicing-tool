@@ -266,6 +266,7 @@ class StableAsWorkflow(WorkflowBase):
         output_summary="Event-level QC, attrition table and interactive attrition plot.",
         analysis_unit="rMATS event within one declared contrast",
         expected_artifacts=3,
+        supports_contrast_selection=True,
         parameters=COMMON_THRESHOLDS + (
             ParameterDefinition("min_reads", "Custom reads per replicate", "number", 15.0, "Used only by Custom profile.", minimum=0, step=1),
             ParameterDefinition("min_supported_replicates", "Custom supported replicates", "number", 2, "Used only by Custom profile.", minimum=1, step=1),
@@ -346,6 +347,7 @@ class LandscapeWorkflow(WorkflowBase):
         output_summary="PSI matrix, duplicate-source audit, PCA, similarity and event composition.",
         analysis_unit="biological sample and exact splice event",
         expected_artifacts=7,
+        supports_contrast_selection=True,
         parameters=(ParameterDefinition("max_pca_events", "Variable events for PCA", "number", 2000, "Highest-variance measurable events only.", minimum=50, maximum=20000, step=50),),
         required_asset_kinds=("rmats_result",),
         limitations="Pairwise rMATS outputs can repeat a sample/event estimate. Katana reports disagreement and uses the median rather than silently duplicating observations.",
@@ -432,6 +434,7 @@ class DifferentialAsWorkflow(WorkflowBase):
         output_summary="One event table, contrast summaries, volcano and event-count plots.",
         analysis_unit="exact splice event within a contrast",
         expected_artifacts=4,
+        supports_contrast_selection=True,
         parameters=COMMON_THRESHOLDS,
         required_asset_kinds=("rmats_result",),
         limitations="The inferential p-value remains the imported rMATS result; Katana stability is an independent measurement-support annotation.",
@@ -521,6 +524,7 @@ class DegWorkflow(WorkflowBase):
         output_summary="DEG table, summary and volcano plot.",
         analysis_unit="gene within a contrast",
         expected_artifacts=3,
+        supports_contrast_selection=True,
         parameters=(
             ParameterDefinition("fdr", "DEG FDR", "number", 0.05, "Adjusted p-value cutoff.", minimum=0, maximum=1, step=0.01),
             ParameterDefinition("min_abs_log2fc", "Minimum |log2FC|", "number", 1.0, "Minimum expression effect size.", minimum=0, step=0.1),
@@ -573,6 +577,7 @@ class DtuWorkflow(WorkflowBase):
         output_summary="Transcript/exon evidence table and gene-level support summary.",
         analysis_unit="transcript or exon feature within a contrast",
         expected_artifacts=2,
+        supports_contrast_selection=True,
         parameters=(ParameterDefinition("fdr", "DTU/DEXSeq FDR", "number", 0.05, "Adjusted p-value cutoff.", minimum=0, maximum=1, step=0.01),),
         optional_asset_kinds=("dtu_result", "dexseq_result"),
     )
@@ -615,6 +620,7 @@ class CrossComparisonWorkflow(WorkflowBase):
         output_summary="Pair summary, event membership, overlap profile and similarity heatmap.",
         analysis_unit="pair of contrasts and exact splice event",
         expected_artifacts=4,
+        supports_contrast_selection=True,
         limitations="Same-gene and nearby-coordinate events are not silently treated as the same event.",
     )
 
@@ -681,6 +687,7 @@ class CandidateEvidenceWorkflow(WorkflowBase):
         output_summary="Candidate matrix and evidence heatmap linked to source artifacts.",
         analysis_unit="gene within a contrast",
         expected_artifacts=2,
+        supports_contrast_selection=True,
         parameters=(ParameterDefinition("fdr", "Evidence FDR", "number", 0.05, "Common display threshold for imported evidence.", minimum=0, maximum=1, step=0.01), ParameterDefinition("deg_min_abs_log2fc", "DEG minimum |log2FC|", "number", 1.0, "DEG effect-size gate.", minimum=0, step=0.1)),
     )
 

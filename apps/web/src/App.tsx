@@ -22,7 +22,6 @@ import { WorkspaceNav } from "./components/WorkspaceNav";
 import type { Artifact, ProjectPayload, WorkflowDefinition } from "./types";
 
 const RECENT_MANIFEST_KEY = "katana-next:recent-manifest";
-const COMPARISON_WORKSPACES = new Set(["quality", "landscape", "differential", "prioritize", "validate", "programs"]);
 
 function defaultsFor(workflow?: WorkflowDefinition) {
   return Object.fromEntries((workflow?.parameters ?? []).map((parameter) => [parameter.key, parameter.default]));
@@ -88,7 +87,9 @@ export default function App() {
   const activeWorkflow = (workflows.data ?? []).find((workflow) => workflow.workflow_id === activeWorkflowId);
   const projectId = project?.snapshot.project_id ?? "";
   const activeParameters = activeWorkflow ? (parameterStore[activeWorkflow.workflow_id] ?? defaultsFor(activeWorkflow)) : {};
-  const requiresComparisons = Boolean(activeWorkflow && project?.manifest.contrasts.length && COMPARISON_WORKSPACES.has(activeWorkflow.workspace_id));
+  const requiresComparisons = Boolean(
+    activeWorkflow?.supports_contrast_selection && project?.manifest.contrasts.length,
+  );
   const resolvedParameters = useMemo(
     () => ({
       ...activeParameters,

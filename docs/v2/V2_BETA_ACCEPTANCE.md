@@ -13,7 +13,7 @@ single-cell method already outperforms published methods on independent data.
 The final acceptance run is stored outside the repository:
 
 ```text
-E:\Project\katana-next-runs\v2-final-acceptance-20260908-r8
+E:\Project\katana-next-runs\v2-final-acceptance-20260908-r9
 ```
 
 The fixture contains 15 bulk samples, three declared contrasts, five rMATS

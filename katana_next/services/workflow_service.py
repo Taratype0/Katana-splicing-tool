@@ -87,6 +87,7 @@ class WorkflowService:
         workflow = self.registry.get(workflow_id)
         workflow.validate_assets(context)
         normalized = workflow.normalize_parameters(parameters)
+        normalized = self._normalize_contrast_scope(context, workflow, normalized)
         input_paths = list(
             dict.fromkeys(
                 Path(path).resolve()
@@ -123,6 +124,38 @@ class WorkflowService:
             project_id, workflow.definition.workflow_id, run_fingerprint
         )
         return context, workflow, normalized, run_fingerprint, cached
+
+    @staticmethod
+    def _normalize_contrast_scope(
+        context, workflow, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        normalized = dict(parameters)
+        if "contrast_ids" not in normalized:
+            return normalized
+        if not workflow.definition.supports_contrast_selection:
+            raise ValueError(
+                f"{workflow.definition.label} does not support contrast subset selection."
+            )
+        raw = normalized["contrast_ids"]
+        if isinstance(raw, str):
+            requested = [raw]
+        elif isinstance(raw, (list, tuple, set)):
+            requested = [str(item) for item in raw]
+        else:
+            raise ValueError("contrast_ids must be a list of declared contrast IDs.")
+        known = [contrast.contrast_id for contrast in context.manifest.contrasts]
+        requested_set = set(requested)
+        unknown = sorted(requested_set.difference(known))
+        if unknown:
+            raise ValueError(f"Unknown contrast IDs: {', '.join(unknown)}")
+        selected = [contrast_id for contrast_id in known if contrast_id in requested_set]
+        if not selected:
+            raise ValueError("Select at least one contrast; an empty selection never means all.")
+        if selected == known:
+            normalized.pop("contrast_ids")
+        else:
+            normalized["contrast_ids"] = selected
+        return normalized
 
     def _fingerprint(self, path: Path) -> FileFingerprint:
         resolved = path.resolve()
