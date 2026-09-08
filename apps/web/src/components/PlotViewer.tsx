@@ -5,14 +5,11 @@ import { ChartNoAxesColumnIncreasing, LoaderCircle } from "lucide-react";
 import { api } from "../api";
 import type { Artifact } from "../types";
 
-type Props = {
-  projectId: string;
-  artifact?: Artifact;
-};
+type Props = { projectId: string; artifact?: Artifact };
 
 export function PlotViewer({ projectId, artifact }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const view = useRef<Result | null>(null);
+  const embedded = useRef<Result | null>(null);
   const query = useQuery({
     queryKey: ["plot", projectId, artifact?.artifact_id],
     queryFn: () => api.artifactContent(projectId, artifact!.artifact_id),
@@ -20,38 +17,36 @@ export function PlotViewer({ projectId, artifact }: Props) {
   });
 
   useEffect(() => {
-    if (!host.current || !query.data) return;
+    const element = host.current;
+    if (!element || !query.data) return;
     let disposed = false;
+    element.replaceChildren();
     void import("vega-embed").then(({ default: embed }) =>
-      embed(host.current!, query.data!, { actions: false, renderer: "svg" }).then((result) => {
-        if (disposed) result.finalize();
-        else view.current = result;
-      }),
+      embed(element, query.data!, { actions: { export: true, source: false, compiled: false, editor: false }, renderer: "svg" })
+        .then((result) => {
+          if (disposed) result.finalize();
+          else embedded.current = result;
+        }),
     );
-    const observer = new ResizeObserver(() => void view.current?.view.resize().runAsync());
-    observer.observe(host.current);
+    const observer = new ResizeObserver(() => {
+      window.requestAnimationFrame(() => void embedded.current?.view.resize().runAsync());
+    });
+    observer.observe(element);
     return () => {
       disposed = true;
       observer.disconnect();
-      view.current?.finalize();
-      view.current = null;
+      embedded.current?.finalize();
+      embedded.current = null;
+      element.replaceChildren();
     };
   }, [query.data]);
 
   if (!artifact) {
-    return (
-      <div className="viewer-empty">
-        <ChartNoAxesColumnIncreasing size={30} />
-        <strong>No cached plot</strong>
-        <span>Run the current workspace explicitly to create one.</span>
-      </div>
-    );
+    return <div className="viewer-empty"><ChartNoAxesColumnIncreasing size={30} /><strong>No cached plot</strong></div>;
   }
   if (query.isLoading) {
-    return <div className="viewer-empty"><LoaderCircle className="spin" size={26} />Loading plot specification</div>;
+    return <div className="viewer-empty"><LoaderCircle className="spin" size={26} />Loading plot</div>;
   }
-  if (query.error) {
-    return <div className="viewer-empty error">{query.error.message}</div>;
-  }
-  return <div ref={host} className="plot-host" aria-label={artifact.name} />;
+  if (query.error) return <div className="viewer-empty error">{query.error.message}</div>;
+  return <div className="plot-stage"><div ref={host} className="plot-host" aria-label={artifact.name} /></div>;
 }

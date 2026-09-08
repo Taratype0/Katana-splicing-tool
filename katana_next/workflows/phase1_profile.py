@@ -65,6 +65,7 @@ class Phase1ProfileWorkflow:
 
         metadata: dict[str, Any] = {
             "workflow_version": self.version,
+            "project_snapshot_fingerprint": context.snapshot.manifest_fingerprint,
             "source": str(source),
             "support_prioritization_only": True,
         }

@@ -75,14 +75,14 @@ Cross-comparison analysis reports separately:
 
 ## 5. CoSplice 2.0
 
-### 5.1 Current limitation
+### 5.1 Production backbone
 
-The legacy production path can calculate a dense Python TOM before invoking R
-WGCNA, and the R wrapper sets `maxBlockSize` to the complete feature count.
-Together with a default 3,000-event dense limit and fixed soft power, this is
-neither truly blockwise nor a defensible universal production path. Experimental
-Leiden, hybrid, multi-view, and preservation stages also make it difficult to
-state which algorithm generated the final module.
+Katana Next does not use the legacy Leiden-first or competing multi-engine path
+as its production result. The workflow locks module discovery to official
+signed blockwise WGCNA: data-driven soft-power diagnostics, signed adjacency,
+TOM, hierarchical clustering, Dynamic Tree Cut, eigengene-based merging, and
+kME membership. Dense Python TOM and exploratory sparse-network results remain
+benchmark code and are not presented as a second production answer.
 
 ### 5.2 Locked baseline
 
@@ -96,23 +96,25 @@ Reference: Langfelder and Horvath, 2008,
 https://doi.org/10.1186/1471-2105-9-559; Dynamic Tree Cut,
 https://doi.org/10.1093/bioinformatics/btm563.
 
-### 5.3 Candidate production method
+### 5.3 Production stabilization
 
-The CoSplice candidate is an uncertainty-aware consensus extension of the
-locked WGCNA baseline:
+CoSplice adds an uncertainty-aware stabilization layer to the locked WGCNA
+backbone:
 
 1. Learn posterior splice usage from replicate junction counts.
 2. Generate paired sample bootstraps and posterior imputations.
 3. Fit the same signed blockwise network protocol in every resample.
 4. Estimate event-event co-assignment, module recovery, kME uncertainty, and
    event coverage.
-5. Refine unstable boundaries using consensus co-assignment while allowing a
-   grey/unassigned set.
+5. Retain stable WGCNA assignments and send weak or ambiguous boundary events
+   to a grey/unassigned set. Stable modules are not repartitioned.
 6. Refit module scores on the discovery data and project them unchanged into
    validation cohorts.
 
-This method is not promoted to default merely because it is novel. It must beat
-or match exact WGCNA under locked, same-input benchmarks.
+This is `backbone_refined_consensus`, not a de novo consensus clustering
+algorithm. Its value must be demonstrated against exact WGCNA under locked,
+same-input benchmarks; rejecting unstable events is not automatically an
+improvement if it destroys coverage or external preservation.
 
 ### 5.4 Module statistics
 

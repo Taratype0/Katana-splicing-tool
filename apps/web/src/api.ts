@@ -1,4 +1,13 @@
-import type { Artifact, Job, ProjectPayload, Selection, TablePage, Workspace } from "./types";
+import type {
+  Artifact,
+  Job,
+  ProjectPayload,
+  Selection,
+  TablePage,
+  WorkflowDefinition,
+  WorkflowCache,
+  Workspace,
+} from "./types";
 
 const API_ROOT = import.meta.env.VITE_API_ROOT ?? "/api";
 
@@ -16,12 +25,33 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   workspaces: () => request<Workspace[]>("/workspaces"),
+  workflows: () => request<WorkflowDefinition[]>("/workflows"),
   openProject: (manifestPath: string) =>
     request<ProjectPayload>("/projects/open", {
       method: "POST",
       body: JSON.stringify({ manifest_path: manifestPath }),
     }),
-  artifacts: (projectId: string) => request<Artifact[]>(`/projects/${projectId}/artifacts`),
+  migrateProject: (payload: { legacy_config_path: string; output_root: string; manifest_path?: string }) =>
+    request<ProjectPayload>("/projects/migrate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  artifacts: (projectId: string, analysisId?: string) => {
+    const query = analysisId ? `?analysis_id=${encodeURIComponent(analysisId)}` : "";
+    return request<Artifact[]>(`/projects/${encodeURIComponent(projectId)}/artifacts${query}`);
+  },
+  workflowCache: (
+    projectId: string,
+    workflowId: string,
+    parameters: Record<string, unknown>,
+  ) =>
+    request<WorkflowCache>(
+      `/projects/${encodeURIComponent(projectId)}/workflows/${encodeURIComponent(workflowId)}/cache`,
+      {
+        method: "POST",
+        body: JSON.stringify({ parameters, force: false }),
+      },
+    ),
   artifactRows: (
     projectId: string,
     artifactId: string,
@@ -34,11 +64,20 @@ export const api = {
     });
     if (options.sortBy) query.set("sort_by", options.sortBy);
     if (options.descending) query.set("descending", "true");
-    return request<TablePage>(`/projects/${projectId}/artifacts/${artifactId}/rows?${query}`);
+    return request<TablePage>(
+      `/projects/${encodeURIComponent(projectId)}/artifacts/${encodeURIComponent(artifactId)}/rows?${query}`,
+    );
   },
   artifactContent: (projectId: string, artifactId: string) =>
-    request<Record<string, unknown>>(`/projects/${projectId}/artifacts/${artifactId}/content`),
-  selections: (projectId: string) => request<Selection[]>(`/projects/${projectId}/selections`),
+    request<Record<string, unknown>>(
+      `/projects/${encodeURIComponent(projectId)}/artifacts/${encodeURIComponent(artifactId)}/content`,
+    ),
+  artifactFileUrl: (projectId: string, artifactId: string, download = false) =>
+    `${API_ROOT}/projects/${encodeURIComponent(projectId)}/artifacts/${encodeURIComponent(artifactId)}/file${
+      download ? "?download=true" : ""
+    }`,
+  selections: (projectId: string) =>
+    request<Selection[]>(`/projects/${encodeURIComponent(projectId)}/selections`),
   createSelection: (
     projectId: string,
     payload: {
@@ -49,14 +88,22 @@ export const api = {
       filters: Record<string, unknown>;
     },
   ) =>
-    request<Selection>(`/projects/${projectId}/selections`, {
+    request<Selection>(`/projects/${encodeURIComponent(projectId)}/selections`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  runPhase1: (projectId: string, force = false) =>
-    request<Job>(`/projects/${projectId}/workflows/phase1-profile/run`, {
+  runWorkflow: (projectId: string, workflowId: string, parameters: Record<string, unknown>, force = false) =>
+    request<Job>(
+      `/projects/${encodeURIComponent(projectId)}/workflows/${encodeURIComponent(workflowId)}/run`,
+      {
+        method: "POST",
+        body: JSON.stringify({ parameters, force }),
+      },
+    ),
+  openOutput: (projectId: string) =>
+    request<{ opened: boolean; path: string }>(`/projects/${encodeURIComponent(projectId)}/open-output`, {
       method: "POST",
-      body: JSON.stringify({ parameters: {}, force }),
     }),
   jobs: (projectId: string) => request<Job[]>(`/jobs?project_id=${encodeURIComponent(projectId)}`),
+  cancelJob: (jobId: string) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }),
 };

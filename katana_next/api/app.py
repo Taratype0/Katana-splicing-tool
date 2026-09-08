@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -13,11 +14,13 @@ from fastapi.staticfiles import StaticFiles
 from katana_next import __version__
 from katana_next.api.schemas import (
     CreateSelectionRequest,
+    MigrateProjectRequest,
     OpenProjectRequest,
     RunWorkflowRequest,
 )
 from katana_next.domain.models import ArtifactKind, JobStatus, SelectionSet
 from katana_next.infrastructure.jobs import JobManager
+from katana_next.migration import migrate_legacy_project
 from katana_next.services.project_service import ProjectService
 from katana_next.services.workflow_service import WorkflowService
 from katana_next.workflows.catalog import WORKSPACES
@@ -62,10 +65,27 @@ def create_app(runtime: PlatformRuntime | None = None) -> FastAPI:
     def workspaces() -> list[dict[str, object]]:
         return [workspace.to_dict() for workspace in WORKSPACES]
 
+    @app.get("/api/workflows")
+    def workflows() -> list[dict[str, object]]:
+        return active.workflows.definitions()
+
     @app.post("/api/projects/open")
     def open_project(request: OpenProjectRequest) -> dict[str, Any]:
         try:
             context = active.projects.open_project(request.manifest_path)
+        except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _project_payload(context)
+
+    @app.post("/api/projects/migrate")
+    def migrate_project(request: MigrateProjectRequest) -> dict[str, Any]:
+        try:
+            manifest_path = migrate_legacy_project(
+                request.legacy_config_path,
+                request.output_root,
+                request.manifest_path,
+            )
+            context = active.projects.open_project(manifest_path)
         except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return _project_payload(context)
@@ -140,13 +160,38 @@ def create_app(runtime: PlatformRuntime | None = None) -> FastAPI:
             )
         return context.results.read_plot_spec(record.path)
 
+    @app.get("/api/projects/{project_id}/artifacts/{artifact_id}/file")
+    def artifact_file(
+        project_id: str, artifact_id: str, download: bool = False
+    ) -> FileResponse:
+        context = _context_or_404(active, project_id)
+        record = context.catalog.get_artifact(artifact_id)
+        if record is None or record.project_id != project_id:
+            raise HTTPException(status_code=404, detail="Artifact not found")
+        if not record.path.is_file():
+            raise HTTPException(status_code=404, detail="Artifact file is missing")
+        media_type = str(record.metadata.get("mime_type", "")) or None
+        return FileResponse(
+            record.path,
+            media_type=media_type,
+            filename=record.path.name if download else None,
+        )
+
     @app.get("/api/projects/{project_id}/selections")
     def selections(project_id: str) -> list[dict[str, Any]]:
         context = _context_or_404(active, project_id)
-        return [
-            item.model_dump(mode="json")
-            for item in context.catalog.list_selections(project_id)
-        ]
+        current = []
+        for item in context.catalog.list_selections(project_id):
+            source = context.catalog.get_artifact(item.source_artifact_id)
+            if source is None:
+                continue
+            if (
+                source.metadata.get("project_snapshot_fingerprint")
+                != context.snapshot.manifest_fingerprint
+            ):
+                continue
+            current.append(item.model_dump(mode="json"))
+        return current
 
     @app.post("/api/projects/{project_id}/selections")
     def create_selection(
@@ -180,6 +225,53 @@ def create_app(runtime: PlatformRuntime | None = None) -> FastAPI:
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return job.model_dump(mode="json")
+
+    @app.post("/api/projects/{project_id}/workflows/{workflow_id}/run")
+    def run_workflow(
+        project_id: str, workflow_id: str, request: RunWorkflowRequest
+    ) -> dict[str, Any]:
+        try:
+            job = active.workflows.run(
+                workflow_id,
+                project_id,
+                parameters=request.parameters,
+                force=request.force,
+            )
+        except (KeyError, ValueError, FileNotFoundError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return job.model_dump(mode="json")
+
+    @app.post("/api/projects/{project_id}/workflows/{workflow_id}/cache")
+    def workflow_cache(
+        project_id: str, workflow_id: str, request: RunWorkflowRequest
+    ) -> dict[str, Any]:
+        try:
+            run_fingerprint, cached = active.workflows.compatible_cache(
+                workflow_id,
+                project_id,
+                parameters=request.parameters,
+            )
+        except (KeyError, ValueError, FileNotFoundError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {
+            "run_fingerprint": run_fingerprint,
+            "cache_hit": bool(cached),
+            "artifacts": [artifact.model_dump(mode="json") for artifact in cached],
+        }
+
+    @app.post("/api/projects/{project_id}/open-output")
+    def open_output(project_id: str) -> dict[str, Any]:
+        context = _context_or_404(active, project_id)
+        output_root = context.manifest.output_root.resolve()
+        output_root.mkdir(parents=True, exist_ok=True)
+        try:
+            os.startfile(output_root)  # type: ignore[attr-defined]
+        except (AttributeError, OSError) as exc:
+            raise HTTPException(
+                status_code=501,
+                detail=f"Could not open the local output folder: {exc}",
+            ) from exc
+        return {"opened": True, "path": str(output_root)}
 
     @app.get("/api/jobs")
     def jobs(project_id: str | None = None) -> list[dict[str, Any]]:

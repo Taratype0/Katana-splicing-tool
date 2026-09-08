@@ -29,10 +29,12 @@ explicit output contract, test fixture, and downstream destination.
 
 ## Current status
 
-Phase 1 is implemented as a runnable vertical slice. It includes the typed
-manifest and contrast domain, file/workflow fingerprints, a DuckDB artifact and
-selection catalog, Parquet result paging, explicit background jobs, cache-hit
-semantics, FastAPI endpoints, and the modern React workspace shell.
+The beta implementation now registers all nine workspaces and 17 isolated
+workflows. It includes typed manifests and contrasts, stable-AS QC, bulk
+landscape, DAS/DEG/DTU, exact cross-comparison analysis, transparent candidate
+evidence, enrichment/RBP/isoform support, real-BAM Native Sashimi, WGCNA-backed
+CoSplice programs, donor-aware single-cell junction analysis, and reproducible
+HTML/PDF/ZIP reporting.
 
 Bootstrap and launch the development build:
 
@@ -42,6 +44,9 @@ cd E:\Project\katana-next
 .\scripts\launch_katana_next.ps1
 ```
 
-The Phase 1 fixture validates platform behavior only and is intentionally not a
-biological analysis. Phase 2 replaces that fixture with the first verified bulk
-splicing vertical slice.
+The complete fixture validates software and scientific contracts only and is
+intentionally not a biological result. Real Ythdc1 rMATS, stageR DTU, quant.sf,
+GTF, BAM and BAI inputs are used separately for adapter and Native Sashimi smoke
+acceptance. Publication-level CoSplice and single-cell performance claims still
+require locked independent cohorts; green software tests do not replace those
+benchmarks.

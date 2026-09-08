@@ -189,6 +189,19 @@ class ArtifactCatalog:
         artifacts = [AnalysisArtifact.model_validate_json(row[0]) for row in rows]
         return [artifact for artifact in artifacts if artifact.path.exists()]
 
+    def clear_run_artifacts(
+        self, project_id: str, analysis_id: str, run_fingerprint: str
+    ) -> None:
+        """Remove stale catalog rows before an explicit forced rebuild."""
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                DELETE FROM artifacts
+                WHERE project_id = ? AND analysis_id = ? AND run_fingerprint = ?
+                """,
+                [project_id, analysis_id, run_fingerprint],
+            )
+
     def save_selection(self, selection: SelectionSet) -> SelectionSet:
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN TRANSACTION")

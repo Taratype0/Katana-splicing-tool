@@ -64,7 +64,8 @@ Katana Next is a local-first web desktop application:
 - A Python API and worker process for analysis.
 - FastAPI for typed local IPC and server-sent job progress.
 - DuckDB plus Parquet/Arrow for large tables and cached matrices.
-- Tauri as the Windows desktop shell after browser-mode acceptance.
+- PySide6 QtWebEngine as the verified Windows desktop host for the same React
+  workspace and loopback FastAPI service.
 
 This is preferred over extending the current PySide widget tree because it
 supports responsive previews, high-DPI rendering, reusable viewers, and large
@@ -88,26 +89,17 @@ Visual direction:
 
 ```text
 katana-next/
-  apps/
-    desktop/                 # Tauri shell
-    web/                     # React/TypeScript UI
-    api/                     # FastAPI composition root
-  packages/
-    domain/                  # immutable project, sample, contrast, artifact models
-    workflows/               # typed analysis DAGs and feasibility gates
-    bulk_splicing/           # event catalog, QC, DAS and comparison methods
-    cosplice/                # network discovery and validation engines
-    single_cell_splicing/    # junction, cell-type and state workflows
-    expression/              # DEG and enrichment adapters
-    isoform/                 # DTU and isoform evidence
-    interpretation/          # RBP, motif, pathway and report evidence
-    visualization/           # plot specifications, not GUI widgets
-  tests/
-    unit/
-    contract/
-    integration/
-    scientific/
-    ui/
+  apps/web/                  # React/TypeScript workspace
+  apps/desktop/              # desktop-host contract and launch documentation
+  katana_next/api/           # FastAPI composition root
+  katana_next/domain/        # immutable project, sample, contrast and artifact models
+  katana_next/infrastructure/# DuckDB, Parquet, fingerprints and jobs
+  katana_next/science/       # normalized bulk/single-cell statistics
+  katana_next/workflows/     # 17 isolated production workflows
+  katana_next/desktop.py     # PySide6 QtWebEngine host
+  katana_cosplice/           # CoSplice stage engine
+  src/adapters/              # verified legacy adapters, including Native Sashimi
+  tests/v2/                  # platform, workflow, desktop and contract acceptance
 ```
 
 Domain packages do not import UI code. Workflows declare inputs and outputs;
@@ -162,7 +154,7 @@ supporting evidence, interpretation, and unsupported causal claim.
 | Isoform support | Keep and strengthen | distinguish DTU, dominant switch, sequence, ORF and domain evidence |
 | Jutils/native Jutils pages | Retire | replace with unified Landscape and similarity workflows |
 | Legacy duplicate/benchmark engines | Exclude from production | retain only in benchmark package or archive |
-| CoSplice | Rebuild behind a stable API | current implementation has duplicated dense computation and mixed engines |
+| CoSplice | Keep behind the workflow API | production is locked to signed WGCNA/TOM plus bootstrap rejection of unstable boundary events |
 
 ## 9. Reporting
 

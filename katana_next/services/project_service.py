@@ -126,6 +126,13 @@ class ProjectService:
             raise ValueError(
                 "Selection source artifact does not belong to the project."
             )
+        if (
+            artifact.metadata.get("project_snapshot_fingerprint")
+            != context.snapshot.manifest_fingerprint
+        ):
+            raise ValueError(
+                "Selection source artifact is stale for the current project inputs."
+            )
         return context.catalog.save_selection(selection)
 
     def _validate_output_root(self, output_root: Path) -> None:

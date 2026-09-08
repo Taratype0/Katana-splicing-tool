@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import duckdb
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -32,6 +33,16 @@ class ResultStore:
         target.parent.mkdir(parents=True, exist_ok=True)
         records = list(rows)
         table = pa.Table.from_pylist(records)
+        temporary = target.with_suffix(target.suffix + ".tmp")
+        pq.write_table(table, temporary, compression="zstd")
+        os.replace(temporary, target)
+        return table.num_rows
+
+    def write_dataframe(self, frame: pd.DataFrame, path: str | Path) -> int:
+        """Write a dataframe atomically while preserving nullable column types."""
+        target = Path(path).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        table = pa.Table.from_pandas(frame.reset_index(drop=True), preserve_index=False)
         temporary = target.with_suffix(target.suffix + ".tmp")
         pq.write_table(table, temporary, compression="zstd")
         os.replace(temporary, target)

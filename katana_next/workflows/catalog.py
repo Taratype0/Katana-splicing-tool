@@ -25,7 +25,7 @@ WORKSPACES = (
         "Quality",
         "Assess coverage, replicates and exclusions.",
         "shield",
-        False,
+        True,
         2,
     ),
     WorkspaceDefinition(
@@ -33,7 +33,7 @@ WORKSPACES = (
         "Landscape",
         "Explore expression and splicing structure.",
         "activity",
-        False,
+        True,
         2,
     ),
     WorkspaceDefinition(
@@ -41,7 +41,7 @@ WORKSPACES = (
         "Differential",
         "Test DEG, DTU and alternative splicing.",
         "split",
-        False,
+        True,
         2,
     ),
     WorkspaceDefinition(
@@ -49,7 +49,7 @@ WORKSPACES = (
         "Prioritize",
         "Combine transparent evidence dimensions.",
         "target",
-        False,
+        True,
         2,
     ),
     WorkspaceDefinition(
@@ -57,7 +57,7 @@ WORKSPACES = (
         "Validate",
         "Inspect junction support with Native Sashimi.",
         "scan",
-        False,
+        True,
         2,
     ),
     WorkspaceDefinition(
@@ -65,7 +65,7 @@ WORKSPACES = (
         "Programs",
         "Discover and validate co-splicing programs.",
         "network",
-        False,
+        True,
         3,
     ),
     WorkspaceDefinition(
@@ -73,7 +73,7 @@ WORKSPACES = (
         "Single Cell",
         "Analyze assay-aware single-cell splicing.",
         "cells",
-        False,
+        True,
         4,
     ),
     WorkspaceDefinition(
@@ -81,7 +81,7 @@ WORKSPACES = (
         "Reports",
         "Build reproducible evidence packages.",
         "report",
-        False,
+        True,
         5,
     ),
 )

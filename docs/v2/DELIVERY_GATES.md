@@ -26,6 +26,8 @@ selected, and reopened without running an analysis implicitly.
 
 ## Phase 2: Bulk analysis vertical slice
 
+Status: **Software and real-adapter gate passed on 2026-09-08.**
+
 - Implement input/QC, event catalog, Landscape, stable-event QC, differential
   AS, exact cross-comparison, Native Sashimi, and report export.
 - Add DEG and DTU adapters and transparent candidate evidence views.
@@ -35,6 +37,13 @@ links to its source rows, and changing one parameter invalidates only dependent
 artifacts.
 
 ## Phase 3: CoSplice 2.0
+
+Status: **Beta implementation complete; publication-performance gate remains
+separate.** The production wrapper locks signed WGCNA/TOM and
+`backbone_refined_consensus`. The deterministic acceptance fixture recovers two
+stable 20-event programs and leaves the unsupported 20-event block grey. A
+12-sample Ythdc1 project is correctly stopped by the declared 15-sample network
+feasibility gate rather than being forced through.
 
 - Implement exact blockwise WGCNA baseline without duplicate dense TOM.
 - Implement posterior/bootstrap consensus candidate and grey-event handling.
@@ -48,6 +57,12 @@ replicate on untouched data.
 
 ## Phase 4: Single-cell splicing
 
+Status: **Core beta workflow and synthetic donor-aware gate passed.** Metadata
+audit, precomputed or barcode/UMI BAM junction-choice quantification,
+donor-cell-type pseudobulk, beta-binomial effect testing, FDR and uncertainty
+outputs are implemented. True tagged single-cell BAM and independent public
+cohort benchmarking remain required before a method-performance claim.
+
 - Implement assay audit, barcode/UMI junction extraction, junction confidence,
   droplet and full-length quantification tracks, donor-aware pseudobulk tests,
   cell-state analysis, interpretation, and pseudobulk Sashimi.
@@ -59,6 +74,12 @@ datasets demonstrate junction precision, PSI/usage accuracy, calibrated DAS,
 replicate concordance, and reproducible biological interpretation.
 
 ## Phase 5: Product acceptance
+
+Status: **Beta software gate passed; packaged clean-machine and multi-monitor
+manual acceptance remain release-candidate gates.** The React interface,
+PySide6 desktop host, isolated jobs, compatible-cache resolver, project-local
+catalog, external output policy, migration, and reproducibility bundle are
+implemented and automatically tested.
 
 - Complete keyboard, high-DPI, resizing, multi-monitor, cancellation, crash
   recovery, and large-table tests.

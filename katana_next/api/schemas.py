@@ -13,6 +13,12 @@ class OpenProjectRequest(ApiModel):
     manifest_path: str
 
 
+class MigrateProjectRequest(ApiModel):
+    legacy_config_path: str
+    output_root: str
+    manifest_path: str | None = None
+
+
 class RunWorkflowRequest(ApiModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
     force: bool = False

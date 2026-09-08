@@ -679,18 +679,21 @@ class CoSplicePipeline:
                         f"Building {network_name} posterior correlation ensemble "
                         f"from {self.config.uncertainty.posterior_draws} beta draws."
                     )
-                    transform = None
+                    draw_transform = None
                     if network_name == "residual":
-                        transform = lambda draw: residualize_matrix(
-                            draw, samples, self.config.residual_covariates
-                        )
+                        def _residualize_draw(draw: pd.DataFrame) -> pd.DataFrame:
+                            return residualize_matrix(
+                                draw, samples, self.config.residual_covariates
+                            )
+
+                        draw_transform = _residualize_draw
                     ensemble = posterior_ensemble_correlation(
                         alpha,
                         beta,
                         n_draws=self.config.uncertainty.posterior_draws,
                         method=self.config.network.method,
                         random_seed=self.config.uncertainty.posterior_random_seed,
-                        draw_transform=transform,
+                        draw_transform=draw_transform,
                     )
                     save_posterior_correlation(ensemble, cache_path)
             reliability = None

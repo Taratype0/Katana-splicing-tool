@@ -174,13 +174,38 @@ def _rscript_candidates() -> list[Path]:
     on_path = shutil.which("Rscript")
     if on_path:
         candidates.append(Path(on_path))
-    for prefix in filter(None, [os.environ.get("CONDA_PREFIX"), sys.prefix]):
-        root = Path(prefix)
-        candidates.extend([root / "Scripts" / "Rscript.exe", root / "Lib" / "R" / "bin" / "Rscript.exe"])
+    prefixes = [Path(prefix) for prefix in filter(None, [os.environ.get("CONDA_PREFIX"), sys.prefix])]
     conda_exe = os.environ.get("CONDA_EXE", "").strip()
     if conda_exe:
-        conda_root = Path(conda_exe).resolve().parent.parent
-        candidates.extend(sorted((conda_root / "envs").glob("*/Scripts/Rscript.exe")))
+        prefixes.append(Path(conda_exe).resolve().parent.parent)
+    conda_on_path = shutil.which("conda") or shutil.which("conda.exe")
+    if conda_on_path:
+        prefixes.append(Path(conda_on_path).resolve().parent.parent)
+    if sys.platform == "win32":
+        prefixes.extend(
+            [
+                Path("D:/anaconda3"),
+                Path("C:/ProgramData/anaconda3"),
+                Path.home() / "anaconda3",
+                Path.home() / "miniconda3",
+                Path.home() / "mambaforge",
+            ]
+        )
+    for root in dict.fromkeys(path.resolve() for path in prefixes):
+        candidates.extend(
+            [
+                root / "Scripts" / "Rscript.exe",
+                root / "Lib" / "R" / "bin" / "Rscript.exe",
+            ]
+        )
+        env_root = root / "envs"
+        if env_root.is_dir():
+            candidates.extend(sorted(env_root.glob("*/Scripts/Rscript.exe")))
+            candidates.extend(sorted(env_root.glob("*/Lib/R/bin/Rscript.exe")))
+    if sys.platform == "win32":
+        candidates.extend(
+            sorted(Path("C:/Program Files/R").glob("R-*/bin/Rscript.exe"), reverse=True)
+        )
     unique: list[Path] = []
     seen: set[str] = set()
     for candidate in candidates:

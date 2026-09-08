@@ -456,7 +456,7 @@ def test_bootstrap_coassignment_builds_confident_consensus_modules() -> None:
         "fixed_wgcna_backbone_no_selection"
     }
     assert "backbone_cut_height" in result.parameter_search
-    assert result.diagnostics.loc[0, "partition_changed_from_backbone"] == False
+    assert not bool(result.diagnostics.loc[0, "partition_changed_from_backbone"])
     assert result.selection_audit["audit_type"].eq(
         "tom_backbone_selection"
     ).any()

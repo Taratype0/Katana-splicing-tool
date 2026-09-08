@@ -774,11 +774,19 @@ class NativeSashimiAdapter:
         ax_title = fig.add_subplot(gs[0])
         ax_title.axis("off")
         ax_title.text(0.02, 0.70, title, ha="left", va="center", fontsize=21, fontweight="bold", color="#111827")
-        ax_title.text(0.02, 0.38, f"event_id: {metadata.get('event_id', '')}", ha="left", va="center", fontsize=12.5, color="#4B5563")
+        ax_title.text(
+            0.02,
+            0.34,
+            f"event_id: {_compact_event_id(metadata.get('event_id', ''))}",
+            ha="left",
+            va="center",
+            fontsize=11.5,
+            color="#4B5563",
+        )
         dpsi = metadata.get("dPSI")
         fdr = metadata.get("FDR")
-        ax_title.text(0.84, 0.72, f"dPSI: {_fmt_signed(dpsi)}", ha="left", va="center", fontsize=18, fontweight="bold", color="#006B4F")
-        ax_title.text(0.84, 0.43, f"FDR: {_fmt_float(fdr)}", ha="left", va="center", fontsize=16.5, fontweight="bold", color="#111827")
+        ax_title.text(0.82, 0.72, f"dPSI: {_fmt_signed(dpsi)}", ha="left", va="center", fontsize=18, fontweight="bold", color="#006B4F")
+        ax_title.text(0.82, 0.34, f"FDR: {_fmt_float(fdr)}", ha="left", va="center", fontsize=16.5, fontweight="bold", color="#111827")
 
         coverage_max = max(float(np.nanmax(track["coverage"])) if len(track["coverage"]) else 0.0 for track in tracks) if tracks else 1.0
         coverage_ylim = max(coverage_max * 1.28, 1.0)
@@ -1435,6 +1443,15 @@ def _fmt_signed(value: object) -> str:
     if np.isnan(number):
         return "NA"
     return f"{number:+.3g}"
+
+
+def _compact_event_id(value: object, max_length: int = 72) -> str:
+    text = str(value or "").strip()
+    if len(text) <= max_length:
+        return text
+    head = max_length // 2 - 2
+    tail = max_length - head - 3
+    return f"{text[:head]}...{text[-tail:]}"
 
 
 def _mean_or_nan(values: list[float]) -> float:

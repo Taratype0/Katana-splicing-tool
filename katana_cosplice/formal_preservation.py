@@ -5,7 +5,6 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from katana_cosplice.benchmark import _r_subprocess_env
