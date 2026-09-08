@@ -13,7 +13,7 @@ single-cell method already outperforms published methods on independent data.
 The final acceptance run is stored outside the repository:
 
 ```text
-E:\Project\katana-next-runs\v2-final-acceptance-20260908-r7
+E:\Project\katana-next-runs\v2-final-acceptance-20260908-r8
 ```
 
 The fixture contains 15 bulk samples, three declared contrasts, five rMATS
@@ -55,6 +55,9 @@ PSI, aligned transcript tracks, and an rMATS evidence preview.
 On the real project, the first normalized rMATS event-cache build took 156.0
 seconds. A forced Landscape rebuild then reused that same input cache in 7.65
 seconds (`source_cache_status=hit`), without rerunning another analysis module.
+Vectorizing dominant-transcript selection reduced the complete 12-sample
+isoform-support rebuild from 145.0 to 17.6 seconds while preserving all 13,512
+switch identities.
 
 CoSplice discovery is intentionally rejected for this project because 12
 independent samples do not pass the declared 15-sample network-discovery gate.
@@ -64,7 +67,7 @@ This is a scientific feasibility result, not a runtime defect.
 
 ```text
 Python compileall: passed
-Full Python regression suite: 164 passed
+Full Python regression suite: 165 passed
 Ruff (katana_next, tests/v2, acceptance runner): passed
 React/Vitest: 3 passed
 TypeScript strict build: passed

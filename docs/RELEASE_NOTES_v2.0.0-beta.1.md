@@ -40,6 +40,8 @@ workspaces, typed artifacts, explicit jobs, and a shared responsive viewer.
   fingerprint, so Landscape and DAS no longer reparse the same large tables.
 - On the real Ythdc1 project, the first cache build took 156.0 seconds and a
   forced downstream Landscape rebuild reused it in 7.65 seconds.
+- Vectorized dominant-transcript selection reduced the real 12-sample isoform
+  support rebuild from 145.0 to 17.6 seconds with identical switch identities.
 - File fingerprints are cached in memory by resolved path, size, and mtime for
   responsive compatible-cache checks against large BAM collections.
 - UI results, parent artifacts, saved selections, and reports are all bound to

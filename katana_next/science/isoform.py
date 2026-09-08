@@ -98,7 +98,8 @@ def isoform_contrast_summary(context: ProjectContext, transcript: pd.DataFrame) 
 
 
 def dominant_isoform_switches(context: ProjectContext, transcript: pd.DataFrame) -> pd.DataFrame:
-    rows = []
+    frames: list[pd.DataFrame] = []
+    gene_columns = ["gene_id", "gene_symbol"]
     for contrast in context.manifest.contrasts:
         selected = transcript[
             transcript["sample_id"].isin(
@@ -122,31 +123,62 @@ def dominant_isoform_switches(context: ProjectContext, transcript: pd.DataFrame)
             .mean()
             .reset_index()
         )
-        for (gene_id, gene_symbol), group in arm_means.groupby(
-            ["gene_id", "gene_symbol"], dropna=False
-        ):
-            numerator = group[group["contrast_arm"].eq("numerator")].sort_values(
-                "tpm", ascending=False
+        top_by_arm: dict[str, pd.DataFrame] = {}
+        for arm in ("numerator", "denominator"):
+            top = (
+                arm_means.loc[arm_means["contrast_arm"].eq(arm)]
+                .sort_values(
+                    [*gene_columns, "tpm", "transcript_id"],
+                    ascending=[True, True, False, True],
+                    na_position="last",
+                )
+                .drop_duplicates(gene_columns, keep="first")
+                .rename(
+                    columns={
+                        "transcript_id": f"{arm}_dominant_transcript",
+                        "tpm": f"{arm}_dominant_tpm",
+                    }
+                )
             )
-            denominator = group[group["contrast_arm"].eq("denominator")].sort_values(
-                "tpm", ascending=False
+            top_by_arm[arm] = top[
+                [
+                    *gene_columns,
+                    f"{arm}_dominant_transcript",
+                    f"{arm}_dominant_tpm",
+                ]
+            ]
+        joined = top_by_arm["numerator"].merge(
+            top_by_arm["denominator"], on=gene_columns, how="inner"
+        )
+        joined = joined.loc[
+            joined["numerator_dominant_transcript"].ne(
+                joined["denominator_dominant_transcript"]
             )
-            if numerator.empty or denominator.empty:
-                continue
-            num_top, den_top = numerator.iloc[0], denominator.iloc[0]
-            if num_top["transcript_id"] == den_top["transcript_id"]:
-                continue
-            rows.append(
-                {
-                    "row_id": f"{contrast.contrast_id}::{gene_id}",
-                    "comparison_id": contrast.contrast_id,
-                    "gene_id": gene_id,
-                    "gene_symbol": gene_symbol,
-                    "numerator_dominant_transcript": num_top["transcript_id"],
-                    "denominator_dominant_transcript": den_top["transcript_id"],
-                    "numerator_dominant_tpm": num_top["tpm"],
-                    "denominator_dominant_tpm": den_top["tpm"],
-                    "support_semantics": "descriptive mean-TPM dominant transcript change; DTU significance is reported separately",
-                }
-            )
-    return pd.DataFrame(rows)
+        ].copy()
+        if joined.empty:
+            continue
+        joined.insert(0, "comparison_id", contrast.contrast_id)
+        joined.insert(
+            0,
+            "row_id",
+            contrast.contrast_id + "::" + joined["gene_id"].fillna("").astype(str),
+        )
+        joined["support_semantics"] = (
+            "descriptive mean-TPM dominant transcript change; "
+            "DTU significance is reported separately"
+        )
+        frames.append(joined)
+    if frames:
+        return pd.concat(frames, ignore_index=True)
+    return pd.DataFrame(
+        columns=[
+            "row_id",
+            "comparison_id",
+            *gene_columns,
+            "numerator_dominant_transcript",
+            "numerator_dominant_tpm",
+            "denominator_dominant_transcript",
+            "denominator_dominant_tpm",
+            "support_semantics",
+        ]
+    )

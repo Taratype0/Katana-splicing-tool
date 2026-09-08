@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 import zipfile
 
 import pandas as pd
@@ -10,6 +11,7 @@ from katana_next.api.app import PlatformRuntime, create_app
 from katana_next.domain.models import JobStatus
 from katana_next.full_fixture import create_full_fixture
 from katana_next.science.bulk import canonical_event_id, canonical_event_ids
+from katana_next.science.isoform import dominant_isoform_switches
 from katana_next.science.single_cell import (
     _annotate_junction_choices,
     _splice_site_components,
@@ -177,6 +179,41 @@ def test_vectorized_event_ids_match_scalar_contract() -> None:
     scalar = frame.apply(lambda row: canonical_event_id(row, "SE"), axis=1)
     vectorized = canonical_event_ids(frame, "SE")
     assert vectorized.tolist() == scalar.tolist()
+
+
+def test_dominant_isoform_switches_select_arm_means_without_gene_loops() -> None:
+    context = SimpleNamespace(
+        manifest=SimpleNamespace(
+            contrasts=(
+                SimpleNamespace(
+                    contrast_id="treated_vs_control",
+                    numerator=SimpleNamespace(sample_ids=("T1", "T2")),
+                    denominator=SimpleNamespace(sample_ids=("C1", "C2")),
+                ),
+            )
+        )
+    )
+    transcript = pd.DataFrame(
+        [
+            {"sample_id": sample, "gene_id": "G1", "gene_symbol": "Gene1", "transcript_id": transcript_id, "tpm": tpm}
+            for sample, transcript_id, tpm in (
+                ("T1", "TX1", 2.0),
+                ("T1", "TX2", 8.0),
+                ("T2", "TX1", 4.0),
+                ("T2", "TX2", 6.0),
+                ("C1", "TX1", 9.0),
+                ("C1", "TX2", 1.0),
+                ("C2", "TX1", 7.0),
+                ("C2", "TX2", 3.0),
+            )
+        ]
+    )
+    observed = dominant_isoform_switches(context, transcript)
+    assert len(observed) == 1
+    assert observed.loc[0, "numerator_dominant_transcript"] == "TX2"
+    assert observed.loc[0, "denominator_dominant_transcript"] == "TX1"
+    assert observed.loc[0, "numerator_dominant_tpm"] == 7.0
+    assert observed.loc[0, "denominator_dominant_tpm"] == 8.0
 
 
 def test_single_cell_junctions_use_exact_and_locus_gtf_annotation(

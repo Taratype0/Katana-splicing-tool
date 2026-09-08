@@ -163,7 +163,7 @@ class RbpSupportWorkflow(WorkflowBase):
 
 
 class IsoformSupportWorkflow(WorkflowBase):
-    version = "2.0.0"
+    version = "2.0.1"
     definition = WorkflowDefinition(
         workflow_id="prioritize.isoform_support",
         workspace_id="prioritize",
