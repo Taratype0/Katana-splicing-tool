@@ -2,6 +2,8 @@
 
 Katana combines methods and evidence within a common project. It does not make different endpoints interchangeable, combine unrelated P values, or claim authorship of external statistical methods.
 
+See [bulk threshold values and evidence](THRESHOLDS.md) for exact defaults, published precedents, Katana-specific heuristics and source references. Published support for a method is distinguished from validation of a particular numerical cutoff.
+
 | Evidence | Interpretation and limits |
 | --- | --- |
 | Differential expression | Gene abundance with the imported or executed method's native effect and significance definitions. |

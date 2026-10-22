@@ -14,6 +14,8 @@ Use explicit sample IDs and condition labels. Preserve donor/biological replicat
 
 ## Workflow execution
 
+The [threshold reference](THRESHOLDS.md) records the current bulk values, exact units, literature support and limitations. In particular, the two 75% replicate-consistency checks are Katana heuristics, and approximate PSI standard error is diagnostic by default.
+
 The browser and Python interfaces use the same workflow inventory and artifact services. A workflow's readiness plan describes its inputs, parameters and limitations. Opening a result or a report is not an instruction to recompute its upstream analyses. Compatible completed artifacts can be reused; changing an input, reference or scientific parameter requires the corresponding new analysis identity.
 
 Inspect the inventory, plan an analysis and list available artifacts:
