@@ -33,6 +33,34 @@ python -m katana_next.cli --project ../analysis-project/katana.project.json run 
 
 Planning checks readiness. `run` executes the selected workflow. Neither command implies a complete raw-data pipeline.
 
+### DEG thresholds at runtime
+
+The DEG analysis defaults to an adjusted P-value cutoff of `0.05` and a minimum absolute log2 fold change of `1.0`. Both can be changed for an individual run:
+
+| Parameter | Meaning | Default |
+| --- | --- | --- |
+| `fdr` | Maximum imported adjusted P-value, inclusive | `0.05` |
+| `min_abs_log2fc` | Minimum absolute log2 fold change, inclusive | `1.0` |
+
+In the desktop or browser interface, open **Differential gene expression** and edit **DEG FDR** and **Minimum \|log2FC\|** before running. For the command line, copy and edit [the DEG parameter example](../examples/parameters/deg.json), then supply it:
+
+```sh
+python -m katana_next.cli --project path/to/katana.project.json run differential.deg --parameters examples/parameters/deg.json
+```
+
+The JSON example contains:
+
+```json
+{
+  "fdr": 0.05,
+  "min_abs_log2fc": 1.0
+}
+```
+
+The same keys are accepted by Python's `project.run("differential.deg", parameters)` and the API's `parameters` object. FDR must be between 0 and 1; the effect-size cutoff must be nonnegative. An effect-size cutoff of `0` removes the additional fold-change requirement for rows with a finite effect estimate.
+
+These settings classify imported DEG statistics; they do not refit DESeq2 or overwrite its P-values. The normalized parameters are retained with the run and its results and participate in the cache identity. The candidate-evidence analysis has its own declared thresholds, and interpreted reports read their configured completed delivery; changing a DEG run does not silently update those analyses or an existing report.
+
 ## MotifTrace and networks
 
 MotifTrace exposes event-level sequence consequences, motif and RBP evidence, and links back to their source inputs. Choose the appropriate evidence layer: RBP identity annotations, boundary motif/reference binding evidence, and mature-RNA sequence consequences answer different questions. Native method results and valid imported results retain their source identities. The presence of a resource does not establish that every optional author-native fit has run.
