@@ -27,7 +27,7 @@ from katana_next.workflows.base import (
 
 
 class ReproducibilityReportWorkflow(WorkflowBase):
-    version = "2.0.9+english.20261021"
+    version = "2.1.0+moduleparams.20261022"
     definition = WorkflowDefinition(
         workflow_id="reports.bundle",
         workspace_id="reports",
@@ -283,6 +283,7 @@ def _html_report(context: ProjectContext, artifacts: list[AnalysisArtifact]) -> 
             f"<h2>{html.escape(str(metadata.get('question', analysis_id)))}</h2>"
             + "".join(_embedded_figure(value) for value in values)
             + "".join(_summary_table(value) for value in values)
+            + _network_module_parameters_html(analysis_id, values)
             + "<details><summary>Methods, interpretation and source inventory</summary>"
             f"<p><strong>Method.</strong> {html.escape(str(metadata.get('method', 'Recorded in artifact metadata.')))}</p>"
             f"<p><strong>Interpretation.</strong> {html.escape(str(metadata.get('interpretation', 'Review source artifacts.')))}</p>"
@@ -304,6 +305,55 @@ def _png_path(artifact: AnalysisArtifact) -> Path | None:
     name = artifact.metadata.get("exports", {}).get("png")
     path = Path(name) if name else artifact.path if artifact.path.suffix.lower() == ".png" else None
     return path if path and path.is_file() else None
+
+
+def _network_module_parameter_records(
+    analysis_id: str, artifacts: list[AnalysisArtifact]
+) -> list[dict[str, str]]:
+    """Read actual saved values only; requested controls do not prove execution."""
+    network_ids = {"programs.cosplice", "programs.psi_network", "single_cell.programs"}
+    if analysis_id not in network_ids and not any(
+        "network_module_parameters" in item.metadata for item in artifacts
+    ):
+        return []
+    rows = []
+    seen = set()
+    for item in artifacts:
+        recorded = item.metadata.get("network_module_parameters")
+        recorded = recorded if isinstance(recorded, dict) else {}
+        minimum = recorded.get("min_module_size")
+        merge = recorded.get("merge_cut_height")
+        row = {
+            "run": item.run_fingerprint,
+            "min_module_size": str(minimum) if minimum is not None else "not recorded",
+            "merge_cut_height": str(merge) if merge is not None else "not recorded",
+        }
+        key = tuple(row.values())
+        if key not in seen:
+            seen.add(key)
+            rows.append(row)
+    return rows
+
+
+def _network_module_parameters_html(
+    analysis_id: str, artifacts: list[AnalysisArtifact]
+) -> str:
+    rows = _network_module_parameter_records(analysis_id, artifacts)
+    if not rows:
+        return ""
+    body = "".join(
+        f"<tr><td><code>{html.escape(row['run'])}</code></td>"
+        f"<td>{html.escape(row['min_module_size'])}</td>"
+        f"<td>{html.escape(row['merge_cut_height'])}</td></tr>"
+        for row in rows
+    )
+    return (
+        "<div class='network-module-parameters'><h3>Recorded actual module parameters</h3>"
+        "<p>Values are taken from the saved network run. Missing historical values are not inferred from current defaults or requested controls.</p>"
+        "<table><thead><tr><th>Source run</th><th>Minimum module size (events)</th>"
+        "<th>Module merge cut height</th></tr></thead>"
+        f"<tbody>{body}</tbody></table></div>"
+    )
 
 
 def _embedded_figure(artifact: AnalysisArtifact) -> str:
@@ -364,6 +414,20 @@ def _pdf_report(
         if layer:
             story.append(Paragraph(f"{layer['number']}. {html.escape(layer['title_en'])}", styles['Heading3']))
             story.append(Paragraph(html.escape(layer['boundary_en']), styles['BodyText']))
+        parameter_rows = _network_module_parameter_records(analysis_id, values)
+        if parameter_rows:
+            story.append(Paragraph("Recorded actual module parameters", styles["Heading3"]))
+            story.append(Paragraph(
+                "Values are taken from the saved network run. Missing historical values are not inferred from current defaults or requested controls.",
+                styles["BodyText"],
+            ))
+            for row in parameter_rows:
+                story.append(Paragraph(
+                    f"<b>Source run:</b> {html.escape(row['run'])}<br/>"
+                    f"<b>Minimum module size (events):</b> {html.escape(row['min_module_size'])}<br/>"
+                    f"<b>Module merge cut height:</b> {html.escape(row['merge_cut_height'])}",
+                    styles["BodyText"],
+                ))
         for item in values:
             image_path = _png_path(item)
             if image_path:

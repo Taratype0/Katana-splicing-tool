@@ -10,9 +10,12 @@ The original workflow inventory remains preserved in `workflow_inventory.json`.
 `workflow_inventory_read_support_v1.json` records the approved every-sample
 ten-count bulk policy. Tests permit method-version changes only to the approved
 input-policy workflows: Quality, bulk Landscape, DAS, exact cross-comparison and
-count-bearing CoSplice. CoSplice retains its public parameter defaults and module kernel.
-Other methods, including MotifTrace, networks, DEG runtime parameters and both
-report entrypoints, retain their existing versions and parameter defaults.
+count-bearing CoSplice. The approved module controls add two nullable runtime
+overrides: blank inherits the YAML configuration; standard effective defaults
+remain 20 events and merge height 0.25. The module kernel is unchanged. Both
+report entrypoints have explicit version changes to record actual parameters,
+without inferring historical values or rerunning scientific stages. Other
+methods, including MotifTrace and DEG runtime parameters, remain unchanged.
 
 The tests use generated synthetic inputs. The API test opens a project, executes
 a small DEG result-reader workflow, verifies reuse of its completed result,

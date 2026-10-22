@@ -85,6 +85,42 @@ Inspect module membership, scores, hub evidence and stability before comparing c
 
 New-policy runs record `network-all-samples-counts-v1` in their resolved configuration and output provenance. Legacy QC settings may be retained as diagnostics but cannot reactivate retired gates. Do not point the new standalone run at a historical output directory: an output missing the new policy is protected against overwrite, including with force. The application uses the independently versioned engine identity for new-policy output and cache locations.
 
+## Network module settings
+
+The standard defaults are 20 splice events per discovery module and WGCNA merge
+cut height 0.25. Preserve custom project YAML settings by leaving the optional
+`min_module_size` and `merge_cut_height` fields blank in the interface, or omitting
+them / supplying JSON `null` through the API. An explicit runtime value overrides
+that run only; it does not edit the input YAML. The merge height must be strictly
+between zero and one; module size must be an integer of at least two.
+
+For an explicit override, save a parameters file such as `network-parameters.json`:
+
+```json
+{"scope": "discovery", "min_module_size": 20, "merge_cut_height": 0.25}
+```
+
+Inspect the plan before running:
+
+```sh
+python -m katana_next.cli --project ../analysis-project/katana.project.json plan programs.cosplice --parameters network-parameters.json
+python -m katana_next.cli --project ../analysis-project/katana.project.json run programs.cosplice --parameters network-parameters.json
+```
+
+The same values work through `project.plan("programs.cosplice", parameters)` and
+`project.run("programs.cosplice", parameters)` in the Python interface. These
+commands run an analysis; rendering a report does not run it. Changed effective
+module settings select a separate engine identity; omitted or equal-valued
+overrides preserve the compatible engine cache. An engine stage must still pass
+its own cache validation before reuse.
+
+Resolved configuration, output metadata and report methods record the actual
+values used. The evidence report lists values per source run. The interpreted
+one-click report follows its actual module-card input chain to the network run;
+if that chain or its recorded values are unavailable, it says **Not recorded**.
+It never substitutes today's defaults or an unrelated newer run. New interpreted
+reports use a separate run directory, preserving previous deliveries.
+
 ## English reports
 
 The two existing report entries remain available:

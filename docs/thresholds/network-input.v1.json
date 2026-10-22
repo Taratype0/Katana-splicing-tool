@@ -67,7 +67,7 @@
     "module_size_and_merging_changed": false,
     "completed_results_recomputed_or_relabelled": false,
     "native_P_values_or_effects_recalculated": false,
-    "module_parameter_review": "Next user decision; existing configured minimum module size 20 and merge cut height 0.25 are recorded separately from this input-policy approval.",
+    "module_parameter_review": "User approved standard defaults 20 events and merge cut 0.25; nullable runtime controls preserve custom YAML settings. Discovery kernel unchanged; see network-modules.v1.json.",
     "biological_design": "Passing count support does not establish adequate replication, power, correlation reliability or module-level inference validity."
   },
   "evidence": [
@@ -88,14 +88,14 @@
     "software_version": "2.0.0b3.dev20261022",
     "engine_version": "1.3.0",
     "workflow_versions": {
-      "programs.cosplice": "3.0.0"
+      "programs.cosplice": "3.1.0"
     },
     "source_sha256": {
       "katana_cosplice/qc.py": "9d7099b2375844fac70f30f8335935b51f84f8581d14aba564291804feb0fe42",
       "katana_cosplice/pipeline.py": "cad530c82cb62be3915b5608fd4a93b373e143e68a259f5ca2cb0895be325d82",
       "katana_cosplice/stage_registry.py": "076a4c2fd59292fbed3fa172b99881d975f8f9d27e15ad90acecb2d2d105de58",
       "katana_cosplice/__init__.py": "b5d1b553eb2053c95283d2b3084d64445c144a2aa34dee61b25f73776282b377",
-      "katana_next/workflows/programs.py": "2928d0d5cd947dabba6442779e7013688fe1d215b6e7bb756bba7a6227c1d9fa"
+      "katana_next/workflows/programs.py": "d2d8e8c9676f9857658f68f940a3ff0de678671213b6cb892705384097572c83"
     },
     "implementation_test_status": "local_regression_passed",
     "biological_validation_status": "not_newly_performed",

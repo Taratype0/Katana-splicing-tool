@@ -159,13 +159,16 @@ export function WorkflowControls({
                 ) : (
                   <input
                     type={parameter.kind === "number" ? "number" : "text"}
-                    value={typeof value === "object" ? JSON.stringify(value) : String(value)}
+                    value={parameter.kind === "number" && parameter.default == null && value == null
+                      ? "" : typeof value === "object" ? JSON.stringify(value) : String(value)}
                     min={parameter.minimum}
                     max={parameter.maximum}
                     step={parameter.step}
                     onChange={(event) => onParameterChange(
                       parameter.key,
-                      parameter.kind === "number" ? Number(event.target.value) : event.target.value,
+                      parameter.kind === "number"
+                        ? parameter.default == null && event.target.value === "" ? null : Number(event.target.value)
+                        : event.target.value,
                     )}
                   />
                 )}

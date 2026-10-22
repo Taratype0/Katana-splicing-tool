@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 from dataclasses import asdict
 from functools import wraps
+import math
 import shutil
 from threading import RLock
 
@@ -147,10 +148,60 @@ def configure_production_membership(config, parameters):
         config.consensus.min_module_size = config.network.min_module_size
 
 
+def _module_override_values(parameters: dict[str, Any]) -> dict[str, int | float]:
+    """Validate explicit overrides; an omitted/null value inherits the YAML."""
+    values = {}
+    for key in ("min_module_size", "merge_cut_height"):
+        raw = parameters.get(key)
+        if raw is None:
+            continue
+        try:
+            if isinstance(raw, bool):
+                raise ValueError("must be numeric, not boolean")
+            value = float(raw)
+            if not math.isfinite(value):
+                raise ValueError("must be finite")
+            if key == "min_module_size":
+                if not value.is_integer() or value < 2:
+                    raise ValueError("must be an integer of at least 2")
+                values[key] = int(value)
+            else:
+                if not 0 < value < 1:
+                    raise ValueError("must be strictly between 0 and 1")
+                values[key] = value
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Invalid {key}: {raw!r} ({error})") from error
+    return values
+
+
+def network_module_parameters(config) -> dict[str, int | float]:
+    """The effective discovery settings, never inferred from request defaults."""
+    return {
+        "min_module_size": config.network.min_module_size,
+        "merge_cut_height": config.network.wgcna_merge_cut_height,
+    }
+
+
+def configure_production_modules(config, parameters):
+    before = network_module_parameters(config)
+    overrides = _module_override_values(parameters)
+    if "min_module_size" in overrides:
+        config.network.min_module_size = overrides["min_module_size"]
+    if "merge_cut_height" in overrides:
+        config.network.wgcna_merge_cut_height = overrides["merge_cut_height"]
+    effective = network_module_parameters(config)
+    sources = {key: "runtime_override" if key in overrides else "project_configuration_or_engine_default"
+               for key in effective}
+    # Equal-valued overrides must not force a new fit of a compatible cache.
+    changes = {key: value for key, value in effective.items() if value != before[key]}
+    return effective, sources, changes
+
+
 def write_production_configuration(config, path: Path) -> Path:
     """Keep the active policy visible beside inert historical YAML settings."""
     payload = config.to_mapping()
     payload["network_input_policy"] = network_input_policy()
+    payload["network_module_parameters"] = network_module_parameters(config)
     payload["legacy_stable_as_settings_role"] = "ignored historical settings; active eligibility is network_input_policy"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
@@ -158,7 +209,7 @@ def write_production_configuration(config, path: Path) -> Path:
 
 
 class CoSpliceWorkflow(WorkflowBase):
-    version = "3.0.0"
+    version = "3.1.0"
     definition = WorkflowDefinition(
         workflow_id="programs.cosplice",
         workspace_id="programs",
@@ -179,6 +230,10 @@ class CoSpliceWorkflow(WorkflowBase):
             ),
             ParameterDefinition("force_engine", "Force cosplice rebuild", "boolean", False, "Rebuild selected engine stages even when their own fingerprints match."),
             ParameterDefinition("max_events", "Maximum events", "number", 0, "Zero uses every count-supported nonconstant event; a positive value is an explicitly recorded exploratory cap.", minimum=0, step=100),
+            ParameterDefinition("min_module_size", "Minimum module size (events)", "number", None,
+                "Blank preserves the project configuration. The standard default is 20 splice events; an explicit value overrides this run only.", minimum=2, step=1),
+            ParameterDefinition("merge_cut_height", "Module merge cut height", "number", None,
+                "Blank preserves the project configuration. The standard default is 0.25; a larger cut permits more eigengene-based merging. Must be strictly between 0 and 1.", minimum=0, maximum=1, step=0.01),
             ParameterDefinition("bootstrap_iterations", "Bootstrap iterations", "number", 50, "Resamples complete donor/biological blocks within condition profiles. Without declared IDs, sample IDs are assumed independent; replicate numbers never imply pairing.", minimum=10, maximum=1000, step=10),
             ParameterDefinition("uncertainty_role", "Read uncertainty role", "select", "diagnostic_only",
                 "Default keeps measured PSI and reports read uncertainty separately. Optional weighting is experimental; raw read-fraction posteriors never replace rMATS PSI.",
@@ -190,6 +245,13 @@ class CoSpliceWorkflow(WorkflowBase):
         required_asset_kinds=("cosplice_config",),
         limitations="Formal condition-specific rewiring is disabled or labeled exploratory when independent samples per condition are insufficient.",
     )
+
+    def normalize_parameters(self, supplied: dict[str, Any] | None) -> dict[str, Any]:
+        # Validate before generic numeric coercion can turn bools into floats.
+        overrides = _module_override_values(supplied or {})
+        values = super().normalize_parameters(supplied)
+        values.update(overrides)
+        return values
 
     def input_paths(self, context: ProjectContext, parameters: dict[str, Any]) -> list[Path]:
         del parameters
@@ -228,15 +290,19 @@ class CoSpliceWorkflow(WorkflowBase):
     @_serialized_engine
     def run(self, context: ProjectContext, job: JobContext, run_fingerprint: str, parameters: dict[str, Any]) -> list[str]:
         config_asset = self._config_asset(context)
-        engine_key = fingerprint_value({"project": context.snapshot.manifest_fingerprint,
+        config = load_config(config_asset.path)
+        effective_modules, module_sources, module_changes = configure_production_modules(config, parameters)
+        engine_payload = {"project": context.snapshot.manifest_fingerprint,
             "inputs": [fingerprint_file(path) for path in self.input_paths(context, parameters)],
             "max_events": parameters.get("max_events", 0), "bootstrap_iterations": parameters.get("bootstrap_iterations", 50),
             "uncertainty_role": parameters.get("uncertainty_role", "diagnostic_only"),
             "membership_policy": parameters.get("membership_policy", "backbone_confidence_only"),
-            "production_contract": "backbone-annotated-v9-all-sample-input", "network_input_policy": network_input_policy()})
+            "production_contract": "backbone-annotated-v9-all-sample-input", "network_input_policy": network_input_policy()}
+        if module_changes:
+            engine_payload["module_parameter_overrides"] = module_changes
+        engine_key = fingerprint_value(engine_payload)
         engine_root = context.manifest.output_root / "engines" / "cosplice" / engine_key[:24]
         engine_root.mkdir(parents=True, exist_ok=True)
-        config = load_config(config_asset.path)
         config.output_dir = engine_root
         config.gene_exclusion = dict(context.manifest.metadata.get("gene_filter") or {})
         config.project_name = context.manifest.name
@@ -260,6 +326,7 @@ class CoSpliceWorkflow(WorkflowBase):
         rscript = str(context.manifest.metadata.get("rscript_path", "")).strip()
         if rscript:
             config.network.wgcna_rscript = rscript
+        config.validate()
         resolved_config = engine_root / "katana_next_cosplice.yaml"
         write_production_configuration(config, resolved_config)
         pipeline = CoSplicePipeline(config)
@@ -305,6 +372,8 @@ class CoSpliceWorkflow(WorkflowBase):
                 "production_backbone": "signed WGCNA blockwiseModules",
                 "network_measurement": "Observed sample-level PSI; approximate raw read fractions do not replace PSI",
                 "network_input_policy": network_input_policy(),
+                "network_module_parameters": effective_modules,
+                "network_module_parameter_sources": module_sources,
                 "read_uncertainty_role": parameters.get("uncertainty_role", "diagnostic_only"),
                 "membership_semantics": "Default confidence annotation preserves the full-data WGCNA partition; the explicitly selected exploratory refinement can reject boundary events. Phenotype, RBP and functional terms never define membership.",
                 "interpretation": "Module-trait associations are program-level effects. Individual event support remains available through membership and Native Sashimi.",

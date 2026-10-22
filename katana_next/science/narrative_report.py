@@ -19,7 +19,7 @@ def build_report(study, base, manifest_path, output):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     from katana_next.science.report_complete import polished_heatmaps, complete_sections
-    polished_heatmaps(base)
+    polished_heatmaps(base, output_dir=output)
     manifest = json.loads(Path(manifest_path).read_text())
     report_metadata = manifest.get('metadata', {})
     design_labels = report_metadata.get('report_design_labels', {})

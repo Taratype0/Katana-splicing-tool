@@ -7,12 +7,13 @@ import numpy as np
 import pandas as pd
 from katana_next.science.heatmap_style import row_scaled, pastel_diverging
 
-def polished_heatmaps(base):
+def polished_heatmaps(base, output_dir=None):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     from scipy.cluster.hierarchy import dendrogram
     base = Path(base)
+    output_dir = Path(output_dir) if output_dir is not None else base / '24_Narrative_report'
     for source in (base / '03_AS_landscape/Native_PSI_clustering').glob('*/*/display_PSI_clustered.tsv'):
         frame = pd.read_csv(source, sep='\t', index_col=0)
         if frame.empty:
@@ -20,7 +21,7 @@ def polished_heatmaps(base):
         meta = pd.read_csv(source.parent / 'event_annotations.tsv', sep='\t', index_col=0)
         meta = meta.loc[~meta.index.duplicated()]
         cfg = json.loads((source.parent / 'parameters.json').read_text())
-        out = base / '24_Narrative_report/figures' / source.parent.parent.name / source.parent.name
+        out = output_dir / 'figures' / source.parent.parent.name / source.parent.name
         out.mkdir(parents=True, exist_ok=True)
         for mode in ('PSI', 'rowZ'):
             values = frame.to_numpy(float)
@@ -74,7 +75,7 @@ def polished_heatmaps(base):
         config = json.loads((source.parent / 'parameters.json').read_text()).get('parameters', {})
         step = int(config.get('rows_per_page', 40))
         events = pd.read_csv(source.parent / 'selected_gene_events.tsv', sep='\t').drop_duplicates('event_id').set_index('event_id')
-        out = base / '24_Narrative_report/figures/selected_genes' / source.parent.name
+        out = output_dir / 'figures/selected_genes' / source.parent.name
         out.mkdir(parents=True, exist_ok=True)
         for start in range(0, len(frame), step):
             chunk = frame.iloc[start:start + step]

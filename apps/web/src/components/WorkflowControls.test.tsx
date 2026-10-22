@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { expect, it, vi } from "vitest";
 import type { Artifact, WorkflowDefinition, WorkflowParameter } from "../types";
 import { WorkflowControls } from "./WorkflowControls";
@@ -16,6 +17,60 @@ const readSupportWorkflow: WorkflowDefinition = {
     {key: "min_abs_dpsi", label: "Minimum |dPSI|", kind: "number", default: 0.1, help: "Absolute effect size.", minimum: 0, maximum: 1, step: 0.01, options: []},
   ],
 };
+
+it("keeps optional numeric controls blank and restores inherited settings when cleared", () => {
+  const change = vi.fn();
+  const workflow: WorkflowDefinition = {
+    ...readSupportWorkflow, workflow_id: "programs.cosplice", workspace_id: "programs",
+    parameters: [
+      {key: "min_module_size", label: "Minimum module size", kind: "number", default: null,
+        help: "Blank inherits the configuration; built-in default is 20 events.", options: [], minimum: 2, step: 1},
+      {key: "merge_cut_height", label: "Module merge cut height", kind: "number", default: null,
+        help: "Blank inherits the configuration; built-in default is 0.25.", options: [], minimum: 0, maximum: 1, step: 0.01},
+      readSupportWorkflow.parameters[0],
+    ],
+  };
+  function ControlsWithState() {
+    const [parameters, setParameters] = useState<Record<string, unknown>>({});
+    return <WorkflowControls workflow={workflow} contrasts={[]} selectedContrasts={new Set()}
+      parameters={parameters} selections={[]} conditions={[]}
+      onToggleContrast={vi.fn()} onSelectAllContrasts={vi.fn()} onClearContrasts={vi.fn()}
+      onParameterChange={(key, value) => {
+        change(key, value);
+        setParameters((current) => ({...current, [key]: value}));
+      }} onReset={vi.fn()} />;
+  }
+  render(<ControlsWithState />);
+  const size = screen.getByRole("spinbutton", {name: /Minimum module size/});
+  const merge = screen.getByRole("spinbutton", {name: /Module merge cut height/});
+  expect(size).toHaveDisplayValue("");
+  expect(merge).toHaveDisplayValue("");
+  expect(change).not.toHaveBeenCalled();
+  fireEvent.change(size, {target: {value: "37"}});
+  fireEvent.change(merge, {target: {value: "0.12"}});
+  expect(size).toHaveValue(37);
+  expect(merge).toHaveValue(0.12);
+  expect(change).toHaveBeenCalledWith("min_module_size", 37);
+  expect(change).toHaveBeenCalledWith("merge_cut_height", 0.12);
+  fireEvent.change(size, {target: {value: ""}});
+  fireEvent.change(merge, {target: {value: ""}});
+  expect(change).toHaveBeenCalledWith("min_module_size", null);
+  expect(change).toHaveBeenCalledWith("merge_cut_height", null);
+  expect(size).toHaveDisplayValue("");
+  expect(merge).toHaveDisplayValue("");
+  expect(change).not.toHaveBeenCalledWith("min_module_size", 0);
+  expect(change).not.toHaveBeenCalledWith("merge_cut_height", 0);
+
+  // A required numeric parameter retains its existing default and change logic.
+  const fdr = screen.getByRole("spinbutton", {name: /rMATS FDR/});
+  expect(fdr).toHaveValue(0.05);
+  fireEvent.change(fdr, {target: {value: "0.01"}});
+  expect(change).toHaveBeenCalledWith("fdr", 0.01);
+  expect(fdr).toHaveValue(0.01);
+  fireEvent.change(fdr, {target: {value: ""}});
+  expect(change).toHaveBeenLastCalledWith("fdr", 0);
+  expect(fdr).toHaveValue(0);
+});
 
 it("explains support in every selected sample and keeps differential cutoffs editable", () => {
   const change = vi.fn();

@@ -1,0 +1,71 @@
+{
+  "schema": "katana.network_module_controls/v1",
+  "status": "user_approved",
+  "decision_date": "2026-10-22",
+  "scope": "Count-bearing CoSplice production workflow; module discovery kernel unchanged",
+  "standard_effective_defaults": {
+    "min_module_size": 20,
+    "merge_cut_height": 0.25
+  },
+  "units": {
+    "min_module_size": "splice event nodes, not genes or biological samples",
+    "merge_cut_height": "WGCNA module eigengene dissimilarity cut, not P-value or FDR"
+  },
+  "runtime_overrides": {
+    "nullable": true,
+    "null_meaning": "inherit project YAML setting, including custom values",
+    "precedence": [
+      "explicit runtime value",
+      "project YAML",
+      "engine defaults"
+    ],
+    "input_yaml_mutated": false,
+    "min_module_size_domain": "integer >=2",
+    "merge_cut_height_domain": "finite number strictly between 0 and 1"
+  },
+  "recording": {
+    "effective_values_key": "network_module_parameters",
+    "sources_key": "network_module_parameter_sources",
+    "resolved_configuration": true,
+    "artifact_metadata": true,
+    "evidence_report_html_pdf": true,
+    "interpreted_report_html": "actual module-card inputs linked to a unique completed source network; otherwise explicitly not recorded",
+    "historical_missing_values": "not recorded; never inferred from defaults or request parameters"
+  },
+  "cache": {
+    "changed_effective_override": "separate engine identity",
+    "omitted_or_equal_override": "compatible engine identity retained; stage cache checks still required",
+    "completed_scientific_results_recomputed": false
+  },
+  "basis": [
+    {
+      "url": "https://search.r-project.org/CRAN/refmans/WGCNA/html/blockwiseModules.html",
+      "supports": "minimum module size concept; function default min(20, ncol(datExpr)/2)",
+      "limit": "not universal validation of 20 event nodes for splicing; documented merge default is 0.15"
+    },
+    {
+      "url": "https://edo98811.github.io/WGCNA_official_documentation/FemaleLiver-02-networkConstr-man.pdf",
+      "supports": "author tutorial precedent for merge cut height 0.25 using eigengene dissimilarity",
+      "limit": "not a universal optimal threshold or a significance test"
+    }
+  ],
+  "implementation": {
+    "programs.cosplice": "3.1.0",
+    "reports.bundle": "2.1.0+moduleparams.20261022",
+    "reports.interpreted_bundle": "1.4.0+network_parameters.20261022",
+    "validation_scope": "synthetic runtime/configuration/report/UI regression; no new native WGCNA fit or biological validation",
+    "source_sha256": {
+      "katana_next/workflows/programs.py": "d2d8e8c9676f9857658f68f940a3ff0de678671213b6cb892705384097572c83",
+      "katana_next/workflows/reporting.py": "811d53a6a5fa0351810813a047993ffca775e9d1523787a3e0f2a6966cbfc681",
+      "katana_next/workflows/narrative_report.py": "24e3e9db9a3731d957fb86bc5358e063e00a66a49a2f46ec7be5eeeb122e2a35",
+      "katana_next/science/narrative_report.py": "e31efef89cf70a2a588fc6758bf1f3ecd2534554130b386f3b9142979e0b378d",
+      "katana_next/science/report_complete.py": "aeb29a4403e830eec243cc6246647b62f49bf2c2c883d0d1aa1b08be70091cc7",
+      "apps/web/src/components/WorkflowControls.tsx": "8bd4c26cde6606c1f73f88252c375c02a4ae2209071808d7efb35bf0df6faf33"
+    }
+  },
+  "unchanged": [
+    "original application and completed research results",
+    "WGCNA and consensus algorithms",
+    "member confidence, Hub and network significance thresholds pending separate review"
+  ]
+}
