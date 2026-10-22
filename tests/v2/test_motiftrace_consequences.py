@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from katana_cosplice.motif_scanner import reverse_complement
+from katana_next.science.bulk import READ_SUPPORT_POLICY_VERSION
 from katana_next.science.motiftrace_events import (
     EVENT_TYPES, event_forms, extract_event_rna, match_event_controls, psi_values,
     score_positions, trace_instances,
@@ -28,7 +29,11 @@ def reference(tmp_path):
 
 def event(kind="SE", strand="+", **changes):
     row = dict(event_id="event", gene_id="g", gene_symbol="G", comparison_id="PBS", event_type=kind,
-        strand=strand, chr="chr1", dpsi=.3, fdr=.001, stable_significant=True, measurement_eligible=True,
+        strand=strand, chr="chr1", dpsi=.3, fdr=.001,
+        significant=True, stable_significant=True, measurement_eligible=True,
+        read_support_policy=READ_SUPPORT_POLICY_VERSION, criterion_min_reads=10,
+        IJC_SAMPLE_1="60,70", SJC_SAMPLE_1="40,30",
+        IJC_SAMPLE_2="30,40", SJC_SAMPLE_2="70,60",
         numerator_mean_reads=100, denominator_mean_reads=100, IncLevel1=".6,.7", IncLevel2=".3,.4",
         upstreamES=0, upstreamEE=40, downstreamES=300, downstreamEE=340,
         exonStart_0base=100, exonEnd=135, **{"1stExonStart_0base": 100, "1stExonEnd": 135,

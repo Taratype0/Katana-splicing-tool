@@ -22,7 +22,7 @@ SWITCHABLE_WORKFLOWS = frozenset({
     "differential.as", "differential.cross_comparison", "prioritize.evidence",
     "prioritize.enrichment", "prioritize.rbp_support",
     "interpretation.joint_response", "interpretation.joint_pathways",
-    "differential.exploratory_event_interaction", "reports.bundle",
+    "differential.exploratory_event_interaction", "reports.bundle", "reports.study",
 })
 RS_REQUIRED_WORKFLOWS = frozenset({
     "prioritize.rbp_mechanism", "prioritize.event_motifs",

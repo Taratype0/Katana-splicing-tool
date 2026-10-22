@@ -31,6 +31,7 @@ dependencies = [
 katana-open = "katana_next.launcher:main"
 katana-next = "katana_next.cli:main"
 katana-motiftrace = "katana_motiftrace.cli:main"
+katana-report = "katana_next.reports.cli:main"
 katana-contracts = "katana_next.contracts.cli:main"
 katana-cosplice = "katana_cosplice.cli:main"
 katana-splice = "katana_cosplice.cli:main"
@@ -49,6 +50,12 @@ katana-next-migrate = "katana_next.migration:main"
 katana-next-acceptance = "scripts.run_v2_acceptance:main"
 
 [project.optional-dependencies]
+report = [
+  "pydantic>=2.9,<3",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "vl-convert-python>=1.8,<2",
+]
 motiftrace = [
   "pydantic>=2.9,<3",
   "pyarrow>=17",
@@ -86,6 +93,7 @@ namespaces = false
 [tool.setuptools.package-data]
 "katana_next.science" = ["rbp_sequence_browser.html", "motiftrace_windows.html", "motiftrace_consequences.html", "motiftrace_parallel.html", "rbp_evidence_layers.json"]
 "katana_next.contracts" = ["schemas/*.json", "data/*.json"]
+"katana_next.reports" = ["assets/*", "assets/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

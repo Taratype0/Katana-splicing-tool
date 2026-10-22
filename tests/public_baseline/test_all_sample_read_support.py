@@ -153,9 +153,20 @@ def test_quality_to_das_inherits_every_sample_policy_without_altering_native_evi
     assert case.das.metadata["read_support_min_counts"] == 10
     assert quality["read_support_policy"].eq(READ_SUPPORT_POLICY_VERSION).all()
     assert quality["criterion_min_reads"].eq(10).all()
+    # The selected foreground is presentation metadata added by DAS. Check it
+    # separately while still comparing every inherited native/audit column.
+    assert set(das.columns) - set(quality.columns) == {
+        "minus_log10_fdr", "selected_das", "das_event_set",
+    }
+    assert das["das_event_set"].eq("stable_significant").all()
+    pd.testing.assert_series_equal(
+        das["selected_das"], das["stable_significant"], check_names=False,
+    )
     pd.testing.assert_frame_equal(
         quality.set_index("row_id").sort_index(),
-        das.set_index("row_id").sort_index().drop(columns="minus_log10_fdr"),
+        das.set_index("row_id").sort_index().drop(
+            columns=["minus_log10_fdr", "selected_das", "das_event_set"],
+        ),
     )
     for source, observed in quality.groupby("source_path"):
         source_rows = observed["source_row"].astype(int).tolist()

@@ -60,7 +60,7 @@ Discovery uses an eligible sample cohort. Condition associations and external va
 
 The approved report follows seven sections: design and QC; AS landscape; DEG/DAS/DTU/DEXSeq; cross-comparison results; GO/KEGG and pathways; co-splicing networks; and RBP/MotifTrace. It includes per-comparison Top 10 details, full-result links and a report-wide ordinary DAS / RS-DAS choice, with RS-DAS as the default. See the [approved report specification](docs/REPORT_SPECIFICATION.md).
 
-Bulk and single-cell dummy reports have been reviewed. Connecting this design to arbitrary eligible completed projects is the next implementation step. The existing package currently provides two export routes:
+The development package provides `katana-report` and `from katana_next.reports import build_report` for completed projects, and the same renderer is available as `reports.study` in the application. See [report inputs, commands and outputs](docs/REPORTS.md). Two additional export routes remain available:
 
 - **Analysis and reproducibility package:** an HTML/PDF summary, figures, parameters, file inventory and ZIP attachments.
 - **Completed study-report import:** package an existing supported report and its attachments while retaining its original scope and results.

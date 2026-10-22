@@ -13,6 +13,7 @@ from katana_motiftrace import MotifTrace, SCIENTIFIC_RELEASE, mode_catalog
 from katana_motiftrace.cli import main
 from katana_next.client import KatanaProject
 from katana_next.full_fixture import create_full_fixture
+from katana_next.science.bulk import READ_SUPPORT_POLICY_VERSION
 from katana_next.workflows.base import ArtifactWriter
 from katana_next.workflows.registry import WorkflowRegistry
 
@@ -138,7 +139,11 @@ def test_public_api_executes_original_sequence_kernel_then_cli_reuses_cache(tmp_
     with MotifTrace(path) as mt:
         rows = pd.DataFrame([dict(row_id='event-row', event_id='SE:e1', event_type='SE', chr='chr1',
             strand='+', gene_id='g1', gene_symbol='G1', comparison_id='perturbation-vs-baseline',
-            dpsi=.3, fdr=.001, stable_significant=True, measurement_eligible=True,
+            dpsi=.3, fdr=.001, significant=True, stable_significant=True,
+            measurement_eligible=True, read_support_policy=READ_SUPPORT_POLICY_VERSION,
+            criterion_min_reads=10,
+            IJC_SAMPLE_1='60,70', SJC_SAMPLE_1='40,30',
+            IJC_SAMPLE_2='30,40', SJC_SAMPLE_2='70,60',
             numerator_mean_reads=100, denominator_mean_reads=100,
             IncLevel1='.6,.7', IncLevel2='.3,.4', upstreamES=0, upstreamEE=40,
             downstreamES=300, downstreamEE=340, exonStart_0base=100, exonEnd=135)])

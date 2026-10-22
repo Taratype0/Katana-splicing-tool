@@ -1,7 +1,7 @@
 {
   "schema": "katana.motiftrace_integration/v1",
   "scientific_release": "1.0.0-frozen.20261017",
-  "integration_version": "1.0.0.post1",
+  "integration_version": "1.0.0.post3",
   "frozen_source_archive_sha256": "fe3f0220d16940a7d90f06a22320d0dee7aa8ebc3d7186f76a131a6d351a5778",
   "frozen_release_manifest_sha256": "d8329931ecb1f453897cb2f8d157dff4fe046c7746d3e10805cfdc43db98357e",
   "scientific_parameter_changes": false,
@@ -207,8 +207,34 @@
     "katana_motiftrace/api.py": "52c420283b1a6e9263e2e4aa11e44f0d64b31db39de32931d07ba067359f8bee",
     "katana_motiftrace/cli.py": "1a8f1e400892a8cf2a4fa5454e49cb39fdc0ef6f670c8cc20048c61e741cfd00",
     "katana_motiftrace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
-    "katana_next/client.py": "6245ac6a22865a49f964b94ad9f83c3b6b4a00ad0701d2da424d9e88b4bcdbdb",
+    "katana_next/client.py": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
     "katana_next/services/selection_routes.py": "f84bae21e008589ed1af1afcc7409b90ec1757dcc18675d98e29659630732da1",
-    "pyproject.toml": "f7d82ce351b1e0c69cb7de70a55ccbb0252a4de8e4801125c3c8ea5ebfc0fa90"
-  }
+    "pyproject.toml": "b1f271b170c1ba76a7579d67ea979cdc653228f3aaeb84abcb21813d38d253b8"
+  },
+  "interface_revisions": [
+    {
+      "integration_version": "1.0.0.post2",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "katana_next/client.py",
+          "previous_sha256": "6245ac6a22865a49f964b94ad9f83c3b6b4a00ad0701d2da424d9e88b4bcdbdb",
+          "current_sha256": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
+          "reason": "Approved downstream DAS/RS-DAS selection adapter; no MotifTrace scientific kernel or parameter change."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post3",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "f7d82ce351b1e0c69cb7de70a55ccbb0252a4de8e4801125c3c8ea5ebfc0fa90",
+          "current_sha256": "b1f271b170c1ba76a7579d67ea979cdc653228f3aaeb84abcb21813d38d253b8",
+          "reason": "Approved public read-only seven-section report CLI and packaged HTML/CSS/JS resources; no MotifTrace numerical change."
+        }
+      ]
+    }
+  ]
 }

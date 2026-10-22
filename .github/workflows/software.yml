@@ -1,4 +1,4 @@
-name: Katana software baseline
+name: Katana tests
 
 on:
   push:
@@ -36,6 +36,8 @@ jobs:
           tests/v2/test_report_revision_contract.py
           tests/v2/test_bulk_all_samples_qc.py
           tests/v2/test_read_support_source_policy.py
+          tests/v2/test_das_event_selection_policy.py
+          tests/v2/test_das_selection_interfaces.py
           tests/v2/test_review_correctness.py
           tests/v2/test_network_all_sample_input_qc.py
           tests/test_qc_array_range_validation.py
@@ -57,7 +59,7 @@ jobs:
           tests/test_runtime_discovery.py
           tests/test_portable_report_metadata.py
 
-  motiftrace-wheel:
+  package-wheel:
     runs-on: ubuntu-latest
     env:
       PYTHONDONTWRITEBYTECODE: '1'
@@ -70,17 +72,18 @@ jobs:
         with:
           python-version: '3.13'
           cache: pip
-      - name: Build and install a wheel with MotifTrace dependencies
+      - name: Build and install a wheel with report and MotifTrace dependencies
         run: |
           python -m pip install build pytest
           python -m build --wheel
-          python -c "import glob,subprocess,sys; subprocess.check_call([sys.executable,'-m','pip','install',glob.glob('dist/*.whl')[0]+'[motiftrace]'])"
+          python -c "import glob,subprocess,sys; subprocess.check_call([sys.executable,'-m','pip','install',glob.glob('dist/*.whl')[0]+'[motiftrace,report]'])"
           python -m pip check
       - name: Test installed resources outside the source checkout
         run: |
           cp tests/public_baseline/test_motiftrace_distribution.py "$RUNNER_TEMP/test_motiftrace_distribution.py"
+          cp tests/public_baseline/test_report_distribution.py "$RUNNER_TEMP/test_report_distribution.py"
           cd "$RUNNER_TEMP"
-          python -I -m pytest -q test_motiftrace_distribution.py
+          python -I -m pytest -q test_motiftrace_distribution.py test_report_distribution.py
 
   interface:
     runs-on: ubuntu-latest

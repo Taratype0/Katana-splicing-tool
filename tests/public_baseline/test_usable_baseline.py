@@ -25,8 +25,14 @@ from katana_next.workflows.registry import WorkflowRegistry
 
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = json.loads(Path(__file__).with_name("workflow_inventory_read_support_v1.json").read_text(encoding="utf-8"))
+# The newly approved read-only seven-section report has an explicit registration
+# outside the historical workflow manifest; it is not a new scientific method.
+NEW_REPORT_WORKFLOW = {"workflow_id": "reports.study", "version": "1.0.0",
+                       "parameter_defaults": {"event_set": "stable_significant"}}
 # The earlier inventory remains immutable. Explicit approved deviations cover
-# input eligibility, optional module controls and actual report provenance only.
+# input eligibility, optional module controls, detected backgrounds, and the
+# approved downstream DAS selection. The two earlier JSON inventories stay
+# byte-for-byte unchanged rather than becoming snapshots of whatever runs now.
 for entry in INVENTORY["workflows"]:
     if entry["workflow_id"] == "programs.cosplice":
         entry["version"] = "3.2.0"
@@ -40,9 +46,22 @@ for entry in INVENTORY["workflows"]:
         entry["version"] = "2.0.0"
         entry["parameter_defaults"]["apply_threshold_labels"] = False
     elif entry["workflow_id"] == "reports.bundle":
-        entry["version"] = "2.2.0+network_labels.20261022"
+        entry["version"] = "2.3.0+das_selection.20261022"
+        entry["parameter_defaults"]["event_set"] = "stable_significant"
     elif entry["workflow_id"] == "reports.interpreted_bundle":
         entry["version"] = "1.5.0+network_labels.20261022"
+    elif entry["workflow_id"] == "prioritize.evidence":
+        entry["version"] = "2.2.0"
+    elif entry["workflow_id"] == "prioritize.enrichment":
+        entry["version"] = "2.4.0"
+        entry["parameter_defaults"].update({
+            "foreground_source": "candidate_union", "background_source": "match_foreground",
+        })
+    elif entry["workflow_id"] == "prioritize.rbp_support":
+        entry["version"] = "2.3.0"
+        entry["parameter_defaults"].update({
+            "foreground_source": "candidate_union", "background_source": "match_foreground",
+        })
 
 
 def test_workflows_match_approved_all_sample_policy_and_retained_other_methods():
@@ -54,8 +73,9 @@ def test_workflows_match_approved_all_sample_policy_and_retained_other_methods()
         }
         for workflow in WorkflowRegistry().all()
     ]
-    assert len(actual) == INVENTORY["workflow_count"] == 54
-    assert actual == INVENTORY["workflows"]
+    assert len(actual) == INVENTORY["workflow_count"] + 1 == 55
+    assert [row for row in actual if row["workflow_id"] != "reports.study"] == INVENTORY["workflows"]
+    assert [row for row in actual if row["workflow_id"] == "reports.study"] == [NEW_REPORT_WORKFLOW]
 
 
 def test_only_approved_input_module_and_label_workflows_changed_from_preserved_baseline():
@@ -67,6 +87,7 @@ def test_only_approved_input_module_and_label_workflows_changed_from_preserved_b
         "quality.stable_as", "landscape.bulk", "differential.as", "differential.cross_comparison", "programs.cosplice",
         "reports.bundle", "reports.interpreted_bundle",
         "programs.psi_network", "programs.hub_events",
+        "prioritize.evidence", "prioritize.enrichment", "prioritize.rbp_support",
     }
     assert current["quality.stable_as"]["parameter_defaults"] == {"fdr": 0.05, "min_abs_dpsi": 0.1}
     assert current["differential.cross_comparison"]["parameter_defaults"] == {
@@ -81,8 +102,16 @@ def test_only_approved_input_module_and_label_workflows_changed_from_preserved_b
         assert current[key]["parameter_defaults"] == {
             **old[key]["parameter_defaults"], "apply_threshold_labels": False,
         }
-    for key in ("reports.bundle", "reports.interpreted_bundle"):
-        assert current[key]["parameter_defaults"] == old[key]["parameter_defaults"]
+    assert current["reports.interpreted_bundle"]["parameter_defaults"] == old["reports.interpreted_bundle"]["parameter_defaults"]
+    assert current["reports.bundle"]["parameter_defaults"] == {
+        **old["reports.bundle"]["parameter_defaults"], "event_set": "stable_significant",
+    }
+    assert current["prioritize.evidence"]["parameter_defaults"] == old["prioritize.evidence"]["parameter_defaults"]
+    for key in ("prioritize.enrichment", "prioritize.rbp_support"):
+        assert current[key]["parameter_defaults"] == {
+            **old[key]["parameter_defaults"],
+            "foreground_source": "candidate_union", "background_source": "match_foreground",
+        }
 
 
 @pytest.mark.parametrize("workflow_id", [
@@ -150,7 +179,7 @@ def test_api_opens_a_synthetic_project_runs_a_cached_result_and_packages_english
     try:
         with TestClient(create_app(runtime)) as client:
             assert client.get("/api/health").json() == {"status": "ok", "version": __version__}
-            assert len(client.get("/api/workflows").json()) == 54
+            assert len(client.get("/api/workflows").json()) == INVENTORY["workflow_count"] + 1 == 55
             assert {w["workspace_id"] for w in client.get("/api/workspaces").json()} == {
                 "project", "quality", "landscape", "differential", "prioritize",
                 "validate", "programs", "single-cell", "reports",

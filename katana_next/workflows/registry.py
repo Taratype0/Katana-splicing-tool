@@ -62,6 +62,7 @@ from katana_next.workflows.rbp_sequence_results import CompletedRbpSequenceWorkf
 from katana_next.workflows.motiftrace_consequences import MotifTraceConsequencesWorkflow
 from katana_next.workflows.motiftrace_usage import MotifTraceUsageWorkflow
 from katana_next.workflows.motiftrace_parallel import MotifTraceParallelWorkflow
+from katana_next.workflows.report_study import StudyReportWorkflow
 
 
 class WorkflowRegistry:
@@ -146,4 +147,5 @@ def _production_workflows() -> tuple[Workflow, ...]:
         SingleCellBenchmarkWorkflow(),
         ReproducibilityReportWorkflow(),
         NarrativeReportWorkflow(),
+        StudyReportWorkflow(),
     )

@@ -56,13 +56,17 @@ def test_selection_changes_only_membership_and_keeps_full_source():
     pd.testing.assert_frame_equal(events, before)
 
 
-@pytest.mark.parametrize("change", ["missing_flag", "missing_audit", "historical", "wrong_counts", "false_support", "not_subset", "string_flag"])
+@pytest.mark.parametrize("change", ["missing_flag", "missing_significance", "missing_audit", "missing_policy", "historical", "wrong_counts", "false_support", "not_subset", "string_flag"])
 def test_rs_missing_or_inconsistent_evidence_never_falls_back(change):
     events = _events()
     if change == "missing_flag":
         events = events.drop(columns="stable_significant")
+    elif change == "missing_significance":
+        events = events.drop(columns="significant")
     elif change == "missing_audit":
         events = events.drop(columns="measurement_eligible")
+    elif change == "missing_policy":
+        events = events.drop(columns="read_support_policy")
     elif change == "historical":
         events["read_support_policy"] = "legacy_consistency"
     elif change == "wrong_counts":
@@ -75,7 +79,7 @@ def test_rs_missing_or_inconsistent_evidence_never_falls_back(change):
         events["stable_significant"] = ["True", "False", "False"]
     with pytest.raises(ValueError):
         selected_event_mask(events)
-    if change not in {"not_subset"}:
+    if change not in {"not_subset", "missing_significance"}:
         assert selected_event_mask(events, "significant").tolist() == [True, True, False]
 
 

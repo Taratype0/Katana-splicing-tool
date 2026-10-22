@@ -20,6 +20,16 @@ imported-PSI workflow and explicit hub analysis. Continuous metrics and complete
 ranks remain; opt-in labels cannot delete events or change fitted assignments.
 Other methods, including MotifTrace and DEG runtime parameters, remain unchanged.
 
+The approved DAS selector defaults to RS-DAS and preserves the ordinary-DAS
+flag, native effects and P/FDR. Tests explicitly allow the downstream selection
+metadata and the detected/testable-background controls without weakening the
+read-support contract. Synthetic MotifTrace selections declare the separate
+native-significance flag and the every-sample ten-count policy; historical
+stable flags alone remain invalid. Both earlier workflow inventory files remain
+unchanged, with the permitted version/default differences listed in the test.
+Interface hashes in the MotifTrace integration record are revisioned separately
+from its 23 frozen scientific sources, retaining prior interface digests.
+
 The tests use generated synthetic inputs. The API test opens a project, executes
 a small DEG result-reader workflow, verifies reuse of its completed result,
 assembles and downloads a report containing HTML, PDF, provenance and result
