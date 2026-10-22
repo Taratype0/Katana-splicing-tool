@@ -8,6 +8,7 @@ import shutil
 from threading import RLock
 
 import pandas as pd
+import yaml
 
 
 def _read_engine_table(source: Path, separator: str) -> pd.DataFrame | None:
@@ -23,6 +24,7 @@ def _read_engine_table(source: Path, separator: str) -> pd.DataFrame | None:
 
 from katana_cosplice.config import load_config
 from katana_cosplice.pipeline import CoSplicePipeline
+from katana_cosplice.qc import network_input_policy
 from katana_cosplice.stage_registry import stage_spec
 from katana_next.domain.models import ArtifactKind
 from katana_next.infrastructure.jobs import JobContext
@@ -145,14 +147,24 @@ def configure_production_membership(config, parameters):
         config.consensus.min_module_size = config.network.min_module_size
 
 
+def write_production_configuration(config, path: Path) -> Path:
+    """Keep the active policy visible beside inert historical YAML settings."""
+    payload = config.to_mapping()
+    payload["network_input_policy"] = network_input_policy()
+    payload["legacy_stable_as_settings_role"] = "ignored historical settings; active eligibility is network_input_policy"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return path
+
+
 class CoSpliceWorkflow(WorkflowBase):
-    version = "2.4.0"
+    version = "3.0.0"
     definition = WorkflowDefinition(
         workflow_id="programs.cosplice",
         workspace_id="programs",
         label="cosplice programs",
         question="Which reproducible sample-level co-splicing programs exist and how do they associate with the declared design?",
-        method="Signed blockwise WGCNA/TOM backbone with bootstrap membership confidence annotation; the default preserves backbone membership. Phenotype and interpretation evidence never define membership.",
+        method="Signed blockwise WGCNA/TOM backbone with bootstrap membership confidence annotation; the default preserves backbone membership. Every cohort sample needs IJC+SJC >=10 and valid nonconstant PSI. DAS significance, phenotype and interpretation evidence never define input eligibility or membership.",
         output_summary="Modules, eigengene-like program scores, membership confidence, trait associations, validation and interpretation artifacts.",
         analysis_unit="exact splice event across independent biological samples",
         expected_artifacts=3,
@@ -166,7 +178,7 @@ class CoSpliceWorkflow(WorkflowBase):
                 ("discovery", "interpretation", "full"),
             ),
             ParameterDefinition("force_engine", "Force cosplice rebuild", "boolean", False, "Rebuild selected engine stages even when their own fingerprints match."),
-            ParameterDefinition("max_events", "Maximum events", "number", 0, "Zero uses every stable event; a positive value is an explicitly recorded exploratory cap.", minimum=0, step=100),
+            ParameterDefinition("max_events", "Maximum events", "number", 0, "Zero uses every count-supported nonconstant event; a positive value is an explicitly recorded exploratory cap.", minimum=0, step=100),
             ParameterDefinition("bootstrap_iterations", "Bootstrap iterations", "number", 50, "Resamples complete donor/biological blocks within condition profiles. Without declared IDs, sample IDs are assumed independent; replicate numbers never imply pairing.", minimum=10, maximum=1000, step=10),
             ParameterDefinition("uncertainty_role", "Read uncertainty role", "select", "diagnostic_only",
                 "Default keeps measured PSI and reports read uncertainty separately. Optional weighting is experimental; raw read-fraction posteriors never replace rMATS PSI.",
@@ -221,7 +233,7 @@ class CoSpliceWorkflow(WorkflowBase):
             "max_events": parameters.get("max_events", 0), "bootstrap_iterations": parameters.get("bootstrap_iterations", 50),
             "uncertainty_role": parameters.get("uncertainty_role", "diagnostic_only"),
             "membership_policy": parameters.get("membership_policy", "backbone_confidence_only"),
-            "production_contract": "backbone-annotated-v8"})
+            "production_contract": "backbone-annotated-v9-all-sample-input", "network_input_policy": network_input_policy()})
         engine_root = context.manifest.output_root / "engines" / "cosplice" / engine_key[:24]
         engine_root.mkdir(parents=True, exist_ok=True)
         config = load_config(config_asset.path)
@@ -249,7 +261,7 @@ class CoSpliceWorkflow(WorkflowBase):
         if rscript:
             config.network.wgcna_rscript = rscript
         resolved_config = engine_root / "katana_next_cosplice.yaml"
-        config.write(resolved_config)
+        write_production_configuration(config, resolved_config)
         pipeline = CoSplicePipeline(config)
         scope = str(parameters.get("scope", "discovery"))
         if scope == "discovery":
@@ -292,8 +304,9 @@ class CoSpliceWorkflow(WorkflowBase):
                 "analysis_unit": self.definition.analysis_unit,
                 "production_backbone": "signed WGCNA blockwiseModules",
                 "network_measurement": "Observed sample-level PSI; approximate raw read fractions do not replace PSI",
+                "network_input_policy": network_input_policy(),
                 "read_uncertainty_role": parameters.get("uncertainty_role", "diagnostic_only"),
-                "membership_semantics": "Bootstrap co-assignment may reject unstable WGCNA boundary events to grey, but never repartitions stable modules or uses phenotype, RBP or functional terms to create membership.",
+                "membership_semantics": "Default confidence annotation preserves the full-data WGCNA partition; the explicitly selected exploratory refinement can reject boundary events. Phenotype, RBP and functional terms never define membership.",
                 "interpretation": "Module-trait associations are program-level effects. Individual event support remains available through membership and Native Sashimi.",
                 "limitations": self.definition.limitations,
                 "resolved_config": str(resolved_config),
@@ -357,7 +370,7 @@ class CoSpliceWorkflow(WorkflowBase):
                 registered += 1
         writer.existing_file(
             "Resolved CoSplice production configuration",
-            config.write(writer.directory / "resolved_cosplice.yaml"),
+            write_production_configuration(config, writer.directory / "resolved_cosplice.yaml"),
             entity_type="analysis_configuration",
             metadata={"mime_type": "application/yaml"},
         )

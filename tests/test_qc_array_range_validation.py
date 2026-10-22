@@ -4,7 +4,8 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from katana_cosplice.qc import _validate_inputs
+from katana_cosplice.qc import _validate_inputs, stable_as_qc
+from katana_cosplice.config import StableASConfig
 from katana_cosplice.matrix import _validate_matrix_values
 
 
@@ -20,15 +21,19 @@ class RangeValidationTests(unittest.TestCase):
 
     def test_genuine_out_of_range_values_and_infinities_are_rejected(self):
         for value in [np.nextafter(0., -1.), np.nextafter(1., 2.), -np.inf, np.inf]:
-            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'PSI values'):
-                _validate_inputs(*self.inputs([value]))
+            with self.subTest(value=value):
+                result = stable_as_qc(*self.inputs([value, .5]), StableASConfig())
+                self.assertFalse(result.metrics.loc['event', 'stable_as'])
+                self.assertIn('invalid_or_missing_psi', result.metrics.loc['event', 'failed_rules'])
 
     def test_negative_read_counts_are_rejected(self):
         for position in (1, 2):
-            inputs = self.inputs([0.5])
+            inputs = self.inputs([0.5, .6])
             inputs[position].iloc[0, 0] = -1
-            with self.subTest(position=position), self.assertRaisesRegex(ValueError, 'cannot be negative'):
-                _validate_inputs(*inputs)
+            with self.subTest(position=position):
+                result = stable_as_qc(*inputs, StableASConfig())
+                self.assertFalse(result.metrics.loc['event', 'stable_as'])
+                self.assertIn('invalid_or_missing_counts', result.metrics.loc['event', 'failed_rules'])
 
     def test_validator_does_not_depend_on_stacked_series_comparison(self):
         with patch.object(pd.DataFrame, 'stack', side_effect=AssertionError('unneeded stacked index')):

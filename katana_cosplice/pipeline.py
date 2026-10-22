@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from html import escape
+import json
 from pathlib import Path
 from typing import Callable
 
@@ -61,7 +62,7 @@ from katana_cosplice.multiobjective_selection import (
     build_multiobjective_candidate_scorer,
 )
 from katana_cosplice.network import fit_network, render_network_plots, residualize_matrix
-from katana_cosplice.qc import stable_as_qc
+from katana_cosplice.qc import stable_as_qc, network_input_policy
 from katana_cosplice.preservation import (
     PRESERVATION_METHOD_VERSION,
     PRESERVATION_BACKGROUND,
@@ -71,7 +72,7 @@ from katana_cosplice.preservation import (
 )
 from katana_cosplice.reporting import build_module_browser, build_validation_pdf, read_cached_table
 from katana_cosplice.stage_registry import stage_spec
-from katana_cosplice.uncertainty import estimate_beta_binomial_uncertainty
+from katana_cosplice.uncertainty import estimate_beta_binomial_uncertainty, UncertaintyResult
 from katana_cosplice.utils import file_signature, fingerprint, write_json
 from katana_cosplice.validation import render_validation_plots, render_validation_report, validate_network_modules
 
@@ -101,6 +102,8 @@ class CoSplicePipeline:
 
     def _mark(self, stage: str, status: str, message: str, stage_fingerprint: str = "", outputs: list[Path] | None = None) -> None:
         stage_spec(stage)
+        if status == "running":
+            self._protect_historical_qc_output()
         state = self._state()
         stages = state.setdefault("stages", {})
         previous = stages.get(stage, {})
@@ -113,6 +116,19 @@ class CoSplicePipeline:
         }
         write_json(self.state_path, state)
         self.artifacts.update_stage(stage, status, message, stage_fingerprint, outputs)
+
+    def _protect_historical_qc_output(self) -> None:
+        """Do not start another writing stage in a historical network run."""
+        root = self.output / "03_stable_as_qc"
+        if not root.is_dir() or not any(path.is_file() for path in root.iterdir()):
+            return
+        try:
+            previous = json.loads((root / "parameters.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            previous = None
+        policy = previous.get("network_input_policy") if isinstance(previous, dict) else None
+        if not isinstance(policy, dict) or policy.get("policy_id") != network_input_policy()["policy_id"]:
+            raise ValueError("Historical network QC output uses an older or unknown input policy. It is preserved; choose a new output directory for the every-sample rule.")
 
     def status(self) -> dict[str, object]:
         return self._state()
@@ -418,20 +434,31 @@ class CoSplicePipeline:
                     / "beta_binomial_sample_uncertainty.tsv",
                 }
             )
-        thresholds = self.config.stable_as.resolved()
+        thresholds = network_input_policy()
+        # Old output remains a historical result, even under force=True.
+        if any(path.is_file() for path in outputs.values()):
+            try:
+                previous = json.loads(outputs["parameters"].read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                previous = {}
+            previous_policy = previous.get("network_input_policy") if isinstance(previous, dict) else None
+            if not isinstance(previous_policy, dict) or previous_policy.get("policy_id") != thresholds["policy_id"]:
+                raise ValueError("Historical network QC output uses an older or unknown input policy. It is preserved; choose a new output directory for the every-sample rule.")
+        uncertainty_settings = {**self.config.uncertainty.__dict__, "filter_low_reliability": False}
         stage_fp = self._fingerprint(
             stage,
             required,
             {
-                "thresholds": thresholds,
-                "uncertainty": self.config.uncertainty.__dict__,
+                "network_input_policy": thresholds,
+                "ignored_legacy_qc_settings": self.config.stable_as.resolved(),
+                "uncertainty": uncertainty_settings,
             },
         )
         state = self._state().get("stages", {}).get(stage, {})
         if not force and state.get("fingerprint") == stage_fp and all(path.exists() for path in outputs.values()):
-            self._mark(stage, "cache_hit", "Loaded existing stable-AS QC cache.", stage_fp, list(outputs.values()))
+            self._mark(stage, "cache_hit", "Loaded existing every-sample network input cache.", stage_fp, list(outputs.values()))
             return outputs
-        self._mark(stage, "running", "Calculating read-supported replicate stability.", stage_fp)
+        self._mark(stage, "running", "Checking all network samples for ten informative counts and nonconstant PSI.", stage_fp)
         try:
             psi = pd.read_csv(required[0], sep="\t", index_col=0)
             ijc = pd.read_csv(required[1], sep="\t", index_col=0)
@@ -441,99 +468,25 @@ class CoSplicePipeline:
             uncertainty = None
             n_pre_uncertainty = len(result.stable_psi)
             if self.config.uncertainty.enabled:
-                uncertainty = estimate_beta_binomial_uncertainty(
-                    ijc,
-                    sjc,
-                    samples,
-                    result.metrics,
-                    prior_strength=self.config.uncertainty.prior_strength,
-                    reliability_read_scale=self.config.uncertainty.reliability_read_scale,
-                )
-                result.metrics = result.metrics.join(
-                    uncertainty.event_metrics,
-                    how="left",
-                    rsuffix="_uncertainty",
-                )
-                result.metrics["stable_as_before_uncertainty"] = result.metrics[
-                    "stable_as"
-                ].astype(bool)
-                result.metrics["passes_uncertainty_reliability"] = (
-                    pd.to_numeric(
-                        result.metrics["network_reliability"], errors="coerce"
+                # Diagnostic computation cannot add an unapproved input gate.
+                # Invalid/rejected rows retain QC reasons and are not fed to this model.
+                keys = result.stable_psi.index
+                if len(keys):
+                    uncertainty = estimate_beta_binomial_uncertainty(
+                        ijc.loc[keys], sjc.loc[keys], samples, result.metrics.loc[keys],
+                        prior_strength=self.config.uncertainty.prior_strength,
+                        reliability_read_scale=self.config.uncertainty.reliability_read_scale,
                     )
-                    .fillna(0.0)
-                    .ge(self.config.uncertainty.min_network_reliability)
-                )
-                if self.config.uncertainty.filter_low_reliability:
-                    result.metrics["stable_as"] = (
-                        result.metrics["stable_as_before_uncertainty"]
-                        & result.metrics["passes_uncertainty_reliability"]
-                    )
-                    failed_uncertainty = (
-                        result.metrics["stable_as_before_uncertainty"]
-                        & ~result.metrics["passes_uncertainty_reliability"]
-                    )
-                    result.metrics.loc[failed_uncertainty, "failed_rules"] = (
-                        result.metrics.loc[failed_uncertainty, "failed_rules"]
-                        .astype(str)
-                        .str.strip(",")
-                        .replace("", "read_uncertainty")
-                    )
-                    has_existing = (
-                        failed_uncertainty
-                        & result.metrics["failed_rules"].ne("read_uncertainty")
-                    )
-                    result.metrics.loc[has_existing, "failed_rules"] = (
-                        result.metrics.loc[has_existing, "failed_rules"]
-                        + ",read_uncertainty"
-                    )
-                    retained = result.metrics.index[result.metrics["stable_as"]]
-                    result.stable_psi = result.stable_psi.loc[
-                        result.stable_psi.index.intersection(retained, sort=False)
-                    ]
-                    result.condition_metrics = result.condition_metrics.loc[
-                        result.condition_metrics["event_key"].isin(retained)
-                    ].copy()
-                result.summary = pd.concat(
-                    [
-                        result.summary,
-                        pd.DataFrame(
-                            [
-                                {
-                                    "rule": "passes_uncertainty_reliability",
-                                    "n_passed": int(
-                                        result.metrics[
-                                            "passes_uncertainty_reliability"
-                                        ].sum()
-                                    ),
-                                    "n_failed": int(
-                                        (~result.metrics[
-                                            "passes_uncertainty_reliability"
-                                        ]).sum()
-                                    ),
-                                    "pass_fraction": float(
-                                        result.metrics[
-                                            "passes_uncertainty_reliability"
-                                        ].mean()
-                                    ),
-                                },
-                                {
-                                    "rule": "stable_as_after_uncertainty",
-                                    "n_passed": int(
-                                        result.metrics["stable_as"].sum()
-                                    ),
-                                    "n_failed": int(
-                                        (~result.metrics["stable_as"]).sum()
-                                    ),
-                                    "pass_fraction": float(
-                                        result.metrics["stable_as"].mean()
-                                    ),
-                                },
-                            ]
-                        ),
-                    ],
-                    ignore_index=True,
-                )
+                else:
+                    empty = pd.DataFrame(index=keys, columns=psi.columns, dtype=float)
+                    event_columns = ["beta_binomial_rho", "median_total_reads", "median_effective_reads", "median_posterior_sd", "median_read_precision", "replicate_consistency_component", "network_reliability", "uncertainty_model"]
+                    sample_columns = ["event_key", "sample_id", "condition", "total_reads", "effective_reads", "posterior_psi", "posterior_sd", "read_precision"]
+                    uncertainty = UncertaintyResult(empty.copy(), empty.copy(), empty.copy(),
+                        pd.DataFrame(index=keys, columns=event_columns), pd.DataFrame(columns=sample_columns))
+                result.metrics = result.metrics.join(uncertainty.event_metrics, how="left", rsuffix="_uncertainty")
+                result.metrics["uncertainty_diagnostic_status"] = np.where(
+                    result.metrics.index.isin(keys), "computed", "not_assessed_input_ineligible")
+                result.metrics["uncertainty_eligibility_filter_applied"] = False
             out_dir.mkdir(parents=True, exist_ok=True)
             result.metrics.to_csv(outputs["metrics"], sep="\t", float_format="%.6g")
             result.condition_metrics.to_csv(outputs["condition_metrics"], sep="\t", index=False, float_format="%.6g")
@@ -566,11 +519,15 @@ class CoSplicePipeline:
                 {
                     "fingerprint": stage_fp,
                     "thresholds": thresholds,
+                    "network_input_policy": thresholds,
+                    "ignored_legacy_qc_settings": self.config.stable_as.resolved(),
+                    "uncertainty_input_eligibility": "diagnostic_only; no additional filter",
                     "n_input_events": len(result.metrics),
                     "n_stable_events_before_uncertainty": n_pre_uncertainty,
                     "n_stable_events": len(result.stable_psi),
                     "condition_detail_scope": "stable_events_only",
-                    "uncertainty": self.config.uncertainty.__dict__,
+                    "uncertainty": uncertainty_settings,
+                    "requested_uncertainty_settings": self.config.uncertainty.__dict__,
                 },
             )
             self._mark(stage, "finished", f"Stable-AS QC retained {len(result.stable_psi)} events.", stage_fp, list(outputs.values()))

@@ -1,4 +1,4 @@
-# Bulk thresholds: current policy and evidence
+# Thresholds: current policies and evidence
 
 **Active policy: `bulk-all-samples-counts-v1`.** For each selected contrast, every expected sample in both arms must have **finite informative counts `IJC + SJC >= 10`**. This is a fixed per-sample rule. Counts are not pooled across samples, arms or contrasts.
 
@@ -74,7 +74,38 @@ Accepted legacy parameter keys, when retained for call compatibility, are inert 
 
 When Landscape assembles an event-by-sample matrix for several selected contrasts, a passing row in one contrast cannot rescue a failing row in another. Every selected sample used in that matrix must have valid PSI and read support of at least ten, and all included rows for that event from the selected contrasts must be `measurement_eligible`. The matrix is not built by an OR across contrast-level support decisions. Missing or unassessable sample values are not zero counts or passing measurements.
 
-The rule above applies to the selected-contrast AS read-support workflow. Independent whole-cohort network discovery retains its own separately declared measurement/QC criteria; its scientific algorithms and defaults are not replaced by this contrast-level gate. Opening an old report does not apply the new policy or recompute its upstream analysis.
+The selected-contrast rule and the whole-cohort network rule have different sample scopes. The network policy below evaluates every sample participating in the fitted network; a passing subset of contrasts is not sufficient. Opening an old report does not apply either new policy or recompute its upstream analysis.
+
+## Whole-cohort network input
+
+**Approved policy: `network-all-samples-counts-v1`.** For count-bearing network inputs, use the measured, nonconstant event universe of the declared network cohort. Do **not** require that an event is a significant DAS hit or has a particular condition effect before unsupervised network discovery.
+
+| Current requirement | Purpose | Basis and limits |
+| --- | --- | --- |
+| Every declared participating sample has finite PSI within 0 to 1 and actual finite, nonnegative IJC/SJC | Reject incomplete, invalid or unmapped measurements | Input validity, rather than an additional biological effect or significance cutoff. |
+| `IJC + SJC >= 10` in **every** participating sample | Establish per-sample count support across the entire fitted cohort | Same per-sample JC precedent [4] as AS read support; applying the number to JCEC or a different count-producing assay is an explicit Katana extension. |
+| At least two distinct PSI values in an event's complete sample vector | Exclude constant features for which correlation cannot be defined | Mathematical eligibility; no positive variance floor such as 0.0025 remains. It does not ensure reliable correlations or sufficient sample size. |
+| No DAS-significance prefilter | Retain unsupervised co-variation that need not follow a prespecified condition effect | WGCNA authors advise against selecting differential-expression hits before network analysis [11]. Extending this reasoning to splicing events is declared, rather than a claim that this entire PSI policy was validated by WGCNA. |
+
+All samples supplied to a given network fit must pass individually for an event to enter that fit. Count support cannot be established with a cohort average, pooled counts, at least two supported replicates per condition, or a fraction of supported samples. The declared cohort, sample IDs, input mode and count evidence must be recorded.
+
+The existing rMATS matrix adapter chooses one canonical source table for each `(condition, event type)` before this gate: largest table by file size, then lexical path/side order. It evaluates the complete PSI/IJC/SJC observations in that chosen source, rather than assembling partial counts from different comparisons or taking median/maximum counts. Its source table records the chosen file, selection rule and candidate count. **This adapter does not certify agreement among the unselected candidate tables.** If the same sample/event has conflicting observations in another comparison, that discrepancy is outside this gate's evidence; a passing network event is not proof that every alternative source observation was audited. This source-selection limitation is preserved and disclosed, rather than silently changing the measurement adapter in this policy update.
+
+The former 80% valid-PSI, 70% count-supported-sample, two-supported-replicates-per-condition and 80% condition-coverage hard filters are retired for this count-bearing policy. The former variance >=0.0025, repeatability >=0.30, condition-mean PSI span >=0.25 and strong dynamic-range gates are also retired as network-input eligibility filters. Such quantities may remain diagnostic columns, but they cannot exclude an otherwise complete, count-supported, nonconstant event under the active policy. This change does not remove a statistical model's own experimental-design requirements or change a native P-value.
+
+### PSI-only input and count evidence
+
+External PSI-only matrices remain a distinct optional input. Without actual counts, they must be labeled **`read_support_not_assessed`**; they cannot be declared to have passed the ten-count policy, have counts fabricated, or silently borrow a different assay's count definition. A network fitted from such a matrix must retain that limitation in its provenance and report. This approval does not authorize silently converting PSI-only input into the count-verified route.
+
+The informative-count rule also does not alter raw BAM-junction discovery settings such as mapping quality, anchor length, event reconstruction or count definition. Those settings affect what was measured and must remain declared independently. Existing network methods, bootstrap procedures, association models and completed fits are not refitted or relabeled by this input-policy change.
+
+### Module settings are reviewed separately
+
+Module-size and eigengene-merging settings remain a separate method decision. The existing configured values are **minimum module size 20** and **merge cut height 0.25**; recording them here does not approve a new algorithm or change the original implementation. The next user review covers their actual implementation, meaning and literature limits. A merge height must not be presented as a P-value or a module-preservation threshold.
+
+The [network policy register](thresholds/network-input.v1.json) records this approved change separately from the [bulk contrast register](thresholds/bulk-defaults.v1.json). The default `max_events=0` includes all eligible events; a user-specified positive cap is an explicitly recorded exploratory subset ranked by cohort PSI variance, independent of condition significance. Implementation, testing and scientific validation are separate statuses; an implemented gate is not a new validation experiment.
+
+The implemented network-input gate is versioned as **CoSplice engine `1.3.0` / workflow `programs.cosplice` `3.0.0`** within software `2.0.0b3.dev20261022`. Its register binds the current QC, stage, execution and workflow sources by SHA-256. Local input and execution-contract tests have passed; this does not claim a new native R network fit or biological validation. Resolved configuration and result provenance record the active policy and mark old QC settings as diagnostic-only. New engine/stage identities separate these runs from historical caches. Existing output lacking the current policy is rejected for overwrite, even when force is requested; completed fits retain their original identity.
 
 ## Implementation identity
 
@@ -105,5 +136,6 @@ Commit `8c368b7` documented the former presets and descriptive consistency/uncer
 8. Van den Berge et al. (2017), *stageR: a general stage-wise method for controlling the gene-level false discovery rate in differential expression and differential transcript usage*. [DOI](https://doi.org/10.1186/s13059-017-1277-0). Gene-level overall error-rate target.
 9. Love, Soneson and Patro, [author-maintained rnaseqDTU workflow](https://www.bioconductor.org/packages/release/workflows/vignettes/rnaseqDTU/inst/doc/rnaseqDTU.html), stageR sections. Adjusted outputs are tied to their specified OFDR target.
 10. Xing laboratory, [rMATS-turbo documentation](https://github.com/Xinglab/rmats-turbo#readme). Native options and count definitions; preserve upstream provenance.
+11. WGCNA authors, [official FAQ](https://edo98811.github.io/WGCNA_official_documentation/faq.html), gene-filtering guidance. Advises against selecting genes by differential-expression significance before network construction; low-quality and low-variation filtering and its suitability remain data dependent. This is not validation of Katana's specific ten-count PSI rule or module parameters.
 
 Policy and evidence reviewed on 2026-10-22. Documentation of this approved policy is not a new validation experiment. Previous installations, native statistical results and completed research deliveries remain preserved.

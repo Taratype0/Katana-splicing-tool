@@ -186,7 +186,7 @@ def test_qc_and_network_build_modules() -> None:
     assert validation.preservation_summary["best_jaccard"].eq(1.0).all()
 
 
-def test_qc_requires_condition_coverage_and_dynamic_psi_range() -> None:
+def test_qc_requires_complete_counts_but_not_condition_response() -> None:
     samples = pd.DataFrame(
         {
             "sample_id": ["A1", "A2", "A3", "B1", "B2", "B3"],
@@ -211,11 +211,15 @@ def test_qc_requires_condition_coverage_and_dynamic_psi_range() -> None:
         StableASConfig(min_repeatability=0.0, min_psi_variance=0.0),
     )
     assert bool(result.metrics.loc["dynamic", "stable_as"])
-    assert not bool(result.metrics.loc["flat", "passes_dynamic_range"])
-    assert not bool(result.metrics.loc["undercovered", "passes_condition_support"])
+    assert bool(result.metrics.loc["flat", "stable_as"])
+    assert not bool(result.metrics.loc["undercovered", "stable_as"])
+    assert "invalid_or_missing_psi" in result.metrics.loc["undercovered", "failed_rules"]
+    assert "passes_dynamic_range" not in result.metrics
+    assert "passes_condition_support" not in result.metrics
     assert len(result.condition_metrics) == int(result.metrics["stable_as"].sum()) * 2
     assert set(result.condition_metrics["event_key"]) == set(result.stable_psi.index)
-    assert set(result.summary["rule"]) >= {"passes_read_support", "passes_repeatability", "stable_as"}
+    assert set(result.summary["rule"]) >= {"passes_read_support", "passes_nonconstant", "stable_as"}
+    assert "passes_repeatability" not in set(result.summary["rule"])
 
 
 def test_metadata_rejects_duplicate_normalized_sample_ids(tmp_path: Path) -> None:
@@ -240,12 +244,14 @@ def test_matrix_rejects_bamlist_condition_mismatch(tmp_path: Path) -> None:
         build_sample_matrices(config)
 
 
-def test_qc_rejects_out_of_range_psi() -> None:
+def test_qc_records_out_of_range_psi_as_input_ineligible() -> None:
     samples = pd.DataFrame({"sample_id": ["A1", "A2", "B1", "B2"], "condition": ["A", "A", "B", "B"]})
     psi = pd.DataFrame([[0.2, 0.3, 1.2, 0.4]], index=["event"], columns=samples["sample_id"])
     reads = pd.DataFrame(20.0, index=psi.index, columns=psi.columns)
-    with pytest.raises(ValueError, match=r"within \[0, 1\]"):
-        stable_as_qc(psi, reads, reads, samples, StableASConfig())
+    result = stable_as_qc(psi, reads, reads, samples, StableASConfig())
+    assert not result.metrics.loc["event", "stable_as"]
+    assert "invalid_or_missing_psi" in result.metrics.loc["event", "failed_rules"]
+    assert result.stable_psi.empty
 
 
 def test_pipeline_does_not_run_missing_upstream_implicitly(tmp_path: Path) -> None:

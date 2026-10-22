@@ -2,7 +2,7 @@
   "schema": "katana.threshold_basis/v2",
   "active_policy_id": "bulk-all-samples-counts-v1",
   "policy_status": "user_approved",
-  "scope": "Selected-contrast AS read support, selected-contrast Landscape eligibility, and independently recorded bulk differential-result selection. Independent whole-cohort network criteria are separate and unchanged.",
+  "scope": "Selected-contrast AS read support, selected-contrast Landscape eligibility, and independently recorded bulk differential-result selection. Whole-cohort network input has its own independently approved policy in network-input.v1.json; this bulk register does not define or modify that policy.",
   "review_date": "2026-10-22",
   "scientific_validation_claim": false,
   "policy_change": {
@@ -10,7 +10,8 @@
     "scope": "Require informative-count support in every expected sample; remove the former descriptive replicate-consistency and approximate-SE gates from active choices.",
     "significance_defaults_changed": false,
     "native_statistics_changed": false,
-    "whole_cohort_network_qc_changed": false
+    "whole_cohort_network_qc_changed_by_this_bulk_policy": false,
+    "separate_network_policy": "network-input.v1.json"
   },
   "read_gate": {
     "policy_id": "bulk-all-samples-counts-v1",
@@ -221,7 +222,8 @@
     "row_rule": "All included event rows from the selected contrasts must be measurement_eligible.",
     "contrast_OR_rescue_allowed": false,
     "missing_values": "not zero and not passing",
-    "separate_whole_cohort_network_criteria_changed": false
+    "whole_cohort_network_criteria_changed_by_this_bulk_policy": false,
+    "separate_network_policy": "network-input.v1.json"
   },
   "software_version": "2.0.0b3.dev20261022",
   "workflow_versions": {

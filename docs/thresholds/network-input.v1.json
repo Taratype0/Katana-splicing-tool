@@ -1,0 +1,107 @@
+{
+  "schema": "katana.network_input_policy/v1",
+  "active_policy_id": "network-all-samples-counts-v1",
+  "policy_status": "user_approved",
+  "review_date": "2026-10-22",
+  "implementation_binding_status": "implemented_and_locally_verified",
+  "scientific_validation_claim": false,
+  "scope": "New count-bearing whole-cohort co-splicing network input; complete declared participating sample set for each fit.",
+  "input_universe": {
+    "significant_DAS_prefilter": false,
+    "required_observations": "Every participating sample has an actual finite PSI in [0,1] and actual finite nonnegative IJC and SJC with unambiguous event/sample identity.",
+    "informative_count_expression": "IJC + SJC",
+    "fixed_minimum_informative_count": 10,
+    "operator": ">=",
+    "aggregation": "logical AND over every participating sample; no count pooling, supported fraction, group mean, supported-replicate subset, or contrast-level OR",
+    "constant_event_handling": "Exclude complete PSI vectors with fewer than two distinct values because correlation is undefined; no additional positive variance floor.",
+    "missing_or_invalid_input": "Cannot pass the count-verified route; record unavailable or block with an explicit reason.",
+    "repeated_measurement_boundary": "The existing rMATS adapter resolves one canonical source per (condition,event type) by largest file size, then lexical path/side order. QC checks all sample observations in the resolved matrix. It neither assembles partial evidence nor takes median/max counts across comparisons, but it does not certify agreement with unselected candidate tables; passing QC is not evidence that all repeated source observations were audited.",
+    "source_selection_limitation": "Conflicting or missing measurements in an unselected comparison table are not validated by this gate. Source choices and candidate counts remain recorded; changing the measurement/source adapter is outside this update.",
+    "optional_event_cap": "max_events=0 uses every eligible event by default; a positive value is a recorded exploratory variance-ranked subset, independent of condition significance.",
+    "technical_measurement_boundary": "Lanes and technical measurements are not promoted to biological replicates."
+  },
+  "retired_hard_filters": [
+    {
+      "name": "minimum_valid_PSI_fraction",
+      "former_default": 0.8
+    },
+    {
+      "name": "minimum_count_supported_sample_fraction",
+      "former_default": 0.7
+    },
+    {
+      "name": "minimum_supported_replicates_per_condition",
+      "former_default": 2
+    },
+    {
+      "name": "minimum_condition_coverage_fraction",
+      "former_default": 0.8
+    },
+    {
+      "name": "minimum_PSI_variance",
+      "former_default": 0.0025
+    },
+    {
+      "name": "minimum_repeatability",
+      "former_default": 0.3
+    },
+    {
+      "name": "minimum_condition_mean_PSI_span",
+      "former_default": 0.25
+    },
+    {
+      "name": "strong_dynamic_range",
+      "former_default": "At least 10% of samples at PSI 0.2-0.8, or all-sample PSI span >=0.5"
+    }
+  ],
+  "diagnostic_boundary": "Retired eligibility statistics can be retained as diagnostics, never reactivated as extra hard gates under this policy.",
+  "PSI_only_optional_route": {
+    "count_support_status": "read_support_not_assessed",
+    "counts_may_be_fabricated": false,
+    "count_verified_policy_may_be_claimed": false,
+    "scope": "Independent optional input with explicit absence of read evidence; not silently promoted to the count-verified route."
+  },
+  "method_boundaries": {
+    "raw_BAM_junction_measurement_settings_changed": false,
+    "module_discovery_kernel_changed": false,
+    "module_size_and_merging_changed": false,
+    "completed_results_recomputed_or_relabelled": false,
+    "native_P_values_or_effects_recalculated": false,
+    "module_parameter_review": "Next user decision; existing configured minimum module size 20 and merge cut height 0.25 are recorded separately from this input-policy approval.",
+    "biological_design": "Passing count support does not establish adequate replication, power, correlation reliability or module-level inference validity."
+  },
+  "evidence": [
+    {
+      "id": "Kuijper2025",
+      "url": "https://doi.org/10.1093/hmg/ddaf153",
+      "supports": "Published precedent for junction-count event filtering by at least ten informative reads in each sample.",
+      "does_not_establish": "Universal ten-count optimum, direct JCEC validation, validity of every other count-producing assay, or network-level error control."
+    },
+    {
+      "id": "WGCNA_author_FAQ",
+      "url": "https://edo98811.github.io/WGCNA_official_documentation/faq.html",
+      "supports": "Advice against differential-expression-significance selection before unsupervised coexpression networks; applied here by declared analogy to splicing.",
+      "does_not_establish": "Direct validation of Katana's PSI count policy, positive effect cutoffs or module parameters."
+    }
+  ],
+  "implementation": {
+    "software_version": "2.0.0b3.dev20261022",
+    "engine_version": "1.3.0",
+    "workflow_versions": {
+      "programs.cosplice": "3.0.0"
+    },
+    "source_sha256": {
+      "katana_cosplice/qc.py": "9d7099b2375844fac70f30f8335935b51f84f8581d14aba564291804feb0fe42",
+      "katana_cosplice/pipeline.py": "cad530c82cb62be3915b5608fd4a93b373e143e68a259f5ca2cb0895be325d82",
+      "katana_cosplice/stage_registry.py": "076a4c2fd59292fbed3fa172b99881d975f8f9d27e15ad90acecb2d2d105de58",
+      "katana_cosplice/__init__.py": "b5d1b553eb2053c95283d2b3084d64445c144a2aa34dee61b25f73776282b377",
+      "katana_next/workflows/programs.py": "2928d0d5cd947dabba6442779e7013688fe1d215b6e7bb756bba7a6227c1d9fa"
+    },
+    "implementation_test_status": "local_regression_passed",
+    "biological_validation_status": "not_newly_performed",
+    "test_evidence_scope": "Input-QC and execution-contract fixtures; no new native R network fit, biological validation, or recomputation of completed research results.",
+    "policy_recording": "Resolved YAML and stage/output provenance record network_input_policy; legacy settings are recorded as diagnostics rather than active gates.",
+    "cache_and_output_boundary": "New policy identity enters engine/stage fingerprints; engine production contract v9 uses an independent output location. Legacy output lacking the new policy is not overwritten, including under force.",
+    "test_evidence": "294 application checks and 12 subtests passed; subsequent historical-output guard integration 11 passed after the final protection update. Synthetic fixtures only; no new native R fit."
+  }
+}

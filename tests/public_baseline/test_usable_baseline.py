@@ -25,6 +25,11 @@ from katana_next.workflows.registry import WorkflowRegistry
 
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = json.loads(Path(__file__).with_name("workflow_inventory_read_support_v1.json").read_text(encoding="utf-8"))
+# The earlier inventory remains immutable; this approved network policy changes
+# the count-bearing network method version, with its parameters unchanged.
+for entry in INVENTORY["workflows"]:
+    if entry["workflow_id"] == "programs.cosplice":
+        entry["version"] = "3.0.0"
 
 
 def test_workflows_match_approved_all_sample_policy_and_retained_other_methods():
@@ -46,12 +51,13 @@ def test_only_approved_read_support_workflows_changed_from_preserved_baseline():
     current = {entry["workflow_id"]: entry for entry in INVENTORY["workflows"]}
     assert old.keys() == current.keys()
     assert {key for key in old if old[key] != current[key]} == {
-        "quality.stable_as", "landscape.bulk", "differential.as", "differential.cross_comparison",
+        "quality.stable_as", "landscape.bulk", "differential.as", "differential.cross_comparison", "programs.cosplice",
     }
     assert current["quality.stable_as"]["parameter_defaults"] == {"fdr": 0.05, "min_abs_dpsi": 0.1}
     assert current["differential.cross_comparison"]["parameter_defaults"] == {
         "membership_mode": "exact_event", "event_set": "stable_significant",
     }
+    assert current["programs.cosplice"]["parameter_defaults"] == old["programs.cosplice"]["parameter_defaults"]
 
 
 @pytest.mark.parametrize("workflow_id", [

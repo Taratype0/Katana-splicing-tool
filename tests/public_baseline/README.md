@@ -8,8 +8,9 @@ python -m pytest -q tests/public_baseline
 
 The original workflow inventory remains preserved in `workflow_inventory.json`.
 `workflow_inventory_read_support_v1.json` records the approved every-sample
-ten-count policy. Tests permit changes only to the four workflows that implement
-or inherit that policy: Quality, bulk Landscape, DAS and exact cross-comparison.
+ten-count bulk policy. Tests permit method-version changes only to the approved
+input-policy workflows: Quality, bulk Landscape, DAS, exact cross-comparison and
+count-bearing CoSplice. CoSplice retains its public parameter defaults and module kernel.
 Other methods, including MotifTrace, networks, DEG runtime parameters and both
 report entrypoints, retain their existing versions and parameter defaults.
 

@@ -52,9 +52,9 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
     ),
     StageSpec(
         key="stable_qc",
-        title="3. Stable-AS QC",
+        title="3. Network input QC",
         order=30,
-        description="Select replicate-supported, read-supported, dynamically informative AS events.",
+        description="Require valid nonconstant PSI and at least ten informative counts in every network sample; condition-response statistics are diagnostic only.",
         dependencies=("matrix",),
         cli_command="qc",
         artifacts=(

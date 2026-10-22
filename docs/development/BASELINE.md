@@ -2,7 +2,7 @@
 
 The preserved application baseline is **`2.0.0b2+baseline.20261022`**. It contains the complete application source, MotifTrace, Katana-Splice-Network and both existing one-click report routes. Its original method versions and parameter inventory remain recorded in `tests/public_baseline/workflow_inventory.json`.
 
-The development version **`2.0.0b3.dev20261022`** implements the approved [every-sample ten-count AS read-support policy](../THRESHOLDS.md). Quality, bulk Landscape, DAS and exact cross-comparison receive new method versions; other method versions and defaults are retained. The original installation, earlier policy documentation and completed research outputs are preserved. New tests check this limited change against the original inventory.
+The development version **`2.0.0b3.dev20261022`** implements the approved [every-sample ten-count AS and count-bearing network input policies](../THRESHOLDS.md). Quality, bulk Landscape, DAS, exact cross-comparison and count-bearing CoSplice receive new method versions; other method versions and defaults are retained. The network module-discovery kernel, module-size and merge defaults remain unchanged. The original installation, earlier policy documentation and completed research outputs are preserved. New tests check these approved input-policy changes against the original inventory.
 
 This is an editable source-checkout baseline. It is not the future minimal headless package, a fully self-contained wheel, a new statistical method or an official nf-core release.
 

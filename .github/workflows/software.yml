@@ -37,6 +37,10 @@ jobs:
           tests/v2/test_bulk_all_samples_qc.py
           tests/v2/test_read_support_source_policy.py
           tests/v2/test_review_correctness.py
+          tests/v2/test_network_all_sample_input_qc.py
+          tests/test_qc_array_range_validation.py
+          tests/test_cosplice.py::test_qc_requires_complete_counts_but_not_condition_response
+          tests/test_cosplice.py::test_qc_records_out_of_range_psi_as_input_ineligible
           tests/v2/test_english_report_policy.py
           tests/v2/test_motiftrace_windows.py
           tests/v2/test_motiftrace_parallel.py
