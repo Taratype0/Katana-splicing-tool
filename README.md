@@ -1,52 +1,110 @@
 # Katana
 
-**An interactive workspace for RNA splicing analysis, regulatory evidence and co-splicing networks.**
+**RNA splicing analysis, MotifTrace and co-splicing networks.**
 
-Katana brings differential expression, splicing, transcript/exon usage and candidate evidence into one project. Explore individual events and genes, trace sequence and RBP evidence with **MotifTrace**, investigate modules and hubs with **Katana-Splice-Network**, and share an **English one-click report** with its supporting results.
+Katana integrates RNA-seq splicing, expression and transcript-usage results to help researchers identify candidate genes and inspect their sequence changes, regulatory context and read support. Analyses can be explored in a desktop application or browser, run from the command line, or called from Python. Completed results can be assembled into study reports.
 
-This repository contains the complete application source baseline, its browser interface, scientific modules and command-line interfaces. The current registry contains **54 workflow entries**. Each entry requires its declared inputs and resources; a registered workflow is not a promise that every analysis runs on every dataset.
+## Inputs
 
-## What you can do
+A project records sample groups, biological replicates, donors, reference versions and the comparisons to analyze. Provide the files required by the selected analysis:
 
-| Area | Capabilities |
+| Input | Used for |
 | --- | --- |
-| Bulk analysis | Import supported upstream results; inspect DAS, DEG, DTU and exon usage; compare selected contrasts; review replicate patterns and candidate evidence. |
-| MotifTrace | Reconstruct supported event-level RNA sequence consequences, inspect motif changes and RBP evidence, and trace results to source loci, models and inputs. |
-| Networks | Build qualified co-splicing networks, inspect modules and hubs, relate module scores to sample metadata, and examine preservation and functional evidence. |
-| Single-cell results | Use supported processed single-cell inputs and dedicated result adapters. Input format, experimental unit and method eligibility remain explicit. |
-| Reports and exports | Generate an English reproducibility evidence package or the existing interpreted study report, retaining tables, figures, parameters and provenance. |
+| rMATS JC or JCEC and compatible DEG, DTU or DEXSeq results | Differential splicing, expression, transcript/exon usage and cross-comparison analysis. |
+| Salmon `quant.sf`, compatible count, PSI or junction matrices | Transcript composition, sample comparisons and eligible statistical or network analyses. |
+| GTF, genome/transcript FASTA and relevant annotation resources | Event and transcript annotation, RNA reconstruction, enrichment, motif and protein-consequence analysis. |
+| BAM files and indexes, when needed | Sashimi, coverage and junction inspection, target-gene checks, and supported network or single-cell counting routes. |
+| Supported processed single-cell/nucleus data, MARVEL or long-read results | The corresponding downstream analyses or completed-result imports. |
 
-## Install and open
+Analyses based on existing results do not require BAM files. Upstream raw-data processing continues to use established nf-core workflows; Katana connects their outputs with the experimental design. Input schemas and compatible references are specified for each analysis.
 
-Use Python 3.11 or newer in an isolated environment. From a source checkout:
+## Analysis features
+
+| Area | Analyses |
+| --- | --- |
+| Samples and experimental design | Check files, sample identities, biological replicates, donors, groups and effect direction; select the comparisons of interest. |
+| Quality and overview | Inspect read support, replicate agreement, coverage bias and uncertainty; explore PSI, event-type distributions, PCA, correlations and heatmaps. |
+| Differential and cross-condition analysis | Integrate DAS, DEG, DTU and DEXSeq while retaining source statistics; compare exact-event overlaps, concordant effects and direction reversals. Additional expression and exon-usage interaction calculations require suitable counts, designs and R tools. |
+| Candidate genes and events | Combine supporting results, browse complete candidate sets, save selections, and inspect gene cards and event details. |
+| Functional enrichment | Analyze declared gene sets against appropriate backgrounds using GO/pathway resources; perform ranked pathway analysis where the design and resources support it. |
+| Transcript and protein consequences | Examine transcript composition and usage changes; inspect annotated ORFs, UTRs, predicted NMD and optional Pfam/domain or protein-feature evidence. |
+| Read validation | Generate replicate-aware Sashimi plots and inspect target-gene coverage, exons, junctions and RNA-level perturbation evidence. |
+| Single-cell/nucleus downstream analysis | For eligible data, aggregate by donor and cell type and analyze splicing measurements, differences, embeddings, networks and transcript usage. Import supported completed MARVEL and long-read results. |
+
+### MotifTrace
+
+MotifTrace links splicing changes to RNA sequence and RBP evidence at three levels:
+
+1. **RBP identity and target sets:** annotate candidate RBPs, splicing factors and declared target sets.
+2. **Regulatory context around splice events:** examine neighborhood motifs, matched-background enrichment and compatible reference CLIP evidence.
+3. **RNA sequence consequences:** reconstruct local reference RNA forms for SE, A3SS, A5SS, MXE and RI; inspect gained, lost or retained motif sites and new splice junctions, and assess motif availability using PSI.
+
+Browse results by gene, event or motif and export RNA FASTA, site tables, genomic coordinates, statistics and figures. Custom motif libraries are supported. Eligible existing transcript/exon-usage and expression results can also inform motif-availability analysis.
+
+MotifTrace supports new sequence analyses and imports of compatible completed sequence or parallel MAPP results. Imported method identities and P/FDR values are retained. General one-command MAPP fitting for arbitrary new projects is not currently provided. Local RNA reconstruction and motif predictions do not establish measured RBP binding.
+
+### Katana-Splice-Network
+
+Network analysis accepts eligible rMATS events, competing junctions extracted from BAMs, or external PSI matrices, retaining the units and read evidence of each input route.
+
+The existing WGCNA/TOM route identifies co-splicing modules and produces memberships, sample activity scores, condition associations, hubs and network views. Supporting analyses include bootstrap stability and membership confidence, module function, structural and sensitivity diagnostics, projection onto existing modules, and preservation in independent cohorts. Optional routes, including the original DJExpress author core, require their own inputs.
+
+Discovery uses an eligible sample cohort. Condition associations and external validation retain their respective designs; membership, association, stability and functional evidence are presented separately.
+
+### One-click reports
+
+Reports bring together completed experimental design, quality checks, differential results, candidates, functional annotations, transcript, regulatory and network analyses, with figures, full result tables and source records.
+
+Two export routes are available:
+
+- **Analysis and reproducibility package:** an HTML/PDF summary, figures, parameters, file inventory and ZIP attachments.
+- **Interpreted study report:** major findings, design, results, interpretation, limitations and attachments, using the required existing delivery structure or a supported completed reader report.
+
+Reports retain significant and non-significant results and document filtering and exclusions. Unrun analyses are identified, and missing required inputs are reported. Report generation reads completed analyses.
+
+### Desktop interaction
+
+The desktop application lets users open projects, inspect samples and designs, select comparisons and parameters, follow task status, filter result tables, save candidate genes or events, inspect gene cards and figures, and export results. MotifTrace, networks and reports are accessible through their analysis pages.
+
+Desktop and browser interfaces use the same analysis service. The CLI and Python interface support scripted and server-side use. Module-specific commands, parameter examples and API calls will be added as the packaged interfaces are finalized.
+
+## Outputs
+
+Depending on the analysis, Katana produces browsable result tables, interactive views and PNG/SVG/PDF figures. Sequence analyses also export FASTA and site files; network analyses export memberships, activities, associations, hubs and stability results. Reports and ZIP packages retain parameters, methods and input sources.
+
+## Install and use
+
+The current version is installed from a source checkout. Use Python 3.11 or newer in a separate environment:
 
 ```sh
 git clone https://github.com/Taratype0/Katana-splicing-tool.git
 cd Katana-splicing-tool
-python -m pip install -e ".[next,next-dev]"
-python -m katana_next.launcher --mode browser --port 8765 --runtime-root ../katana-runtime
+python -m venv .venv
 ```
 
-Open the URL printed by the launcher. The source checkout includes the built browser interface; Node.js is needed only when rebuilding it. Keep project data, analysis outputs and runtime files outside the checkout. See [installation](docs/INSTALL.md) for environment setup, rebuilding and optional tools.
+Activate the environment with `.venv\Scripts\Activate.ps1` in Windows PowerShell or `. .venv/bin/activate` on Linux. Then install and open the browser interface:
 
-## Start an analysis
+```sh
+python -m pip install -e ".[next]"
+python -m katana_next.launcher --mode browser --runtime-root ../katana-runtime
+```
 
-1. Open a supported Katana project manifest, or migrate an existing compatible Katana project.
-2. Check sample identities, biological units, references and contrast direction.
-3. Select the analysis and the contrasts you need; inspect readiness before running.
-4. Browse completed results and generate the appropriate report. Reporting reads completed evidence and does not silently run missing analyses.
+Open an existing Katana project or migrate a compatible legacy project, check the samples and inputs, then select the analysis. Use `--mode desktop` for the desktop application. The command line and Python interface call the same analyses; for example, export a reproducibility package from an existing project:
 
-See [usage](docs/USAGE.md) for CLI examples, project migration and the two report routes.
+```sh
+python -m katana_next.cli --project path/to/katana.project.json run reports.bundle
+```
 
-## Scope and requirements
+Inputs are currently registered in a project configuration. Sample/contrast-sheet onboarding and upstream-result adapters are being unified for new users. See [installation](docs/INSTALL.md) and [usage](docs/USAGE.md) for migration, formats and resources. R, motif-scanning environments, references and databases are configured for the selected modules.
 
-- Katana consumes supported analysis inputs and results. This application baseline is **not an official nf-core pipeline release** and does not itself provide a general raw FASTQ-to-results workflow.
-- R/WGCNA, author-native tools, genome annotations, sequence files, motif libraries and CLIP resources are required only by the workflows that use them. They are not bundled as experimental data.
-- Motif/CLIP evidence suggests regulatory hypotheses; hubs and associations are not proof of causality. Imported results retain their original method and statistical meaning.
-- The current installation uses an editable source checkout. A fully self-contained wheel, a GUI-independent analysis package and the expanded Nextflow integration remain development work.
+## Development status
 
-[Methods and limitations](docs/METHODS.md) describe the scientific boundaries. [Development architecture](docs/development/ARCHITECTURE.md) and the [roadmap](docs/development/ROADMAP.md) are separate from the software guide. Ongoing package development continues on the development branch.
+The analyses described above are implemented in the existing Katana application and include both new calculations and completed-result imports. The source installation provides interface, CLI and Python access.
 
-## License and attribution
+Current development packages these capabilities for general distribution, including independent installation, dependency separation, input adapters, local/server execution and reports for new projects. Standalone distributions and complete Nextflow downstream integration still require packaging and acceptance work; a published PyPI installation command is not yet provided here.
 
-Katana's own code is distributed under the [MIT License](LICENSE). Bundled third-party components retain their original licenses, including the original DJExpress author core and browser fonts. See [third-party notices](THIRD_PARTY_NOTICES.md).
+Further technical details are in [methods](docs/METHODS.md) and [development documentation](docs/development/ARCHITECTURE.md).
+
+## License
+
+Katana's own code uses the [MIT License](LICENSE). Third-party components retain their original licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
