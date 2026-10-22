@@ -2,7 +2,7 @@ from types import SimpleNamespace as NS
 import pandas as pd
 import numpy as np
 from katana_next.science.report_revision import module_contrasts, transcript_usage_reliability
-from katana_next.science.bulk import STABLE_PRESETS, apply_stable_event_qc
+from katana_next.science.bulk import DEFAULT_MIN_READS, READ_SUPPORT_POLICY_VERSION, apply_stable_event_qc
 
 def contrast():
     return NS(contrast_id="A_vs_B", numerator=NS(label="A",sample_ids=["a1","a2","a3"]),
@@ -25,8 +25,9 @@ def test_usage_not_abundance_and_no_gene_fallback():
     assert r.delta_fraction.abs().max() < 1e-10
     assert not r.DTU_supported.any()
 
-def test_balanced_reads_are_ten():
-    assert STABLE_PRESETS["balanced"]["min_reads"] == 10
+def test_fixed_read_support_is_ten_for_every_sample():
+    assert DEFAULT_MIN_READS == 10
+    assert READ_SUPPORT_POLICY_VERSION == "bulk-all-samples-counts-v1"
 
 def test_approximate_se_does_not_exclude_by_default():
     row=dict(IncLevel1='0.3,0.3',IncLevel2='0.6,0.6',IJC_SAMPLE_1='5,5',SJC_SAMPLE_1='5,5',
@@ -34,7 +35,9 @@ def test_approximate_se_does_not_exclude_by_default():
         replicate_pairwise_direction_consistency=1.,leave_one_out_direction_consistency=1.,max_measurement_se=.4)
     frame=pd.DataFrame([row])
     assert apply_stable_event_qc(frame,{}).stable_event.iloc[0]
-    assert not apply_stable_event_qc(frame,{'apply_measurement_se_gate':True}).stable_event.iloc[0]
+    import pytest
+    with pytest.raises(ValueError, match="Legacy QC option"):
+        apply_stable_event_qc(frame,{'apply_measurement_se_gate':True})
 
 def test_stager_gene_screen_is_not_transcript_confirmation(tmp_path):
     from katana_next.science.bulk import load_dtu_results

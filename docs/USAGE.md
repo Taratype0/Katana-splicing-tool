@@ -14,7 +14,7 @@ Use explicit sample IDs and condition labels. Preserve donor/biological replicat
 
 ## Workflow execution
 
-The [threshold reference](THRESHOLDS.md) records the current bulk values, exact units, literature support and limitations. In particular, the two 75% replicate-consistency checks are Katana heuristics, and approximate PSI standard error is diagnostic by default.
+The [threshold reference](THRESHOLDS.md) records the active `bulk-all-samples-counts-v1` policy: AS read support requires `IJC + SJC >= 10` in every expected sample of both arms of the selected contrast. The count threshold is fixed; there is no selectable replicate-QC preset, direction-consistency gate or approximate-SE option. Missing counts or ambiguous sample mappings do not pass. Significance selection is separate.
 
 The browser and Python interfaces use the same workflow inventory and artifact services. A workflow's readiness plan describes its inputs, parameters and limitations. Opening a result or a report is not an instruction to recompute its upstream analyses. Compatible completed artifacts can be reused; changing an input, reference or scientific parameter requires the corresponding new analysis identity.
 
@@ -62,6 +62,14 @@ The JSON example contains:
 The same keys are accepted by Python's `project.run("differential.deg", parameters)` and the API's `parameters` object. FDR must be between 0 and 1; the effect-size cutoff must be nonnegative. An effect-size cutoff of `0` removes the additional fold-change requirement for rows with a finite effect estimate.
 
 These settings classify imported DEG statistics; they do not refit DESeq2 or overwrite its P-values. The normalized parameters are retained with the run and its results and participate in the cache identity. The candidate-evidence analysis has its own declared thresholds, and interpreted reports read their configured completed delivery; changing a DEG run does not silently update those analyses or an existing report.
+
+## AS read support
+
+Select the contrast to check, then use **AS read support**. The workflow checks all participating samples individually; it does not accept a passing group mean or a subset of supported samples. Each declared arm must be present, count arrays must map unambiguously to the expected sample IDs, and every sample needs finite, nonnegative IJC and SJC with a sum of at least ten. PSI must be finite and within 0 to 1 as an input-validity requirement; this is not a replicate-stability threshold. Invalid or unavailable inputs are blocked or carry an explicit reason; empty or missing inputs never pass.
+
+The compatibility output names `stable_event` and `stable_significant` refer to the current count gate and its intersection with native significance. They do not mean that replicate-direction consistency, uncertainty calibration or biological stability was tested. Read-support results and significance results should be inspected separately. Historical outputs keep their original policy identity.
+
+For a multi-contrast Landscape, each selected sample must have a valid PSI and meet the count rule, and every included contrast row for an event must pass read support. An event passing one contrast is not sufficient to import its failing measurements from another contrast. This selected-contrast gate does not replace the separately declared QC rules for whole-cohort network matrices. Upstream rMATS statistics, gene-level differential models and completed results are not rewritten.
 
 ## MotifTrace and networks
 

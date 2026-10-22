@@ -33,6 +33,10 @@ export function WorkflowControls({
   onReset,
 }: Props) {
   const showComparisons = contrasts.length > 0 && workflow.supports_contrast_selection;
+  const isReadSupport = workflow.workflow_id === "quality.stable_as";
+  const visibleParameters = isReadSupport
+    ? workflow.parameters.filter((parameter) => ["fdr", "min_abs_dpsi"].includes(parameter.key))
+    : workflow.parameters;
 
   return (
     <section className="workflow-controls" aria-label="Workflow parameters">
@@ -87,11 +91,10 @@ export function WorkflowControls({
         </div>
       )}
 
-      {workflow.parameters.length > 0 && (
+      {visibleParameters.length > 0 && (
         <div className="parameter-grid">
-          {workflow.parameters.map((parameter) => {
+          {visibleParameters.map((parameter) => {
             const value = parameters[parameter.key] ?? parameter.default;
-            if (parameter.label.startsWith("Custom ") && parameters.stability_profile !== "custom") return null;
             if (workflow.workflow_id === "prioritize.rbp_mechanism") {
               const completedMaps = parameters.sequence_scope === "completed_sequence_maps";
               const consequences = parameters.sequence_scope === "event_consequences";
@@ -126,7 +129,7 @@ export function WorkflowControls({
                       <option value="">Latest compatible completed result</option>
                       {artifacts.filter((artifact) => parameter.options[0]?.split("|").includes(artifact.analysis_id) && artifact.name === parameter.options[1]).map((artifact) => (
                         <option key={artifact.artifact_id} value={artifact.artifact_id}>
-                          {String(artifact.parameters.stability_profile ?? artifact.name)} · {new Date(artifact.created_at).toLocaleString()} · {artifact.run_fingerprint.slice(0, 8)}
+                          {artifact.name} · {new Date(artifact.created_at).toLocaleString()} · {artifact.run_fingerprint.slice(0, 8)}
                         </option>
                       ))}
                     </select><ChevronDown size={14} />
@@ -172,7 +175,7 @@ export function WorkflowControls({
           })}
         </div>
       )}
-      {workflow.workflow_id === "quality.stable_as" && parameters.stability_profile !== "custom" && <p className="preset-description">{({exploratory:"Read-support preset: at least 8 reads, 2 supporting replicates and 67% direction consistency.",balanced:"Read-support preset: at least 10 reads, 2 supporting replicates and 75% direction consistency.",stringent:"Read-support preset: at least 20 reads, 3 supporting replicates and 80% direction consistency."}[String(parameters.stability_profile ?? "balanced")] ?? "")} Choose Custom to edit these thresholds. PSI standard error is not a filter unless the experimental option is enabled.</p>}
+      {isReadSupport && <p className="preset-description" role="note" aria-label="AS read-support policy">Read support: IJC + SJC must be at least 10 in every selected sample across both groups. Missing counts fail this check. FDR and |dPSI| thresholds are applied separately.</p>}
     </section>
   );
 }

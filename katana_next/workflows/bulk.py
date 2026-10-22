@@ -10,7 +10,9 @@ import pandas as pd
 from katana_next.domain.models import AnalysisArtifact
 from katana_next.infrastructure.jobs import JobContext
 from katana_next.science.bulk import (
-    STABLE_PRESETS,
+    READ_SUPPORT_POLICY_VERSION,
+    DEFAULT_MIN_READS,
+    _validate_read_support_parameters,
     apply_stable_event_qc,
     build_candidate_evidence,
     candidate_display_labels,
@@ -102,14 +104,6 @@ def _plot(
 
 COMMON_THRESHOLDS = (
     ParameterDefinition(
-        "stability_profile",
-        "Stable-AS profile",
-        "select",
-        "balanced",
-        "Three declared measurement-quality presets plus Custom.",
-        ("exploratory", "balanced", "stringent", "custom"),
-    ),
-    ParameterDefinition(
         "fdr", "rMATS FDR", "number", 0.05, "BH-adjusted caller FDR cutoff.", minimum=0, maximum=1, step=0.01
     ),
     ParameterDefinition(
@@ -119,7 +113,7 @@ COMMON_THRESHOLDS = (
 
 QUALITY_SOURCE = ParameterDefinition(
     "quality_artifact_id", "Measurement policy from Quality", "artifact", "",
-    "Use a completed Quality result. Empty selects the newest scope-compatible result; no upstream job is started.",
+    "Use a completed every-sample read-support result. Empty selects a compatible current-policy result; historical QC is not reused as this policy.",
     ("quality.stable_as", "Stable-AS event QC"),
 )
 
@@ -130,20 +124,30 @@ def _quality_source(context: ProjectContext, parameters: dict[str, Any]) -> Anal
         source = context.catalog.get_artifact(identity)
         validate_source(context, source)
         if source.analysis_id != "quality.stable_as" or source.name != "Stable-AS event QC":
-            raise ValueError("Select a Stable-AS event QC artifact.")
+            raise ValueError("Select an AS read-support QC artifact.")
+        if source.metadata.get("read_support_policy") != READ_SUPPORT_POLICY_VERSION:
+            raise ValueError("This saved QC uses a historical policy. Run AS read support explicitly to create an every-sample result; historical results are preserved.")
         bound = {**parameters, "source_artifact_ids": {"quality.stable_as::Stable-AS event QC": identity}}
         return resolve_table(context, "quality.stable_as", "Stable-AS event QC", bound)
-    return resolve_table(context, "quality.stable_as", "Stable-AS event QC", parameters)
+    source = resolve_table(context, "quality.stable_as", "Stable-AS event QC", parameters)
+    if source is not None and source.metadata.get("read_support_policy") != READ_SUPPORT_POLICY_VERSION:
+        if parameters.get("source_artifact_ids", {}).get("quality.stable_as::Stable-AS event QC"):
+            raise ValueError("The bound QC uses a historical read-support policy; create a new AS read-support result explicitly.")
+        return None
+    return source
 
 
 def _quality_events(context: ProjectContext, parameters: dict[str, Any], events: pd.DataFrame) -> tuple[pd.DataFrame, AnalysisArtifact | None]:
+    _validate_read_support_parameters(parameters)
     source = _quality_source(context, parameters)
     if source is None:
         return significance_columns(apply_stable_event_qc(events, parameters), parameters), None
     evaluated = pd.read_parquet(source.path)
     evaluated = evaluated[evaluated["comparison_id"].isin(selected_contrast_ids(context, parameters))].copy()
-    if "measurement_eligible" not in evaluated:
-        raise ValueError("Quality cache predates the separate measurement policy. Rebuild Quality explicitly.")
+    if not {"measurement_eligible", "read_support_policy", "criterion_min_reads"} <= set(evaluated):
+        raise ValueError("Quality cache predates the every-sample read policy. Run AS read support explicitly; old outputs are preserved.")
+    if not evaluated["read_support_policy"].eq(READ_SUPPORT_POLICY_VERSION).all() or not evaluated["criterion_min_reads"].eq(DEFAULT_MIN_READS).all():
+        raise ValueError("Saved Quality values do not match the every-sample ten-count policy.")
     if set(events["row_id"]) - set(evaluated["row_id"]):
         raise ValueError("Quality cache does not cover the selected source events. Rebuild Quality explicitly.")
     return evaluated, source
@@ -323,41 +327,33 @@ def _audit_asset(kind: str, path: Path) -> tuple[str, str]:
 
 
 class StableAsWorkflow(WorkflowBase):
-    version = "2.2.0"
+    version = "3.0.0"
     definition = WorkflowDefinition(
         workflow_id="quality.stable_as",
         workspace_id="quality",
-        label="DAS read support and replicate consistency",
-        question="Which events have adequate read support and reproducible replicate behavior?",
-        method="Replicate read support and direction consistency; approximate PSI uncertainty is diagnostic only by default.",
-        output_summary="Which events pass the read-count and replicate-consistency checks, and how many are significant; full event-level audit and filtering plot.",
+        label="AS read support",
+        question="Which events have at least ten informative counts in every sample of the selected comparison?",
+        method="Every declared sample in both contrast arms must have IJC + SJC >= 10 and usable complete measurements. No two-replicate, direction-consistency, leave-one-out or SE filter. JC is the published count mode; using the same threshold for JCEC is a declared extension.",
+        output_summary="Complete event-level read-support audit, exclusion reasons, significant-event flags and filtering plot.",
         analysis_unit="rMATS event within one declared contrast",
         expected_artifacts=3,
         supports_contrast_selection=True,
-        parameters=COMMON_THRESHOLDS + (
-            ParameterDefinition("min_reads", "Custom reads per replicate", "number", 10.0, "Used only by Custom profile.", minimum=0, step=1),
-            ParameterDefinition("min_supported_replicates", "Custom supported replicates", "number", 2, "Used only by Custom profile.", minimum=1, step=1),
-            ParameterDefinition("min_direction_consistency", "Custom direction consistency", "number", 0.75, "Used only by Custom profile.", minimum=0, maximum=1, step=0.05),
-            ParameterDefinition("apply_measurement_se_gate", "Experimental SE gate (off by default)", "boolean", False, "Uncalibrated approximate SE; do not treat as a literature-validated stability criterion."),
-            ParameterDefinition("max_measurement_se", "Custom maximum PSI SE", "number", 0.12, "Used only by Custom profile.", minimum=0, maximum=0.5, step=0.01),
-        ),
+        parameters=COMMON_THRESHOLDS,
         required_asset_kinds=("rmats_result",),
-        limitations="rMATS IJC/SJC are caller-derived evidence counts; uncertainty is a measurement diagnostic, not a replacement for rMATS inference.",
+        limitations="rMATS JC/JCEC count modes remain distinct. This rule checks observations, not statistical power or independent replication, and does not replace native rMATS inference.",
     )
 
     def run(self, context: ProjectContext, job: JobContext, run_fingerprint: str, parameters: dict[str, Any]) -> list[str]:
         job.report(0.05, "Reading selected rMATS comparisons")
         data = load_bulk_events(context, parameters)
         job.report(0.25, f"Normalized rMATS source cache: {data.source_cache_status}")
-        job.report(0.35, "Evaluating replicate stability and read support")
+        job.report(0.35, "Checking every selected sample for at least ten informative counts")
         evaluated = significance_columns(apply_stable_event_qc(data.events, parameters), parameters)
         stages = [
             ("All tested", pd.Series(True, index=evaluated.index)),
-            ("Replicate count", evaluated["passes_replicate_count"]),
-            ("Read support", evaluated["passes_replicate_count"] & evaluated["passes_read_support"]),
-            ("Measurement eligible", evaluated["measurement_eligible"]),
-            ("Repeat-supported difference", evaluated["stable_event"]),
-            ("Stable + significant", evaluated["stable_significant"]),
+            ("Complete usable samples", evaluated["passes_data_usability"]),
+            ("Every sample >=10 counts", evaluated["passes_read_support"]),
+            ("Read-supported + significant", evaluated["stable_significant"]),
         ]
         from katana_next.science.attrition import cumulative_attrition
         attrition, first_failure = cumulative_attrition(evaluated, stages)
@@ -368,9 +364,13 @@ class StableAsWorkflow(WorkflowBase):
                 "question": self.definition.question,
                 "method": self.definition.method,
                 "analysis_unit": self.definition.analysis_unit,
-                "interpretation": "measurement_eligible uses read/replicate/uncertainty gates without requiring a group effect. differential_repeat_supported records direction and leave-one-out consistency. stable_significant requires both plus caller FDR/effect thresholds.",
+                "interpretation": "measurement_eligible requires usable data and IJC+SJC >=10 for every declared comparison sample. stable_event is a compatibility name for this read-supported set; stable_significant additionally uses native FDR/effect selection. No direction or uncertainty filter is applied.",
                 "limitations": self.definition.limitations,
-                "preset_values": STABLE_PRESETS,
+                "read_support_policy": READ_SUPPORT_POLICY_VERSION,
+                "read_support_min_counts": DEFAULT_MIN_READS,
+                "read_support_scope": "every declared sample in both selected contrast arms",
+                "read_support_reference": "https://doi.org/10.1093/hmg/ddaf153",
+                "reference_scope": "Published junction-count precedent; JCEC is a declared extension.",
                 "source_cache_status": data.source_cache_status,
             },
         )
@@ -388,25 +388,25 @@ class StableAsWorkflow(WorkflowBase):
                     "color": {"field": "comparison_id", "type": "nominal", "scale": {"scheme": "tableau10"}, "legend": {"title": "Contrast"}},
                     "tooltip": [{"field": "comparison_id"}, {"field": "stage"}, {"field": "events"}],
                 },
-                title="Stable-AS QC attrition",
-                description="Independent measurement-quality gates followed by differential significance.",
+                title="AS read support and significance",
+                description="Input usability and every-sample ten-count support, followed separately by native significance and observed-effect selection.",
                 height=360,
             ),
             entity_type="qc_summary",
             parents=(table.artifact_id,),
         )
-        job.report(0.92, "Stable-AS QC complete")
+        job.report(0.92, "Every-sample read-support QC complete")
         return writer.finish()
 
 
 class LandscapeWorkflow(WorkflowBase):
-    version = "2.0.0"
+    version = "2.1.0"
     definition = WorkflowDefinition(
         workflow_id="landscape.bulk",
         workspace_id="landscape",
         label="Bulk splicing landscape",
         question="Do samples and event classes show coherent broad splicing structure?",
-        method="Deduplicated sample-level PSI matrix, Spearman similarity and PCA on variable measured events.",
+        method="Deduplicated sample-level PSI matrix, Spearman similarity and PCA on variable events with usable PSI and at least ten counts in every selected sample.",
         output_summary="PSI matrix, duplicate-source audit, PCA, similarity and event composition.",
         analysis_unit="biological sample and exact splice event",
         expected_artifacts=7,
@@ -424,9 +424,25 @@ class LandscapeWorkflow(WorkflowBase):
         job.report(0.05, "Building deduplicated sample-level PSI matrix")
         data = load_bulk_events(context, parameters)
         evaluated, quality = _quality_events(context, parameters, data.events)
-        eligible = set(evaluated.loc[evaluated["measurement_eligible"], "event_id"])
-        data = replace(data, events=evaluated, psi_matrix=data.psi_matrix.loc[data.psi_matrix.index.isin(eligible)],
-                       read_matrix=data.read_matrix.loc[data.read_matrix.index.isin(eligible)])
+        selected = set(selected_contrast_ids(context, parameters))
+        sample_ids = list(dict.fromkeys(
+            sample_id for contrast in context.manifest.contrasts if contrast.contrast_id in selected
+            for arm in (contrast.numerator, contrast.denominator) for sample_id in arm.sample_ids
+        ))
+        psi_matrix = data.psi_matrix.reindex(columns=sample_ids)
+        read_matrix = data.read_matrix.reindex(index=psi_matrix.index, columns=sample_ids)
+        # A passing contrast cannot admit the low-depth samples of another one.
+        event_eligibility = evaluated.groupby("event_id")["measurement_eligible"].all()
+        matrix_eligible = (
+            np.isfinite(psi_matrix).all(axis=1)
+            & psi_matrix.ge(0).all(axis=1) & psi_matrix.le(1).all(axis=1)
+            & np.isfinite(read_matrix).all(axis=1) & read_matrix.ge(DEFAULT_MIN_READS).all(axis=1)
+            & event_eligibility.reindex(psi_matrix.index, fill_value=False)
+        )
+        if not sample_ids:
+            matrix_eligible[:] = False
+        data = replace(data, events=evaluated, psi_matrix=psi_matrix.loc[matrix_eligible],
+                       read_matrix=read_matrix.loc[matrix_eligible])
         job.report(0.22, f"Normalized rMATS source cache: {data.source_cache_status}")
         summary, pca, similarity = landscape_tables(
             data, max_pca_events=int(parameters.get("max_pca_events", 2000))
@@ -444,6 +460,9 @@ class LandscapeWorkflow(WorkflowBase):
                 "limitations": self.definition.limitations,
                 "source_cache_status": data.source_cache_status,
                 "measurement_policy_source": quality.artifact_id if quality else "declared defaults; no cached Quality result",
+                "read_support_policy": READ_SUPPORT_POLICY_VERSION,
+                "read_support_min_counts": DEFAULT_MIN_READS,
+                "read_support_scope": "every sample across the selected contrasts; every observed event/contrast must pass",
             },
         )
         psi = data.psi_matrix.reset_index()
@@ -496,20 +515,20 @@ class LandscapeWorkflow(WorkflowBase):
 
 
 class DifferentialAsWorkflow(WorkflowBase):
-    version = "2.0.0"
+    version = "3.0.0"
     definition = WorkflowDefinition(
         workflow_id="differential.as",
         workspace_id="differential",
         label="Differential alternative splicing",
         question="Which exact AS events change in each declared contrast?",
-        method="Imported rMATS effect/FDR with Katana replicate-stability annotation and declared numerator-minus-denominator direction.",
+        method="Imported rMATS effect/FDR with every-sample ten-count read support and declared numerator-minus-denominator direction.",
         output_summary="One event table, contrast summaries, volcano and event-count plots.",
         analysis_unit="exact splice event within a contrast",
         expected_artifacts=4,
         supports_contrast_selection=True,
         parameters=(QUALITY_SOURCE,),
         required_asset_kinds=("rmats_result",),
-        limitations="The inferential p-value remains the imported rMATS result; Katana read/replicate flags are supporting diagnostics, not independent validation.",
+        limitations="The inferential p-value remains the imported rMATS result. Read-count eligibility is not independent validation or a claim of adequate statistical power.",
     )
 
     def parent_artifacts(self, context: ProjectContext, parameters: dict[str, Any]) -> list[AnalysisArtifact]:
@@ -537,7 +556,10 @@ class DifferentialAsWorkflow(WorkflowBase):
                 "direction_definition": "dPSI = numerator minus denominator from the manifest contrast",
                 "measurement_policy_source": quality.artifact_id if quality else "declared defaults; no cached Quality result",
                 "effective_evidence_parameters": quality.parameters if quality else parameters,
-                "interpretation": "Use stable_significant for the strict event set. significant retains caller significance even when replicate-support QC fails.",
+                "interpretation": "stable_significant is a compatibility name for every-sample read-supported significant events. significant retains native significance even when read support fails. No direction, leave-one-out or SE filter is applied.",
+                "read_support_policy": READ_SUPPORT_POLICY_VERSION,
+                "read_support_min_counts": DEFAULT_MIN_READS,
+                "read_support_scope": "every declared sample in both selected contrast arms",
                 "limitations": self.definition.limitations,
                 "source_cache_status": data.source_cache_status,
             },
@@ -556,32 +578,32 @@ class DifferentialAsWorkflow(WorkflowBase):
                 {
                     "x": {"field": "dpsi", "type": "quantitative", "axis": {"title": "dPSI (numerator minus denominator)"}},
                     "y": {"field": "minus_log10_fdr", "type": "quantitative", "axis": {"title": "-log10 rMATS FDR"}},
-                    "color": {"field": "stable_significant", "type": "nominal", "scale": {"domain": [True, False], "range": [RED, "#aab3ba"]}, "legend": {"title": "Stable + significant"}},
+                    "color": {"field": "stable_significant", "type": "nominal", "scale": {"domain": [True, False], "range": [RED, "#aab3ba"]}, "legend": {"title": "Read-supported + significant"}},
                     "facet": {"field": "comparison_id", "type": "nominal", "columns": 2, "header": {"title": None}},
                     "tooltip": [{"field": "gene_symbol"}, {"field": "event_type"}, {"field": "comparison_id"}, {"field": "dpsi", "format": ".3f"}, {"field": "fdr", "format": ".2e"}, {"field": "stable_significant"}],
                 },
                 title="Differential alternative splicing",
-                description="Imported rMATS significance with independent Katana stability annotation.",
+                description="Imported rMATS significance with every-sample ten-count eligibility.",
                 height=260,
             ),
             entity_type="event_summary",
             parents=(table.artifact_id,),
         )
         writer.plot(
-            "Stable significant events by type",
+            "Read-supported significant events by type",
             "differential_as_counts.vl.json",
             _plot(
                 summary.to_dict("records"),
                 {"type": "bar", "cornerRadiusEnd": 3},
                 {
                     "x": {"field": "comparison_id", "type": "nominal", "axis": {"title": None, "labelAngle": -25}},
-                    "y": {"field": "stable_significant_events", "type": "quantitative", "axis": {"title": "Stable significant events"}},
+                    "y": {"field": "stable_significant_events", "type": "quantitative", "axis": {"title": "Read-supported significant events"}},
                     "color": {"field": "event_type", "type": "nominal", "scale": {"scheme": "tableau10"}},
                     "xOffset": {"field": "event_type"},
                     "tooltip": [{"field": "comparison_id"}, {"field": "event_type"}, {"field": "tested_events"}, {"field": "significant_events"}, {"field": "stable_significant_events"}],
                 },
                 title="Strict AS event set by contrast",
-                description="Events pass rMATS FDR, effect-size and Katana stable-AS gates.",
+                description="Events pass rMATS FDR, effect-size and IJC + SJC >= 10 in every declared sample of both contrast arms.",
                 height=360,
             ),
             entity_type="event_summary",
@@ -687,7 +709,7 @@ def _latest_table(context: ProjectContext, analysis_id: str, name: str | None = 
 
 
 class CrossComparisonWorkflow(WorkflowBase):
-    version = "2.1.1"
+    version = "3.0.0"
     definition = WorkflowDefinition(
         workflow_id="differential.cross_comparison",
         workspace_id="differential",
@@ -700,9 +722,7 @@ class CrossComparisonWorkflow(WorkflowBase):
         supports_contrast_selection=True,
         parameters=(
             ParameterDefinition("membership_mode", "Intersection membership", "select", "exact_event", "Exact event ignores sign for membership. Event and direction requires both exact identity and equal nonzero standardized dPSI sign; zero-effect events are excluded in that mode.", ("exact_event", "event_and_direction")),
-            ParameterDefinition("event_set", "Significant event set", "select", "stable_significant", "Both require caller significance; strict also uses the saved replicate QC policy.", ("stable_significant", "significant")),
-            ParameterDefinition("min_reads", "Minimum IJC + SJC per replicate", "number", 0, "Optional extra read gate in each arm; 0 keeps the saved event set unchanged.", minimum=0, step=1),
-            ParameterDefinition("min_supported_replicates", "Supported replicates in each arm", "number", 2, "Required in numerator and denominator when the extra read gate is enabled.", minimum=1, step=1),
+            ParameterDefinition("event_set", "Significant event set", "select", "stable_significant", "stable_significant means caller-significant events with IJC + SJC >= 10 in every sample of both contrast arms. significant retains caller significance without read-support filtering.", ("stable_significant", "significant")),
         ),
         limitations="Same-gene and nearby-coordinate events are not silently treated as the same event.",
     )
@@ -715,6 +735,8 @@ class CrossComparisonWorkflow(WorkflowBase):
         return [artifact.path for artifact in self.parent_artifacts(context, parameters)]
 
     def run(self, context: ProjectContext, job: JobContext, run_fingerprint: str, parameters: dict[str, Any]) -> list[str]:
+        if {"min_reads", "min_supported_replicates"} & parameters.keys():
+            raise ValueError("Cross-comparison inherits the every-sample ten-count policy from Differential AS. Extra read or minimum-replicate gates are no longer supported; remove these legacy options.")
         parent = _latest_table(context, "differential.as", "Differential AS events", parameters)
         if parent is None:
             raise ValueError("Run Differential alternative splicing first. Cross-comparison never starts it implicitly.")
@@ -733,12 +755,6 @@ class CrossComparisonWorkflow(WorkflowBase):
             raise ValueError("Choose significant or stable_significant events.")
         events = events.copy()
         events["stable_significant"] = events[event_set].fillna(False).astype(bool)
-        if float(parameters.get("min_reads", 0)) > 0:
-            from katana_next.science.bulk import _arm_read_totals
-            for arm in ("numerator", "denominator"):
-                supported = events.apply(lambda row: sum(value >= float(parameters["min_reads"])
-                                                          for value in _arm_read_totals(row, arm)), axis=1)
-                events["stable_significant"] &= supported.ge(int(parameters.get("min_supported_replicates", 2)))
         job.report(0.25, "Matching exact event structures")
         summary, membership = cross_comparison_summary(events)
         mode = parameters.get("membership_mode", "exact_event")

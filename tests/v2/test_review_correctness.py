@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from katana_next.science.bulk import cross_comparison_summary, build_candidate_evidence
+from katana_next.science.bulk import READ_SUPPORT_POLICY_VERSION, cross_comparison_summary, build_candidate_evidence
 from katana_next.science.enrichment import canonical_gene_mapping, map_gene_sets, overrepresentation
 from katana_next.science.experimental_design import observation_units, bootstrap_blocks, donor_covariates
 from katana_next.science.single_cell_programs import load_declared_cell_embedding
@@ -26,6 +26,7 @@ def test_missing_psi_preserves_replicate_and_read_alignment(tmp_path):
     context = runtime.projects.open_project(manifest)
     asset = next(a for a in context.manifest.assets if a.kind == "rmats_result")
     frame = pd.read_csv(asset.path, sep="\t")
+    frame["PValue"] = 0.0001
     frame.loc[0, "IncLevel1"] = "0.1,NA,0.9,NA,NA"
     frame.loc[0, "IJC_SAMPLE_1"] = "10,200,30,0,0"
     frame.loc[0, "SJC_SAMPLE_1"] = "1,2,3,0,0"
@@ -39,9 +40,20 @@ def test_missing_psi_preserves_replicate_and_read_alignment(tmp_path):
     assert np.isnan(data.psi_matrix.loc[event.event_id, names[1]])
     assert data.psi_matrix.loc[event.event_id, names[2]] == .9
     assert data.read_matrix.loc[event.event_id, names[2]] == 33
-    qc = apply_stable_event_qc(data.events, {"stability_profile": "custom", "min_reads": 15})
+    qc = apply_stable_event_qc(data.events, {})
     row = qc.loc[qc.row_id.eq(event.row_id)].iloc[0]
-    assert row[f"{arm}_supported_replicates"] == 1
+    assert row.read_support_policy == READ_SUPPORT_POLICY_VERSION
+    assert row.criterion_min_reads == 10
+    assert row[f"{arm}_expected_samples"] == len(names)
+    assert row[f"{arm}_supported_replicates"] == 2
+    assert row[f"{arm}_read_count_supported_samples"] == 3
+    assert not row[f"{arm}_all_read_counts_pass"]
+    assert not row.measurement_eligible
+    assert "invalid_PSI" in row.read_support_failure_reason
+    assert "counts_below_10" in row.read_support_failure_reason
+    native_columns = ["PValue", "FDR", "IncLevelDifference", "IncLevel1", "IncLevel2",
+                      "IJC_SAMPLE_1", "SJC_SAMPLE_1", "IJC_SAMPLE_2", "SJC_SAMPLE_2"]
+    pd.testing.assert_frame_equal(qc[native_columns], data.events[native_columns])
 
 
 def test_replicate_mapping_rejects_extra_values():
@@ -181,13 +193,24 @@ def test_scope_policy_and_selection_remain_bound(tmp_path: Path):
         assert finished.status in {JobStatus.COMPLETE, JobStatus.CACHE_HIT}, finished.error
         return [context.catalog.get_artifact(i) for i in finished.artifact_ids]
 
-    quality = run("quality.stable_as", {"stability_profile": "custom", "min_reads": 7, "min_direction_consistency": .6})
+    quality = run("quality.stable_as", {"fdr": .01, "min_abs_dpsi": .2})
     q = next(a for a in quality if a.name == "Stable-AS event QC")
     das = run("differential.as")
     full = next(a for a in das if a.name == "Differential AS events")
     assert full.metadata["measurement_policy_source"] == q.artifact_id
+    assert q.metadata["read_support_policy"] == READ_SUPPORT_POLICY_VERSION
+    assert full.metadata["read_support_policy"] == READ_SUPPORT_POLICY_VERSION
     full_data = pd.read_parquet(full.path)
-    assert full_data.criterion_min_reads.eq(7).all()
+    assert full_data.criterion_min_reads.eq(10).all()
+    assert full_data.read_support_policy.eq(READ_SUPPORT_POLICY_VERSION).all()
+    assert full_data.fdr_cutoff.eq(.01).all()
+    assert full_data.min_abs_dpsi.eq(.2).all()
+    every_sample = (full_data.numerator_all_read_counts_pass
+                    & full_data.denominator_all_read_counts_pass & full_data.passes_data_usability)
+    pd.testing.assert_series_equal(full_data.measurement_eligible, every_sample, check_names=False)
+    saved_qc = pd.read_parquet(q.path).set_index("row_id")
+    inherited = full_data.set_index("row_id")
+    pd.testing.assert_series_equal(inherited.stable_significant, saved_qc.loc[inherited.index, "stable_significant"])
     run("prioritize.evidence")
     original = resolve_table(context, "prioritize.evidence", "Candidate evidence matrix")
     candidates = pd.read_parquet(original.path)
@@ -301,6 +324,10 @@ def test_four_set_intersections_are_exact_and_plottable(tmp_path):
 
 @pytest.mark.parametrize("bad", [-1, float("inf"), float("nan")])
 def test_numeric_workflow_parameters_reject_invalid_values(bad):
-    from katana_next.workflows.bulk import CrossComparisonWorkflow
+    from katana_next.workflows.bulk import DegWorkflow
+    workflow = DegWorkflow()
     with pytest.raises(ValueError):
-        CrossComparisonWorkflow().normalize_parameters({"min_reads": bad})
+        workflow.normalize_parameters({"fdr": bad})
+    custom = workflow.normalize_parameters({"fdr": .01, "min_abs_log2fc": .5})
+    assert custom["fdr"] == .01
+    assert custom["min_abs_log2fc"] == .5

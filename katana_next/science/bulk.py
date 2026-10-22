@@ -24,6 +24,9 @@ from katana_next.science.gene_filter import apply_gene_filter
 
 
 EVENT_TYPES = ("SE", "RI", "A3SS", "A5SS", "MXE")
+READ_SUPPORT_POLICY_VERSION = "bulk-all-samples-counts-v1"
+DEFAULT_MIN_READS = 10
+_BULK_EVENT_LOADER_VERSION = "4.0-all-declared-samples"
 EVENT_COORDINATES = (
     "chr",
     "strand",
@@ -185,16 +188,23 @@ def _contrast(context: ProjectContext, contrast_id: str):
     return match
 
 
-def _sample_names(asset: Any, contrast: Any, arm: str, count: int) -> list[str]:
+def _declared_sample_names(asset: Any, contrast: Any, arm: str) -> list[str]:
+    """An asset may reorder an arm's native vector, but never reduce its scope."""
     key = f"{arm}_sample_ids"
-    names = asset.metadata.get(key)
+    declared = [str(value) for value in getattr(contrast, arm).sample_ids]
+    if not declared or len(declared) != len(set(declared)):
+        raise ValueError(f"{contrast.contrast_id}: {arm} requires nonempty unique declared samples")
+    names = asset.metadata[key] if key in asset.metadata else declared
     if not isinstance(names, (list, tuple)):
-        names = (
-            contrast.numerator.sample_ids
-            if arm == "numerator"
-            else contrast.denominator.sample_ids
-        )
+        raise ValueError(f"{contrast.contrast_id}: {key} must map every declared sample")
     normalized = [str(value) for value in names]
+    if len(normalized) != len(set(normalized)) or len(normalized) != len(declared) or set(normalized) != set(declared):
+        raise ValueError(f"{contrast.contrast_id}: {key} must cover every declared {arm} sample exactly once; partial, duplicate or unmapped IDs are invalid")
+    return normalized
+
+
+def _sample_names(asset: Any, contrast: Any, arm: str, count: int) -> list[str]:
+    normalized = _declared_sample_names(asset, contrast, arm)
     if len(normalized) < count:
         raise ValueError(f"{contrast.contrast_id}: {count} {arm} replicate values but only {len(normalized)} mapped samples. Correct the sample mapping before analysis.")
     return normalized[:count]
@@ -230,6 +240,8 @@ def load_bulk_events(
             continue
         contrast = _contrast(context, contrast_id)
         frame = source.copy()
+        for arm in ("numerator", "denominator"):
+            frame[f"{arm}_expected_samples"] = len(_declared_sample_names(asset, contrast, arm))
         frame["event_type"] = event_type
         frame["event_id"] = canonical_event_ids(frame, event_type)
         frame["comparison_id"] = contrast_id
@@ -266,7 +278,7 @@ def load_bulk_events(
             )
         }
         for arm_index, arm in ((1, arm1), (2, "denominator" if arm1 == "numerator" else "numerator")):
-            expected_count = len(asset.metadata.get(f"{arm}_sample_ids") or getattr(contrast, arm).sample_ids)
+            expected_count = len(_declared_sample_names(asset, contrast, arm))
             for column in (f"IncLevel{arm_index}", f"IJC_SAMPLE_{arm_index}", f"SJC_SAMPLE_{arm_index}"):
                 if not parsed[column].map(len).isin({0, expected_count}).all():
                     raise ValueError(f"{asset.path.name}: {column} replicate count does not match its {expected_count} declared samples. NA positions must be retained.")
@@ -377,7 +389,7 @@ def _bulk_event_cache_directory(
         for item in context.snapshot.input_fingerprints
     }
     payload = {
-        "loader_version": "3.0-na-preserving",
+        "loader_version": _BULK_EVENT_LOADER_VERSION,
         "contrast_ids": contrast_ids,
         "contrasts": [
             contrast.model_dump(mode="json")
@@ -413,6 +425,9 @@ def _read_bulk_event_cache(directory: Path) -> BulkEventData | None:
     if not all(path.is_file() for path in paths.values()):
         return None
     try:
+        metadata = json.loads(paths["metadata"].read_text(encoding="utf-8"))
+        if metadata.get("loader_version") != _BULK_EVENT_LOADER_VERSION:
+            return None
         psi = pd.read_parquet(paths["psi"]).set_index("event_id")
         reads = pd.read_parquet(paths["reads"]).set_index("event_id")
         return BulkEventData(
@@ -445,7 +460,8 @@ def _write_bulk_event_cache(
     temporary.write_text(
         json.dumps(
             {
-                "schema_version": "2.1",
+                "schema_version": "3.0",
+                "loader_version": _BULK_EVENT_LOADER_VERSION,
                 "contrast_ids": contrast_ids,
                 "semantics": "parameter-independent normalized rMATS event and replicate cache",
             },
@@ -554,88 +570,149 @@ def _finite_range(values: list[float]) -> float:
     return max(finite) - min(finite) if finite else math.nan
 
 
-STABLE_PRESETS: dict[str, dict[str, float]] = {
-    "exploratory": {
-        "min_reads": 8.0,
-        "min_supported_replicates": 2.0,
-        "min_direction_consistency": 0.67,
-        "max_measurement_se": 0.18,
-    },
-    "balanced": {
-        "min_reads": 10.0,
-        "min_supported_replicates": 2.0,
+def _validate_read_support_parameters(parameters: dict[str, Any]) -> str:
+    """Reject changed legacy gates; their old default values are inert compatibility input."""
+    legacy_defaults = {
+        "stability_profile": "balanced",
+        "min_supported_replicates": 2,
         "min_direction_consistency": 0.75,
         "max_measurement_se": 0.12,
-    },
-    "stringent": {
-        "min_reads": 20.0,
-        "min_supported_replicates": 3.0,
-        "min_direction_consistency": 0.80,
-        "max_measurement_se": 0.10,
-    },
-}
+        "apply_measurement_se_gate": False,
+    }
+    if "min_reads" in parameters and parameters["min_reads"] != DEFAULT_MIN_READS:
+        raise ValueError(f"{READ_SUPPORT_POLICY_VERSION} requires fixed min_reads={DEFAULT_MIN_READS} in every declared sample")
+    requested = parameters.get("read_support_policy", READ_SUPPORT_POLICY_VERSION)
+    if requested != READ_SUPPORT_POLICY_VERSION:
+        raise ValueError(f"Unknown read-support policy: {requested}")
+    ignored = {}
+    for name, previous_default in legacy_defaults.items():
+        if name not in parameters:
+            continue
+        if parameters[name] != previous_default:
+            raise ValueError(f"Legacy QC option {name}={parameters[name]!r} is incompatible with {READ_SUPPORT_POLICY_VERSION}; direction, replicate-minimum and SE gates are no longer applied")
+        ignored[name] = parameters[name]
+    return json.dumps(ignored, sort_keys=True)
+
+
+def _policy_vector(value: object) -> list[float]:
+    if isinstance(value, (list, tuple, np.ndarray, pd.Series)):
+        result = []
+        for item in value:
+            try:
+                result.append(float(item) if not isinstance(item, (bool, np.bool_)) else math.nan)
+            except (TypeError, ValueError):
+                result.append(math.nan)
+        return result
+    return parse_number_list(value)
+
+
+def _arm_read_support(row: pd.Series, arm: str, suffix: str) -> dict[str, Any]:
+    psi = _policy_vector(row.get(f"IncLevel{suffix}"))
+    ijc = _policy_vector(row.get(f"IJC_SAMPLE_{suffix}"))
+    sjc = _policy_vector(row.get(f"SJC_SAMPLE_{suffix}"))
+    key = f"{arm}_expected_samples"
+    expected = len(psi)
+    reasons = []
+    basis = "PSI_vector_length" if key not in row else "declared_contrast_samples"
+    if key in row:
+        value = row[key]
+        try:
+            if isinstance(value, (bool, np.bool_)) or not math.isfinite(float(value)) or float(value) != int(value) or int(value) < 1:
+                raise ValueError
+            expected = int(value)
+        except (TypeError, ValueError, OverflowError):
+            expected = 0
+            reasons.append(f"{arm}:invalid_declared_sample_count")
+    if expected < 1:
+        reasons.append(f"{arm}:empty_arm")
+    for label, values in (("PSI", psi), ("IJC", ijc), ("SJC", sjc)):
+        if len(values) != expected:
+            reasons.append(f"{arm}:{label}_vector_length_{len(values)}_expected_{expected}")
+    shape_valid = expected > 0 and len(psi) == len(ijc) == len(sjc) == expected
+    count_shape_valid = expected > 0 and len(ijc) == len(sjc) == expected
+    usable = read_supported = supported = invalid = low_reads = 0
+    observed_positions = min(expected, max(len(psi), len(ijc), len(sjc)))
+    for index in range(observed_positions):
+        p = psi[index] if index < len(psi) else math.nan
+        i = ijc[index] if index < len(ijc) else math.nan
+        s = sjc[index] if index < len(sjc) else math.nan
+        psi_valid = math.isfinite(p) and 0 <= p <= 1
+        counts_valid = math.isfinite(i) and math.isfinite(s) and i >= 0 and s >= 0 and math.isfinite(i + s)
+        read_pass = counts_valid and i + s >= DEFAULT_MIN_READS
+        usable += int(psi_valid and counts_valid)
+        read_supported += int(read_pass)
+        supported += int(psi_valid and read_pass)
+        invalid += int(not (psi_valid and counts_valid))
+        low_reads += int(counts_valid and not read_pass)
+        if not psi_valid:
+            reasons.append(f"{arm}:sample_{index + 1}:invalid_PSI")
+        if not counts_valid:
+            reasons.append(f"{arm}:sample_{index + 1}:invalid_counts")
+        elif not read_pass:
+            reasons.append(f"{arm}:sample_{index + 1}:counts_below_{DEFAULT_MIN_READS}")
+    if observed_positions < expected:
+        invalid += expected - observed_positions
+        reasons.append(f"{arm}:missing_sample_positions_{expected - observed_positions}")
+    return {
+        f"{arm}_expected_samples": expected,
+        f"{arm}_sample_scope_basis": basis,
+        f"{arm}_observed_psi_samples": len(psi),
+        f"{arm}_observed_ijc_samples": len(ijc),
+        f"{arm}_observed_sjc_samples": len(sjc),
+        f"{arm}_read_count_supported_samples": read_supported,
+        f"{arm}_supported_replicates": supported,
+        f"{arm}_invalid_samples": invalid,
+        f"{arm}_low_read_samples": low_reads,
+        f"{arm}_vector_lengths_match": shape_valid,
+        f"{arm}_data_usable": shape_valid and usable == expected,
+        f"{arm}_all_read_counts_pass": count_shape_valid and read_supported == expected,
+        "_reasons": reasons,
+    }
 
 
 def apply_stable_event_qc(events: pd.DataFrame, parameters: dict[str, Any]) -> pd.DataFrame:
-    profile = str(parameters.get("stability_profile", "balanced"))
-    if profile not in {*STABLE_PRESETS, "custom"}:
-        raise ValueError(f"Unknown stability profile: {profile}")
-    criteria = dict(STABLE_PRESETS.get(profile, STABLE_PRESETS["balanced"]))
-    if profile == "custom":
-        for key in criteria:
-            if key in parameters:
-                criteria[key] = float(parameters[key])
-    frame = events.copy()
-    min_reads = criteria["min_reads"]
-    min_replicates = int(criteria["min_supported_replicates"])
-    supported = {}
-    for suffix in ("1", "2"):
-        supported[suffix] = np.fromiter((
-            sum(math.isfinite(psi) and read >= min_reads
-                for psi, read in zip(parse_number_list(psis),
-                    _paired_sums(parse_number_list(ijc), parse_number_list(sjc))))
-            for psis, ijc, sjc in zip(optional_series(frame, f"IncLevel{suffix}"),
-                                      optional_series(frame, f"IJC_SAMPLE_{suffix}"),
-                                      optional_series(frame, f"SJC_SAMPLE_{suffix}"))
-        ), dtype=int, count=len(frame))
-    reverse = optional_series(frame, "reverse_direction", False).fillna(False).astype(bool)
-    frame["numerator_supported_replicates"] = np.where(reverse, supported["2"], supported["1"])
-    frame["denominator_supported_replicates"] = np.where(reverse, supported["1"], supported["2"])
-    checks = {
-        "replicate_count": frame["numerator_replicates"].ge(min_replicates)
-        & frame["denominator_replicates"].ge(min_replicates),
-        "read_support": frame["numerator_supported_replicates"].ge(min_replicates)
-        & frame["denominator_supported_replicates"].ge(min_replicates),
-        "direction_consistency": pd.to_numeric(
-            frame["replicate_pairwise_direction_consistency"], errors="coerce"
-        ).ge(criteria["min_direction_consistency"]),
-        "leave_one_out": pd.to_numeric(
-            frame["leave_one_out_direction_consistency"], errors="coerce"
-        ).ge(criteria["min_direction_consistency"]),
-        "measurement_uncertainty": pd.to_numeric(
-            frame["max_measurement_se"], errors="coerce"
-        ).le(criteria["max_measurement_se"]) if parameters.get("apply_measurement_se_gate", False)
-        else pd.Series(True, index=frame.index),
+    """Compatibility entry for fixed ten-count, all-declared-sample eligibility.
+
+    Every sample in each selected contrast arm is checked independently. Native
+    PSI, count, P and FDR columns are never rewritten. Existing direction/SE
+    diagnostics are preserved as observations and do not select events.
+    """
+    ignored = _validate_read_support_parameters(parameters)
+    retired = {
+        "stability_profile", "differential_repeat_supported",
+        "passes_direction_consistency", "passes_leave_one_out",
+        "passes_measurement_uncertainty", "criterion_min_supported_replicates",
+        "criterion_min_direction_consistency", "criterion_max_measurement_se",
     }
-    for name, values in checks.items():
-        frame[f"passes_{name}"] = values.fillna(False)
-    frame["measurement_eligible"] = np.logical_and.reduce(
-        [frame[f"passes_{name}"].to_numpy(dtype=bool) for name in
-         ("replicate_count", "read_support", "measurement_uncertainty")]
-    )
-    frame["differential_repeat_supported"] = (
-        frame["passes_direction_consistency"] & frame["passes_leave_one_out"]
-    )
-    # Preserve the strict differential-set contract without using it as network QC.
-    frame["stable_event"] = frame["measurement_eligible"] & frame["differential_repeat_supported"]
-    frame["stability_profile"] = profile
-    frame["measurement_se_gate_enabled"] = bool(parameters.get("apply_measurement_se_gate", False))
-    frame["stability_failure_reason"] = [
-        ", ".join(name for name, passed in zip(checks, row) if not passed) or "passed"
-        for row in zip(*(frame[f"passes_{name}"].to_numpy() for name in checks))
-    ]
-    for key, value in criteria.items():
-        frame[f"criterion_{key}"] = value
+    frame = events.drop(columns=list(retired), errors="ignore").copy()
+    audits = []
+    for _, row in frame.iterrows():
+        reverse = bool(row.get("reverse_direction", False))
+        numerator = _arm_read_support(row, "numerator", "2" if reverse else "1")
+        denominator = _arm_read_support(row, "denominator", "1" if reverse else "2")
+        reasons = numerator.pop("_reasons") + denominator.pop("_reasons")
+        audit = {**numerator, **denominator}
+        audit["passes_replicate_count"] = numerator["numerator_vector_lengths_match"] and denominator["denominator_vector_lengths_match"]
+        audit["passes_data_usability"] = numerator["numerator_data_usable"] and denominator["denominator_data_usable"]
+        audit["passes_read_counts"] = numerator["numerator_all_read_counts_pass"] and denominator["denominator_all_read_counts_pass"]
+        audit["passes_read_support"] = audit["passes_data_usability"] and audit["passes_read_counts"]
+        audit["measurement_eligible"] = audit["passes_read_support"]
+        audit["stable_event"] = audit["measurement_eligible"]
+        audit["read_support_failure_reason"] = "; ".join(reasons) or "passed"
+        audit["stability_failure_reason"] = audit["read_support_failure_reason"]
+        audits.append(audit)
+    audit_frame = pd.DataFrame(audits, index=frame.index)
+    for column in audit_frame:
+        frame[column] = audit_frame[column]
+    if frame.empty:
+        for column in ("passes_replicate_count", "passes_data_usability", "passes_read_counts", "passes_read_support", "measurement_eligible", "stable_event"):
+            frame[column] = pd.Series(index=frame.index, dtype=bool)
+        for column in ("read_support_failure_reason", "stability_failure_reason"):
+            frame[column] = pd.Series(index=frame.index, dtype=object)
+    frame["read_support_policy"] = READ_SUPPORT_POLICY_VERSION
+    frame["criterion_min_reads"] = DEFAULT_MIN_READS
+    frame["measurement_se_gate_enabled"] = False
+    frame["ignored_legacy_qc_options"] = ignored
     return frame
 
 

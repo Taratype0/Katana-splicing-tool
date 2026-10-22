@@ -26,10 +26,6 @@ export function displayArtifactName(value: string): string {
 export function displayParameterOption(key: string, value: string): string {
   if (key === "pairing") return ({auto:"Detect from sample identities", paired:"Paired samples", unpaired:"Independent samples"}[value] ?? value);
   return ({
-    balanced: "Standard read support",
-    exploratory: "Exploratory read support",
-    stringent: "High read support",
-    custom: "Custom thresholds",
     direct_experiment: "Experimental motifs only",
     all_evidence_separate: "Experimental, inferred and predicted (separate)",
     boundary_association: "Upstream motif / CLIP regulatory clues",

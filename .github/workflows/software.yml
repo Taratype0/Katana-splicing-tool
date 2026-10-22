@@ -34,6 +34,9 @@ jobs:
           tests/public_baseline
           tests/v2/test_complete_report.py
           tests/v2/test_report_revision_contract.py
+          tests/v2/test_bulk_all_samples_qc.py
+          tests/v2/test_read_support_source_policy.py
+          tests/v2/test_review_correctness.py
           tests/v2/test_english_report_policy.py
           tests/v2/test_motiftrace_windows.py
           tests/v2/test_motiftrace_parallel.py

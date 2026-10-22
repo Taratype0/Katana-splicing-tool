@@ -352,7 +352,7 @@ export default function App() {
 
                 {requiresComparisons && selectedContrasts.size === 0 && <div className="warning-strip">Select at least one comparison. An empty selection never silently means all.</div>}
                 {(runWorkflow.error || lastWorkflowJob?.error) && <div className="warning-strip error-strip">{runWorkflow.error?.message ?? lastWorkflowJob?.error}</div>}
-                {activeWorkflow.workflow_id === "differential.as" && <div className="run-plan-panel"><p>This module uses the completed DAS quality-check result selected below. Set FDR, PSI-change and read-support thresholds in Quality Control.</p><button type="button" className="text-action" onClick={() => {setActiveWorkspace("quality"); setActiveWorkflowId("quality.stable_as");}}>Edit DAS thresholds</button></div>}
+                {activeWorkflow.workflow_id === "differential.as" && <div className="run-plan-panel"><p>This module uses the completed AS read-support result selected below. Set FDR and |dPSI| in Quality Control. Read support requires IJC + SJC of at least 10 in every selected sample.</p><button type="button" className="text-action" onClick={() => {setActiveWorkspace("quality"); setActiveWorkflowId("quality.stable_as");}}>Edit DAS thresholds</button></div>}
                 {artifactQuery.error && <div className="warning-strip error-strip">Could not read compatible cache: {artifactQuery.error.message}</div>}
                 {!artifactQuery.isFetching && !latestArtifacts.length && savedSettingsArtifact && (
                   <div className="warning-strip">

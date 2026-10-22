@@ -1,0 +1,22 @@
+{
+  "schema": "katana.historical_threshold_archive/v1",
+  "status": "historical_not_active",
+  "source_commit": "8c368b74cba5a7a7b25ca9edea8c40231b9d598f",
+  "superseded_by": "bulk-all-samples-counts-v1",
+  "records": [
+    {
+      "source_commit": "8c368b74cba5a7a7b25ca9edea8c40231b9d598f",
+      "source_path": "docs/THRESHOLDS.md",
+      "archived_file": "THRESHOLDS.original.txt",
+      "sha256": "34a378da3f9e4b7e737de684d9c3abbedb88b8d8e4ac76b21506003078ec72aa",
+      "bytes": 14261
+    },
+    {
+      "source_commit": "8c368b74cba5a7a7b25ca9edea8c40231b9d598f",
+      "source_path": "docs/thresholds/bulk-defaults.v1.json",
+      "archived_file": "bulk-defaults.v1.json",
+      "sha256": "48fa41aa187f2be8355d1260d7fc61fc2b540b352cab89bd3562994475e57f4f",
+      "bytes": 8627
+    }
+  ]
+}

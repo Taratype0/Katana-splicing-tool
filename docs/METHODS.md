@@ -2,12 +2,12 @@
 
 Katana combines methods and evidence within a common project. It does not make different endpoints interchangeable, combine unrelated P values, or claim authorship of external statistical methods.
 
-See [bulk threshold values and evidence](THRESHOLDS.md) for exact defaults, published precedents, Katana-specific heuristics and source references. Published support for a method is distinguished from validation of a particular numerical cutoff.
+See [bulk threshold values and evidence](THRESHOLDS.md) for the active `bulk-all-samples-counts-v1` policy and separate significance choices. The AS read gate requires finite `IJC + SJC >= 10` in every expected sample of both arms of the selected contrast, with unambiguous sample mapping and no pooling. Its per-sample JC precedent is distinguished from the explicitly declared JCEC extension; neither is a universal assay-independent validation.
 
 | Evidence | Interpretation and limits |
 | --- | --- |
 | Differential expression | Gene abundance with the imported or executed method's native effect and significance definitions. |
-| DAS, DTU and exon usage | Event, transcript and exon-bin endpoints remain distinct. A feature-level FDR is not automatically a gene-level FDR. JC/JCEC and reference identities must remain explicit. |
+| DAS, DTU and exon usage | Event, transcript and exon-bin endpoints remain distinct. AS read support and native significance are separate states; no replicate-consistency or approximate-SE gate is added. A feature-level FDR is not automatically a gene-level FDR. JC/JCEC and reference identities remain explicit. |
 | Candidate evidence | Support across eligible endpoints and contrasts is prioritization, not independent replication or causal proof. Unavailable evidence is not a negative finding. |
 | MotifTrace | Sequence consequences, motif changes, usage support and RBP/CLIP evidence are separate layers. Predictions are not measured occupancy; unmatched public binding data do not establish binding in the user's experiment. |
 | Co-splicing networks | The original WGCNA/TOM backbone and the declared cohort/event universe are retained. Modules group co-varying features; membership, association, stability, preservation and hubs have separate meanings. |
@@ -30,3 +30,9 @@ Single-cell and single-nucleus claims remain input- and method-specific. Process
 ## Reproducibility
 
 Keep sample and contrast identities, biological units, reference versions, native result columns and completed-run provenance. Preserve complete statistical test families when parallelizing work. Record omitted, blocked, failed and unassessable tasks explicitly. Reusing completed output requires compatible inputs and methods; reopening a report alone does not authorize scientific recomputation.
+
+## Current and historical AS support policies
+
+The current all-sample read-count gate does not refit native statistical models or rewrite their P-values, FDR or effect estimates. In its compatibility columns, `stable_event` means current read support and `stable_significant` adds native significance/effect selection. The names are not claims of experimentally validated stability. A fixed sample-count gate does not establish adequate replication or power for a statistical design.
+
+The prior presets are retained only in the [versioned historical archive](thresholds/history/8c368b7/README.md). New runs must record the active policy and cannot silently reuse a previous-policy Quality result as if it had passed the current gate. Selected-contrast Landscape matrices require support in every selected sample and eligibility of every included selected-contrast event row; an OR across contrasts cannot rescue a failing measurement. Independent network-discovery QC remains separate.

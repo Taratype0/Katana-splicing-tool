@@ -6,10 +6,12 @@ Run from the repository root after installing the application and test dependenc
 python -m pytest -q tests/public_baseline
 ```
 
-The workflow inventory is copied from the preserved English-report application
-baseline. It fixes the 54 workflow identifiers, method versions and public
-parameter defaults, including MotifTrace, network analysis and both report
-entrypoints.
+The original workflow inventory remains preserved in `workflow_inventory.json`.
+`workflow_inventory_read_support_v1.json` records the approved every-sample
+ten-count policy. Tests permit changes only to the four workflows that implement
+or inherit that policy: Quality, bulk Landscape, DAS and exact cross-comparison.
+Other methods, including MotifTrace, networks, DEG runtime parameters and both
+report entrypoints, retain their existing versions and parameter defaults.
 
 The tests use generated synthetic inputs. The API test opens a project, executes
 a small DEG result-reader workflow, verifies reuse of its completed result,

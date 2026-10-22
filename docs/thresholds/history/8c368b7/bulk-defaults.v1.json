@@ -1,0 +1,204 @@
+{
+  "schema": "katana.threshold_basis/v1",
+  "scope": "Bulk result selection and replicate QC only; other modules pending separate review.",
+  "review_date": "2026-10-22",
+  "numerical_source_changes": false,
+  "scientific_validation_claim": false,
+  "references": {
+    "BH1995": "https://doi.org/10.1111/j.2517-6161.1995.tb02031.x",
+    "rMATS2014": "https://doi.org/10.1073/pnas.1419161111",
+    "STRAP2020": "https://doi.org/10.1038/s41467-020-19698-6",
+    "Kuijper2025": "https://doi.org/10.1093/hmg/ddaf153",
+    "DESeq2_2014": "https://doi.org/10.1186/s13059-014-0550-8",
+    "DESeq2_author_guide": "https://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html",
+    "DEXSeq2012": "https://doi.org/10.1101/gr.133744.111",
+    "stageR2017": "https://doi.org/10.1186/s13059-017-1277-0",
+    "rnaseqDTU_author_workflow": "https://www.bioconductor.org/packages/release/workflows/vignettes/rnaseqDTU/inst/doc/rnaseqDTU.html",
+    "rMATS_author_documentation": "https://github.com/Xinglab/rmats-turbo#readme"
+  },
+  "thresholds": [
+    {
+      "id": "das.native_fdr",
+      "default": 0.05,
+      "operator": "<=",
+      "unit": "native event-level adjusted statistic",
+      "evidence_class": "published_application_choice",
+      "rationale": "Published cutoff combination; inclusive boundary is the Katana choice, not a universal standard.",
+      "references": [
+        "rMATS2014",
+        "STRAP2020",
+        "BH1995"
+      ],
+      "implementation": "katana_next/science/bulk.py:significance_columns"
+    },
+    {
+      "id": "das.observed_abs_delta_psi",
+      "default": 0.1,
+      "operator": ">=",
+      "unit": "PSI fraction (0.10 = ten percentage points)",
+      "evidence_class": "published_application_choice",
+      "rationale": "Observed effect filter, not a new cstat null hypothesis.",
+      "references": [
+        "STRAP2020",
+        "rMATS_author_documentation"
+      ],
+      "implementation": "katana_next/science/bulk.py:significance_columns"
+    },
+    {
+      "id": "deg.native_adjusted_p",
+      "default": 0.05,
+      "operator": "<=",
+      "unit": "native gene-level adjusted P",
+      "evidence_class": "configurable_project_choice",
+      "rationale": "Not the native DESeq2 results() alpha default. No refitting or independent-filter optimization is performed.",
+      "references": [
+        "DESeq2_2014",
+        "DESeq2_author_guide"
+      ],
+      "implementation": "katana_next/workflows/bulk.py:DegWorkflow"
+    },
+    {
+      "id": "deg.observed_abs_log2fc",
+      "default": 1.0,
+      "operator": ">=",
+      "unit": "absolute log2 fold change",
+      "evidence_class": "configurable_effect_size_choice",
+      "rationale": "A twofold observed-effect gate; not a native test proving a true effect above this value.",
+      "references": [
+        "DESeq2_2014",
+        "DESeq2_author_guide"
+      ],
+      "implementation": "katana_next/workflows/bulk.py:DegWorkflow",
+      "runtime_customizable": true
+    },
+    {
+      "id": "dtu.native_adjusted_value",
+      "default": 0.05,
+      "operator": "<=",
+      "unit": "native gene/transcript adjusted statistic",
+      "evidence_class": "native_method_constrained_choice",
+      "rationale": "For stageR this must match the original adjustment target; another target requires repeating stage-wise adjustment.",
+      "references": [
+        "stageR2017",
+        "rnaseqDTU_author_workflow"
+      ],
+      "implementation": "katana_next/workflows/bulk.py:DtuWorkflow",
+      "compatibility_guard_implemented": false
+    },
+    {
+      "id": "dexseq.native_adjusted_value",
+      "default": 0.05,
+      "operator": "<=",
+      "unit": "native exon/bin adjusted statistic",
+      "evidence_class": "configurable_project_choice",
+      "rationale": "Preserves native testing unit; not automatically a new gene-level FDR.",
+      "references": [
+        "DEXSeq2012"
+      ],
+      "implementation": "katana_next/workflows/bulk.py:DtuWorkflow"
+    },
+    {
+      "id": "qc.per_sample_informative_counts",
+      "default": 10,
+      "operator": ">=",
+      "unit": "IJC + SJC for one sample in the selected JC/JCEC mode",
+      "evidence_class": "published_numerical_precedent_with_different_aggregation",
+      "rationale": "Kuijper et al. require every sample to pass. Katana instead counts passing samples in each arm; the complete aggregation is local.",
+      "references": [
+        "Kuijper2025"
+      ],
+      "implementation": "katana_next/science/bulk.py:apply_stable_event_qc",
+      "count_mode_reference_scope": "The published application filters junction-count results (JC). Applying the ten-count value to JCEC is a Katana extension, not validation supplied by that article."
+    },
+    {
+      "id": "qc.supported_samples_per_arm",
+      "default": 2,
+      "operator": ">=",
+      "unit": "finite-PSI and individually read-supported samples in each arm",
+      "evidence_class": "katana_aggregation_policy",
+      "rationale": "Two-replicate studies exist, but do not validate the complete 10-count x 2-sample rule or guarantee power.",
+      "references": [
+        "STRAP2020"
+      ],
+      "implementation": "katana_next/science/bulk.py:apply_stable_event_qc"
+    },
+    {
+      "id": "qc.cross_arm_direction_fraction",
+      "default": 0.75,
+      "operator": ">=",
+      "unit": "fraction of non-tied cross-arm differences agreeing with imported mapped dPSI",
+      "evidence_class": "katana_heuristic_no_direct_validation_identified",
+      "rationale": "Uses all finite PSI; cross-arm pairs share observations. No calibrated probability or P-value is implied.",
+      "references": [],
+      "implementation": "katana_next/science/bulk.py:_replicate_metrics"
+    },
+    {
+      "id": "qc.leave_one_out_direction_fraction",
+      "default": 0.75,
+      "operator": ">=",
+      "unit": "fraction of nonzero one-observation-deleted mean differences agreeing with imported mapped dPSI",
+      "evidence_class": "katana_heuristic_no_direct_validation_identified",
+      "rationale": "Uses all finite PSI; no native-model refit or paired-donor leave-one-out inference.",
+      "references": [],
+      "implementation": "katana_next/science/bulk.py:_replicate_metrics"
+    },
+    {
+      "id": "qc.apply_measurement_se_gate",
+      "default": false,
+      "operator": "enabled_if_true",
+      "unit": "boolean",
+      "evidence_class": "diagnostic_only_policy",
+      "rationale": "Uncalibrated approximate uncertainty is not a default hard filter.",
+      "references": [],
+      "implementation": "katana_next/science/bulk.py:apply_stable_event_qc"
+    },
+    {
+      "id": "qc.max_approximate_measurement_se",
+      "default": 0.12,
+      "operator": "<= only if explicitly enabled",
+      "unit": "maximum approximate PSI SE across positive-count finite observations",
+      "evidence_class": "uncalibrated_katana_diagnostic",
+      "rationale": "sqrt(max(PSI*(1-PSI),0)/(IJC+SJC+1)); not rMATS hierarchical-model SE.",
+      "references": [
+        "rMATS2014"
+      ],
+      "implementation": "katana_next/science/bulk.py:_replicate_metrics",
+      "reference_scope": "rMATS2014 supports the distinction from the native model; it does not validate 0.12 or this approximation."
+    }
+  ],
+  "built_in_presets": {
+    "exploratory": {
+      "min_reads": 8.0,
+      "min_supported_replicates": 2.0,
+      "min_direction_consistency": 0.67,
+      "max_measurement_se": 0.18
+    },
+    "balanced": {
+      "min_reads": 10.0,
+      "min_supported_replicates": 2.0,
+      "min_direction_consistency": 0.75,
+      "max_measurement_se": 0.12
+    },
+    "stringent": {
+      "min_reads": 20.0,
+      "min_supported_replicates": 3.0,
+      "min_direction_consistency": 0.8,
+      "max_measurement_se": 0.1
+    }
+  },
+  "preset_rule": "Select custom to use caller-supplied QC values; otherwise stored preset values apply.",
+  "reporting_requirements": [
+    "selected Quality source identity",
+    "effective criterion values",
+    "requested parameters",
+    "count mode JC/JCEC",
+    "native test settings and adjusted-value units",
+    "sample and contrast identities",
+    "method versions",
+    "complete source results and exclusion reasons"
+  ],
+  "source_sha256": {
+    "katana_next/science/bulk.py": "9cd7470a0d05b52edba043944d6848baa0ed2ea3b8b71c556263cece909df1aa",
+    "katana_next/workflows/bulk.py": "abe34b1515fcf62bb4964b915c9668a57bbf3128375e792e031315e245b93baa"
+  }
+}

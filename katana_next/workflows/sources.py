@@ -32,11 +32,24 @@ def validate_source(context: ProjectContext, artifact: AnalysisArtifact | None) 
         raise ValueError("The selected source artifact is unavailable in this project.")
     if artifact.metadata.get("project_snapshot_fingerprint") != context.snapshot.manifest_fingerprint:
         raise ValueError("The selected source belongs to an older project snapshot. Rebuild explicitly before using it.")
+    if artifact.analysis_id in {"quality.stable_as", "differential.as", "landscape.bulk"}:
+        from katana_next.science.bulk import READ_SUPPORT_POLICY_VERSION
+
+        if (artifact.metadata.get("read_support_policy") != READ_SUPPORT_POLICY_VERSION
+                or artifact.metadata.get("workflow_version") != _workflow_versions().get(artifact.analysis_id)):
+            raise ValueError("This saved result uses a historical read-support policy or method version. It is preserved, but cannot stand in for a new every-sample result; run the required module explicitly.")
     if not source_complete(context, artifact):
         raise ValueError("The selected source run has not completed. Finish or rerun that module explicitly first.")
 
 
 def source_complete(context: ProjectContext, artifact: AnalysisArtifact) -> bool:
+    if artifact.analysis_id in {"quality.stable_as", "differential.as", "landscape.bulk"}:
+        from katana_next.science.bulk import READ_SUPPORT_POLICY_VERSION
+
+        current = _workflow_versions().get(artifact.analysis_id)
+        if (artifact.metadata.get("read_support_policy") != READ_SUPPORT_POLICY_VERSION
+                or current is None or artifact.metadata.get("workflow_version") != current):
+            return False
     if artifact.metadata.get("artifact_contract_version") != "3.0-correctness":
         return True
     current = _workflow_versions().get(artifact.analysis_id)

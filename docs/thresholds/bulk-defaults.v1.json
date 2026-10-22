@@ -1,9 +1,44 @@
 {
-  "schema": "katana.threshold_basis/v1",
-  "scope": "Bulk result selection and replicate QC only; other modules pending separate review.",
+  "schema": "katana.threshold_basis/v2",
+  "active_policy_id": "bulk-all-samples-counts-v1",
+  "policy_status": "user_approved",
+  "scope": "Selected-contrast AS read support, selected-contrast Landscape eligibility, and independently recorded bulk differential-result selection. Independent whole-cohort network criteria are separate and unchanged.",
   "review_date": "2026-10-22",
-  "numerical_source_changes": false,
   "scientific_validation_claim": false,
+  "policy_change": {
+    "authorized": true,
+    "scope": "Require informative-count support in every expected sample; remove the former descriptive replicate-consistency and approximate-SE gates from active choices.",
+    "significance_defaults_changed": false,
+    "native_statistics_changed": false,
+    "whole_cohort_network_qc_changed": false
+  },
+  "read_gate": {
+    "policy_id": "bulk-all-samples-counts-v1",
+    "workflow_label": "AS read support",
+    "fixed_minimum_informative_count": 10,
+    "operator": ">=",
+    "quantifier": "every expected sample in both numerator and denominator of each selected contrast",
+    "count_expression": "IJC + SJC",
+    "supported_count_modes": [
+      "JC",
+      "JCEC"
+    ],
+    "default_count_policy_selectable": false,
+    "input_contract": [
+      "Both declared contrast arms are nonempty.",
+      "Expected sample IDs and ordered count-slot identities resolve unambiguously to the selected contrast.",
+      "Every expected sample has actual numeric finite nonnegative IJC/SJC and a finite PSI observation in its defined [0,1] range; the three vectors have the expected length. This is input validity, not an extra stability threshold.",
+      "Missing columns, missing samples, incorrect array lengths, malformed values, duplicate/ambiguous mappings and non-finite counts cannot pass.",
+      "Valid zero counts are computable support failures; unavailable counts are not replaced by zero.",
+      "An absent arm or empty list cannot pass by vacuous truth."
+    ],
+    "aggregation": "logical AND over the per-sample >=10 results in both arms; no group averaging, summing over replicates, selecting a supported subset or pooling contrasts",
+    "missing_or_invalid_input": "block or record unavailable with an explicit reason; never passing support",
+    "biological_design_boundary": "Passing counts does not establish adequate biological replication, power or native-model eligibility.",
+    "extra_consistency_or_uncertainty_filters": false,
+    "implementation_binding_status": "implemented",
+    "input_validity_boundary": "Finite PSI in [0,1], finite nonnegative IJC/SJC, complete expected vector lengths and declared sample mapping are validity requirements; they do not add a replicate-consistency or approximate-SE threshold."
+  },
   "references": {
     "BH1995": "https://doi.org/10.1111/j.2517-6161.1995.tb02031.x",
     "rMATS2014": "https://doi.org/10.1073/pnas.1419161111",
@@ -23,7 +58,7 @@
       "operator": "<=",
       "unit": "native event-level adjusted statistic",
       "evidence_class": "published_application_choice",
-      "rationale": "Published cutoff combination; inclusive boundary is the Katana choice, not a universal standard.",
+      "rationale": "Published rMATS application precedent; inclusive boundary is a declared implementation choice, not a universal biological boundary.",
       "references": [
         "rMATS2014",
         "STRAP2020",
@@ -35,9 +70,9 @@
       "id": "das.observed_abs_delta_psi",
       "default": 0.1,
       "operator": ">=",
-      "unit": "PSI fraction (0.10 = ten percentage points)",
+      "unit": "PSI fraction; 0.10 is ten percentage points",
       "evidence_class": "published_application_choice",
-      "rationale": "Observed effect filter, not a new cstat null hypothesis.",
+      "rationale": "Observed-effect selection; not a new rMATS cstat null hypothesis.",
       "references": [
         "STRAP2020",
         "rMATS_author_documentation"
@@ -49,8 +84,10 @@
       "default": 0.05,
       "operator": "<=",
       "unit": "native gene-level adjusted P",
+      "runtime_customizable": true,
+      "runtime_parameter": "fdr",
       "evidence_class": "configurable_project_choice",
-      "rationale": "Not the native DESeq2 results() alpha default. No refitting or independent-filter optimization is performed.",
+      "rationale": "Not the DESeq2 results() alpha default; selection does not refit or re-optimize independent filtering.",
       "references": [
         "DESeq2_2014",
         "DESeq2_author_guide"
@@ -62,28 +99,29 @@
       "default": 1.0,
       "operator": ">=",
       "unit": "absolute log2 fold change",
+      "runtime_customizable": true,
+      "runtime_parameter": "min_abs_log2fc",
       "evidence_class": "configurable_effect_size_choice",
-      "rationale": "A twofold observed-effect gate; not a native test proving a true effect above this value.",
+      "rationale": "Observed twofold gate, not a native test proving the true effect exceeds this value.",
       "references": [
         "DESeq2_2014",
         "DESeq2_author_guide"
       ],
-      "implementation": "katana_next/workflows/bulk.py:DegWorkflow",
-      "runtime_customizable": true
+      "implementation": "katana_next/workflows/bulk.py:DegWorkflow"
     },
     {
       "id": "dtu.native_adjusted_value",
       "default": 0.05,
       "operator": "<=",
-      "unit": "native gene/transcript adjusted statistic",
+      "unit": "original gene/transcript adjusted statistic, endpoint preserved",
       "evidence_class": "native_method_constrained_choice",
-      "rationale": "For stageR this must match the original adjustment target; another target requires repeating stage-wise adjustment.",
+      "rationale": "For stageR the target must match the original adjustment target; changing the target requires repeating stage-wise adjustment.",
       "references": [
         "stageR2017",
         "rnaseqDTU_author_workflow"
       ],
-      "implementation": "katana_next/workflows/bulk.py:DtuWorkflow",
-      "compatibility_guard_implemented": false
+      "compatibility_guard_implemented": false,
+      "implementation": "katana_next/workflows/bulk.py:DtuWorkflow"
     },
     {
       "id": "dexseq.native_adjusted_value",
@@ -91,114 +129,128 @@
       "operator": "<=",
       "unit": "native exon/bin adjusted statistic",
       "evidence_class": "configurable_project_choice",
-      "rationale": "Preserves native testing unit; not automatically a new gene-level FDR.",
+      "rationale": "Preserve native testing unit; selecting a gene with a significant bin is not a new gene-level FDR.",
       "references": [
         "DEXSeq2012"
       ],
       "implementation": "katana_next/workflows/bulk.py:DtuWorkflow"
     },
     {
-      "id": "qc.per_sample_informative_counts",
+      "id": "as_read_support.informative_count_per_expected_sample",
       "default": 10,
       "operator": ">=",
-      "unit": "IJC + SJC for one sample in the selected JC/JCEC mode",
-      "evidence_class": "published_numerical_precedent_with_different_aggregation",
-      "rationale": "Kuijper et al. require every sample to pass. Katana instead counts passing samples in each arm; the complete aggregation is local.",
+      "unit": "IJC + SJC for one expected sample in the declared JC/JCEC mode",
+      "runtime_customizable": false,
+      "scope": "every expected sample in both arms of each selected contrast",
+      "evidence_class": "published_per_sample_JC_precedent_with_explicit_JCEC_extension",
+      "rationale": "Kuijper et al. require every sample to have at least ten informative junction reads. Applying the same count threshold to JCEC is a declared Katana extension, not directly validated by that paper.",
       "references": [
         "Kuijper2025"
       ],
-      "implementation": "katana_next/science/bulk.py:apply_stable_event_qc",
-      "count_mode_reference_scope": "The published application filters junction-count results (JC). Applying the ten-count value to JCEC is a Katana extension, not validation supplied by that article."
-    },
-    {
-      "id": "qc.supported_samples_per_arm",
-      "default": 2,
-      "operator": ">=",
-      "unit": "finite-PSI and individually read-supported samples in each arm",
-      "evidence_class": "katana_aggregation_policy",
-      "rationale": "Two-replicate studies exist, but do not validate the complete 10-count x 2-sample rule or guarantee power.",
-      "references": [
-        "STRAP2020"
-      ],
+      "no_pooling": true,
+      "implementation_binding_status": "implemented",
       "implementation": "katana_next/science/bulk.py:apply_stable_event_qc"
-    },
-    {
-      "id": "qc.cross_arm_direction_fraction",
-      "default": 0.75,
-      "operator": ">=",
-      "unit": "fraction of non-tied cross-arm differences agreeing with imported mapped dPSI",
-      "evidence_class": "katana_heuristic_no_direct_validation_identified",
-      "rationale": "Uses all finite PSI; cross-arm pairs share observations. No calibrated probability or P-value is implied.",
-      "references": [],
-      "implementation": "katana_next/science/bulk.py:_replicate_metrics"
-    },
-    {
-      "id": "qc.leave_one_out_direction_fraction",
-      "default": 0.75,
-      "operator": ">=",
-      "unit": "fraction of nonzero one-observation-deleted mean differences agreeing with imported mapped dPSI",
-      "evidence_class": "katana_heuristic_no_direct_validation_identified",
-      "rationale": "Uses all finite PSI; no native-model refit or paired-donor leave-one-out inference.",
-      "references": [],
-      "implementation": "katana_next/science/bulk.py:_replicate_metrics"
-    },
-    {
-      "id": "qc.apply_measurement_se_gate",
-      "default": false,
-      "operator": "enabled_if_true",
-      "unit": "boolean",
-      "evidence_class": "diagnostic_only_policy",
-      "rationale": "Uncalibrated approximate uncertainty is not a default hard filter.",
-      "references": [],
-      "implementation": "katana_next/science/bulk.py:apply_stable_event_qc"
-    },
-    {
-      "id": "qc.max_approximate_measurement_se",
-      "default": 0.12,
-      "operator": "<= only if explicitly enabled",
-      "unit": "maximum approximate PSI SE across positive-count finite observations",
-      "evidence_class": "uncalibrated_katana_diagnostic",
-      "rationale": "sqrt(max(PSI*(1-PSI),0)/(IJC+SJC+1)); not rMATS hierarchical-model SE.",
-      "references": [
-        "rMATS2014"
-      ],
-      "implementation": "katana_next/science/bulk.py:_replicate_metrics",
-      "reference_scope": "rMATS2014 supports the distinction from the native model; it does not validate 0.12 or this approximation."
     }
   ],
-  "built_in_presets": {
-    "exploratory": {
-      "min_reads": 8.0,
-      "min_supported_replicates": 2.0,
-      "min_direction_consistency": 0.67,
-      "max_measurement_se": 0.18
+  "compatibility_columns": {
+    "stable_event": {
+      "meaning": "all expected samples pass the active count gate",
+      "not_a_biological_stability_claim": true
     },
-    "balanced": {
-      "min_reads": 10.0,
-      "min_supported_replicates": 2.0,
-      "min_direction_consistency": 0.75,
-      "max_measurement_se": 0.12
-    },
-    "stringent": {
-      "min_reads": 20.0,
-      "min_supported_replicates": 3.0,
-      "min_direction_consistency": 0.8,
-      "max_measurement_se": 0.1
+    "stable_significant": {
+      "meaning": "active count gate AND native significance/observed-effect selection",
+      "not_a_biological_stability_claim": true
     }
   },
-  "preset_rule": "Select custom to use caller-supplied QC values; otherwise stored preset values apply.",
+  "native_statistic_policy": {
+    "effects_P_and_adjusted_values": "retained unchanged",
+    "rMATS_cstat": "retain exact native upstream setting",
+    "DESeq2_selection": "does not refit independent filtering, shrinkage or a thresholded-effect model",
+    "stageR_target": "must match source adjustment target; guard not yet implemented",
+    "DEXSeq_unit": "exon/bin evidence remains distinct from gene-level adjustment"
+  },
+  "result_identity_policy": {
+    "policy_id_is_recorded": true,
+    "new_policy_requires_new_analysis_or_cache_identity": true,
+    "historical_Quality_results_must_not_be_silently_relabeled": true,
+    "completed_research_deliveries_preserved": true
+  },
   "reporting_requirements": [
-    "selected Quality source identity",
-    "effective criterion values",
-    "requested parameters",
-    "count mode JC/JCEC",
-    "native test settings and adjusted-value units",
-    "sample and contrast identities",
-    "method versions",
-    "complete source results and exclusion reasons"
+    "active policy ID and count threshold",
+    "selected contrast identity",
+    "expected numerator/denominator sample IDs and sample counts",
+    "resolved sample-to-count-slot mapping",
+    "JC/JCEC mode",
+    "read-support state and unavailable/failure reasons",
+    "native significance settings and adjusted-value units",
+    "native upstream test settings",
+    "method/workflow versions",
+    "complete native source results"
   ],
+  "historical_policy": {
+    "status": "archived_not_active",
+    "source_commit": "8c368b74cba5a7a7b25ca9edea8c40231b9d598f",
+    "archive": "history/8c368b7/README.md",
+    "archive_manifest": "history/8c368b7/archive-manifest.json"
+  },
+  "implementation_binding": {
+    "status": "implemented",
+    "policy_constant": "katana_next.science.bulk.READ_SUPPORT_POLICY_VERSION",
+    "count_gate": "katana_next.science.bulk.apply_stable_event_qc",
+    "expected_sample_scope": "production project loader resolves every declared contrast-arm sample and records the expected sizes",
+    "selected_contrast_landscape": "all selected samples and all included selected-contrast event rows must satisfy support; no OR rescue",
+    "source_contract_guard": "katana_next/workflows/sources.py",
+    "evidence_scope": "Local implementation and source-identity checks passed; these are not new experimental-data acceptance or biological validation. The original native statistical results remain unchanged.",
+    "historical_policy_data_preserved": true,
+    "local_implementation_review": "passed"
+  },
+  "result_columns": {
+    "read_support_policy": "active policy identity",
+    "passes_data_usability": "valid correctly sized PSI/IJC/SJC vectors for both arms",
+    "passes_read_counts": "all expected count slots meet IJC+SJC>=10",
+    "passes_read_support": "passes_data_usability AND passes_read_counts",
+    "measurement_eligible": "compatibility alias for passes_read_support",
+    "stable_event": "compatibility alias for passes_read_support",
+    "stable_significant": "read support AND native significance/observed-effect selection",
+    "read_support_failure_reason": "invalid-input and/or low-count reasons",
+    "numerator_expected_samples": "expected numerator arm size",
+    "denominator_expected_samples": "expected denominator arm size"
+  },
+  "selected_contrast_landscape": {
+    "sample_matrix_rule": "Every selected sample requires valid PSI and finite nonnegative informative counts >=10.",
+    "row_rule": "All included event rows from the selected contrasts must be measurement_eligible.",
+    "contrast_OR_rescue_allowed": false,
+    "missing_values": "not zero and not passing",
+    "separate_whole_cohort_network_criteria_changed": false
+  },
+  "software_version": "2.0.0b3.dev20261022",
+  "workflow_versions": {
+    "quality.stable_as": {
+      "version": "3.0.0",
+      "label": "AS read support",
+      "class": "StableAsWorkflow"
+    },
+    "landscape.bulk": {
+      "version": "2.1.0",
+      "label": "Bulk splicing landscape",
+      "class": "LandscapeWorkflow"
+    },
+    "differential.as": {
+      "version": "3.0.0",
+      "label": "Differential alternative splicing",
+      "class": "DifferentialAsWorkflow"
+    },
+    "differential.cross_comparison": {
+      "version": "3.0.0",
+      "label": "Exact cross-comparison AS",
+      "class": "CrossComparisonWorkflow"
+    }
+  },
   "source_sha256": {
-    "katana_next/science/bulk.py": "9cd7470a0d05b52edba043944d6848baa0ed2ea3b8b71c556263cece909df1aa",
-    "katana_next/workflows/bulk.py": "abe34b1515fcf62bb4964b915c9668a57bbf3128375e792e031315e245b93baa"
+    "katana_next/science/bulk.py": "1b43b7c7aa8c38838f001a094fab4c1fcdcc11cccb1cfa6bf2155f106d4fa658",
+    "katana_next/workflows/bulk.py": "cb557fdaf4273e428cdb5b3384e00cdc38501497a2943e9253051ec1765d2d5a",
+    "katana_next/workflows/sources.py": "9092732807d01fb4ece424429cf3aa763bdcac6bef751324aa40128824264f45",
+    "pyproject.toml": "e7d8d30a6eb2802b0522b504f22c05b6e05306d0b7604bc10aaf032e74b8d49f",
+    "katana_next/__init__.py": "21433e65fdcacd9c668e0b2b186774d95cf5a42b8a269df2c913a8606e8c3f31"
   }
 }
