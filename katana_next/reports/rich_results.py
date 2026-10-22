@@ -386,6 +386,11 @@ def collect_rich_results(
             seen.add(key)
             observed.add(chapter)
             root = _root_for(path)
+            declared_root = _path(metadata.get("portable_root"), project_root)
+            if declared_root is not None:
+                if not declared_root.is_dir() or not _inside(path, declared_root):
+                    raise ValueError("Declared portable root must contain its completed source asset")
+                root = declared_root
             deps = _dependencies(path, root, by_id) if kind in {"html", "vega"} else {
                 "local_dependencies": [], "local_link_rewrites": [],
                 "portability_warnings": [], "external_urls": [],
@@ -423,7 +428,7 @@ def collect_rich_results(
                            "portable_root": str(root), "relative_path": path.relative_to(root).as_posix(),
                            "source_bytes": stat.st_size, "source_mtime_ns": stat.st_mtime_ns,
                            "display_group_id": str(artifact.get("artifact_id") or path.parent.name) + ":" + stem,
-                           "display_in_main": not (path.suffix.lower() == ".svg" and path.with_suffix(".png").is_file()),
+                           "display_in_main": bool(metadata.get("display_in_main", True)) and not (path.suffix.lower() == ".svg" and path.with_suffix(".png").is_file()),
                            **deps}
             if metadata.get("completion_scope") == "sequence_consequences_only":
                 result_meta["partial_status"] = "sequence_consequences_available_inference_not_completed"

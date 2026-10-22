@@ -49,6 +49,13 @@ def _ordered_panels(builder, chapter):
         contrasts = {c['contrast_id']: i for i,c in enumerate(builder.source['project'].get('contrasts', []))}
         levels = {'DEG': 0, 'DAS': 1, 'DTU': 2, 'DEXSeq': 3, 'integration': 4}
         return sorted(records, key=lambda r: (contrasts.get(r.get('contrast_id'), 10**6), levels[_analysis(r)]))
+    if chapter == 7:
+        def evidence_layer(record):
+            title = record['title'].lower()
+            if 'motiftrace' in title:
+                return 3 if any(x in title for x in ('window', 'cluster', 'statistics')) else 2
+            return 1 if any(x in title for x in ('motif', 'clip', 'mapp')) else 0
+        return sorted(records, key=evidence_layer)
     return records
 
 
@@ -62,7 +69,7 @@ def _top10(record, output):
     body = ''
     for rank, row in enumerate(rows[:10], 1):
         details = '<dl>'+''.join('<dt>'+esc(k)+'</dt><dd>'+_cell(row.get(k))+'</dd>' for k in columns)+'</dl>'
-        body += '<tr><td>'+str(rank)+'</td>'+''.join('<td title="'+esc(row.get(k))+'">'+_cell(row.get(k))+'</td>' for k in visible)+'<td><details><summary>Details</summary>'+details+'</details></td></tr>'
+        body += '<tr><td>'+str(rank)+'</td>'+''.join('<td title="'+esc(row.get(k))+'"><span class="top10-cell-value">'+_cell(row.get(k))+'</span></td>' for k in visible)+'<td><details><summary>Details</summary>'+details+'</details></td></tr>'
     if not rows: body = '<tr><td colspan="20">No qualifying result for this selection. No nonsignificant result has been promoted to fill ten rows.</td></tr>'
     full = record.get('full_path', record.get('full_table', ''))
     if full:

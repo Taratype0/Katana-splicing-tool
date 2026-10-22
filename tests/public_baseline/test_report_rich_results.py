@@ -276,3 +276,29 @@ def test_network_baseline_does_not_claim_bootstrap_confidence(tmp_path):
     boot.write_text("module\tconfidence\nM1\t0.82\n")
     rows = collect_rich_results([base, artifact(boot, artifact_id="bootstrap", metadata={"completion_scope": "bootstrap_confidence"})])
     assert not any(row["metadata"].get("component") == "network_bootstrap" for row in rows)
+
+
+def test_explicit_independent_portable_root_retains_parent_table_links(tmp_path):
+    root = tmp_path / "network-view"
+    (root / "browser").mkdir(parents=True)
+    (root / "tables").mkdir()
+    table = root / "tables" / "all_members.tsv"
+    table.write_text("event\tmodule\ne1\tM1\n")
+    browser = root / "browser" / "ALL_MODULES.html"
+    browser.write_text('<a href="../tables/all_members.tsv">Every member</a>')
+    rows = collect_rich_results([artifact(browser, metadata={"portable_root": str(root), "display_in_main": False})])
+    row = available(rows)[0]
+    assert row["metadata"]["display_in_main"] is False
+    assert not row["metadata"]["portability_warnings"]
+    receipt = copy_rich_asset(row, tmp_path / "portable")
+    assert (tmp_path / "portable" / "tables" / "all_members.tsv").read_bytes() == table.read_bytes()
+    assert Path(receipt["path"]).name == "ALL_MODULES.html"
+
+
+def test_declared_portable_root_cannot_relocate_unrelated_asset(tmp_path):
+    source = tmp_path / "members.tsv"
+    source.write_text("event\ne1\n")
+    unrelated = tmp_path / "unrelated"
+    unrelated.mkdir()
+    with pytest.raises(ValueError, match="must contain"):
+        collect_rich_results([artifact(source, metadata={"portable_root": str(unrelated)})])

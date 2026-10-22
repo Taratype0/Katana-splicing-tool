@@ -29,6 +29,28 @@ workspace and shared workflow API. Its outputs are the HTML report, portable
 ZIP, provenance and machine-readable report manifest. The existing
 `reports.bundle` and completed-report import routes remain available.
 
+### Relative file paths
+
+A report descriptor can live separately from the original study. Its
+`project_manifest`, catalog fields, `extra_assets` and `supplemental_sources`
+are relative to the descriptor file's directory. Inline descriptors supplied
+as Python dictionaries use the caller's current working directory. Native
+artifact paths inside a catalog remain relative to the native project
+manifest, regardless of where the descriptor or exported catalog is stored.
+The same native directory resolves `input_root`, `output_root`, annotation
+GTF/FASTA paths, project asset paths and sample `quant_sf` paths. Resolution
+uses a report-only copy; parent hashes always describe the original manifest.
+Remote URIs are preserved as declared and are not fetched by this local report
+loader; use locally available completed inputs for report assembly.
+
+An explicitly supplied `--catalog` or Python `catalog=` argument is relative
+to the caller's current working directory. This overrides a descriptor's
+catalog path. For `extra_views`, a referenced JSON file resolves its own panel,
+table and Top 10 complete-result paths relative to that views file; inline
+view definitions resolve those paths relative to the report descriptor.
+Absolute paths retain their original targets. Report loading does not rewrite
+any descriptor, catalog or source result.
+
 ## DAS selection and Top 10
 
 RS-DAS is the default: native caller FDR and effect criteria plus IJC + SJC of
