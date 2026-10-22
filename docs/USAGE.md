@@ -121,6 +121,44 @@ if that chain or its recorded values are unavailable, it says **Not recorded**.
 It never substitutes today's defaults or an unrelated newer run. New interpreted
 reports use a separate run directory, preserving previous deliveries.
 
+## Optional network labels
+
+`programs.cosplice`, `programs.psi_network` and `programs.hub_events` default to
+`apply_threshold_labels=false`. Keep this default to export continuous evidence
+and complete rankings without core/peripheral/stability or hub-candidate labels.
+To add the documented descriptive presets, explicitly supply:
+
+```json
+{"apply_threshold_labels": true}
+```
+
+This adds labels only; it does not delete members or refit module assignments.
+`not_applied` means labeling was disabled. It is different from an estimable
+candidate failing a selected preset, an analysis not run, or a metric that could
+not be estimated. An optional preset-selection frequency depends on that preset;
+it is not the probability of a true biological hub. The legacy composite
+membership score is also identified as threshold-dependent evidence. Raw
+measurements and complete per-metric ranks remain available.
+
+Report methods record the source run's actual label policy and switch, while
+preserving the default FDR reporting level of 0.05 and the native correction
+families. Historical results are not relabeled by opening or exporting them.
+
+The standalone stage/CLI route uses the same opt-in setting in project YAML:
+
+```yaml
+consensus:
+  clustering_method: backbone_confidence_only
+  apply_threshold_labels: false
+```
+
+Its current tables and report companion are written separately under
+`label_views/`; raw scientific tables and the frozen report remain internal or
+historical references. Use `CoSplicePipeline.run_stage(...)` or the corresponding
+CLI stage command for these versioned views. Direct legacy numerical stage
+methods retain their internal raw schema. Historical refinement modes cannot
+be presented as an unfiltered partition merely by disabling their labels.
+
 ## English reports
 
 The two existing report entries remain available:

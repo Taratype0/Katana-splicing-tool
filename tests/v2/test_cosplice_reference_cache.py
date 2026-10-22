@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import pytest
 
 from katana_next.infrastructure.fingerprints import fingerprint_file, fingerprint_value
 from katana_next.workflows.programs import CoSpliceWorkflow, configure_production_membership
@@ -6,8 +7,9 @@ from katana_next.workflows.programs import CoSpliceWorkflow, configure_productio
 
 def test_product_default_annotates_instead_of_rejecting():
     workflow = CoSpliceWorkflow()
-    assert workflow.normalize_parameters({})["membership_policy"] == "backbone_confidence_only"
-    assert workflow.normalize_parameters({"membership_policy": "backbone_refined_consensus"})["membership_policy"] == "backbone_refined_consensus"
+    assert workflow.normalize_parameters({})["apply_threshold_labels"] is False
+    with pytest.raises(ValueError, match='cannot refine or filter'):
+        workflow.normalize_parameters({"membership_policy": "backbone_refined_consensus"})
 
 
 def test_old_size_cutoff_cannot_silently_prune_annotation_only_modules():

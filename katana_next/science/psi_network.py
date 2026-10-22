@@ -1,6 +1,6 @@
 """Public PSI-only network contract, distinct from read-supported rMATS QC."""
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 import numpy as np
 import pandas as pd
 from katana_cosplice.config import NetworkConfig, ConsensusConfig
@@ -96,7 +96,9 @@ def fit_psi_backbone(complete, qc, network, samples):
 
 
 def fit_psi_network(matrix, samples, *, rscript=None, progress=None, filters=None, network=None,
-                    filter_profile='legacy',max_features=2000):
+                    filter_profile='legacy',max_features=2000,apply_threshold_labels=False):
+    from katana_next.science.network_labels import member_label_view, network_label_policy
+    network_label_policy(apply_threshold_labels)
     from katana_next.science.frozen_psi import _samples
     _samples(matrix, samples,allow_empty_events=filter_profile=='coverage_variable')
     measured, complete, qc, means = prepare_psi_network(matrix, samples, filters=filters,
@@ -113,4 +115,8 @@ def fit_psi_network(matrix, samples, *, rscript=None, progress=None, filters=Non
         progress("Discovery WGCNA fit complete; starting 50 module-confidence refits")
     confidence = build_bootstrap_coassignment_consensus(complete, baseline.assignments, samples, network,
         ConsensusConfig(bootstrap_iterations=50, clustering_method="backbone_confidence_only"), progress=progress)
+    confidence = replace(confidence,
+        assignments=member_label_view(confidence.assignments, apply_threshold_labels),
+        module_summary=member_label_view(confidence.module_summary, apply_threshold_labels),
+        diagnostics=member_label_view(confidence.diagnostics, apply_threshold_labels))
     return measured, qc, means, baseline, confidence

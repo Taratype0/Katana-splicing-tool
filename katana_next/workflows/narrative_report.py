@@ -89,19 +89,41 @@ def _network_module_parameter_record(context, config):
             or isinstance(height, bool) or not isinstance(height, (int, float))
             or not math.isfinite(height) or not 0 <= height <= 1):
         return missing
+    label_policies = [a.metadata.get('network_label_policy') for a in linked]
+    label_policy = (dict(label_policies[0]) if isinstance(label_policies[0], dict)
+                    and all(value == label_policies[0] for value in label_policies[1:]) else None)
     return {'status': 'recorded', 'network_module_parameters': dict(actuals[0]),
+            'network_label_policy': label_policy,
             'network_run_fingerprint': linked[0].run_fingerprint,
             'network_source_artifact_ids': [a.artifact_id for a in linked],
             'module_cards_artifact_id': explanations[0].artifact_id,
             'module_cards_file': str(selected.resolve())}
 
 
-def _append_network_module_methods(path, record):
+def _append_network_module_methods(path, record, *, mark_delivery_references=False):
     """Append recorded settings to a newly generated report or delivery copy."""
     from bs4 import BeautifulSoup
 
     path = Path(path)
     soup = BeautifulSoup(path.read_text(encoding='utf-8'), 'html.parser')
+    if mark_delivery_references:
+        for delivery_section in soup.find_all('section'):
+            heading = delivery_section.find(['h2', 'h3'], recursive=False)
+            title = heading.get_text(' ', strip=True).lower() if heading else ''
+            section_key = delivery_section.get('id', '')
+            if (section_key in {'module-15_CoSplice', 'module-23_Module_explanation'}
+                    or any(word in title for word in ('cosplice', 'katana-splice-network'))):
+                reference = soup.new_tag('p', attrs={'class': 'network-delivery-reference'})
+                reference.string = (
+                    'Delivery reference: figures and table previews in this section are retained from their original delivery. '
+                    'Their individual threshold-label policies have not been authenticated by the report generator. '
+                    'They remain historical/internal references and must not be relabelled by the current policy switch. '
+                    'The recorded policy appendix applies only to its explicitly linked source run; '
+                    'use that run\'s complete current table views for label status and continuous metrics.')
+                if heading:
+                    heading.insert_after(reference)
+                else:
+                    delivery_section.insert(0, reference)
     appendix = path.parent / 'NETWORK_MODULE_PARAMETERS.json'
     section_id = 'network-module-parameters'
     # A previously approved reader may already contain historical provenance.
@@ -128,6 +150,26 @@ def _append_network_module_methods(path, record):
     paragraph = soup.new_tag('p')
     paragraph.string = text
     section.append(paragraph)
+    policy = record.get('network_label_policy')
+    policy = policy if isinstance(policy, dict) else {}
+    enabled = policy.get('apply_threshold_labels')
+    filtering = policy.get('hard_filter')
+    policy_text = (f"Network label policy: {policy.get('policy_id') or 'not recorded'}. "
+                   f"Threshold labels: {'on' if enabled is True else 'off' if enabled is False else 'not recorded'}. "
+                   f"Hard filtering: {'yes' if filtering is True else 'no' if filtering is False else 'not recorded'}. "
+                   'Off means labels were not applied, not that members failed a threshold. '
+                   'Historical policy values are never inferred from current defaults.')
+    policy_paragraph = soup.new_tag('p', attrs={'class': 'network-label-policy'})
+    policy_paragraph.string = policy_text
+    section.append(policy_paragraph)
+    if isinstance(policy.get('label_thresholds'), dict):
+        rules = soup.new_tag('pre', attrs={'class': 'network-label-rules'})
+        rules.string = json.dumps(policy['label_thresholds'], indent=2, sort_keys=True)
+        section.append(rules)
+    from katana_next.workflows.reporting import NETWORK_LABEL_METHODS
+    basis = soup.new_tag('p', attrs={'class': 'network-label-methods'})
+    basis.string = NETWORK_LABEL_METHODS
+    section.append(basis)
     link = soup.new_tag('a', href=appendix.name)
     link.string = 'Network parameter provenance'
     section.append(link)
@@ -137,7 +179,7 @@ def _append_network_module_methods(path, record):
 
 
 class NarrativeReportWorkflow(WorkflowBase):
-    version = '1.4.0+network_parameters.20261022'
+    version = '1.5.0+network_labels.20261022'
     definition = WorkflowDefinition(workflow_id='reports.interpreted_bundle', workspace_id='reports', label='English interpreted study report', question='What did this experiment show, how strong is the evidence, and what remains unresolved?', method='Question-led synthesis of completed result delivery folders; complete non-significant attachments and SHA256 inventory.', output_summary='English reports, source manifest and portable ZIP; no hidden upstream analysis.', analysis_unit='experiment and its declared contrasts', parameters=(ParameterDefinition('config_path', 'Delivery configuration JSON', 'text', '', 'Keys: study, result_root, manifest_path. Requires standardized numbered delivery directories.'),), limitations='Requires completed delivery tables. This synthesis is not causal validation or a claim of journal suitability.')
 
     def _config(self, parameters):
@@ -222,7 +264,7 @@ class NarrativeReportWorkflow(WorkflowBase):
         root = Path(c['result_root'])
         out = root / '24_Narrative_report' / run_fingerprint[:16]
         build_report(c['study'], root, c['manifest_path'], out)
-        parameter_provenance = _append_network_module_methods(out / 'REPORT_EN.html', _network_module_parameter_record(context, c))
+        parameter_provenance = _append_network_module_methods(out / 'REPORT_EN.html', _network_module_parameter_record(context, c), mark_delivery_references=True)
         for name in ('REPORT_EN.html', 'SOURCE_MANIFEST_SHA256.tsv', 'report_status.json'):
             writer.existing_file(name, out / name, entity_type='report')
         writer.existing_file('Recorded network module parameters', parameter_provenance, entity_type='report_provenance')

@@ -14,8 +14,11 @@ count-bearing CoSplice. The approved module controls add two nullable runtime
 overrides: blank inherits the YAML configuration; standard effective defaults
 remain 20 events and merge height 0.25. The module kernel is unchanged. Both
 report entrypoints have explicit version changes to record actual parameters,
-without inferring historical values or rerunning scientific stages. Other
-methods, including MotifTrace and DEG runtime parameters, remain unchanged.
+without inferring historical values or rerunning scientific stages. The approved
+network annotation policy adds `apply_threshold_labels=false` to CoSplice, the
+imported-PSI workflow and explicit hub analysis. Continuous metrics and complete
+ranks remain; opt-in labels cannot delete events or change fitted assignments.
+Other methods, including MotifTrace and DEG runtime parameters, remain unchanged.
 
 The tests use generated synthetic inputs. The API test opens a project, executes
 a small DEG result-reader workflow, verifies reuse of its completed result,

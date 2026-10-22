@@ -11,6 +11,7 @@ from typing import Any
 
 import pandas as pd
 from katana_next.science.report_language import is_retired_report
+from katana_next.science.network_label_report import NETWORK_LABEL_METHODS
 
 from katana_cosplice.branding import display_module_name
 
@@ -27,7 +28,7 @@ from katana_next.workflows.base import (
 
 
 class ReproducibilityReportWorkflow(WorkflowBase):
-    version = "2.1.0+moduleparams.20261022"
+    version = "2.2.0+network_labels.20261022"
     definition = WorkflowDefinition(
         workflow_id="reports.bundle",
         workspace_id="reports",
@@ -284,6 +285,7 @@ def _html_report(context: ProjectContext, artifacts: list[AnalysisArtifact]) -> 
             + "".join(_embedded_figure(value) for value in values)
             + "".join(_summary_table(value) for value in values)
             + _network_module_parameters_html(analysis_id, values)
+            + _network_label_policy_html(analysis_id, values)
             + "<details><summary>Methods, interpretation and source inventory</summary>"
             f"<p><strong>Method.</strong> {html.escape(str(metadata.get('method', 'Recorded in artifact metadata.')))}</p>"
             f"<p><strong>Interpretation.</strong> {html.escape(str(metadata.get('interpretation', 'Review source artifacts.')))}</p>"
@@ -356,6 +358,46 @@ def _network_module_parameters_html(
     )
 
 
+def _network_label_policy_records(analysis_id, artifacts):
+    network_ids = {"programs.cosplice", "programs.psi_network", "programs.hub_events", "single_cell.programs"}
+    if analysis_id not in network_ids and not any("network_label_policy" in item.metadata for item in artifacts):
+        return []
+    rows, seen = [], set()
+    for item in artifacts:
+        saved = item.metadata.get("network_label_policy")
+        policy = saved if isinstance(saved, dict) else {}
+        enabled = policy.get("apply_threshold_labels")
+        filtering = policy.get("hard_filter")
+        row = {"run": item.run_fingerprint,
+               "policy_id": str(policy.get("policy_id") or "not recorded"),
+               "apply_threshold_labels": "on" if enabled is True else "off" if enabled is False else "not recorded",
+               "hard_filter": "yes" if filtering is True else "no" if filtering is False else "not recorded",
+               "label_thresholds": json.dumps(policy["label_thresholds"], sort_keys=True)
+               if isinstance(policy.get("label_thresholds"), dict) else "not recorded"}
+        key = tuple(row.values())
+        if key not in seen:
+            rows.append(row)
+            seen.add(key)
+    return rows
+
+
+def _network_label_policy_html(analysis_id, artifacts):
+    rows = _network_label_policy_records(analysis_id, artifacts)
+    if not rows:
+        return ""
+    body = "".join(
+        "<tr>" + "".join(f"<td>{html.escape(row[key])}</td>" for key in
+                         ("run", "policy_id", "apply_threshold_labels", "hard_filter", "label_thresholds")) + "</tr>"
+        for row in rows
+    )
+    return ("<div class='network-label-policy'><h3>Recorded optional network labels</h3>"
+            "<p>Off means labels were not applied; it does not mean that events failed a label rule. "
+            "Missing historical policy records are not replaced by current defaults.</p>"
+            "<table><thead><tr><th>Source run</th><th>Policy</th><th>Threshold labels</th>"
+            f"<th>Hard filtering</th><th>Recorded label rules</th></tr></thead><tbody>{body}</tbody></table>"
+            f"<p>{html.escape(NETWORK_LABEL_METHODS)}</p></div>")
+
+
 def _embedded_figure(artifact: AnalysisArtifact) -> str:
     path = _png_path(artifact)
     if path is None:
@@ -414,6 +456,17 @@ def _pdf_report(
         if layer:
             story.append(Paragraph(f"{layer['number']}. {html.escape(layer['title_en'])}", styles['Heading3']))
             story.append(Paragraph(html.escape(layer['boundary_en']), styles['BodyText']))
+        label_rows = _network_label_policy_records(analysis_id, values)
+        if label_rows:
+            story.append(Paragraph("Recorded optional network labels", styles["Heading3"]))
+            for row in label_rows:
+                story.append(Paragraph(
+                    f"Source run: {html.escape(row['run'])}; policy: {html.escape(row['policy_id'])}; "
+                    f"threshold labels: {row['apply_threshold_labels']}; hard filtering: {row['hard_filter']}. "
+                    f"Recorded label rules: {html.escape(row['label_thresholds'])}.",
+                    styles["BodyText"],
+                ))
+            story.append(Paragraph(html.escape(NETWORK_LABEL_METHODS), styles["BodyText"]))
         parameter_rows = _network_module_parameter_records(analysis_id, values)
         if parameter_rows:
             story.append(Paragraph("Recorded actual module parameters", styles["Heading3"]))
@@ -486,12 +539,19 @@ def _write_archive(
                     continue
                 seen.add(source)
                 safe_analysis = artifact.analysis_id.replace("/", "_").replace("\\", "_")
+                run_directory = context.results.artifact_directory(artifact.analysis_id, artifact.run_fingerprint).resolve()
+                preserve_links = artifact.metadata.get("preserve_relative_report_links") is True
+                if preserve_links:
+                    if not source.is_relative_to(run_directory):
+                        raise ValueError("Portable report HTML must be inside its immutable run directory")
+                    archive_name = f"artifacts/{safe_analysis}/{artifact.run_fingerprint[:12]}/{source.relative_to(run_directory).as_posix()}"
+                else:
+                    archive_name = f"artifacts/{safe_analysis}/{artifact.artifact_id[:8]}_{source.name}"
                 archive.write(
                     source,
-                    f"artifacts/{safe_analysis}/{artifact.artifact_id[:8]}_{source.name}",
+                    archive_name,
                 )
                 extras = [Path(path) for path in artifact.metadata.get("exports", {}).values()]
-                run_directory = context.results.artifact_directory(artifact.analysis_id, artifact.run_fingerprint).resolve()
                 extras.append(run_directory / "parameters.json")
                 for path in extras:
                     path = path.resolve()

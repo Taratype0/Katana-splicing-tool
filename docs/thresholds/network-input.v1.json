@@ -88,14 +88,14 @@
     "software_version": "2.0.0b3.dev20261022",
     "engine_version": "1.3.0",
     "workflow_versions": {
-      "programs.cosplice": "3.1.0"
+      "programs.cosplice": "3.2.0"
     },
     "source_sha256": {
       "katana_cosplice/qc.py": "9d7099b2375844fac70f30f8335935b51f84f8581d14aba564291804feb0fe42",
-      "katana_cosplice/pipeline.py": "cad530c82cb62be3915b5608fd4a93b373e143e68a259f5ca2cb0895be325d82",
+      "katana_cosplice/pipeline.py": "5f41d408a7d90a28e06db110f59dbd1af4ec25e2cae05766382882ec5e885430",
       "katana_cosplice/stage_registry.py": "076a4c2fd59292fbed3fa172b99881d975f8f9d27e15ad90acecb2d2d105de58",
       "katana_cosplice/__init__.py": "b5d1b553eb2053c95283d2b3084d64445c144a2aa34dee61b25f73776282b377",
-      "katana_next/workflows/programs.py": "d2d8e8c9676f9857658f68f940a3ff0de678671213b6cb892705384097572c83"
+      "katana_next/workflows/programs.py": "011653c744010961297ebbcac4e8fbbc23460dc92f63298f45db8a8b43cc5a5e"
     },
     "implementation_test_status": "local_regression_passed",
     "biological_validation_status": "not_newly_performed",

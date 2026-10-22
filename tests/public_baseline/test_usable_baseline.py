@@ -29,12 +29,20 @@ INVENTORY = json.loads(Path(__file__).with_name("workflow_inventory_read_support
 # input eligibility, optional module controls and actual report provenance only.
 for entry in INVENTORY["workflows"]:
     if entry["workflow_id"] == "programs.cosplice":
-        entry["version"] = "3.1.0"
-        entry["parameter_defaults"].update({"min_module_size": None, "merge_cut_height": None})
+        entry["version"] = "3.2.0"
+        entry["parameter_defaults"].update({"min_module_size": None, "merge_cut_height": None,
+                                            "apply_threshold_labels": False})
+        entry["parameter_defaults"].pop("membership_policy", None)
+    elif entry["workflow_id"] == "programs.psi_network":
+        entry["version"] = "1.4.0"
+        entry["parameter_defaults"]["apply_threshold_labels"] = False
+    elif entry["workflow_id"] == "programs.hub_events":
+        entry["version"] = "2.0.0"
+        entry["parameter_defaults"]["apply_threshold_labels"] = False
     elif entry["workflow_id"] == "reports.bundle":
-        entry["version"] = "2.1.0+moduleparams.20261022"
+        entry["version"] = "2.2.0+network_labels.20261022"
     elif entry["workflow_id"] == "reports.interpreted_bundle":
-        entry["version"] = "1.4.0+network_parameters.20261022"
+        entry["version"] = "1.5.0+network_labels.20261022"
 
 
 def test_workflows_match_approved_all_sample_policy_and_retained_other_methods():
@@ -50,7 +58,7 @@ def test_workflows_match_approved_all_sample_policy_and_retained_other_methods()
     assert actual == INVENTORY["workflows"]
 
 
-def test_only_approved_read_support_workflows_changed_from_preserved_baseline():
+def test_only_approved_input_module_and_label_workflows_changed_from_preserved_baseline():
     previous = json.loads(Path(__file__).with_name("workflow_inventory.json").read_text(encoding="utf-8"))
     old = {entry["workflow_id"]: entry for entry in previous["workflows"]}
     current = {entry["workflow_id"]: entry for entry in INVENTORY["workflows"]}
@@ -58,15 +66,21 @@ def test_only_approved_read_support_workflows_changed_from_preserved_baseline():
     assert {key for key in old if old[key] != current[key]} == {
         "quality.stable_as", "landscape.bulk", "differential.as", "differential.cross_comparison", "programs.cosplice",
         "reports.bundle", "reports.interpreted_bundle",
+        "programs.psi_network", "programs.hub_events",
     }
     assert current["quality.stable_as"]["parameter_defaults"] == {"fdr": 0.05, "min_abs_dpsi": 0.1}
     assert current["differential.cross_comparison"]["parameter_defaults"] == {
         "membership_mode": "exact_event", "event_set": "stable_significant",
     }
     assert current["programs.cosplice"]["parameter_defaults"] == {
-        **old["programs.cosplice"]["parameter_defaults"],
-        "min_module_size": None, "merge_cut_height": None,
+        **{key: value for key, value in old["programs.cosplice"]["parameter_defaults"].items()
+           if key != "membership_policy"},
+        "min_module_size": None, "merge_cut_height": None, "apply_threshold_labels": False,
     }
+    for key in ("programs.psi_network", "programs.hub_events"):
+        assert current[key]["parameter_defaults"] == {
+            **old[key]["parameter_defaults"], "apply_threshold_labels": False,
+        }
     for key in ("reports.bundle", "reports.interpreted_bundle"):
         assert current[key]["parameter_defaults"] == old[key]["parameter_defaults"]
 

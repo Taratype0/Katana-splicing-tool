@@ -1,0 +1,97 @@
+{
+  "schema": "katana.network_label_policy/v1",
+  "policy_id": "network-descriptive-labels-opt-in-v1",
+  "status": "user_approved",
+  "decision_date": "2026-10-22",
+  "defaults": {
+    "apply_threshold_labels": false,
+    "hard_filter": false,
+    "reporting": "continuous measurements and complete per-metric rankings",
+    "statistical_reporting_FDR": 0.05
+  },
+  "scope": [
+    "network member-confidence output",
+    "module stability output",
+    "hub metrics and candidates",
+    "network dashboard and report methods"
+  ],
+  "optional_presets": {
+    "role": "descriptive annotation only; no row deletion or change to fitted module assignment",
+    "reference": "network-confidence-review.md",
+    "closed_state": "not_applied; candidate booleans missing rather than false",
+    "basis": "Katana operational choices, not universally calibrated literature cutoffs"
+  },
+  "continuous_outputs": [
+    "co-assignment and alternative-module margin",
+    "kME and bootstrap kME summaries",
+    "all-edge and cross-gene connectivity with complete ranks",
+    "estimability, coverage and bootstrap diagnostics"
+  ],
+  "threshold_dependent_legacy_evidence": {
+    "composite_membership_score": "retain with explicit legacy identity; split-half discrete labels contribute to this score",
+    "preset_bootstrap_selection_frequency": "retain as preset-specific sensitivity evidence, not biological truth probability or a required default rank"
+  },
+  "not_changed": [
+    "WGCNA network fit and fixed module assignments",
+    "native statistical effects, P values and correction families",
+    "approved count-support and module-size/merging settings",
+    "mathematical input validity and experimental-unit requirements",
+    "original application and completed research deliveries"
+  ],
+  "report_requirements": [
+    "actual source policy and labeling switch",
+    "actual configured optional rule values, distinguished from applied values",
+    "method references versus uncalibrated operational cutoffs",
+    "missing, not applied, not computed and not estimable remain distinct",
+    "no backfill of missing historical policy from current defaults"
+  ],
+  "evidence": [
+    {
+      "url": "https://search.r-project.org/CRAN/refmans/WGCNA/html/signedKME.html",
+      "supports": "definition of eigengene membership, not Katana's exact membership cutoffs"
+    },
+    {
+      "url": "https://search.r-project.org/CRAN/refmans/WGCNA/html/intramodularConnectivity.html",
+      "supports": "within-module adjacency sum, not a compulsory top-ten-percent rule"
+    },
+    {
+      "url": "https://stat.ethz.ch/R-manual/R-devel/library/stats/html/p.adjust.html",
+      "supports": "BH adjustment procedure; 0.05 is the selected reporting convention"
+    },
+    {
+      "url": "https://search.r-project.org/CRAN/refmans/fpc/html/clusterboot.html",
+      "supports": "bootstrap Jaccard interpretation guidance; not calibration of Katana's combined stability score"
+    }
+  ],
+  "implementation": {
+    "software_version": "2.0.0b3.dev20261022",
+    "raw_engine_algorithm_version": "1.3.0",
+    "workflow_versions": {
+      "programs.cosplice": "3.2.0",
+      "programs.psi_network": "1.4.0",
+      "programs.hub_events": "2.0.0",
+      "reports.bundle": "2.2.0+network_labels.20261022",
+      "reports.interpreted_bundle": "1.5.0+network_labels.20261022"
+    },
+    "source_sha256": {
+      "katana_cosplice/config.py": "29de7861e2cd28122c33818c6559450202f0bdc2301962cc10a8f28d4a06a3ba",
+      "katana_cosplice/pipeline.py": "5f41d408a7d90a28e06db110f59dbd1af4ec25e2cae05766382882ec5e885430",
+      "katana_next/science/network_labels.py": "73e9d4f855401f204f6e91e2bd544a59703554a22743b9304b03ecb5edbde361",
+      "katana_next/science/network_label_report.py": "5f37d0f02063fa7b16294d374a883804d2b7d12fa29bec7232b6550dff2093d8",
+      "katana_next/science/psi_network.py": "9453c1077849facd45a8cf54a34a36501f824ec0504acf456d16a9846e9a79c4",
+      "katana_next/science/hub_events.py": "2f3be2935a6fb053bd39cd6249561458af6b4004a3d90c9d2f4425e04a374b05",
+      "katana_next/workflows/programs.py": "011653c744010961297ebbcac4e8fbbc23460dc92f63298f45db8a8b43cc5a5e",
+      "katana_next/workflows/psi_network.py": "458aa876787c24004e0f5a94646143fe63253e992f262eb33ce59c24a45fd17c",
+      "katana_next/workflows/hub_events.py": "faa18673247b965b7a77cc6bf971feccb7b05708bccb82a1f8c357521fbe249a",
+      "katana_next/workflows/reporting.py": "c1b5b217e401d18243214c0288503016a9ec1fc48cff14a060a76ab1472045a9",
+      "katana_next/workflows/narrative_report.py": "77aea92da7b24415229b89a512cf829df59bd4cafcd3fff2e9b14b3f6f4e0403",
+      "katana_next/services/module_dashboard.py": "e227332237e4e66ea6d0175fdbdafc5bdaa83a21e7ec256ee4b690d92311df3c",
+      "katana_next/services/design_editor.py": "d6880f0fdd02f489add1cdf3fc2b6e1ca298fe040f3ad519b8717af34040b821",
+      "katana_next/workflows/column_details.py": "169b7d851ebb47f947db38192e93a278a1a15ee1de10ec1de91e5b4d3f45759d",
+      "katana_next/science/module_dashboard_report.py": "c01e02027caadce08faa38cda6de25a21cf16b0b8cff3e7f3c25a3f589a23480",
+      "apps/web/src/components/ModuleDashboard.tsx": "dbaacc71ef683ec7dbecce02fa324c4da136bce8d146d63e945a1ca553a27626"
+    },
+    "test_scope": "Synthetic output/configuration/cache/CLI/UI/report regression and local native R/WGCNA fixtures; no experimental study rerun or new biological validation",
+    "cache_boundary": "Versioned annotation views preserve raw scientific outputs. Label-only changes reuse verified completed measurements; unknown legacy fits are not claimed as verified current-format cache hits."
+  }
+}

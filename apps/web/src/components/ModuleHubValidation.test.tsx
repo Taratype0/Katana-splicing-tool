@@ -19,7 +19,7 @@ it("does not show zero-connectivity hubs when there are no edges",async()=>{
   vi.spyOn(api,"moduleDashboard").mockResolvedValue(data());
   const run=vi.spyOn(api,"runWorkflow");
   render(<QueryClientProvider client={new QueryClient()}><ModuleDashboard projectId="p" artifactId="a" module="M1"/></QueryClientProvider>);
-  expect(await screen.findByText(/No validated hub candidates/)).toHaveTextContent("no_supported_edges");
+  expect(await screen.findByText(/No optional labelled hub candidates/)).toHaveTextContent("no_supported_edges");
   expect(screen.queryByRole("columnheader",{name:"Full kWithin"})).not.toBeInTheDocument();
   expect(run).not.toHaveBeenCalled();vi.restoreAllMocks();
 });
@@ -34,7 +34,37 @@ it("shows persisted full metrics and same-gene rank comparison without launching
   render(<QueryClientProvider client={new QueryClient()}><ModuleDashboard projectId="p" artifactId="a" module="M1"/></QueryClientProvider>);
   expect((await screen.findAllByRole("columnheader",{name:"Full kWithin"})).length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText("0.90 / 0.80 (all / cross-gene)")).toBeInTheDocument();
-  fireEvent.click(screen.getByText(/All events: same-gene sensitivity/));
   expect(screen.getByRole("columnheader",{name:"Rank change"})).toBeInTheDocument();
-  expect(screen.getByText("passed")).toBeInTheDocument();expect(run).not.toHaveBeenCalled();vi.restoreAllMocks();
+  expect(screen.getByText(/not recorded; passed/)).toBeInTheDocument();expect(run).not.toHaveBeenCalled();vi.restoreAllMocks();
+});
+
+it("shows every continuous metric and sortable rank while optional hub labels remain NA",async()=>{
+  const d=data();d.total_events=25;d.hub_status="labels_not_applied";d.hub_label_status="not_applied";
+  d.hub_comparison=Array.from({length:25},(_,i)=>({event_key:`event-${i+1}`,gene:`Gene${i+1}`,connectivity:25-i,
+    kWithin:25-i,kWithin_no_same_gene:20-i/2,kME:.9-i/100,rank_all_edges:i+1,rank_no_same_gene:i+1,
+    hub_candidate:null,label_status:"not_applied",estimation_status:"estimable"}));
+  vi.spyOn(api,"moduleDashboard").mockResolvedValue(d);const run=vi.spyOn(api,"runWorkflow");
+  render(<QueryClientProvider client={new QueryClient()}><ModuleDashboard projectId="p" artifactId="a" module="M1"/></QueryClientProvider>);
+  expect(await screen.findByText(/Optional threshold labels were not applied/)).toBeInTheDocument();
+  const section=screen.getByRole("region",{name:"Complete hub metrics"});
+  expect(section.querySelectorAll("tbody tr")).toHaveLength(25);
+  expect(section.querySelector("tbody tr")?.textContent).toContain("event-1");
+  fireEvent.click(screen.getByRole("button",{name:/^Full rank$/}));
+  expect(section.querySelector("tbody tr")?.textContent).toContain("event-25");
+  expect(section.querySelectorAll("tbody tr")).toHaveLength(25);
+  expect(screen.getByRole("button",{name:"Optional labelled hub candidates TSV"})).toBeDisabled();
+  expect(screen.queryByText(/No optional labelled hub candidates/)).not.toBeInTheDocument();
+  expect(screen.getAllByText("not_applied; estimable")).toHaveLength(25);
+  expect(screen.getByText(/not a probability, P value or FDR/)).toBeInTheDocument();
+  expect(run).not.toHaveBeenCalled();vi.restoreAllMocks();
+});
+
+it("uses inclusive FDR 0.05 for the functional-label boundary without changing statistics",async()=>{
+  const d=data();d.enrichment=[{term:"Boundary term",overlap_count:2,overlap_genes:"G1;G2",pvalue:.01,FDR:.05}];d.enrichment_total=1;
+  vi.spyOn(api,"moduleDashboard").mockResolvedValue(d);
+  render(<QueryClientProvider client={new QueryClient()}><ModuleDashboard projectId="p" artifactId="a" module="M1"/></QueryClientProvider>);
+  const plot=await screen.findByRole("img",{name:"Module functional enrichment bubble plot"});
+  expect(plot.querySelector("circle")).toHaveAttribute("fill","#b85362");
+  expect(screen.getByText(/Red: FDR≤0.05/)).toBeInTheDocument();
+  expect(d.enrichment[0].FDR).toBe(.05);vi.restoreAllMocks();
 });

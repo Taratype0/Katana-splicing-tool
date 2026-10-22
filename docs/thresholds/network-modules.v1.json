@@ -50,14 +50,14 @@
     }
   ],
   "implementation": {
-    "programs.cosplice": "3.1.0",
-    "reports.bundle": "2.1.0+moduleparams.20261022",
-    "reports.interpreted_bundle": "1.4.0+network_parameters.20261022",
+    "programs.cosplice": "3.2.0",
+    "reports.bundle": "2.2.0+network_labels.20261022",
+    "reports.interpreted_bundle": "1.5.0+network_labels.20261022",
     "validation_scope": "synthetic runtime/configuration/report/UI regression; no new native WGCNA fit or biological validation",
     "source_sha256": {
-      "katana_next/workflows/programs.py": "d2d8e8c9676f9857658f68f940a3ff0de678671213b6cb892705384097572c83",
-      "katana_next/workflows/reporting.py": "811d53a6a5fa0351810813a047993ffca775e9d1523787a3e0f2a6966cbfc681",
-      "katana_next/workflows/narrative_report.py": "24e3e9db9a3731d957fb86bc5358e063e00a66a49a2f46ec7be5eeeb122e2a35",
+      "katana_next/workflows/programs.py": "011653c744010961297ebbcac4e8fbbc23460dc92f63298f45db8a8b43cc5a5e",
+      "katana_next/workflows/reporting.py": "c1b5b217e401d18243214c0288503016a9ec1fc48cff14a060a76ab1472045a9",
+      "katana_next/workflows/narrative_report.py": "77aea92da7b24415229b89a512cf829df59bd4cafcd3fff2e9b14b3f6f4e0403",
       "katana_next/science/narrative_report.py": "e31efef89cf70a2a588fc6758bf1f3ecd2534554130b386f3b9142979e0b378d",
       "katana_next/science/report_complete.py": "aeb29a4403e830eec243cc6246647b62f49bf2c2c883d0d1aa1b08be70091cc7",
       "apps/web/src/components/WorkflowControls.tsx": "8bd4c26cde6606c1f73f88252c375c02a4ae2209071808d7efb35bf0df6faf33"
@@ -66,6 +66,6 @@
   "unchanged": [
     "original application and completed research results",
     "WGCNA and consensus algorithms",
-    "member confidence, Hub and network significance thresholds pending separate review"
+    "Member, Hub and stability labels use the separately approved opt-in policy network-labels.v1.json; discovery algorithms are unchanged."
   ]
 }

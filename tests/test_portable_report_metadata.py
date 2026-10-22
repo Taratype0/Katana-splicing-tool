@@ -11,7 +11,7 @@ from katana_next.science.narrative_report import build_report
 def test_report_uses_selected_contrast_count_and_explicit_design_metadata(tmp_path, monkeypatch):
     from katana_next.science import report_annotation, report_complete
 
-    monkeypatch.setattr(report_complete, "polished_heatmaps", lambda base: None)
+    monkeypatch.setattr(report_complete, "polished_heatmaps", lambda base, output_dir=None: None)
     monkeypatch.setattr(report_complete, "complete_sections", lambda *args: "")
     monkeypatch.setattr(report_annotation, "annotate_exons", lambda frame, annotation: frame.copy())
     base = tmp_path / "completed-results"

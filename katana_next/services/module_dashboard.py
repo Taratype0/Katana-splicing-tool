@@ -65,17 +65,25 @@ def module_dashboard(context, artifact_id, module, *, include_measurements=False
     result = build_module_dashboard(matrix, assignments, samples, module, metadata=metadata, edges=edges, scores=scores, **options)
     result["discovery_run"] = run
     result["sources"] = used
+    result["network_label_policy"] = source.metadata.get("network_label_policy")
     if hubs is not None:
         selected = hubs.loc[hubs.module.astype(str).eq(str(module)) & hubs.condition.astype(str).eq(result['condition'])].copy()
-        result['hub_method'] = 'Full observed-PSI module adjacency and PC1/kME; biological-block bootstrap; candidates must pass both all-edge and no-same-gene criteria. All ranks and rejection reasons remain exportable.'
+        result['hub_method'] = 'Full observed-PSI module adjacency and PC1/kME; biological-block bootstrap. Continuous metrics and complete ranks remain available for every assessed event. Optional threshold labels do not filter membership; preset-selection frequency is not a probability or P/FDR.'
         result['hub_status'] = 'scope_not_computed' if selected.empty else 'no_hubs_passed'
+        policy = hub_anchor.metadata.get('network_label_policy') if hub_anchor else None
+        result['hub_label_policy'] = policy
+        enabled = policy.get('apply_threshold_labels') if isinstance(policy, dict) else None
+        result['hub_label_status'] = 'applied' if enabled is True else 'not_applied' if enabled is False else 'not_recorded'
         if not selected.empty:
             selected = selected.assign(connectivity=selected.kWithin).sort_values(['rank_all_edges','event_key'],kind='stable')
             result['total_edges'] = int(selected.supported_degree.sum()//2)
             result['connectivity_definition'] = 'Complete module adjacency sum (kWithin) from the explicit hub analysis; no edge threshold/cap in connectivity. Node sizes use this value. The drawing alone is thinned.'
-            # Do not turn an unsupported/underpowered network into a hub list.
-            eligible = selected.loc[selected.hub_candidate.eq(True) & selected.supported_degree.gt(0) & selected.cross_gene_supported_degree.gt(0)]
-            if result['status'] != 'available' or selected.supported_degree.sum() == 0:
+            # NA means labels were not applied, never failed or silently passed.
+            eligible = selected.loc[selected.hub_candidate.eq(True).fillna(False)]
+            if enabled is False:
+                eligible = eligible.iloc[:0]
+                result['hub_status'] = 'labels_not_applied'
+            elif result['status'] != 'available' or selected.supported_degree.sum() == 0:
                 eligible = eligible.iloc[:0]
                 result['hub_status'] = 'no_supported_edges'
             elif len(eligible):

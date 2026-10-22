@@ -1,10 +1,18 @@
 # Network confidence, hubs and statistical labels
 
-**Status: current implementation review; stage 3 awaits user confirmation.**
-This document records existing behavior. It does not change an algorithm, a result,
-or a default. The stage-2 defaults, **20 splice events per module** and **merge
-height 0.25**, are already approved; they are not awaiting approval here. These
-parameters remain configurable and the report records the values actually used.
+**Status: stage 3 approved on 2026-10-22; labels are optional and off by default.**
+The approved output policy is `network-descriptive-labels-opt-in-v1`:
+retain continuous measurements and complete rankings, with no default rejection
+by the heuristic membership or hub cutoffs below. `apply_threshold_labels=true`
+adds descriptive labels only; it does not remove rows or change the fitted
+partition. A disabled label is `not_applied`, not a failed candidate or an absent
+hub. The standard statistical reporting level remains FDR 0.05, with the actual
+test family and native values retained.
+
+The tables below document the **legacy optional labeling presets**, not newly
+validated scientific boundaries. The stage-2 defaults, **20 splice events** and
+**merge height 0.25**, remain approved and configurable. Previously completed
+results retain their original policy. See the [active policy register](network-labels.v1.json).
 
 ## Member confidence annotates the fixed modules
 
@@ -144,7 +152,16 @@ of 100. See [`config.py:201–205`](../../katana_cosplice/config.py#L201),
   or co-splicing-specific validity.
 
 The exact confidence, hub and composite-score values above are **Katana
-operational heuristics requiring stage-3 confirmation**, not universal literature
-standards. Association is not causation; a hub event is not automatically a
-regulatory protein or a causal driver. Same-cohort resampling is not independent
-replication. Approval of stage 2 does not approve these stage-3 rules.
+operational heuristics**, not universal literature standards. Existing external
+membership checks and hub simulation evaluations do not establish that these
+specific numeric cutoffs are calibrated or optimal. Under the approved policy
+they are optional labels, not default inclusion rules. Association is not
+causation; a hub event is not automatically a regulatory protein or a causal
+driver. Same-cohort resampling is not independent replication.
+
+The legacy composite confidence score includes components derived from discrete
+split-half labels. It must therefore remain identified as threshold-dependent
+legacy evidence, rather than being presented as a threshold-free probability or
+the required default ranking. Individual raw measurements and their full ranks
+remain available. This policy does not change the WGCNA fit, resampling formulas,
+native statistical tests or completed studies.

@@ -154,6 +154,9 @@ export type ModuleDashboard = {
   edges: {event_a: string; event_b: string; weight: number; correlation: number | null; pair_n: number | null; same_gene: boolean}[];
   hub_events: HubEvent[];
   hub_status?: string; hub_method?: string; hub_analysis_run?: string; hub_comparison?: HubEvent[];
+  hub_label_status?: string;
+  network_label_policy?: {policy_id?: string; apply_threshold_labels?: boolean; hard_filter?: boolean}|null;
+  hub_label_policy?: {policy_id?: string; apply_threshold_labels?: boolean; hard_filter?: boolean}|null;
   event_options: {event_key: string; gene: string}[];
   heatmap: {events: string[]; samples: string[]; conditions: string[]; z: (number|null)[][]; scale: string};
   selected_event: string; event_profile: {sample_id: string; biological_sample_id: string; condition: string; psi: number|null}[];
@@ -168,7 +171,9 @@ export type HubEvent = {event_key: string; gene: string; connectivity: number;
   kWithin?: number|null; kWithin_no_same_gene?: number|null; kME?: number|null;
   rank_all_edges?: number|null; rank_no_same_gene?: number|null; rank_change_no_same_gene?: number|null;
   bootstrap_frequency_all_edges?: number|null; bootstrap_frequency_no_same_gene?: number|null;
-  hub_candidate?: boolean; candidate_all_edges?: boolean; candidate_no_same_gene?: boolean; selection_reason?: string};
+  hub_candidate?: boolean|null; candidate_all_edges?: boolean|null; candidate_no_same_gene?: boolean|null; selection_reason?: string;
+  preset_selection_frequency_all_edges?: number|null; preset_selection_frequency_no_same_gene?: number|null;
+  label_status?: string; hub_label_status?: string; estimation_status?: string; estimation_reason?: string};
 
 export type ModuleEvidence = {module: string; discovery_run: string; scope: string; tables: {
   artifact_id: string; name: string; entity_type: string; row_count: number; preview_limit: number; rows: Record<string,unknown>[]; run_fingerprint: string;

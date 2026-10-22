@@ -4,6 +4,10 @@ from pathlib import Path
 import json, os, subprocess
 import numpy as np
 import pandas as pd
+from katana_next.science.network_labels import network_label_policy as _network_label_policy
+
+
+NETWORK_LABEL_POLICY_ID = 'network-descriptive-labels-opt-in-v1'
 
 
 @dataclass(frozen=True)
@@ -21,9 +25,29 @@ class HubSettings:
     minimum_valid_bootstrap_fraction: float = .80
     minimum_pair_coverage: float = .80
     block_size: int = 256
+    apply_threshold_labels: bool = False
+
+
+def network_label_policy(settings):
+    return {
+        **_network_label_policy(settings.apply_threshold_labels),
+        'label_thresholds': {key:getattr(settings,key) for key in (
+            'top_fraction','minimum_kme','minimum_selection_frequency',
+            'minimum_valid_bootstrap_fraction','minimum_pair_coverage')},
+        'ranking': 'Complete all-edge and cross-gene connectivity ranks; no preset eligibility filter.',
+        'preset_frequency_semantics':
+            'preset_selection_frequency_* and legacy bootstrap_frequency_* count selection '
+            'under the recorded top-fraction/kME/coverage/edge preset. These are descriptive '
+            'sensitivity metrics, not threshold-free confidence or default ranking criteria.',
+        'bootstrap_valid_semantics':
+            'bootstrap_valid_* and bootstrap_valid_fraction_* describe mathematical estimability; '
+            'bootstrap_preset_valid_* additionally require the recorded pair-coverage preset.',
+    }
 
 
 def prepare_inputs(matrix, assignments, samples, annotation, settings, scope='all_and_conditions'):
+    if type(settings.apply_threshold_labels) is not bool:
+        raise ValueError('apply_threshold_labels must be a boolean')
     if settings.method not in {'pearson','bicor','spearman'} or settings.power <= 0:
         raise ValueError('Unsupported source correlation method or power')
     if settings.bootstrap_iterations < 20 or settings.minimum_samples < 3:
@@ -88,28 +112,54 @@ def prepare_inputs(matrix, assignments, samples, annotation, settings, scope='al
 
 
 def summarize_hubs(raw, settings):
+    if type(settings.apply_threshold_labels) is not bool:
+        raise ValueError('apply_threshold_labels must be a boolean')
     raw=raw.copy()
     rank_cols={'all_edges':('kWithin','pair_coverage','supported_degree'), 'no_same_gene':('kWithin_no_same_gene','cross_gene_pair_coverage','cross_gene_supported_degree')}
     keys=['module','condition','bootstrap']
     effective_kme=raw.kME if settings.signed else raw.kME.abs()
+    design_estimable=raw.biological_units.ge(settings.minimum_samples)&raw.module_events.ge(3)
     for mode,(kw,coverage,degree) in rank_cols.items():
         raw['rank_'+mode]=raw.groupby(keys)[kw].rank(ascending=False,method='average')
-        cutoff=np.maximum(1,np.ceil(raw.module_events*settings.top_fraction))
-        raw['pass_'+mode]=(raw['rank_'+mode]<=cutoff)&(effective_kme>=settings.minimum_kme)&(raw[kw]>0)&(raw[degree]>0)&(raw[coverage]>=settings.minimum_pair_coverage)
+        estimable=design_estimable&np.isfinite(raw[kw])&np.isfinite(raw.kME)&np.isfinite(raw[coverage])&raw[coverage].gt(0)
         if mode=='no_same_gene':
-            raw['pass_'+mode] &= raw.gene_annotation_fraction.eq(1.)
+            estimable &= raw.gene_known.fillna(False)&raw.cross_gene_possible_pairs.gt(0)&raw.gene_annotation_fraction.eq(1.)
+        raw['estimable_'+mode]=estimable
+        cutoff=np.maximum(1,np.ceil(raw.module_events*settings.top_fraction))
+        raw['preset_pass_'+mode]=estimable&(raw['rank_'+mode]<=cutoff)&(effective_kme>=settings.minimum_kme)&(raw[kw]>0)&(raw[degree]>0)&(raw[coverage]>=settings.minimum_pair_coverage)
+        raw['pass_'+mode]=raw['preset_pass_'+mode].astype('boolean') if settings.apply_threshold_labels else pd.Series(pd.NA,index=raw.index,dtype='boolean')
+        if settings.apply_threshold_labels:
+            raw.loc[~estimable,'pass_'+mode]=pd.NA
     baseline=raw.loc[raw.bootstrap.eq(0)].copy()
     boot=raw.loc[raw.bootstrap.gt(0)].copy()
     indexes=['module','condition','event_key']
     for mode,(kw,coverage,degree) in rank_cols.items():
-        valid=boot[kw].notna()&boot.kME.notna()&(boot[coverage]>=settings.minimum_pair_coverage)
+        valid=boot['estimable_'+mode]
         boot['valid_'+mode]=valid
+        boot['preset_valid_'+mode]=valid&boot[coverage].ge(settings.minimum_pair_coverage)
         grouped=boot.groupby(indexes)
-        counts=grouped.agg(**{'bootstrap_valid_'+mode:('valid_'+mode,'sum'),'bootstrap_selected_'+mode:('pass_'+mode,'sum')}).reset_index()
+        counts=grouped.agg(**{
+            'bootstrap_attempts_'+mode:('bootstrap','size'),
+            'bootstrap_valid_'+mode:('valid_'+mode,'sum'),
+            'bootstrap_preset_valid_'+mode:('preset_valid_'+mode,'sum'),
+            'bootstrap_selected_'+mode:('preset_pass_'+mode,'sum'),
+        }).reset_index()
         baseline=baseline.merge(counts,on=indexes,how='left')
-        baseline['bootstrap_valid_'+mode]=baseline['bootstrap_valid_'+mode].fillna(0).astype(int)
-        baseline['bootstrap_frequency_'+mode]=baseline['bootstrap_selected_'+mode].fillna(0)/settings.bootstrap_iterations
-        baseline['candidate_'+mode]=baseline['pass_'+mode]&(baseline['bootstrap_valid_'+mode]/settings.bootstrap_iterations>=settings.minimum_valid_bootstrap_fraction)&(baseline['bootstrap_frequency_'+mode]>=settings.minimum_selection_frequency)
+        for prefix in ('bootstrap_attempts_','bootstrap_valid_','bootstrap_preset_valid_','bootstrap_selected_'):
+            baseline[prefix+mode]=baseline[prefix+mode].fillna(0).astype(int)
+        assessed=baseline['bootstrap_attempts_'+mode].gt(0)
+        baseline['bootstrap_valid_fraction_'+mode]=(baseline['bootstrap_valid_'+mode]/settings.bootstrap_iterations).where(assessed)
+        baseline['bootstrap_preset_valid_fraction_'+mode]=(baseline['bootstrap_preset_valid_'+mode]/settings.bootstrap_iterations).where(assessed)
+        baseline['preset_selection_frequency_'+mode]=(baseline['bootstrap_selected_'+mode]/settings.bootstrap_iterations).where(assessed)
+        # Legacy column retained only as a clearly recorded preset-sensitivity alias.
+        baseline['bootstrap_frequency_'+mode]=baseline['preset_selection_frequency_'+mode]
+        candidate=baseline['preset_pass_'+mode]&baseline['bootstrap_preset_valid_fraction_'+mode].ge(settings.minimum_valid_bootstrap_fraction)&baseline['preset_selection_frequency_'+mode].ge(settings.minimum_selection_frequency)
+        candidate_estimable=baseline['estimable_'+mode]&assessed&baseline['bootstrap_valid_'+mode].gt(0)
+        baseline['candidate_'+mode]=candidate.astype('boolean') if settings.apply_threshold_labels else pd.Series(pd.NA,index=baseline.index,dtype='boolean')
+        if settings.apply_threshold_labels:
+            baseline.loc[~candidate_estimable,'candidate_'+mode]=pd.NA
+        status_name='all_edge_estimation_status' if mode=='all_edges' else 'cross_gene_estimation_status'
+        baseline[status_name]=np.where(baseline['estimable_'+mode],'estimable','not_estimable')
     if len(boot):
         stats=boot.groupby(indexes).agg(bootstrap_kME_q10=('kME',lambda x:x.quantile(.1)),bootstrap_kME_median=('kME','median'),
             bootstrap_kWithin_q10=('kWithin',lambda x:x.quantile(.1)),bootstrap_cross_gene_kWithin_q10=('kWithin_no_same_gene',lambda x:x.quantile(.1)),
@@ -119,20 +169,40 @@ def summarize_hubs(raw, settings):
         for key in ('bootstrap_kME_q10','bootstrap_kME_median','bootstrap_rank_q90','bootstrap_kWithin_q10','bootstrap_cross_gene_kWithin_q10','bootstrap_cross_gene_rank_q90'): baseline[key]=np.nan
     baseline['rank_change_no_same_gene']=baseline.rank_no_same_gene-baseline.rank_all_edges
     baseline['hub_candidate']=baseline.candidate_all_edges&baseline.candidate_no_same_gene
+    estimable=baseline.estimable_all_edges&baseline.estimable_no_same_gene
+    # An unassessable arm cannot establish either a positive or a negative candidate label.
+    label_estimable=estimable&baseline.candidate_all_edges.notna()&baseline.candidate_no_same_gene.notna()
+    baseline.loc[~label_estimable,'hub_candidate']=pd.NA
+    baseline['estimation_status']=np.where(estimable,'estimable','not_estimable')
+    baseline['label_status']=np.where(label_estimable,'applied','not_estimable') if settings.apply_threshold_labels else 'not_applied'
+    baseline['hub_label_status']=baseline['label_status']
+    baseline['threshold_labels_applied']=settings.apply_threshold_labels
     def reason(row):
         reasons=[]
         if row.biological_units<settings.minimum_samples: reasons.append('insufficient_biological_units')
         if row.module_events<3: reasons.append('fewer_than_three_module_events')
         if not np.isfinite(row.kWithin): reasons.append('no_estimable_connections')
-        if row.supported_degree==0: reasons.append('no_supported_edges')
-        if not np.isfinite(row.kME) or (row.kME if settings.signed else abs(row.kME))<settings.minimum_kme: reasons.append('low_or_unavailable_kME')
-        if row.pair_coverage<settings.minimum_pair_coverage: reasons.append('insufficient_pair_coverage')
+        if not np.isfinite(row.kME): reasons.append('unavailable_kME')
+        if not np.isfinite(row.pair_coverage) or row.pair_coverage<=0: reasons.append('no_estimable_pair_coverage')
         if not row.gene_known or row.cross_gene_possible_pairs==0: reasons.append('cross_gene_comparison_unavailable')
         if row.gene_annotation_fraction<1: reasons.append('incomplete_host_gene_annotation')
-        if not row.candidate_all_edges: reasons.append('all_edge_hub_criteria_not_met')
-        if not row.candidate_no_same_gene: reasons.append('cross_gene_hub_criteria_not_met')
-        return ';'.join(reasons) or 'passed'
-    baseline['selection_reason']=baseline.apply(reason,axis=1)
+        if not np.isfinite(row.kWithin_no_same_gene): reasons.append('no_estimable_cross_gene_connections')
+        if not np.isfinite(row.cross_gene_pair_coverage) or row.cross_gene_pair_coverage<=0: reasons.append('no_estimable_cross_gene_pair_coverage')
+        return ';'.join(reasons) or 'estimable'
+    baseline['estimation_reason']=baseline.apply(reason,axis=1)
+    def selection_reason(row):
+        if not settings.apply_threshold_labels:
+            return 'threshold_labels_not_applied'+(';' + row.estimation_reason if row.estimation_reason!='estimable' else '')
+        reasons=[] if row.estimation_reason=='estimable' else [row.estimation_reason]
+        if row.supported_degree==0: reasons.append('preset_no_supported_edges')
+        if np.isfinite(row.kME) and (row.kME if settings.signed else abs(row.kME))<settings.minimum_kme: reasons.append('preset_low_kME')
+        if np.isfinite(row.pair_coverage) and row.pair_coverage<settings.minimum_pair_coverage: reasons.append('preset_insufficient_pair_coverage')
+        for mode in rank_cols:
+            value=row['candidate_'+mode]
+            if pd.isna(value): reasons.append(mode+'_candidate_not_estimable')
+            elif not value: reasons.append(mode+'_preset_criteria_not_met')
+        return ';'.join(reasons) or 'passed_optional_preset'
+    baseline['selection_reason']=baseline.apply(selection_reason,axis=1)
     return baseline,boot
 
 
@@ -142,7 +212,7 @@ def run_hub_analysis(matrix, assignments, samples, annotation, settings, directo
     measured.to_csv(directory/'hub_input_psi.tsv',sep='\t',index_label='event_key')
     events.to_csv(directory/'hub_input_events.tsv',sep='\t',index=False)
     design.to_csv(directory/'hub_biological_units.tsv',sep='\t',index=False)
-    plan={**asdict(settings),**structure,'source_units':design.biological_sample_id.tolist(),'matrix':str(directory/'hub_input_psi.tsv'),'events':str(directory/'hub_input_events.tsv'),
+    plan={**asdict(settings),**structure,'network_label_policy':network_label_policy(settings),'source_units':design.biological_sample_id.tolist(),'matrix':str(directory/'hub_input_psi.tsv'),'events':str(directory/'hub_input_events.tsv'),
           'output':str(directory/'hub_raw_metrics.tsv'),'edges':str(directory/'hub_display_edges.tsv'),'session':str(directory/'R_session.txt')}
     (directory/'hub_plan.json').write_text(json.dumps(plan,indent=2),encoding='utf-8')
     (directory/'technical_repeat_audit.json').write_text(json.dumps(audit,indent=2),encoding='utf-8')

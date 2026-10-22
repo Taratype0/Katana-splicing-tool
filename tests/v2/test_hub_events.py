@@ -27,7 +27,7 @@ def planted(n=40,p=15):
 @pytest.fixture(scope='module')
 def fitted(tmp_path_factory):
     inputs=planted()
-    settings=HubSettings(method='pearson',bootstrap_iterations=20,top_fraction=.2,minimum_selection_frequency=.5)
+    settings=HubSettings(method='pearson',bootstrap_iterations=20,top_fraction=.2,minimum_selection_frequency=.5,apply_threshold_labels=True)
     directory=tmp_path_factory.mktemp('real_R_hub_analysis')
     metrics,boot,plan=run_hub_analysis(*inputs,settings,directory,RSCRIPT)
     return inputs,settings,directory,metrics,boot,plan
@@ -92,7 +92,7 @@ def test_same_gene_cluster_loses_cross_gene_hub_status(tmp_path):
     m,a,s,e=planted(p=15)
     # All high-correlation members belong to one gene; unrelated members cannot rescue it.
     e.loc[:13,'gene_id']='same_host'
-    settings=HubSettings(method='pearson',bootstrap_iterations=20,top_fraction=.2,minimum_selection_frequency=.5)
+    settings=HubSettings(method='pearson',bootstrap_iterations=20,top_fraction=.2,minimum_selection_frequency=.5,apply_threshold_labels=True)
     metrics,_,_=run_hub_analysis(m,a,s,e,settings,tmp_path,RSCRIPT,scope='all')
     center=metrics.set_index('event_key').loc['e0']
     assert center.kWithin_no_same_gene < center.kWithin*.1

@@ -105,11 +105,36 @@ The approved standard defaults are **minimum module size 20 splice events** and 
 
 Runtime `min_module_size` and `merge_cut_height` override the corresponding project YAML values for that run. Blank/null preserves the project configuration, including existing custom values. The standard engine fallback remains 20/0.25. Actual effective values are recorded in resolved configuration and artifact metadata, and displayed in the evidence report and the one-click interpreted report when its source network can be identified. Historical values without that provenance are **not recorded**, never backfilled from today's defaults. Module algorithms and completed fits are unchanged. See [module policy](thresholds/network-modules.v1.json) and [runtime examples](USAGE.md#network-module-settings).
 
-Member confidence, Hub candidates and statistical labels are a separate [current-implementation review](thresholds/network-confidence-review.md). Their exact numeric heuristics are **pending user confirmation**; this module-size approval does not change those algorithms.
+### Continuous network evidence and optional labels
+
+**Approved policy: `network-descriptive-labels-opt-in-v1`.** Continuous co-assignment,
+kME, connectivity, margins, resampling diagnostics and complete rankings are the
+default output. The Katana-specific core/peripheral, stability and hub-candidate
+cutoffs are optional descriptive labels, disabled by default. Their old values
+are documented in the [preset review](thresholds/network-confidence-review.md),
+not presented as literature-calibrated boundaries or mandatory inclusion rules.
+Enabling `apply_threshold_labels` adds labels without removing events or
+changing their fitted module assignments. Disabling it produces `not_applied`
+label states rather than false candidate failures or a claim that no hubs exist.
+
+The old composite confidence score and preset bootstrap selection frequencies
+depend on heuristic cutoffs. They remain traceable as legacy/preset sensitivity
+evidence, not probabilities or required primary ranking scores. Numerical
+measurements remain available independently of these optional labels. Invalid
+inputs, undefined correlations, insufficient independent samples and unavailable
+annotations retain explicit reasons; disabling labels does not manufacture
+estimable measurements or override the separately approved count-support rule.
+
+The default statistical reporting level stays **FDR 0.05**. BH correction retains
+its native test families; full tested tables remain available. A significant
+module association does not imply significant network edges or causal hubs.
+Reports record the actual labeling switch and configured presets for their own
+source run. Unknown historical settings are not backfilled. See the
+[policy register](thresholds/network-labels.v1.json) for scope and source evidence.
 
 The [network policy register](thresholds/network-input.v1.json) records this approved change separately from the [bulk contrast register](thresholds/bulk-defaults.v1.json). The default `max_events=0` includes all eligible events; a user-specified positive cap is an explicitly recorded exploratory subset ranked by cohort PSI variance, independent of condition significance. Implementation, testing and scientific validation are separate statuses; an implemented gate is not a new validation experiment.
 
-The implemented network-input gate is versioned as **CoSplice engine `1.3.0` / workflow `programs.cosplice` `3.1.0`** within software `2.0.0b3.dev20261022`. Its register binds the current QC, stage, execution and workflow sources by SHA-256. Local input and execution-contract tests have passed; this does not claim a new native R network fit or biological validation. Resolved configuration and result provenance record the active policy and mark old QC settings as diagnostic-only. New engine/stage identities separate these runs from historical caches. Existing output lacking the current policy is rejected for overwrite, even when force is requested; completed fits retain their original identity.
+The implemented network-input gate is versioned as **CoSplice engine `1.3.0` / workflow `programs.cosplice` `3.2.0`** within software `2.0.0b3.dev20261022`. Its register binds the current QC, stage, execution and workflow sources by SHA-256. Local input and execution-contract tests have passed; this does not claim a new native R network fit or biological validation. Resolved configuration and result provenance record the active policy and mark old QC settings as diagnostic-only. New engine/stage identities separate these runs from historical caches. Existing output lacking the current policy is rejected for overwrite, even when force is requested; completed fits retain their original identity.
 
 ## Implementation identity
 

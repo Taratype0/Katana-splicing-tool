@@ -243,6 +243,7 @@ class ConsensusConfig:
     output_edge_threshold: float = 0.50
     max_output_edges: int = 200_000
     random_seed: int = 37
+    apply_threshold_labels: bool = False
 
 
 @dataclass
@@ -741,6 +742,8 @@ class CoSpliceConfig:
             raise ValueError("validation.knn_neighbors must contain values >= 2")
         if not self.validation.community_resolutions or any(value <= 0 for value in self.validation.community_resolutions):
             raise ValueError("validation.community_resolutions must contain positive values")
+        if not isinstance(self.consensus.apply_threshold_labels, bool):
+            raise ValueError("consensus.apply_threshold_labels must be true or false")
         if self.consensus.bootstrap_iterations < 2:
             raise ValueError("consensus.bootstrap_iterations must be at least 2")
         if self.consensus.bootstrap_iterations > 65_535:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from html import escape
+import hashlib
 import json
 from pathlib import Path
 from typing import Callable
@@ -161,9 +162,124 @@ class CoSplicePipeline:
             "bayesian_preservation": lambda: self.bayesian_preservation(force=force),
             "report": self.report,
         }
-        return actions[stage]()
+        if (stage in {'consensus_modules', 'validate_modules', 'report'}
+                and self.config.consensus.clustering_method != 'backbone_confidence_only'):
+            raise ValueError('The public descriptive-label view requires backbone_confidence_only; '
+                             'historical refinement modes may discard members and cannot be relabelled as an unfiltered partition')
+        old_report = self.output / '07_report' / 'katana_cosplice_report.html'
+        result = old_report if stage == 'report' and old_report.is_file() else actions[stage]()
+        if stage in {'consensus_modules', 'validate_modules'} and isinstance(result, dict):
+            return self._network_label_views(stage, result)
+        if stage == 'report' and isinstance(result, (str, Path)):
+            from katana_next.science.network_label_report import create_network_label_report
+            tables = {}
+            for source_stage in ('consensus_modules', 'validate_modules'):
+                sources = {item.key: self.output / item.relative_path
+                           for item in stage_spec(source_stage).artifacts
+                           if (self.output / item.relative_path).is_file()}
+                if sources:
+                    tables.update({f'{source_stage}__{key}': path
+                                   for key, path in self._network_label_views(source_stage, sources).items()
+                                   if path.suffix == '.tsv'})
+            policy = self._network_label_policy()
+            identity = fingerprint({'policy': policy, 'report': self._view_file_signature(Path(result)),
+                                    'tables': {key: self._view_file_signature(path) for key, path in tables.items()}})
+            return create_network_label_report(Path(result),
+                self.output / 'label_views' / policy['policy_id'] / 'report' / identity[:20] / 'network_label_views.html',
+                policy=policy, table_views=tables)
+        return result
+
+    @staticmethod
+    def _view_file_signature(path: Path) -> dict:
+        digest = hashlib.sha256()
+        with path.open('rb') as handle:
+            for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b''):
+                digest.update(chunk)
+        return {'path': str(path.resolve()), 'sha256': digest.hexdigest(), 'bytes': path.stat().st_size}
+
+    def _network_label_policy(self):
+        from katana_next.science.network_labels import configured_member_thresholds, network_label_policy
+        policy = network_label_policy(self.config.consensus.apply_threshold_labels,
+            label_thresholds=configured_member_thresholds(self.config.consensus, self.config.validation))
+        source = self.output / '04c_consensus_modules/parameters.json'
+        try:
+            recorded = json.loads(source.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            recorded = {}
+        source_consensus = recorded.get('consensus') or {}
+        method = source_consensus.get('clustering_method') if isinstance(source_consensus, dict) else None
+        partition = recorded.get('production_partition_policy')
+        if (method and method != 'backbone_confidence_only') or partition == 'explicit_legacy_consensus_mode':
+            raise ValueError('The raw source used a historical refined partition; a label view cannot restore discarded members or claim an unfiltered WGCNA backbone')
+        verified = method == 'backbone_confidence_only' or partition == 'wgcna_backbone_with_confidence_annotation'
+        policy['source_partition_status'] = 'recorded_full_backbone' if verified else 'source_partition_not_recorded'
+        if not verified:
+            policy['partition'] = 'source_partition_not_recorded'
+        actual = {key: source_consensus[key] for key in policy['label_thresholds'] if key in source_consensus}
+        validation_path = self.output / '06_module_validation/parameters.json'
+        try:
+            validation = json.loads(validation_path.read_text(encoding='utf-8')).get('validation') or {}
+        except (OSError, ValueError):
+            validation = {}
+        for target, key in [('robust_recovery_min', 'robust_jaccard'), ('moderate_recovery_min', 'moderate_jaccard')]:
+            if key in validation:
+                actual[target] = validation[key]
+        policy['configured_label_thresholds'] = policy['label_thresholds']
+        policy['label_thresholds'] = actual
+        if not actual:
+            policy['label_threshold_role'] = 'source_thresholds_not_recorded'
+        return policy
+
+    def _network_label_views(self, stage, outputs):
+        """Create isolated annotation views; never rewrite raw science caches."""
+        from katana_next.science.network_labels import member_label_view
+        policy = self._network_label_policy()
+        sources = {key: self._view_file_signature(Path(path)) for key, path in outputs.items()
+                   if Path(path).is_file()}
+        identity = fingerprint({'stage': stage, 'sources': sources, 'network_label_policy': policy})
+        out = self.output / 'label_views' / policy['policy_id'] / stage / identity[:20]
+        manifest_path = out / 'parameters.json'
+        if manifest_path.is_file():
+            previous = json.loads(manifest_path.read_text(encoding='utf-8'))
+            views = {key: Path(value['path']) for key, value in previous['view_files'].items()}
+            if not all(path.is_file() and self._view_file_signature(path) == previous['view_files'][key]
+                       for key, path in views.items()):
+                raise ValueError('A completed network label view has changed; existing view files will not be overwritten')
+            return {**views, 'parameters': manifest_path}
+        out.mkdir(parents=True, exist_ok=True)
+        views = {}
+        for key, source in outputs.items():
+            source = Path(source)
+            if source.is_file() and source.suffix.lower() == '.npz':
+                import shutil
+                target = out / source.name
+                shutil.copy2(source, target)
+                views[key] = target
+                continue
+            if not source.is_file() or source.suffix.lower() not in {'.tsv', '.csv'}:
+                continue
+            target = out / (key + '.tsv')
+            try:
+                frame = pd.read_csv(source, sep='\t' if source.suffix.lower() == '.tsv' else ',', low_memory=False)
+                member_label_view(frame, policy['apply_threshold_labels']).to_csv(target, sep='\t', index=False)
+            except pd.errors.EmptyDataError:
+                target.write_bytes(source.read_bytes())
+            canonical = next((a.key for a in stage_spec(stage).artifacts
+                              if Path(a.relative_path).name == source.name), key)
+            views[canonical] = target
+        write_json(manifest_path, {'view_status': 'complete', 'fingerprint': identity,
+            'network_label_policy': policy, 'stage': stage,
+            'raw_output_role': 'Legacy/internal scientific cache; labels are not the active public view.',
+            'source_files': sources, 'partition_changed': False,
+            'view_files': {key: self._view_file_signature(path) for key, path in views.items()}})
+        self._emit(f"Network label view ({'enabled' if policy['apply_threshold_labels'] else 'not applied'}): {out}")
+        return {**views, 'parameters': manifest_path}
 
     def _fingerprint(self, stage: str, inputs: list[Path], settings: object) -> str:
+        if isinstance(settings, dict) and isinstance(settings.get('consensus'), dict):
+            settings = {**settings, 'consensus': {
+                key: value for key, value in settings['consensus'].items()
+                if key != 'apply_threshold_labels'}}
         return fingerprint(
             {
                 "schema": 1,

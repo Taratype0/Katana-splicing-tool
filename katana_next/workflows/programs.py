@@ -30,6 +30,9 @@ from katana_cosplice.stage_registry import stage_spec
 from katana_next.domain.models import ArtifactKind
 from katana_next.infrastructure.jobs import JobContext
 from katana_next.infrastructure.fingerprints import fingerprint_file, fingerprint_value
+from katana_next.science.network_labels import (
+    configured_member_thresholds, member_label_view, network_label_policy,
+)
 from katana_next.services.project_service import ProjectContext
 from katana_next.workflows.base import (
     ArtifactWriter,
@@ -139,13 +142,13 @@ def configure_interpretation_resources(config, manifest, root: Path) -> None:
 
 def configure_production_membership(config, parameters):
     policy = str(parameters.get("membership_policy", "backbone_confidence_only"))
-    if policy not in {"backbone_confidence_only", "backbone_refined_consensus"}:
-        raise ValueError("Unknown bootstrap membership policy")
-    config.consensus.clustering_method = policy
-    if policy == "backbone_confidence_only":
-        # An old, larger consensus size cutoff must not silently delete modules
-        # when the requested operation is confidence annotation only.
-        config.consensus.min_module_size = config.network.min_module_size
+    if policy != "backbone_confidence_only":
+        raise ValueError("Threshold labels cannot refine or filter the WGCNA partition; use backbone_confidence_only")
+    apply_labels = parameters.get("apply_threshold_labels", False)
+    network_label_policy(apply_labels)
+    config.consensus.clustering_method = "backbone_confidence_only"
+    config.consensus.min_module_size = config.network.min_module_size
+    config.consensus.apply_threshold_labels = apply_labels
 
 
 def _module_override_values(parameters: dict[str, Any]) -> dict[str, int | float]:
@@ -202,6 +205,8 @@ def write_production_configuration(config, path: Path) -> Path:
     payload = config.to_mapping()
     payload["network_input_policy"] = network_input_policy()
     payload["network_module_parameters"] = network_module_parameters(config)
+    payload["network_label_policy"] = network_label_policy(config.consensus.apply_threshold_labels,
+        label_thresholds=configured_member_thresholds(config.consensus, config.validation))
     payload["legacy_stable_as_settings_role"] = "ignored historical settings; active eligibility is network_input_policy"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
@@ -209,7 +214,7 @@ def write_production_configuration(config, path: Path) -> Path:
 
 
 class CoSpliceWorkflow(WorkflowBase):
-    version = "3.1.0"
+    version = "3.2.0"
     definition = WorkflowDefinition(
         workflow_id="programs.cosplice",
         workspace_id="programs",
@@ -238,9 +243,8 @@ class CoSpliceWorkflow(WorkflowBase):
             ParameterDefinition("uncertainty_role", "Read uncertainty role", "select", "diagnostic_only",
                 "Default keeps measured PSI and reports read uncertainty separately. Optional weighting is experimental; raw read-fraction posteriors never replace rMATS PSI.",
                 ("diagnostic_only", "raw_reliability_weighted")),
-            ParameterDefinition("membership_policy", "Bootstrap membership policy", "select", "backbone_confidence_only",
-                "Default annotates confidence without rejecting backbone members. Hard filtering is an experimental sensitivity analysis, not a proven stability improvement.",
-                ("backbone_confidence_only", "backbone_refined_consensus")),
+            ParameterDefinition("apply_threshold_labels", "Apply descriptive network labels", "boolean", False,
+                "Optional core/peripheral/stability labels only. All events, continuous metrics, ranks and the fitted WGCNA partition are retained."),
         ),
         required_asset_kinds=("cosplice_config",),
         limitations="Formal condition-specific rewiring is disabled or labeled exploratory when independent samples per condition are insufficient.",
@@ -250,6 +254,8 @@ class CoSpliceWorkflow(WorkflowBase):
         # Validate before generic numeric coercion can turn bools into floats.
         overrides = _module_override_values(supplied or {})
         values = super().normalize_parameters(supplied)
+        if values.get("membership_policy", "backbone_confidence_only") != "backbone_confidence_only":
+            raise ValueError("Threshold labels cannot refine or filter the WGCNA partition")
         values.update(overrides)
         return values
 
@@ -296,7 +302,7 @@ class CoSpliceWorkflow(WorkflowBase):
             "inputs": [fingerprint_file(path) for path in self.input_paths(context, parameters)],
             "max_events": parameters.get("max_events", 0), "bootstrap_iterations": parameters.get("bootstrap_iterations", 50),
             "uncertainty_role": parameters.get("uncertainty_role", "diagnostic_only"),
-            "membership_policy": parameters.get("membership_policy", "backbone_confidence_only"),
+            "membership_policy": "backbone_confidence_only",
             "production_contract": "backbone-annotated-v9-all-sample-input", "network_input_policy": network_input_policy()}
         if module_changes:
             engine_payload["module_parameter_overrides"] = module_changes
@@ -351,13 +357,14 @@ class CoSpliceWorkflow(WorkflowBase):
             job.report(.02, f"Bootstrap: {info['resampling_units']} {info['resampling_unit_field']} units; "
                 f"{info['resampling_strata']} condition profiles; {info['fixed_singleton_strata']} fixed singleton strata; {info['resampling_scope']}")
         force = bool(parameters.get("force_engine", False))
+        stage_outputs = {}
         for index, stage in enumerate(stages, start=1):
             job.check_cancelled()
             job.report(
                 0.04 + 0.76 * (index - 1) / max(1, len(stages)),
                 f"CoSplice: {stage_spec(stage).title}",
             )
-            pipeline.run_stage(stage, force=force)
+            stage_outputs[stage] = pipeline.run_stage(stage, force=force)
 
         writer = ArtifactWriter(
             context,
@@ -374,8 +381,10 @@ class CoSpliceWorkflow(WorkflowBase):
                 "network_input_policy": network_input_policy(),
                 "network_module_parameters": effective_modules,
                 "network_module_parameter_sources": module_sources,
+                "network_label_policy": network_label_policy(config.consensus.apply_threshold_labels,
+                    label_thresholds=configured_member_thresholds(config.consensus, config.validation)),
                 "read_uncertainty_role": parameters.get("uncertainty_role", "diagnostic_only"),
-                "membership_semantics": "Default confidence annotation preserves the full-data WGCNA partition; the explicitly selected exploratory refinement can reject boundary events. Phenotype, RBP and functional terms never define membership.",
+                "membership_semantics": "The fixed WGCNA partition and full continuous rankings are preserved. Descriptive threshold labels are opt-in, never filters or calibrated probability. Phenotype, RBP and functional terms never define membership.",
                 "interpretation": "Module-trait associations are program-level effects. Individual event support remains available through membership and Native Sashimi.",
                 "limitations": self.definition.limitations,
                 "resolved_config": str(resolved_config),
@@ -386,7 +395,17 @@ class CoSpliceWorkflow(WorkflowBase):
         registered = 0
         for stage in stages:
             for artifact_spec in stage_spec(stage).artifacts:
-                source = engine_root / artifact_spec.relative_path
+                returned = stage_outputs.get(stage)
+                if isinstance(returned, dict) and stage in {'consensus_modules', 'validate_modules'}:
+                    if artifact_spec.key not in returned:
+                        continue  # Historical label-based figures are internal references.
+                    source = Path(returned[artifact_spec.key])
+                elif isinstance(returned, (str, Path)) and stage == 'report':
+                    if artifact_spec.key != 'report':
+                        continue
+                    source = Path(returned)
+                else:
+                    source = engine_root / artifact_spec.relative_path
                 if not source.is_file():
                     continue
                 label = f"{stage_spec(stage).title}: {artifact_spec.key.replace('_', ' ')}"
@@ -394,8 +413,18 @@ class CoSpliceWorkflow(WorkflowBase):
                 suffix = source.suffix.lower()
                 if suffix not in {".tsv", ".csv"}:
                     # Registered artifacts must not point into the mutable stage cache.
-                    destination = writer.directory / f"{stage}__{artifact_spec.key}{suffix}"
+                    destination = (writer.directory / 'report-view' / source.name
+                                   if stage == 'report' and suffix == '.html'
+                                   else writer.directory / f"{stage}__{artifact_spec.key}{suffix}")
+                    destination.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source, destination)
+                    if stage == 'report' and suffix == '.html':
+                        for attachment in source.parent.rglob('*'):
+                            if attachment.is_file() and attachment != source:
+                                relative = attachment.relative_to(source.parent)
+                                copied = destination.parent / relative
+                                copied.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(attachment, copied)
                     source = destination
                 if suffix in {".tsv", ".csv"}:
                     separator = "\t" if suffix == ".tsv" else ","
@@ -412,6 +441,7 @@ class CoSpliceWorkflow(WorkflowBase):
                         continue
                     if "row_id" not in frame.columns:
                         frame.insert(0, "row_id", [f"{stage}:{artifact_spec.key}:{index}" for index in range(len(frame))])
+                    frame = member_label_view(frame, config.consensus.apply_threshold_labels)
                     writer.table(
                         label,
                         f"{stage}__{artifact_spec.key}.parquet",
@@ -427,12 +457,18 @@ class CoSpliceWorkflow(WorkflowBase):
                         metadata={"mime_type": "image/png" if suffix == ".png" else "image/svg+xml"},
                     )
                 elif suffix in {".html", ".pdf"}:
+                    report_metadata = {"mime_type": "text/html" if suffix == ".html" else "application/pdf"}
+                    if stage == 'report' and suffix == '.html':
+                        report_metadata['preserve_relative_report_links'] = True
+                        report_metadata['exports'] = {
+                            path.relative_to(source.parent).as_posix(): str(path)
+                            for path in source.parent.rglob('*') if path.is_file()}
                     writer.existing_file(
                         label,
                         source,
                         kind=ArtifactKind.REPORT,
                         entity_type="cosplice_report",
-                        metadata={"mime_type": "text/html" if suffix == ".html" else "application/pdf"},
+                        metadata=report_metadata,
                     )
                 elif suffix in {".json", ".yaml", ".yml", ".npz"}:
                     writer.existing_file(label, source, entity_type="cosplice_provenance")

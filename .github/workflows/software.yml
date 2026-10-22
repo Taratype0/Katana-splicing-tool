@@ -48,6 +48,8 @@ jobs:
           tests/v2/test_frozen_psi.py
           tests/v2/test_psi_enhancement.py
           tests/v2/test_cosplice_empty_optional_table.py
+          tests/v2/test_cosplice_reference_cache.py
+          tests/v2/test_hub_source_configuration.py
           tests/test_cosplice.py::test_audit_and_matrix_preserve_sample_order
           tests/test_cosplice.py::test_tom_backbone_strengthens_shared_neighbors
           tests/test_cosplice.py::test_metadata_rejects_duplicate_normalized_sample_ids

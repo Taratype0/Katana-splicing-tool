@@ -99,4 +99,8 @@ def sync_cosplice_design(config, manifest, output_root):
             frame.loc[index, key] = value
     output_root.mkdir(parents=True, exist_ok=True)
     config.sample_metadata = output_root / "edited_sample_metadata.tsv"
-    frame.to_csv(config.sample_metadata, sep="\t", index=False)
+    payload = frame.to_csv(sep="\t", index=False).encode("utf-8")
+    # Stage fingerprints include metadata mtime. Reopening an unchanged design
+    # or changing only a label view must not invalidate the scientific cache.
+    if not config.sample_metadata.is_file() or config.sample_metadata.read_bytes() != payload:
+        config.sample_metadata.write_bytes(payload)

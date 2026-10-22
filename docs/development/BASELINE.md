@@ -6,6 +6,14 @@ The development version **`2.0.0b3.dev20261022`** implements the approved [every
 
 This is an editable source-checkout baseline. It is not the future minimal headless package, a fully self-contained wheel, a new statistical method or an official nf-core release.
 
+The approved [network annotation policy](../thresholds/network-labels.v1.json)
+retains continuous metrics and complete ranks by default. Heuristic member,
+stability and hub-candidate labels are opt-in and do not change the fitted
+partition. These versioned views retain the original raw scientific cache and
+identify threshold-dependent legacy scores separately. Report and dashboard
+versions record the actual source policy; historical unknown settings stay
+unknown. The raw WGCNA algorithm version is unchanged.
+
 ## Publication and portability changes
 
 - Exclude private datasets, generated research results, installed runtimes, workstation configuration and one-off experiment controllers from the public source tree.
