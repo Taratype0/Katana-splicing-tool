@@ -58,14 +58,14 @@ Discovery uses an eligible sample cohort. Condition associations and external va
 
 ### One-click reports
 
-Reports bring together completed experimental design, quality checks, differential results, candidates, functional annotations, transcript, regulatory and network analyses, with figures, full result tables and source records.
+The approved report follows seven sections: design and QC; AS landscape; DEG/DAS/DTU/DEXSeq; cross-comparison results; GO/KEGG and pathways; co-splicing networks; and RBP/MotifTrace. It includes per-comparison Top 10 details, full-result links and a report-wide ordinary DAS / RS-DAS choice, with RS-DAS as the default. See the [approved report specification](docs/REPORT_SPECIFICATION.md).
 
-Two export routes are available:
+Bulk and single-cell dummy reports have been reviewed. Connecting this design to arbitrary eligible completed projects is the next implementation step. The existing package currently provides two export routes:
 
 - **Analysis and reproducibility package:** an HTML/PDF summary, figures, parameters, file inventory and ZIP attachments.
-- **Interpreted study report:** major findings, design, results, interpretation, limitations and attachments, using the required existing delivery structure or a supported completed reader report.
+- **Completed study-report import:** package an existing supported report and its attachments while retaining its original scope and results.
 
-Reports retain significant and non-significant results and document filtering and exclusions. Unrun analyses are identified, and missing required inputs are reported. Report generation reads completed analyses.
+Reports retain significant and non-significant results and document actual filtering and exclusions. Unrun analyses and missing matching downstream results are identified. Report generation reads completed analyses; it does not infer experimental purpose or rescue, generate a validation programme, or rerun upstream processing. Selected gene/event dossiers remain separate interactive analyses.
 
 ### Desktop interaction
 
