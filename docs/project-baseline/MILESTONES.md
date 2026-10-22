@@ -3,7 +3,7 @@
 | Stage | Deliverable | Current status |
 |---|---|---|
 | M01 | T01–T08 scope, source inventory, method boundaries and protected baseline | Complete as planning/baseline work |
-| M02 | T09–T16 and T57–T60: data contracts, eligibility, adapters and headless core | T09 contracts implemented; remainder pending |
+| M02 | T09–T16 and T57–T60: data contracts, eligibility, adapters and headless core | T09 contracts and T10 sample metadata adapter implemented; T11 selected designs and remainder pending |
 | M03 | T17–T48: core science, MotifTrace, networks and qualified single-cell/nucleus adapters | Existing local source; generic package migration and acceptance pending |
 | M04 | T49–T56 and T61: English reports and interactive product integration | Existing local report/UI source; new integration pending |
 | M05 | T62–T64: builds, dependencies, containers and selected Nextflow execution DAG | Pending |
