@@ -1,4 +1,4 @@
-# Katana T09–T10 contract development checkpoint
+# Katana T09–T11 contract development checkpoint
 
 This allow-listed source snapshot publishes the new read-only exchange-contract
 boundary plus its unchanged import dependencies. It does **not** contain the
@@ -40,7 +40,7 @@ successfully. Validation is not biological completion or execution permission.
 
 Exchange schema `1.0.0`, project/asset/run/result identity and provenance checks,
 sample/contrast/method/unit/path/missing-state rules, three synthetic projects,
-and the original 88 T09 contract/API/CLI tests plus 88 T10 samplesheet tests. `domain/` and the parent initializer
+and 88 T09 contract/API/CLI tests, 88 T10 samplesheet tests and 111 T11 selected-contrast tests (287 total). `domain/` and the parent initializer
 are unchanged import dependencies; their legacy platform schema `2.0` remains
 separate from the exchange schema. The source package version label identifies
 the development source; this subset is not an installable scientific release.
@@ -79,3 +79,32 @@ synthetic examples. Validation does not certify arbitrary BAMs, every upstream
 schema/version or scientific eligibility. An optional `--project` checks an
 existing T09 manifest without rewriting it. T09 exchange schema 1.0.0 and legacy
 platform schema 2.0 are preserved.
+
+## T11: only user-selected comparisons
+
+Keep the native `contrast,treatment,control` CSV. T11 checks only those rows;
+three available conditions do not create all three pairwise comparisons.
+Metadata preflight records the exact treatment-minus-control request and each
+method's original direction convention. It never rewrites native effects or P/FDR.
+
+From `development/`, with `PYTHONPATH=source` set as above:
+
+```sh
+python -B -m katana_next.contracts contrasts --metadata source/examples/contracts/selected-contrasts-v1/selected-subset.metadata.csv --contrasts source/examples/contracts/selected-contrasts-v1/selected-subset.contrasts.csv --route bulk_complete
+```
+
+Current complete bulk upstream supports independent `~ condition` only. The
+existing DEG adapter's additive batch/subject models are explicitly marked
+`adapter_present_route_unwired`; passing metadata checks does not enable dispatch.
+Pairing must be explicit and complete. Technical/repeated observations,
+confounding, rank deficiency, unsupported designs and missing residual degrees
+of freedom are diagnosed without dropping covariates or unmatched samples.
+
+Imported native formulas remain unverified provenance. Requested comparison
+samples do not establish the original fit universe. The separate formal 2x2
+DEXSeq interaction feature keeps its own adapter and pending acceptance.
+All calls report zero models fitted and no execution authorization.
+
+See [the support table and full contract](source/docs/selected-contrasts-v1.md).
+NumPy is used only for requested sample-design rank/row-space preflight and is
+imported lazily; the basic T09/T10 paths retain their small import boundary.

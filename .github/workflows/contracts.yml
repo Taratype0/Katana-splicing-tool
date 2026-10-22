@@ -30,3 +30,4 @@ jobs:
       - run: python -B -m pytest -q -p no:cacheprovider source/tests/contracts
       - run: python -B -m katana_next.contracts validate source/examples/contracts/v1/bulk-native-import.project.json --verify-hashes
       - run: python -B -m katana_next.contracts samplesheets --input source/examples/contracts/sample-identity-v1/fastq-multilane/upstream.csv --metadata source/examples/contracts/sample-identity-v1/fastq-multilane/metadata.csv --format fastq
+      - run: python -B -m katana_next.contracts contrasts --metadata source/examples/contracts/selected-contrasts-v1/selected-subset.metadata.csv --contrasts source/examples/contracts/selected-contrasts-v1/selected-subset.contrasts.csv --route bulk_complete

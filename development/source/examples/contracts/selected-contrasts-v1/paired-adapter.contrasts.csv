@@ -1,0 +1,2 @@
+contrast,treatment,control,design,paired_by,paired
+paired_treated_vs_control,Treated,Control,~ subject + condition,donor_id,true

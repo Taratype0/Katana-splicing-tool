@@ -1,0 +1,2 @@
+contrast,treatment,control,design
+adjusted_treated_vs_control,Treated,Control,~ batch + condition

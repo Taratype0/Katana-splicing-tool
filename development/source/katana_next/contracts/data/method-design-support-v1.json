@@ -1,0 +1,163 @@
+{
+  "schema": "katana.method_design_support/v1",
+  "version": "1.0.0",
+  "scope": "Declared selected-contrast metadata preflight against pinned current wrappers; no fitting or execution authorization",
+  "source_snapshot": "Isolated T08 upstream and algorithm baseline; not a claim about every published method or current nf-core release",
+  "selection_policy": "Only user-declared rows; never generate all condition pairs",
+  "profiles": {
+    "bulk_complete": {
+      "allowed_terms": ["condition"],
+      "paired": false,
+      "status": "supported_declared_design",
+      "methods": ["deseq2", "dexseq_exon", "dexseq_dtu_stager", "rmats", "suppa"],
+      "assays": ["bulk_rna"],
+      "formula": "~ condition",
+      "boundary": "Independent selected two-condition contrasts only. Complete-bundle input gate rejects paired, batch, covariate and interaction models. Native fit, reference, input and resource qualification remain required."
+    },
+    "deseq2_adapter": {
+      "allowed_terms": ["condition", "batch", "subject"],
+      "paired": true,
+      "status": "adapter_present_route_unwired",
+      "methods": ["deseq2"],
+      "assays": ["bulk_rna"],
+      "formula_family": "Intercept plus additive categorical condition and optional batch and/or subject",
+      "boundary": "Native R DEG adapter exists with full-rank/residual-df checks and complete subject-pair checks. Extended designs are not exposed by the complete-bundle entry gate. A valid metadata preflight does not make this an integrated execution route. No interaction, arbitrary numeric covariate, nonlinear term or mixed model."
+    },
+    "import_only": {
+      "allowed_terms": [],
+      "paired": false,
+      "status": "imported_native_design_unverified",
+      "methods": ["deseq2", "dexseq_exon", "dexseq_dtu_stager", "rmats", "suppa"],
+      "assays": ["bulk_rna", "single_cell_rna", "single_nucleus_rna"],
+      "allowed_terms_semantics": "Empty because source model text is preserved as opaque provenance; it is not parsed, evaluated or substituted with a simpler model",
+      "paired_flag_semantics": "No local paired computation is provided; a declared native paired result may still be imported without claiming local reproducibility",
+      "boundary": "Validate identity and declared effect direction, preserve original declared row, native pairing/model fields and P/FDR. Import does not certify source-model correctness, assay eligibility, independent replication or successful new computation.",
+      "fit_scope": "native_fit_unverified",
+      "fit_sample_ids": null,
+      "sample_scope_semantics": "Selected sample IDs describe comparison arms only; they do not establish all samples used in the original native statistical fit."
+    }
+  },
+  "methods": {
+    "deseq2": {
+      "native_name": "DESeq2",
+      "endpoint": "gene differential expression",
+      "native_effect": "log2(treatment/control)",
+      "pinned_adapter_version": "1.34.0",
+      "contrast_binding": "results(dds, contrast=c('condition', treatment, control))",
+      "statistics_policy": "Native P, BH-adjusted P, test status and tested universe are preserved. Metadata validation does not fit DESeq2."
+    },
+    "dexseq_exon": {
+      "native_name": "DEXSeq exon DEU",
+      "endpoint": "exon counting-bin differential usage",
+      "native_effect": "native_header_authoritative_control_over_treatment",
+      "pinned_adapter_version": "1.36.0",
+      "direction_exception": "Do not assign treatment-minus-control to a native fold-change column merely because the user selected that comparison. Current export records control-over-treatment with the native column header authoritative. Gene-level perGeneQValue is unsigned.",
+      "design_boundary": "Current upstream script retains sample and condition only; additional batch/donor columns do not adjust the fitted model."
+    },
+    "dexseq_dtu_stager": {
+      "native_name": "DRIMSeq filtering, DEXSeq DTU, stageR adjustment",
+      "endpoint": "transcript differential usage",
+      "native_effect": "native_header_authoritative; qvalue_unsigned",
+      "pinned_adapter_versions": {"DRIMSeq": "1.18.0", "DEXSeq": "1.36.0", "stageR": "1.12.0"},
+      "direction_exception": "Native DEXSeq fold-change header is authoritative; gene and stageR q-values have no effect direction.",
+      "design_boundary": "Current upstream DEXSeq script consumes sample plus condition and selected pair rows. DRIMSeq is used for filtering, not an independent dmFit/dmTest differential result."
+    },
+    "rmats": {
+      "native_name": "rMATS-turbo",
+      "endpoint": "event differential splicing",
+      "native_effect": "group1_minus_group2",
+      "pinned_adapter_version": "4.1.2",
+      "contrast_binding": "group1=treatment; group2=control; preserve JC/JCEC and declared sample-vector order",
+      "design_boundary": "Vendored module exposes --paired-stats, but the current complete workflow passes false. It provides no batch/covariate/interaction model. No automatic donor pairing."
+    },
+    "suppa": {
+      "native_name": "SUPPA2",
+      "endpoint": "local-event or isoform differential PSI",
+      "native_effect": "second_minus_first; adapter_control_then_treatment",
+      "pinned_adapter_version": "2.3",
+      "contrast_binding": "Adapter places control first and treatment second; native output is treatment-minus-control. Preserve original input-order provenance.",
+      "design_boundary": "Vendored module exposes -pa, but the complete workflow passes false. Arbitrary batch/covariate/interaction models are not implemented by this wrapper."
+    }
+  },
+  "formal_extensions": {
+    "dexseq_interaction": {
+      "workflow_id": "differential.replicate_interaction",
+      "workflow_version": "3.0.1",
+      "function_status": "formal",
+      "activation": "opt_in",
+      "status": "implementation_acceptance_pending",
+      "design": "Explicit independent 2x2 with two categorical factors, explicit reference levels and at least two independent samples per cell; optional batch usage terms",
+      "statistic": "Native DEXSeq full-versus-reduced likelihood-ratio test, removing the declared interaction term; BH across tested exon bins",
+      "boundary": "Existing dedicated adapter, not the complete upstream route or the thin T11 contrast dispatcher. No paired donor model or mixed model. Exon-bin fractions are descriptive and are not rMATS PSI. Real-data and simulation acceptance are still required."
+    }
+  },
+  "source_evidence": [
+    {
+      "path": "upstream-reference/bin/katana_validate_inputs.py",
+      "sha256": "b11d0953cd1b34e1f330bf962d1f63a5f1032be865cb065b5d8fb3dd71081571",
+      "line_ranges": [[136, 177]],
+      "claim": "Complete-bundle gate accepts only ~ condition, independent biological replicas and explicit treatment/control comparisons; extended designs are rejected."
+    },
+    {
+      "path": "upstream-reference/bin/katana_differential.R",
+      "sha256": "8bf075f03e043c19c04bbbc9c10250df7cdab6952e72b7d72e7e2fb6401788c4",
+      "line_ranges": [[74, 122], [278, 294]],
+      "claim": "DEG adapter supports only additive categorical condition/batch/subject with native rank/residual-df and complete-pair checks; native DESeq2 contrast is treatment/control."
+    },
+    {
+      "path": "upstream-reference/workflows/katana.nf",
+      "sha256": "4a6d63bcc019a9bcafa5ac4eef9ebb4834c1ed1ba1fef55038a17360939c5b12",
+      "line_ranges": [[30, 39], [142, 181], [215, 216], [254, 281]],
+      "claim": "Current complete route passes false to rMATS/SUPPA paired flags; export preserves DEXSeq direction exception and SUPPA input-order provenance."
+    },
+    {
+      "path": "upstream-reference/bin/run_dexseq_exon.R",
+      "sha256": "3bad7ee75546a03e292f7a7970e873710e0a1477ddc48dde0d4ae41cad0d25c1",
+      "line_ranges": [[104, 156]],
+      "claim": "Exon DEU wrapper retains only sample/condition, selects declared pairs and invokes native DEXSeq."
+    },
+    {
+      "path": "upstream-reference/bin/run_dexseq_dtu.R",
+      "sha256": "9e6ee3d88eaa02646e526153c90c18d92050e07dce1ecbc0d3527d1d09b10c71",
+      "line_ranges": [[80, 89], [119, 152]],
+      "claim": "Transcript DTU wrapper consumes two-column sample/condition metadata and declared pairs."
+    },
+    {
+      "path": "upstream-reference/vendor/nf-core-rnasplice/modules/local/rmats_post.nf",
+      "sha256": "25fac904356724b4e29eb05f1e64650818a6e1e66e09da05ed5168711e223ace",
+      "line_ranges": [[5, 18], [49, 51], [68, 87]],
+      "claim": "Native rMATS pin and optional paired flag exist in the vendored module, separately from complete-route wiring."
+    },
+    {
+      "path": "upstream-reference/vendor/nf-core-rnasplice/modules/local/suppa_diffsplice.nf",
+      "sha256": "449ed8b6a5c97cdd0ebfa5a2456809c2c7424653fe23c930d3ab955d28aa8650",
+      "line_ranges": [[5, 8], [22, 46]],
+      "claim": "SUPPA pin and optional paired flag exist in the vendored module, separately from complete-route wiring."
+    },
+    {
+      "path": "source/katana_next/workflows/dexseq_interaction.py",
+      "sha256": "a1cf985775c7548a683467c234118300b4c55828be04fe97cb40c237494af31d",
+      "line_ranges": [[11, 28], [43, 53]],
+      "claim": "Existing formal opt-in workflow identity, explicit 2x2 scope and pending real-data/simulation acceptance."
+    },
+    {
+      "path": "source/katana_next/science/dexseq_interaction.py",
+      "sha256": "00d0fb6a3b7a92583f6c21237067d56dc2bae66bfb220b37a6963cc088c4bbec",
+      "line_ranges": [[6, 33]],
+      "claim": "Independent 2x2 design validation, explicit references, replicate counts and unique count files."
+    },
+    {
+      "path": "source/katana_next/science/dexseq_interaction.R",
+      "sha256": "1f72c16bd882d38a58b267b3bd81d39bd6aeaac6b0afbeea7b7905051535b4e7",
+      "line_ranges": [[31, 52], [81, 103]],
+      "claim": "Native full/reduced interaction models, optional batch usage terms, rank checks, LRT and complete-family BH."
+    },
+    {
+      "path": "source/katana_next/science/contrast_planner.py",
+      "sha256": "7c266402fdf04b549f944ddb7728a65183503d95ad6303a76b15550b07f0e270",
+      "line_ranges": [[10, 88], [90, 126]],
+      "claim": "Existing estimability utility uses native NumPy rank/row-space diagnostics but enumerates contrasts; T11 must not invoke its all-pairs generator."
+    }
+  ],
+  "public_artifact_note": "Evidence paths are relative identifiers of the isolated source snapshot. These source copies are not installed as part of the thin contract resource; no machine paths, data, credentials or native results are included."
+}
