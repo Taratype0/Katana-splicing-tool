@@ -1,0 +1,210 @@
+{
+  "kind": "project",
+  "schema_version": "1.0.0",
+  "project_id": "project_missing_fixture",
+  "display_name": "Synthetic missing result source",
+  "assay_mode": "bulk_rna",
+  "analysis_level": "bulk",
+  "input_kind": "processed_results",
+  "intent": "import",
+  "samples": [
+    {
+      "sample_id": "sample_A1",
+      "display_name": "sample A1",
+      "biological_unit_id": "bio_A1",
+      "donor_id": null,
+      "group": "A",
+      "cell_type": null,
+      "source_assay": "bulk_rna",
+      "covariates": {}
+    },
+    {
+      "sample_id": "sample_A2",
+      "display_name": "sample A2",
+      "biological_unit_id": "bio_A2",
+      "donor_id": null,
+      "group": "A",
+      "cell_type": null,
+      "source_assay": "bulk_rna",
+      "covariates": {}
+    },
+    {
+      "sample_id": "sample_B1",
+      "display_name": "sample B1",
+      "biological_unit_id": "bio_B1",
+      "donor_id": null,
+      "group": "B",
+      "cell_type": null,
+      "source_assay": "bulk_rna",
+      "covariates": {}
+    },
+    {
+      "sample_id": "sample_B2",
+      "display_name": "sample B2",
+      "biological_unit_id": "bio_B2",
+      "donor_id": null,
+      "group": "B",
+      "cell_type": null,
+      "source_assay": "bulk_rna",
+      "covariates": {}
+    }
+  ],
+  "contrasts": [
+    {
+      "contrast_id": "contrast_B_vs_A",
+      "display_name": "B versus A",
+      "kind": "group_difference",
+      "sample_ids": [
+        "sample_A1",
+        "sample_A2",
+        "sample_B1",
+        "sample_B2"
+      ],
+      "effect_direction": "numerator_minus_denominator",
+      "model_formula": null,
+      "paired": false,
+      "numerator_sample_ids": [
+        "sample_B1",
+        "sample_B2"
+      ],
+      "denominator_sample_ids": [
+        "sample_A1",
+        "sample_A2"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "reference_id": "reference_unresolved",
+      "taxon_id": null,
+      "genome_build": null,
+      "annotation_version": null,
+      "identity_status": "unresolved",
+      "asset_ids": []
+    }
+  ],
+  "assets": [
+    {
+      "kind": "asset",
+      "schema_version": "1.0.0",
+      "asset_id": "asset_native_events",
+      "role": "input",
+      "format": "table",
+      "location": {
+        "kind": "project_relative",
+        "path": "data/not-provided-events.csv"
+      },
+      "availability": "missing",
+      "sha256": null,
+      "bytes": null,
+      "sample_ids": [
+        "sample_A1",
+        "sample_A2",
+        "sample_B1",
+        "sample_B2"
+      ],
+      "reference_id": "reference_unresolved",
+      "measurement_unit": "PSI_fraction"
+    }
+  ],
+  "methods": [
+    {
+      "method_id": "synthetic_native_fixture",
+      "tool_name": "synthetic_native_fixture",
+      "tool_version": "fixture-1",
+      "workflow_id": "fixture.native_import",
+      "workflow_version": "fixture-1",
+      "source_sha256": null,
+      "operation": "import",
+      "measurement_unit": "PSI_fraction",
+      "inference_unit": "biological_sample",
+      "effect_scale": "numerator_minus_denominator",
+      "statistics_origin": "native_import"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "run",
+      "schema_version": "1.0.0",
+      "run_id": "run_fixture_import",
+      "method_id": "synthetic_native_fixture",
+      "execution_kind": "import",
+      "status": "blocked",
+      "sample_ids": [
+        "sample_A1",
+        "sample_A2",
+        "sample_B1",
+        "sample_B2"
+      ],
+      "contrast_ids": [
+        "contrast_B_vs_A"
+      ],
+      "input_asset_ids": [
+        "asset_native_events"
+      ],
+      "reference_ids": [
+        "reference_unresolved"
+      ],
+      "parent_run_ids": [],
+      "parameters": {
+        "significance_threshold": 0.05,
+        "fixture_only": true
+      },
+      "seed": null,
+      "software": {
+        "package_version": "T09-contract-fixture",
+        "source_commit": null,
+        "python_version": null,
+        "container_digest": null
+      },
+      "provenance": {
+        "source_uri": "data/native-events.csv",
+        "source_schema": "synthetic_native_event_table",
+        "source_version": "fixture-1",
+        "source_artifact_id": "asset_native_events",
+        "source_completion": "unknown"
+      },
+      "execution_evidence": {
+        "status": "not_applicable",
+        "receipt_asset_ids": []
+      },
+      "reason": {
+        "code": "missing_input",
+        "detail": "Synthetic source table has not been provided."
+      }
+    }
+  ],
+  "results": [
+    {
+      "kind": "result",
+      "schema_version": "1.0.0",
+      "result_id": "result_fixture_events",
+      "run_id": "run_fixture_import",
+      "endpoint": "differential_splicing",
+      "entity_unit": "event",
+      "measurement_unit": "PSI_fraction",
+      "inference_unit": "biological_sample",
+      "statistics_origin": "native_import",
+      "contrast_id": "contrast_B_vs_A",
+      "status": "not_computed",
+      "row_count": null,
+      "tested_count": null,
+      "significant_count": null,
+      "findings": "not_assessed",
+      "output_asset_ids": [],
+      "tested_universe_asset_id": null,
+      "family_id": null,
+      "columns": {},
+      "reason": {
+        "code": "missing_input",
+        "detail": "Import was not performed because the source is missing; absence is not a zero finding."
+      }
+    }
+  ],
+  "extensions": {
+    "fixture": {
+      "synthetic": true,
+      "not_real_data_acceptance": true
+    }
+  }
+}
