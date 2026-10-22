@@ -46,6 +46,13 @@ class JointResponseWorkflow(WorkflowBase):
         if frame.empty:
             raise ValueError('No cached gene evidence')
         frame, summary = classify_response(frame)
+        # The unchanged classifier reads policy-specific as_supported values;
+        # display labels must name that actual selection rather than always RS.
+        from katana_next.science.das_selection import EVENT_SET_LABELS, normalize_event_set
+        das_label = EVENT_SET_LABELS[normalize_event_set(parameters.get('event_set'))]
+        frame['joint_class'] = frame.joint_class.str.replace('stable DAS', das_label, regex=False)
+        summary['joint_class'] = summary.joint_class.str.replace('stable DAS', das_label, regex=False)
+        summary['row_id'] = summary.comparison_id + '::' + summary.joint_class
         writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version, common_metadata={'limitations': self.definition.limitations, 'threshold_policy': 'Inherited from parent candidate and DAS artifacts; not recalculated', 'source_artifact': parents[0].artifact_id})
         ids = (parents[0].artifact_id,)
         writer.table('Integrated all-gene response', 'joint_response.parquet', frame, entity_type='gene', parents=ids)
@@ -54,7 +61,7 @@ class JointResponseWorkflow(WorkflowBase):
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
         labels = {c.contrast_id: c.label for c in context.manifest.contrasts}
-        categories = ['DEG and stable DAS', 'stable DAS; not DEG', 'DEG; not stable DAS']
+        categories = [f'DEG and {das_label}', f'{das_label}; not DEG', f'DEG; not {das_label}']
         matrix = summary.pivot(index='comparison_id', columns='joint_class', values='genes').reindex(columns=categories).fillna(0)
         fig, ax = plt.subplots(figsize=(12, max(4, len(matrix) * 1.3)))
         matrix.rename(index=labels).plot.barh(ax=ax, width=0.8)

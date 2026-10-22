@@ -35,6 +35,13 @@ export type WorkflowDefinition = {
   enabled: boolean;
   limitations: string;
   presentation_role?: "primary" | "advanced" | "auxiliary";
+  das_selection?: {
+    mode: "switchable" | "rs_required" | "measurement_population" | "not_applicable";
+    label: string;
+    description: string;
+    default_event_set: string | null;
+    policy_version?: string;
+  };
 };
 
 export type FileFingerprint = {

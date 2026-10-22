@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { api, type MotifTraceMode } from "./api";
 import { displayModuleName, displayArtifactName } from "./branding";
+import { DEFAULT_DAS_EVENT_SET, isDasEventSet, isDasSwitchable, parametersWithDasSelection, type DasEventSet } from "./dasSelection";
 import { ArtifactViewer } from "./components/ArtifactViewer";
 import { ContextBar } from "./components/ContextBar";
 import { Inspector } from "./components/Inspector";
@@ -48,6 +49,7 @@ export default function App() {
   const [showAdvancedAnalyses, setShowAdvancedAnalyses] = useState(false);
   const [selectedContrasts, setSelectedContrasts] = useState<Set<string>>(new Set());
   const [parameterStore, setParameterStore] = useState<Record<string, Record<string, unknown>>>({});
+  const [dasEventSet, setDasEventSet] = useState<DasEventSet>(DEFAULT_DAS_EVENT_SET);
   const [activeArtifactId, setActiveArtifactId] = useState("");
   const [focusedRow, setFocusedRow] = useState<Record<string, unknown>>();
   const [detailOpen, setDetailOpen] = useState(false);
@@ -70,6 +72,10 @@ export default function App() {
   function acceptProject(payload: ProjectPayload) {
     localStorage.setItem(RECENT_MANIFEST_KEY, payload.snapshot.manifest_path);
     startTransition(() => {
+      if (project?.snapshot.manifest_path !== payload.snapshot.manifest_path) {
+        setDasEventSet(DEFAULT_DAS_EVENT_SET);
+        setParameterStore({});
+      }
       setProject(payload);
       setSelectedContrasts(new Set(payload.manifest.contrasts.map((contrast) => contrast.contrast_id)));
       setSelectedIds(new Set());
@@ -108,7 +114,8 @@ export default function App() {
   const projectId = project?.snapshot.project_id ?? "";
   const sourceArtifacts = useQuery({ queryKey: ["source-artifacts", projectId], queryFn: () => api.artifacts(projectId), enabled: Boolean(projectId) });
   const scConditions = useQuery({ queryKey: ["single-cell-conditions", projectId], queryFn: () => api.singleCellConditions(projectId), enabled: Boolean(projectId) && activeWorkspace === "single-cell" });
-  const activeParameters = activeWorkflow ? (parameterStore[activeWorkflow.workflow_id] ?? defaultsFor(activeWorkflow)) : {};
+  const activeParameters = parametersWithDasSelection(activeWorkflow,
+    activeWorkflow ? (parameterStore[activeWorkflow.workflow_id] ?? defaultsFor(activeWorkflow)) : {}, dasEventSet);
   const requiresComparisons = Boolean(
     activeWorkflow?.supports_contrast_selection && project?.manifest.contrasts.length,
   );
@@ -221,11 +228,13 @@ export default function App() {
       setFocusedRow(undefined);
       setSelectedIds(new Set());
       setParameterStore({});
+      setDasEventSet(DEFAULT_DAS_EVENT_SET);
     });
   }
 
   function updateParameter(key: string, value: unknown) {
     if (!activeWorkflow) return;
+    if (key === "event_set" && isDasSwitchable(activeWorkflow) && isDasEventSet(value)) setDasEventSet(value);
     setParameterStore((current) => ({
       ...current,
       [activeWorkflow.workflow_id]: { ...(current[activeWorkflow.workflow_id] ?? defaultsFor(activeWorkflow)), [key]: value },
@@ -241,11 +250,15 @@ export default function App() {
 
   function resetParameters() {
     if (!activeWorkflow) return;
+    if (isDasSwitchable(activeWorkflow)) setDasEventSet(DEFAULT_DAS_EVENT_SET);
     setParameterStore((current) => ({ ...current, [activeWorkflow.workflow_id]: defaultsFor(activeWorkflow) }));
   }
 
   function restoreSavedParameters() {
     if (!activeWorkflow || !savedSettingsArtifact) return;
+    if (isDasSwitchable(activeWorkflow) && isDasEventSet(savedSettingsArtifact.parameters.event_set)) {
+      setDasEventSet(savedSettingsArtifact.parameters.event_set);
+    }
     setParameterStore((current) => ({
       ...current,
       [activeWorkflow.workflow_id]: { ...defaultsFor(activeWorkflow), ...savedSettingsArtifact.parameters },

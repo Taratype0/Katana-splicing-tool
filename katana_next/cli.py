@@ -35,6 +35,8 @@ def main():
         command = sub.add_parser(action)
         command.add_argument("workflow")
         command.add_argument("--parameters", type=Path, help="JSON object using the same parameters as the web UI")
+        command.add_argument("--event-set", choices=["stable_significant", "significant"],
+                             help="DAS selection: stable_significant is RS-DAS (default); significant is ordinary DAS. Only declared switchable modules accept both.")
         if action == "run":
             command.add_argument("--force", action="store_true")
     args = parser.parse_args()
@@ -43,6 +45,11 @@ def main():
             parameters = json.loads(args.parameters.read_text(encoding="utf-8")) if getattr(args, "parameters", None) else {}
             if not isinstance(parameters, dict):
                 raise ValueError("Parameters must be a JSON object")
+            explicit_event_set = getattr(args, "event_set", None)
+            if explicit_event_set is not None:
+                if "event_set" in parameters and parameters["event_set"] != explicit_event_set:
+                    raise ValueError("Conflicting event_set in --parameters and --event-set")
+                parameters["event_set"] = explicit_event_set
             if args.action == "workflows":
                 result = project.inventory()
             elif args.action == "design":

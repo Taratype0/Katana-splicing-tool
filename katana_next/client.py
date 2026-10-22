@@ -41,8 +41,23 @@ class KatanaProject:
             self.context = self.projects.get(self.project_id)
         return result
 
-    def plan(self, workflow: str, parameters=None):
-        return preflight(self.workflows, self.project_id, workflow, parameters)
+    @staticmethod
+    def _with_event_set(parameters, event_set):
+        if parameters is not None and not isinstance(parameters, dict):
+            raise ValueError("Parameters must be a JSON object")
+        values = dict(parameters or {})
+        if event_set is not None:
+            if event_set not in {"stable_significant", "significant"}:
+                raise ValueError("Choose stable_significant (RS-DAS) or significant (ordinary DAS)")
+            if "event_set" in values and values["event_set"] != event_set:
+                raise ValueError("Conflicting event_set in parameters and keyword argument")
+            values["event_set"] = event_set
+        return values
+
+    def plan(self, workflow: str, parameters=None, *, event_set=None):
+        """Check one module using its declared DAS selection capability; no execution."""
+        return preflight(self.workflows, self.project_id, workflow,
+                         self._with_event_set(parameters, event_set))
 
     def contrasts(self, factors=None, *, include_batch=False, pairing="auto", reference_levels=None):
         from katana_next.science.contrast_planner import plan_contrasts
@@ -55,8 +70,9 @@ class KatanaProject:
             raise RuntimeError(result.error or result.message)
         return result
 
-    def run(self, workflow: str, parameters=None, *, force=False, timeout=None):
-        job = self.workflows.run(workflow, self.project_id, parameters=parameters, force=force)
+    def run(self, workflow: str, parameters=None, *, event_set=None, force=False, timeout=None):
+        job = self.workflows.run(workflow, self.project_id,
+                                 parameters=self._with_event_set(parameters, event_set), force=force)
         try:
             result = self.jobs.wait(job.job_id, timeout=timeout)
         except (TimeoutError, KeyboardInterrupt):

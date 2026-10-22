@@ -27,6 +27,10 @@ from katana_next.science.bulk import (
     significance_columns,
 )
 from katana_next.services.project_service import ProjectContext
+from katana_next.science.das_selection import (
+    EVENT_SET_LABELS, legacy_kernel_event_view, normalize_event_set,
+    selected_event_view, selection_metadata,
+)
 from katana_next.workflows.sources import resolve_table, validate_source
 from katana_next.workflows.base import (
     ArtifactWriter,
@@ -540,10 +544,13 @@ class DifferentialAsWorkflow(WorkflowBase):
         data = load_bulk_events(context, parameters)
         job.report(0.24, f"Normalized rMATS source cache: {data.source_cache_status}")
         events, quality = _quality_events(context, parameters, data.events)
+        event_set = normalize_event_set(parameters.get("event_set"))
+        events = selected_event_view(events, event_set)
+        selection_label = EVENT_SET_LABELS[event_set]
         events["minus_log10_fdr"] = -np.log10(events["fdr"].clip(lower=np.finfo(float).tiny))
         summary = (
             events.groupby(["comparison_id", "event_type"], dropna=False)
-            .agg(tested_events=("event_id", "size"), significant_events=("significant", "sum"), stable_significant_events=("stable_significant", "sum"))
+            .agg(tested_events=("event_id", "size"), significant_events=("significant", "sum"), stable_significant_events=("stable_significant", "sum"), selected_das_events=("selected_das", "sum"))
             .reset_index()
         )
         summary["row_id"] = summary["comparison_id"] + "::" + summary["event_type"]
@@ -562,11 +569,12 @@ class DifferentialAsWorkflow(WorkflowBase):
                 "read_support_scope": "every declared sample in both selected contrast arms",
                 "limitations": self.definition.limitations,
                 "source_cache_status": data.source_cache_status,
+                "das_selection": selection_metadata(event_set),
             },
         )
         table = writer.table("Differential AS events", "differential_as_events.parquet", events, entity_type="splice_event", parents=(quality.artifact_id,) if quality else ())
         summary_artifact = writer.table("Differential AS summary", "differential_as_summary.parquet", summary, entity_type="event_summary", parents=(table.artifact_id,))
-        plot_values = events.loc[events["fdr"].notna() & events["dpsi"].notna(), ["row_id", "comparison_id", "event_type", "gene_symbol", "dpsi", "fdr", "minus_log10_fdr", "stable_significant", "significant"]]
+        plot_values = events.loc[events["fdr"].notna() & events["dpsi"].notna(), ["row_id", "comparison_id", "event_type", "gene_symbol", "dpsi", "fdr", "minus_log10_fdr", "stable_significant", "significant", "selected_das", "das_event_set"]]
         if len(plot_values) > 50000:
             plot_values = pd.concat([plot_values[plot_values["significant"]], plot_values[~plot_values["significant"]].sample(n=min(30000, int((~plot_values["significant"]).sum())), random_state=17)]).drop_duplicates("row_id")
         writer.plot(
@@ -578,32 +586,32 @@ class DifferentialAsWorkflow(WorkflowBase):
                 {
                     "x": {"field": "dpsi", "type": "quantitative", "axis": {"title": "dPSI (numerator minus denominator)"}},
                     "y": {"field": "minus_log10_fdr", "type": "quantitative", "axis": {"title": "-log10 rMATS FDR"}},
-                    "color": {"field": "stable_significant", "type": "nominal", "scale": {"domain": [True, False], "range": [RED, "#aab3ba"]}, "legend": {"title": "Read-supported + significant"}},
+                    "color": {"field": "selected_das", "type": "nominal", "scale": {"domain": [True, False], "range": [RED, "#aab3ba"]}, "legend": {"title": selection_label}},
                     "facet": {"field": "comparison_id", "type": "nominal", "columns": 2, "header": {"title": None}},
-                    "tooltip": [{"field": "gene_symbol"}, {"field": "event_type"}, {"field": "comparison_id"}, {"field": "dpsi", "format": ".3f"}, {"field": "fdr", "format": ".2e"}, {"field": "stable_significant"}],
+                    "tooltip": [{"field": "gene_symbol"}, {"field": "event_type"}, {"field": "comparison_id"}, {"field": "dpsi", "format": ".3f"}, {"field": "fdr", "format": ".2e"}, {"field": "significant"}, {"field": "stable_significant"}, {"field": "selected_das"}, {"field": "das_event_set"}],
                 },
-                title="Differential alternative splicing",
-                description="Imported rMATS significance with every-sample ten-count eligibility.",
+                title=f"Differential alternative splicing: {selection_label}",
+                description=f"Selected foreground: {selection_label}. Original rMATS P/FDR, both significance flags and all source events are retained.",
                 height=260,
             ),
             entity_type="event_summary",
             parents=(table.artifact_id,),
         )
         writer.plot(
-            "Read-supported significant events by type",
+            "Selected significant events by type",
             "differential_as_counts.vl.json",
             _plot(
                 summary.to_dict("records"),
                 {"type": "bar", "cornerRadiusEnd": 3},
                 {
                     "x": {"field": "comparison_id", "type": "nominal", "axis": {"title": None, "labelAngle": -25}},
-                    "y": {"field": "stable_significant_events", "type": "quantitative", "axis": {"title": "Read-supported significant events"}},
+                    "y": {"field": "selected_das_events", "type": "quantitative", "axis": {"title": f"{selection_label} events"}},
                     "color": {"field": "event_type", "type": "nominal", "scale": {"scheme": "tableau10"}},
                     "xOffset": {"field": "event_type"},
-                    "tooltip": [{"field": "comparison_id"}, {"field": "event_type"}, {"field": "tested_events"}, {"field": "significant_events"}, {"field": "stable_significant_events"}],
+                    "tooltip": [{"field": "comparison_id"}, {"field": "event_type"}, {"field": "tested_events"}, {"field": "significant_events"}, {"field": "stable_significant_events"}, {"field": "selected_das_events"}],
                 },
-                title="Strict AS event set by contrast",
-                description="Events pass rMATS FDR, effect-size and IJC + SJC >= 10 in every declared sample of both contrast arms.",
+                title=f"{selection_label} event set by contrast",
+                description="RS-DAS adds IJC + SJC >= 10 in every declared comparison sample; ordinary DAS uses the original significance flag alone. Both counts remain in the summary.",
                 height=360,
             ),
             entity_type="event_summary",
@@ -714,7 +722,7 @@ class CrossComparisonWorkflow(WorkflowBase):
         workflow_id="differential.cross_comparison",
         workspace_id="differential",
         label="Exact cross-comparison AS",
-        question="How much of each strict AS signature is shared, directionally concordant or contrast-specific?",
+        question="How much of each selected AS signature is shared, directionally concordant or contrast-specific?",
         method="Exact normalized event identity, declared tested-event universe, hypergeometric overlap, direction concordance and effect correlation.",
         output_summary="Pair summary, event membership, overlap profile and similarity heatmap.",
         analysis_unit="pair of contrasts and exact splice event",
@@ -750,15 +758,18 @@ class CrossComparisonWorkflow(WorkflowBase):
             raise ValueError(f"Source DAS result is missing comparisons: {', '.join(sorted(missing))}. Run them explicitly first.")
         if events["comparison_id"].nunique() < 2:
             raise ValueError("Select at least two contrasts for cross-comparison.")
-        event_set = str(parameters.get("event_set", "stable_significant"))
-        if event_set not in {"stable_significant", "significant"}:
-            raise ValueError("Choose significant or stable_significant events.")
-        events = events.copy()
-        events["stable_significant"] = events[event_set].fillna(False).astype(bool)
+        event_set = normalize_event_set(parameters.get("event_set"))
+        # The frozen kernel consumes stable_significant. Only its private input
+        # copy is adapted; no source flags or raw P/FDR are rewritten.
+        events = legacy_kernel_event_view(events, event_set)
         job.report(0.25, "Matching exact event structures")
         summary, membership = cross_comparison_summary(events)
+        summary["das_event_set"] = event_set
+        membership["das_event_set"] = event_set
+        if "counterpart_status" in membership:
+            membership["counterpart_status"] = membership["counterpart_status"].str.replace("strict significant set", f"selected {EVENT_SET_LABELS[event_set]} set", regex=False)
         mode = parameters.get("membership_mode", "exact_event")
-        writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version, common_metadata={"question": self.definition.question, "method": self.definition.method, "analysis_unit": self.definition.analysis_unit, "interpretation": "Overlap, direction agreement and effect correlation answer different questions and are kept separate.", "limitations": self.definition.limitations})
+        writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version, common_metadata={"question": self.definition.question, "method": self.definition.method, "analysis_unit": self.definition.analysis_unit, "interpretation": "Overlap, direction agreement and effect correlation answer different questions and are kept separate.", "limitations": self.definition.limitations, "das_selection": selection_metadata(event_set), "legacy_kernel_adapter": "Private copy maps selected_das to the frozen kernel input. Original source flags, caller P/FDR and full event table are unchanged."})
         summary_artifact = writer.table("Cross-comparison exact-event summary", "cross_comparison_summary.parquet", summary, entity_type="contrast_pair", parents=(parent.artifact_id,))
         writer.table("Cross-comparison event membership", "cross_comparison_events.parquet", membership, entity_type="splice_event", parents=(summary_artifact.artifact_id, parent.artifact_id))
         from katana_next.workflows.intersection_plots import exact_intersections, render_intersections, event_membership_sets
@@ -778,7 +789,7 @@ class CrossComparisonWorkflow(WorkflowBase):
         writer.plot(
             "Exact-event overlap profile",
             "cross_comparison_overlap.vl.json",
-            _plot(long_values, {"type": "bar", "cornerRadiusEnd": 3}, {"x": {"field": "events", "type": "quantitative", "axis": {"title": "Selected AS set members"}}, "y": {"field": "pair", "type": "nominal", "axis": {"title": None, "labelLimit": 320}}, "color": {"field": "category", "type": "nominal", "scale": {"domain": [shared_label, "A-specific", "B-specific"], "range": [TEAL, BLUE, ORANGE]}}, "tooltip": [{"field": "pair"}, {"field": "category"}, {"field": "events"}]}, title=f"AS overlap: {mode.replace('_', ' ')}", description="All plot counts use the selected membership rule. A/B identify the first/second named contrast; specificity is relative to this rule, not biological absence.", height=max(300, 65 * len(summary))),
+            _plot(long_values, {"type": "bar", "cornerRadiusEnd": 3}, {"x": {"field": "events", "type": "quantitative", "axis": {"title": "Selected AS set members"}}, "y": {"field": "pair", "type": "nominal", "axis": {"title": None, "labelLimit": 320}}, "color": {"field": "category", "type": "nominal", "scale": {"domain": [shared_label, "A-specific", "B-specific"], "range": [TEAL, BLUE, ORANGE]}}, "tooltip": [{"field": "pair"}, {"field": "category"}, {"field": "events"}]}, title=f"{EVENT_SET_LABELS[event_set]} overlap: {mode.replace('_', ' ')}", description="All plot counts use the selected membership rule. A/B identify the first/second named contrast; specificity is relative to this rule, not biological absence.", height=max(300, 65 * len(summary))),
             entity_type="contrast_pair_summary",
             parents=(summary_artifact.artifact_id,),
         )
@@ -796,7 +807,7 @@ class CrossComparisonWorkflow(WorkflowBase):
         writer.plot(
             "AS similarity matrix",
             "cross_comparison_similarity.vl.json",
-            _plot(matrix_values, "rect", {"x": {"field": "comparison_a", "type": "nominal", "axis": {"title": None, "labelAngle": -45, "labelLimit": 220}}, "y": {"field": "comparison_b", "type": "nominal", "axis": {"title": None, "labelLimit": 220}}, "color": {"field": "jaccard", "type": "quantitative", "scale": {"domain": [0, 1], "scheme": "tealblues"}, "legend": {"title": "Jaccard"}}, "tooltip": [{"field": "comparison_a"}, {"field": "comparison_b"}, {"field": "jaccard", "format": ".3f"}, {"field": "direction_concordance", "format": ".1%"}]}, title="Strict AS signature similarity", description="Jaccard quantifies set similarity; tooltip separately reports same-sign dPSI among shared exact events.", height=500),
+            _plot(matrix_values, "rect", {"x": {"field": "comparison_a", "type": "nominal", "axis": {"title": None, "labelAngle": -45, "labelLimit": 220}}, "y": {"field": "comparison_b", "type": "nominal", "axis": {"title": None, "labelLimit": 220}}, "color": {"field": "jaccard", "type": "quantitative", "scale": {"domain": [0, 1], "scheme": "tealblues"}, "legend": {"title": "Jaccard"}}, "tooltip": [{"field": "comparison_a"}, {"field": "comparison_b"}, {"field": "jaccard", "format": ".3f"}, {"field": "direction_concordance", "format": ".1%"}]}, title=f"{EVENT_SET_LABELS[event_set]} signature similarity", description="Jaccard quantifies set similarity; tooltip separately reports same-sign dPSI among shared exact events.", height=500),
             entity_type="contrast_pair_summary",
             parents=(summary_artifact.artifact_id,),
         )
@@ -812,7 +823,7 @@ class CandidateEvidenceWorkflow(WorkflowBase):
         workspace_id="prioritize",
         label="Transparent candidate evidence",
         question="Which genes have AS, DEG, DTU or DEXSeq support, and which are shared between comparisons?",
-        method="One gene per contrast; ranking_score counts AS/DEG/DTU/DEXSeq support (0-4), not independent evidence or a p-value. Pair membership uses at least one supported analysis. Direction changes compare significant DEG or dominant stable AS signs at gene level, not necessarily the same event.",
+        method="One gene per contrast; ranking_score counts AS/DEG/DTU/DEXSeq support (0-4), not independent evidence or a p-value. Pair membership uses at least one supported analysis. Direction changes compare significant DEG or dominant selected DAS signs at gene level, not necessarily the same event.",
         output_summary="Candidate matrix, contrast-resolved heatmap and all-pair gene membership/direction table and summary.",
         analysis_unit="gene within a contrast",
         expected_artifacts=4,
@@ -849,9 +860,30 @@ class CandidateEvidenceWorkflow(WorkflowBase):
             if not dtu.empty:
                 dtu = dtu[dtu["comparison_id"].isin(selected)]
         job.report(0.35, "Joining transparent evidence dimensions")
-        candidates = build_candidate_evidence(events, deg, dtu, parameters)
+        event_set = normalize_event_set(parameters.get("event_set"))
+        adapted_events = legacy_kernel_event_view(events, event_set) if not events.empty else events
+        candidates = build_candidate_evidence(adapted_events, deg, dtu, parameters)
+        # Retain the historical column's actual RS count. The new selected
+        # count drives as_supported and ranking in the unchanged kernel.
+        candidates["selected_significant_as_events"] = candidates["stable_significant_as_events"]
+        if not events.empty and "stable_significant" in events:
+            rs_counts = events.groupby(["comparison_id", "gene_id"], dropna=False)["stable_significant"].sum()
+            keys = pd.MultiIndex.from_frame(candidates[["comparison_id", "gene_id"]])
+            candidates["stable_significant_as_events"] = rs_counts.reindex(keys).to_numpy()
+        candidates["das_event_set"] = event_set
+        candidates["evidence_class"] = candidates["evidence_class"].replace({"stable AS only": f"{EVENT_SET_LABELS[event_set]} only"})
         from katana_next.science.enrichment import attach_native_gene_measurement_flags
         candidates = attach_native_gene_measurement_flags(candidates, events, deg, dtu)
+        candidates["as_read_supported_eligible"] = candidates["as_eligible"]
+        if event_set == "significant" and not events.empty:
+            # Ordinary-DAS foregrounds include caller-testable low-read events.
+            # Their matched assay background must therefore use the same caller
+            # eligibility, not silently reapply the RS gate to foreground genes.
+            tested = pd.to_numeric(events["fdr"], errors="coerce").between(0, 1)
+            tested &= np.isfinite(pd.to_numeric(events["dpsi"], errors="coerce"))
+            eligible = pd.MultiIndex.from_frame(events.loc[tested, ["comparison_id", "gene_id"]].drop_duplicates())
+            candidates["as_eligible"] = pd.MultiIndex.from_frame(candidates[["comparison_id", "gene_id"]]).isin(eligible)
+        candidates["as_background_policy"] = ("caller_testable_without_read_support" if event_set == "significant" else "caller_testable_and_read_supported")
         labels = {c.contrast_id: c.label for c in context.manifest.contrasts}
         candidates["display_row"] = candidate_display_labels(candidates, labels)
         candidates = candidates[[c for c in candidates if c != "ranking_score"] + ["ranking_score"]]

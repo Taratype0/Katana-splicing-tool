@@ -223,7 +223,7 @@ def test_category_extension_preserves_original_membership(tmp_path):
         add_ontology_categories(bundle, extended)
 
 
-def _api_catalog_fixture(tmp_path, *, clip=False):
+def _api_catalog_fixture(tmp_path, *, clip=False, rs_proof=True):
     import json
     from fastapi.testclient import TestClient
     from katana_next.api.app import PlatformRuntime, create_app
@@ -256,8 +256,32 @@ def _api_catalog_fixture(tmp_path, *, clip=False):
              "exonEnd": 1100 + i*500, "upstreamES": 800 + i*500, "upstreamEE": 900 + i*500,
              "downstreamES": 1200 + i*500, "downstreamEE": 1300 + i*500, "model_status": "fit", "pvalue": .5}
             for comparison in comparisons for i in range(6)]
+    frame = pd.DataFrame(rows)
+    if clip and rs_proof:
+        # This fixture tests an RS-required foreground. Derive its evidence
+        # from declared per-arm sample counts with the production QC adapter;
+        # do not merely attach an RS label to a generic imported event catalog.
+        from katana_next.science.bulk import apply_stable_event_qc, significance_columns
+        contrasts = {c.contrast_id: c for c in context.manifest.contrasts}
+        for index, row in frame.iterrows():
+            contrast = contrasts[row.comparison_id]
+            n1, n2 = len(contrast.numerator.sample_ids), len(contrast.denominator.sample_ids)
+            frame.loc[index, "numerator_expected_samples"] = n1
+            frame.loc[index, "denominator_expected_samples"] = n2
+            for suffix, number, psi in (("1", n1, ".6"), ("2", n2, ".4")):
+                frame.loc[index, f"IncLevel{suffix}"] = ",".join([psi]*number)
+                frame.loc[index, f"IJC_SAMPLE_{suffix}"] = ",".join(["12"]*number)
+                frame.loc[index, f"SJC_SAMPLE_{suffix}"] = ",".join(["8"]*number)
+            foreground = row.event_id in {"e0", "e1"}
+            frame.loc[index, "pvalue"] = .001 if foreground else .5
+            frame.loc[index, "fdr"] = .01 if foreground else .5
+            frame.loc[index, "dpsi"] = .2 if foreground else .02
+            frame.loc[index, "abs_dpsi"] = .2 if foreground else .02
+        frame = significance_columns(apply_stable_event_qc(frame, {}), {})
+        assert frame.measurement_eligible.all()
+        assert frame.stable_significant.eq(frame.event_id.isin({"e0", "e1"})).all()
     writer = ArtifactWriter(context, "test.measured_event_catalog", "frozen", {}, "1.0")
-    artifact = writer.table("Complete test event catalog", "events.parquet", pd.DataFrame(rows), entity_type="splicing_event")
+    artifact = writer.table("Complete test event catalog", "events.parquet", frame, entity_type="splicing_event")
     writer.finish()
     chosen = [f"{comparisons[0]}::e0", f"{comparisons[0]}::e1"]
     saved = client.post(f"/api/projects/{project}/selections", json={"name": "Exact comparison A", "entity_type": "splicing_event",
@@ -292,6 +316,21 @@ def test_clip_enrichment_workflow_runs_exact_matching_and_provenance(tmp_path):
     assert result.background_hit_genes.eq(0).all()
     assert result.enrichment_pvalue.eq(.25).all()
     assert next(a for a in artifacts if a.name == "Experimental CLIP provenance").path.is_file()
+
+
+def test_clip_enrichment_rejects_catalog_without_rs_proof_before_submission(tmp_path):
+    runtime, client, context, project, selection, comparisons = _api_catalog_fixture(tmp_path, clip=True, rs_proof=False)
+    try:
+        source = next(a for a in context.catalog.list_artifacts(project) if a.name == "Complete test event catalog")
+        before = source.path.read_bytes()
+        started = client.post(f"/api/projects/{project}/workflows/prioritize.binding_enrichment/run",
+            json={"parameters": {"selection_id": selection}, "force": False})
+        assert started.status_code == 422, started.text
+        assert "lacks stable_significant" in started.json()["detail"]
+        assert not runtime.jobs.list(project)
+        assert source.path.read_bytes() == before
+    finally:
+        runtime.jobs.shutdown()
 
 
 def test_cell_embedding_overlay_uses_same_coordinates_and_expression_mode_runs(tmp_path):

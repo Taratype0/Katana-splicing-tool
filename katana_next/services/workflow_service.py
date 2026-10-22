@@ -126,6 +126,7 @@ class WorkflowService:
             )
         )
         parents = workflow.parent_artifacts(context, normalized)
+        self._validate_das_parent_selection(context, workflow_id, normalized, parents)
         normalized["source_artifact_ids"] = {
             f"{artifact.analysis_id}::{artifact.name}": artifact.artifact_id
             for artifact in parents
@@ -170,6 +171,29 @@ class WorkflowService:
             except (OSError, ValueError, KeyError, TypeError):
                 cached = []
         return context, workflow, normalized, run_fingerprint, cached
+
+    @staticmethod
+    def _validate_das_parent_selection(context, workflow_id, parameters, parents):
+        from katana_next.science.das_selection import (
+            policy_matches_artifact, selected_event_mask, workflow_das_capability,
+        )
+        capability = workflow_das_capability(workflow_id)
+        if capability["mode"] not in {"switchable", "rs_required"}:
+            return
+        for artifact in parents:
+            if not policy_matches_artifact(artifact, parameters["event_set"]):
+                raise ValueError("Selected downstream source has a different or unrecorded DAS event_set; create a matching downstream result explicitly. Completed raw upstream results are preserved.")
+        if capability["mode"] != "rs_required" or not parameters.get("selection_id"):
+            return
+        # Validate only the selected rows, keeping the full source available to
+        # the unchanged sequence/background kernels. Never silently drop rows.
+        import pandas as pd
+        from katana_next.workflows.sources import selected_source, selection_rows
+        source = selected_source(context, parameters)
+        if source is not None:
+            selected = selection_rows(context, parameters, source, pd.read_parquet(source.path))
+            if selected.empty or not selected_event_mask(selected, "stable_significant").all():
+                raise ValueError("This module requires an explicit RS-DAS selection; ordinary/unsupported events are retained in their source but cannot be silently used or dropped here.")
 
     @staticmethod
     def _normalize_contrast_scope(

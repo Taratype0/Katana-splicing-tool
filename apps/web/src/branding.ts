@@ -24,6 +24,7 @@ export function displayArtifactName(value: string): string {
 }
 
 export function displayParameterOption(key: string, value: string): string {
+  if (key === "event_set") return ({stable_significant: "RS-DAS: significant + read support (default)", significant: "Ordinary DAS: significant events"}[value] ?? value);
   if (key === "pairing") return ({auto:"Detect from sample identities", paired:"Paired samples", unpaired:"Independent samples"}[value] ?? value);
   return ({
     direct_experiment: "Experimental motifs only",

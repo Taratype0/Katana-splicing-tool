@@ -2,6 +2,7 @@ import { Check, ChevronDown, RotateCcw, SlidersHorizontal } from "lucide-react";
 import type { Artifact, ManifestContrast, Selection, WorkflowDefinition } from "../types";
 import { displayParameterOption } from "../branding";
 import { RbpLayerNote } from "./RbpEvidenceGuide";
+import { DasSelectionNote } from "./DasSelectionNote";
 
 type Props = {
   workflow: WorkflowDefinition;
@@ -40,6 +41,7 @@ export function WorkflowControls({
 
   return (
     <section className="workflow-controls" aria-label="Workflow parameters">
+      <DasSelectionNote workflow={workflow} parameters={parameters} />
       <RbpLayerNote workflowId={workflow.workflow_id} parameters={parameters} />
       <details style={{ margin: "0 0 16px", lineHeight: 1.6 }}>
         <summary>Statistical method and interpretation</summary>

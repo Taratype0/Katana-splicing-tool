@@ -28,7 +28,7 @@ from katana_next.workflows.base import (
 
 
 class ReproducibilityReportWorkflow(WorkflowBase):
-    version = "2.2.0+network_labels.20261022"
+    version = "2.3.0+das_selection.20261022"
     definition = WorkflowDefinition(
         workflow_id="reports.bundle",
         workspace_id="reports",
@@ -39,6 +39,9 @@ class ReproducibilityReportWorkflow(WorkflowBase):
         analysis_unit="analysis artifact",
         expected_artifacts=5,
         parameters=(
+            ParameterDefinition("event_set", "DAS event set", "select", "stable_significant",
+                "RS-DAS is the default. Include only matching completed switchable downstream results; absent results are not recomputed or relabelled. RS-required and measured-PSI modules keep their own declared scope.",
+                ("stable_significant", "significant")),
             ParameterDefinition(
                 "latest_only",
                 "Latest result per output",
@@ -71,6 +74,7 @@ class ReproducibilityReportWorkflow(WorkflowBase):
             and item.metadata.get("project_snapshot_fingerprint")
             == context.snapshot.manifest_fingerprint
         ]
+        artifacts = [item for item in artifacts if _report_artifact_matches(item, parameters.get("event_set"))]
         if not bool(parameters.get("latest_only", True)):
             return artifacts
         selected: list[AnalysisArtifact] = []
@@ -148,6 +152,10 @@ class ReproducibilityReportWorkflow(WorkflowBase):
             "parameters": parameters,
             "artifacts": [item.model_dump(mode="json") for item in parents],
         }
+        from katana_next.science.das_selection import selection_metadata
+        das_policy = selection_metadata(parameters.get("event_set"))
+        das_policy["scope"] = "Matching saved downstream artifacts only; no analysis or caller refitting. RS-required and measured-PSI modules retain their separate declared populations."
+        provenance["das_report_selection"] = das_policy
         from katana_next.science.rbp_evidence_layers import CONTRACT, layer_inventory
         provenance["rbp_evidence_layers"] = {
             "contract_version": CONTRACT["version"],
@@ -187,7 +195,7 @@ class ReproducibilityReportWorkflow(WorkflowBase):
                         entity_type="module_dashboard", metadata={"mime_type":"image/png","interpretation":d["interpretation"]},parents=(artifact.artifact_id,))
                     parents.append(plot)
         html_path = writer.directory / "KATANA_EVIDENCE_REPORT.html"
-        content = _html_report(context, parents)
+        content = _html_report(context, parents, das_policy=das_policy)
         if payloads:
             content = content.replace("</main>", dashboard_section(payloads)+"</main>")
             (writer.directory / "module_dashboards.json").write_text(json.dumps(payloads,allow_nan=False),encoding="utf-8")
@@ -204,7 +212,7 @@ class ReproducibilityReportWorkflow(WorkflowBase):
             parents=(inventory_artifact.artifact_id,),
         )
         pdf_path = writer.directory / "KATANA_EVIDENCE_REPORT.pdf"
-        _pdf_report(context, parents, pdf_path)
+        _pdf_report(context, parents, pdf_path, das_policy=das_policy)
         pdf_artifact = writer.existing_file(
             "Katana evidence report (PDF)",
             pdf_path,
@@ -240,6 +248,36 @@ class ReproducibilityReportWorkflow(WorkflowBase):
         return writer.finish()
 
 
+def _report_artifact_matches(artifact: AnalysisArtifact, event_set: Any = None) -> bool:
+    """Reporting never gives a saved plot/table another selection identity.
+
+    Even a full DAS table may contain a recorded selected_das column. Requiring
+    the stored context here prevents an ordinary-DAS report from quietly showing
+    that RS-selected column under a new heading. Source files remain untouched.
+    """
+    from katana_next.science.das_selection import (
+        DAS_SELECTION_POLICY_VERSION, normalize_event_set, workflow_das_capability,
+    )
+    if workflow_das_capability(artifact.analysis_id)["mode"] != "switchable":
+        return True
+    recorded = artifact.metadata.get("das_selection")
+    return (isinstance(recorded, dict)
+            and recorded.get("policy_version") == DAS_SELECTION_POLICY_VERSION
+            and recorded.get("event_set") == normalize_event_set(event_set))
+
+
+def _artifact_scope_label(artifact: AnalysisArtifact) -> str:
+    from katana_next.science.das_selection import workflow_das_capability
+    capability = workflow_das_capability(artifact.analysis_id)
+    recorded = artifact.metadata.get("das_selection", {})
+    saved = recorded.get("label") if isinstance(recorded, dict) else None
+    if capability["mode"] == "rs_required":
+        return "RS-DAS required for new analysis; saved scope: " + (str(saved) if saved else "not recorded")
+    if capability["mode"] == "measurement_population":
+        return "Declared measured PSI / read-support population; DAS switch does not apply"
+    return str(saved) if saved else "Own recorded result scope; no DAS relabelling"
+
+
 def _inventory(artifacts: list[AnalysisArtifact]) -> pd.DataFrame:
     rows = []
     for item in artifacts:
@@ -256,12 +294,13 @@ def _inventory(artifacts: list[AnalysisArtifact]) -> pd.DataFrame:
                 "sha256": file_fingerprint.digest,
                 "run_fingerprint": item.run_fingerprint,
                 "created_at": item.created_at.isoformat(),
+                "das_scope": _artifact_scope_label(item),
             }
         )
     return pd.DataFrame(rows)
 
 
-def _html_report(context: ProjectContext, artifacts: list[AnalysisArtifact]) -> str:
+def _html_report(context: ProjectContext, artifacts: list[AnalysisArtifact], *, das_policy=None) -> str:
     from katana_next.science.gene_filter import gene_filter_footnote
     from katana_next.science.rbp_evidence_layers import report_groups, overview_html, layer_note_html
     filter_note = html.escape(gene_filter_footnote(context.manifest))
@@ -282,6 +321,8 @@ def _html_report(context: ProjectContext, artifacts: list[AnalysisArtifact]) -> 
             + layer_note_html(layer)
             +
             f"<h2>{html.escape(str(metadata.get('question', analysis_id)))}</h2>"
+            + f"<p class='das-scope'><strong>DAS scope.</strong> {html.escape(_artifact_scope_label(values[0]))}</p>"
+            + (_das_top10_html(values, das_policy["event_set"]) if analysis_id == "differential.as" and das_policy else "")
             + "".join(_embedded_figure(value) for value in values)
             + "".join(_summary_table(value) for value in values)
             + _network_module_parameters_html(analysis_id, values)
@@ -294,10 +335,17 @@ def _html_report(context: ProjectContext, artifacts: list[AnalysisArtifact]) -> 
             f"<tbody>{rows}</tbody></table></details></section>"
         )
     contrasts = "".join(f"<tr><td>{html.escape(c.contrast_id)}</td><td>{html.escape(c.label)}</td><td>{html.escape(c.numerator.label)}</td><td>{html.escape(c.denominator.label)}</td></tr>" for c in context.manifest.contrasts)
+    selected_scope = "" if das_policy is None else (
+        "<section id='das-report-selection'><h2>DAS report selection</h2>"
+        f"<p><strong>{html.escape(str(das_policy['label']))}</strong>. {html.escape(str(das_policy['scope']))}</p>"
+        "<p>A switchable module without a matching completed result is not computed for this view. "
+        "No result from another DAS selection is substituted. Full original results remain in their source output directories.</p></section>"
+    )
     return f"""<!doctype html><html><head><meta charset='utf-8'><title>Katana evidence report</title>
 <style>body{{font-family:Arial,sans-serif;margin:0;color:#17252a;background:#f4f4ef}}main{{max-width:1080px;margin:auto;padding:52px}}header{{padding:34px;background:#12383b;color:white}}h1{{font-size:40px;margin:0 0 8px}}h2{{font-size:23px}}section{{margin:22px 0;padding:26px;background:white;border:1px solid #d9ded8}}.kicker{{color:#087d70;text-transform:uppercase;letter-spacing:.1em;font-size:12px;font-weight:700}}.boundary{{padding:12px;border-left:3px solid #da6f32;background:#fff4e8}}table{{width:100%;border-collapse:collapse}}th,td{{padding:9px;text-align:left;border-bottom:1px solid #e3e6e1;font-size:13px}}code{{font-size:12px}}</style></head>
 <body><header><h1>{html.escape(context.manifest.name)}</h1><p>Katana Next reproducibility evidence report</p></header><main>
 <p><strong>Genome:</strong> {html.escape(context.manifest.annotation.genome_build)} &nbsp; <strong>Samples:</strong> {len(context.manifest.samples)} &nbsp; <strong>Contrasts:</strong> {len(context.manifest.contrasts)}</p>
+{selected_scope}
 <section><h2>Comparisons and effect direction</h2><p>All standardized effects use numerator minus denominator. These are distinct experimental contrasts, not independent replications of one effect.</p><table><tr><th>ID</th><th>Comparison</th><th>Numerator</th><th>Denominator</th></tr>{contrasts}</table></section>
 {overview_html(artifacts)}
 {''.join(sections)}<footer id="gene-exclusion-footnote"><h2>Gene exclusion</h2><p>{filter_note}</p></footer></main></body></html>"""
@@ -307,6 +355,47 @@ def _png_path(artifact: AnalysisArtifact) -> Path | None:
     name = artifact.metadata.get("exports", {}).get("png")
     path = Path(name) if name else artifact.path if artifact.path.suffix.lower() == ".png" else None
     return path if path and path.is_file() else None
+
+
+def _das_top10_frames(artifacts: list[AnalysisArtifact], event_set: str):
+    """Read-only per-comparison ranking from the saved full DAS source."""
+    from katana_next.science.das_selection import selected_event_mask
+    ranked = []
+    for artifact in artifacts:
+        if artifact.name != "Differential AS events" or artifact.kind != ArtifactKind.TABLE:
+            continue
+        frame = pd.read_parquet(artifact.path) if artifact.path.suffix == ".parquet" else pd.read_csv(artifact.path, sep="\t")
+        required = {"comparison_id", "event_id", "dpsi", "fdr"}
+        if not required.issubset(frame.columns):
+            continue
+        chosen = frame.loc[selected_event_mask(frame, event_set)].copy()
+        chosen["_rank_fdr"] = pd.to_numeric(chosen["fdr"], errors="coerce")
+        chosen["_rank_effect"] = pd.to_numeric(chosen["dpsi"], errors="coerce").abs()
+        chosen = chosen.sort_values(["_rank_fdr", "_rank_effect", "event_id"], ascending=[True, False, True], na_position="last", kind="stable")
+        for comparison in frame["comparison_id"].dropna().astype(str).drop_duplicates():
+            top = chosen.loc[chosen["comparison_id"].astype(str).eq(comparison)].head(10).drop(columns=["_rank_fdr", "_rank_effect"])
+            ranked.append((comparison, top, artifact))
+    return ranked
+
+
+def _das_top10_html(artifacts: list[AnalysisArtifact], event_set: str) -> str:
+    sections = []
+    for comparison, top, artifact in _das_top10_frames(artifacts, event_set):
+        label = "RS-DAS" if event_set == "stable_significant" else "DAS"
+        columns = [key for key in ("gene_symbol", "gene_id", "event_id", "event_type", "dpsi", "fdr") if key in top]
+        detail = "".join(
+            f"<details><summary>{html.escape(str(row.get('gene_symbol', row['event_id'])))}: event fields</summary>"
+            + pd.DataFrame({"Field": list(row.index), "Value": [str(value) for value in row]}).to_html(index=False, escape=True, border=0)
+            + "</details>" for _, row in top.iterrows()
+        )
+        sections.append(
+            f"<div class='das-top10'><h3>Top {len(top)} {label} events | {html.escape(comparison)}</h3>"
+            "<p>Ranked within this comparison by native FDR, absolute PSI effect and event ID. "
+            f"The saved full table remains unchanged (source run {html.escape(artifact.run_fingerprint[:12])}).</p>"
+            + (top[columns].to_html(index=False, escape=True, border=0) if len(top) else "<p>No selected events; this is a computed empty foreground.</p>")
+            + detail + "</div>"
+        )
+    return "".join(sections)
 
 
 def _network_module_parameter_records(
@@ -419,7 +508,7 @@ def _summary_table(artifact: AnalysisArtifact) -> str:
 
 
 def _pdf_report(
-    context: ProjectContext, artifacts: list[AnalysisArtifact], target: Path
+    context: ProjectContext, artifacts: list[AnalysisArtifact], target: Path, *, das_policy=None
 ) -> None:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
@@ -441,6 +530,10 @@ def _pdf_report(
         ),
     ]
     from katana_next.science.rbp_evidence_layers import CONTRACT, layer_inventory, report_groups
+    if das_policy is not None:
+        story.append(Paragraph("DAS report selection: " + html.escape(str(das_policy["label"])), styles["Heading2"]))
+        story.append(Paragraph(html.escape(str(das_policy["scope"])), styles["BodyText"]))
+        story.append(Paragraph("Missing matching downstream results are not computed for this view; no other selection is substituted.", styles["BodyText"]))
     story.append(Paragraph(html.escape(gene_filter_footnote(context.manifest)), styles["BodyText"]))
     story.append(Paragraph(CONTRACT['title_en'], styles['Heading2']))
     for layer in layer_inventory(artifacts):
@@ -453,6 +546,16 @@ def _pdf_report(
     story.append(Paragraph(CONTRACT['shared_boundary_en'], styles['BodyText']))
     for analysis_id, layer, values in report_groups(artifacts):
         story.extend([Spacer(1, 6 * mm), Paragraph(analysis_id, styles["Heading2"])])
+        story.append(Paragraph("DAS scope: " + html.escape(_artifact_scope_label(values[0])), styles["BodyText"]))
+        if analysis_id == "differential.as" and das_policy:
+            label = "RS-DAS" if das_policy["event_set"] == "stable_significant" else "DAS"
+            for comparison, top, source in _das_top10_frames(values, das_policy["event_set"]):
+                story.append(Paragraph(f"Top {len(top)} {label} events | {html.escape(comparison)}", styles["Heading3"]))
+                story.append(Paragraph("Ranked within the comparison by native FDR, absolute PSI effect and event ID. Complete fields remain in the HTML and original table.", styles["BodyText"]))
+                for rank, (_, row) in enumerate(top.iterrows(), 1):
+                    text = (f"{rank}. {row.get('gene_symbol', '')} | {row['event_id']} | "
+                            f"dPSI {row['dpsi']} | FDR {row['fdr']}")
+                    story.append(Paragraph(html.escape(text), styles["BodyText"]))
         if layer:
             story.append(Paragraph(f"{layer['number']}. {html.escape(layer['title_en'])}", styles['Heading3']))
             story.append(Paragraph(html.escape(layer['boundary_en']), styles['BodyText']))

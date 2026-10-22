@@ -56,7 +56,17 @@ class WorkflowDefinition:
             payload[key] = display_module_name(payload[key])
         payload["parameters"] = [parameter.to_dict() for parameter in self.parameters]
         from katana_next.workflows.presentation import apply_workflow_copy
-        return apply_workflow_copy(payload)
+        payload = apply_workflow_copy(payload)
+        from katana_next.science.das_selection import workflow_das_capability
+        capability = workflow_das_capability(self.workflow_id)
+        payload["das_selection"] = capability
+        if capability["mode"] == "switchable" and not any(p["key"] == "event_set" for p in payload["parameters"]):
+            payload["parameters"].append(ParameterDefinition(
+                "event_set", "DAS event set", "select", "stable_significant",
+                "RS-DAS is the default: significant plus IJC + SJC >= 10 in every comparison sample. DAS uses original significance without the read-support foreground gate. Both original flags and caller statistics are preserved.",
+                ("stable_significant", "significant"),
+            ).to_dict())
+        return payload
 
 
 class Workflow(Protocol):
@@ -106,6 +116,8 @@ class WorkflowBase:
             for definition in self.definition.parameters
         }
         values.update(supplied or {})
+        from katana_next.science.das_selection import normalize_workflow_selection
+        values = normalize_workflow_selection(self.definition.workflow_id, values)
         for definition in self.definition.parameters:
             value = values.get(definition.key)
             if value is None:
@@ -305,6 +317,15 @@ class ArtifactWriter:
             **self.common_metadata,
             **(metadata or {}),
         }
+        from katana_next.science.das_selection import workflow_das_capability, selection_metadata
+        capability = workflow_das_capability(self.analysis_id)
+        merged_metadata["das_selection_capability"] = capability
+        if capability["mode"] in {"switchable", "rs_required"}:
+            merged_metadata["das_selection"] = selection_metadata(self.parameters.get("event_set"))
+            if self.analysis_id == "differential.as":
+                merged_metadata["das_selection"]["source_table_scope"] = "all events with both original significant and stable_significant flags"
+            elif capability["mode"] == "rs_required":
+                merged_metadata["das_selection"]["requirement"] = "RS-required; ordinary-DAS switching is unsupported"
         if self.context.manifest.metadata.get("gene_filter") and not self.analysis_id.startswith("single_cell."):
             from katana_next.science.gene_filter import gene_filter_details, gene_filter_footnote
             merged_metadata["gene_filter"] = gene_filter_details(self.context.manifest)

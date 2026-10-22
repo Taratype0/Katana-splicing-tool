@@ -85,6 +85,12 @@ def resolve_table(context: ProjectContext, analysis_id: str, name: str | None = 
             continue
         if not source_complete(context, artifact):
             continue
+        if "event_set" in parameters:
+            from katana_next.science.das_selection import policy_matches_artifact
+            if not policy_matches_artifact(artifact, parameters["event_set"]):
+                if bound:
+                    raise ValueError("The bound downstream source uses a different or unrecorded DAS event_set. Run the supported downstream module explicitly with the matching selection; raw upstream results remain reusable.")
+                continue
         available = set(artifact.contrast_ids or artifact.parameters.get("contrast_ids") or
                         [c.contrast_id for c in context.manifest.contrasts])
         if contrast_scoped and not requested.issubset(available):
