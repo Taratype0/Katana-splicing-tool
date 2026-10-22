@@ -76,6 +76,12 @@ def create_app(runtime: PlatformRuntime | None = None) -> FastAPI:
     def workflows() -> list[dict[str, object]]:
         return active.workflows.definitions()
 
+    @app.get("/api/motiftrace/modes")
+    def motiftrace_modes() -> dict[str, Any]:
+        """One read-only public catalog; execution uses the workflow routes."""
+        from katana_motiftrace import mode_catalog
+        return mode_catalog()
+
     @app.post("/api/projects/open")
     def open_project(request: OpenProjectRequest) -> dict[str, Any]:
         try:

@@ -10,7 +10,7 @@ import {
   Rows3,
   Info,
 } from "lucide-react";
-import { api } from "./api";
+import { api, type MotifTraceMode } from "./api";
 import { displayModuleName, displayArtifactName } from "./branding";
 import { ArtifactViewer } from "./components/ArtifactViewer";
 import { ContextBar } from "./components/ContextBar";
@@ -23,6 +23,7 @@ import { WorkflowControls } from "./components/WorkflowControls";
 import { WorkspaceNav } from "./components/WorkspaceNav";
 import { RunPlanPanel } from "./components/RunPlanPanel";
 import { RbpEvidenceGuide } from "./components/RbpEvidenceGuide";
+import { MotifTraceWorkbench, motifTraceModeParameters } from "./components/MotifTraceWorkbench";
 import type { Artifact, ProjectPayload, WorkflowDefinition } from "./types";
 
 const RECENT_MANIFEST_KEY = "katana-next:recent-manifest";
@@ -63,6 +64,8 @@ export default function App() {
 
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces });
   const workflows = useQuery({ queryKey: ["workflows"], queryFn: api.workflows });
+  const motifTraceCatalog = useQuery({ queryKey: ["motiftrace-modes"], queryFn: api.motifTraceModes,
+    enabled: activeWorkspace === "prioritize" });
 
   function acceptProject(payload: ProjectPayload) {
     localStorage.setItem(RECENT_MANIFEST_KEY, payload.snapshot.manifest_path);
@@ -90,8 +93,8 @@ export default function App() {
   }, [recentManifest]);
 
   const workspaceWorkflows = useMemo(
-    () => (workflows.data ?? []).filter((workflow) => workflow.workspace_id === activeWorkspace && workflow.enabled && (showAdvancedAnalyses || !workflow.presentation_role || workflow.presentation_role === "primary")),
-    [activeWorkspace, workflows.data, showAdvancedAnalyses],
+    () => (workflows.data ?? []).filter((workflow) => workflow.workspace_id === activeWorkspace && workflow.enabled && (showAdvancedAnalyses || workflow.workflow_id === activeWorkflowId || !workflow.presentation_role || workflow.presentation_role === "primary")),
+    [activeWorkspace, activeWorkflowId, workflows.data, showAdvancedAnalyses],
   );
 
   useEffect(() => {
@@ -229,6 +232,13 @@ export default function App() {
     }));
   }
 
+  function selectMotifTraceMode(mode: MotifTraceMode) {
+    const target=(workflows.data ?? []).find(workflow=>workflow.workflow_id===mode.workflow_id);
+    if (!target) return;
+    setParameterStore(current=>({...current,[mode.workflow_id]:motifTraceModeParameters(mode,target,activeParameters,current[mode.workflow_id])}));
+    setActiveWorkflowId(mode.workflow_id);
+  }
+
   function resetParameters() {
     if (!activeWorkflow) return;
     setParameterStore((current) => ({ ...current, [activeWorkflow.workflow_id]: defaultsFor(activeWorkflow) }));
@@ -306,6 +316,11 @@ export default function App() {
 
         <div className={`workspace-grid${detailOpen ? "" : " detail-closed"}`}>
           <main className="workbench">
+            {activeWorkspace === "prioritize" && <MotifTraceWorkbench projectId={projectId}
+              catalog={motifTraceCatalog.data} loading={motifTraceCatalog.isLoading} error={motifTraceCatalog.error?.message}
+              workflows={workflows.data ?? []}
+              artifacts={(sourceArtifacts.data ?? []).filter(a=>a.metadata.project_snapshot_fingerprint===project.snapshot.manifest_fingerprint)}
+              activeWorkflowId={activeWorkflowId} parameters={activeParameters} onSelect={selectMotifTraceMode} />}
             {activeWorkspace === "prioritize" && (
               <RbpEvidenceGuide workflows={workflows.data ?? []}
                 artifacts={(sourceArtifacts.data ?? []).filter(a => a.metadata.project_snapshot_fingerprint === project.snapshot.manifest_fingerprint)}

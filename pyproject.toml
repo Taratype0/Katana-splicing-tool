@@ -30,6 +30,7 @@ dependencies = [
 [project.scripts]
 katana-open = "katana_next.launcher:main"
 katana-next = "katana_next.cli:main"
+katana-motiftrace = "katana_motiftrace.cli:main"
 katana-contracts = "katana_next.contracts.cli:main"
 katana-cosplice = "katana_cosplice.cli:main"
 katana-splice = "katana_cosplice.cli:main"
@@ -48,6 +49,14 @@ katana-next-migrate = "katana_next.migration:main"
 katana-next-acceptance = "scripts.run_v2_acceptance:main"
 
 [project.optional-dependencies]
+motiftrace = [
+  "pydantic>=2.9,<3",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "beautifulsoup4>=4.12,<5",
+  "requests>=2.32,<3",
+  "vl-convert-python>=1.8,<2",
+]
 contracts = [
   "jsonschema>=4.18,<5",
   "pydantic>=2.9,<3",
@@ -71,7 +80,7 @@ next-dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app", "app.*", "katana_cosplice", "katana_cosplice.*", "katana_next", "katana_next.*", "scripts", "src", "src.*"]
+include = ["app", "app.*", "katana_cosplice", "katana_cosplice.*", "katana_motiftrace", "katana_motiftrace.*", "katana_next", "katana_next.*", "scripts", "src", "src.*"]
 namespaces = false
 
 [tool.setuptools.package-data]

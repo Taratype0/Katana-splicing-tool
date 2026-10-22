@@ -19,6 +19,12 @@ class KatanaProject:
     def inventory(self):
         return self.workflows.definitions()
 
+    @property
+    def motiftrace(self):
+        """Borrow this project's established MotifTrace modes; no execution."""
+        from katana_motiftrace import MotifTrace
+        return MotifTrace(self)
+
     def design(self):
         return experimental_design(self.context.manifest)
 

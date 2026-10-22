@@ -25,6 +25,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  motifTraceModes: () => request<MotifTraceCatalog>("/motiftrace/modes"),
   configureGeneFilter: (projectId: string, settings: import("./components/GeneFilterPanel").GeneFilterSettings) =>
     request<ProjectPayload>(`/projects/${encodeURIComponent(projectId)}/gene-filter`, {method:"POST",body:JSON.stringify(settings)}),
   moduleDashboard: (projectId: string, artifactId: string, module: string, condition = "all", selected_event?: string, hide_same_gene = false) =>
@@ -138,6 +139,15 @@ export const api = {
   jobs: (projectId: string) => request<Job[]>(`/jobs?project_id=${encodeURIComponent(projectId)}`),
   retryJob: (jobId: string) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/retry`, {method: "POST"}),
   cancelJob: (jobId: string) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }),
+};
+
+export type MotifTraceMode = {
+  mode_id: string; label: string; workflow_id: string;
+  fixed_parameters: Record<string, unknown>; description: string;
+  operation: "new_analysis" | "completed_result_import" | "existing_result_integration"; requires_selection: boolean;
+};
+export type MotifTraceCatalog = {
+  package_version: string; scientific_release: string; modes: MotifTraceMode[];
 };
 
 export type RunPlan = { ready: boolean; errors: string[]; warnings: string[]; scope: string; input_bytes: number;

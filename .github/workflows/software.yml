@@ -57,6 +57,31 @@ jobs:
           tests/test_runtime_discovery.py
           tests/test_portable_report_metadata.py
 
+  motiftrace-wheel:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      MPLBACKEND: Agg
+      QT_QPA_PLATFORM: offscreen
+      KATANA_WHEEL_ONLY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Build and install a wheel with MotifTrace dependencies
+        run: |
+          python -m pip install build pytest
+          python -m build --wheel
+          python -c "import glob,subprocess,sys; subprocess.check_call([sys.executable,'-m','pip','install',glob.glob('dist/*.whl')[0]+'[motiftrace]'])"
+          python -m pip check
+      - name: Test installed resources outside the source checkout
+        run: |
+          cp tests/public_baseline/test_motiftrace_distribution.py "$RUNNER_TEMP/test_motiftrace_distribution.py"
+          cd "$RUNNER_TEMP"
+          python -I -m pytest -q test_motiftrace_distribution.py
+
   interface:
     runs-on: ubuntu-latest
     defaults:

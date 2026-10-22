@@ -43,6 +43,11 @@ Browse results by gene, event or motif and export RNA FASTA, site tables, genomi
 
 MotifTrace supports new sequence analyses and imports of compatible completed sequence or parallel MAPP results. Imported method identities and P/FDR values are retained. General one-command MAPP fitting for arbitrary new projects is not currently provided. Local RNA reconstruction and motif predictions do not establish measured RBP binding.
 
+The development package provides `from katana_motiftrace import MotifTrace`,
+`katana-motiftrace` commands, and a shared MotifTrace mode selector in the
+desktop/browser application. See [MotifTrace inputs, API and commands](docs/MOTIFTRACE.md)
+for the six analysis/import modes, requirements and examples.
+
 ### Katana-Splice-Network
 
 Network analysis accepts eligible rMATS events, competing junctions extracted from BAMs, or external PSI matrices, retaining the units and read evidence of each input route.
@@ -66,7 +71,7 @@ Reports retain significant and non-significant results and document filtering an
 
 The desktop application lets users open projects, inspect samples and designs, select comparisons and parameters, follow task status, filter result tables, save candidate genes or events, inspect gene cards and figures, and export results. MotifTrace, networks and reports are accessible through their analysis pages.
 
-Desktop and browser interfaces use the same analysis service. The CLI and Python interface support scripted and server-side use. Module-specific commands, parameter examples and API calls will be added as the packaged interfaces are finalized.
+Desktop and browser interfaces use the same analysis service. The CLI and Python interface support scripted and server-side use. [MotifTrace](docs/MOTIFTRACE.md) has dedicated API and command-line examples; other modules remain available through the shared workflow commands as their packaged interfaces are finalized.
 
 ## Outputs
 

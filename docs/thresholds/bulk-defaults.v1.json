@@ -252,7 +252,7 @@
     "katana_next/science/bulk.py": "1b43b7c7aa8c38838f001a094fab4c1fcdcc11cccb1cfa6bf2155f106d4fa658",
     "katana_next/workflows/bulk.py": "cb557fdaf4273e428cdb5b3384e00cdc38501497a2943e9253051ec1765d2d5a",
     "katana_next/workflows/sources.py": "9092732807d01fb4ece424429cf3aa763bdcac6bef751324aa40128824264f45",
-    "pyproject.toml": "e7d8d30a6eb2802b0522b504f22c05b6e05306d0b7604bc10aaf032e74b8d49f",
+    "pyproject.toml": "f7d82ce351b1e0c69cb7de70a55ccbb0252a4de8e4801125c3c8ea5ebfc0fa90",
     "katana_next/__init__.py": "21433e65fdcacd9c668e0b2b186774d95cf5a42b8a269df2c913a8606e8c3f31"
   }
 }

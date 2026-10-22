@@ -104,8 +104,16 @@ def test_minimal_meme_requires_explicit_metadata_and_native_probabilities(tmp_pa
 def test_normal_ui_names_and_legacy_ids_stay_separate():
     from katana_next.workflows.registry import WorkflowRegistry
     registry = WorkflowRegistry()
-    for key in ("prioritize.rbp_mechanism", "prioritize.rbp_sequence_results", "prioritize.se_rbp_impact"):
-        assert registry.get(key).definition.to_dict()["label"].startswith("Katana MotifTrace")
+    # Retain the accepted scientific identity and the independently approved
+    # researcher-facing copy; packaging does not rename either layer.
+    labels = {
+        "prioritize.rbp_mechanism": "RBP sequence evidence: regulatory clues / consequences",
+        "prioritize.rbp_sequence_results": "Katana MotifTrace: sequence workbench",
+        "prioritize.se_rbp_impact": "Katana MotifTrace: legacy SE fixed-site enrichment",
+    }
+    for key, label in labels.items():
+        assert registry.get(key).definition.label.startswith("Katana MotifTrace")
+        assert registry.get(key).definition.to_dict()["label"] == label
     main = registry.get("prioritize.rbp_mechanism").normalize_parameters({})
     assert main["sequence_scope"] == "boundary_association"
     assert main["custom_motif_mode"] == "preview_only"
