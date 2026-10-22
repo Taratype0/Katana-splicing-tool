@@ -6,7 +6,7 @@ export type GeneFilterSettings = {
   protein_coding_only: boolean; excluded_genes: string[]; min_expression: number; min_samples: number;
   annotation_path: string; expression_matrix_path: string;
 };
-const defaults: GeneFilterSettings = {exclude_mitochondrial:false, exclude_pseudogenes:false,
+const defaults: GeneFilterSettings = {exclude_mitochondrial:true, exclude_pseudogenes:true,
   exclude_rrna:false, protein_coding_only:false, excluded_genes:[], min_expression:0, min_samples:1,
   annotation_path:"", expression_matrix_path:""};
 
@@ -17,7 +17,10 @@ export function GeneFilterPanel({project, busy, error, onApply}: {
   const saved = project.manifest.metadata.gene_filter as {
     config?: Partial<GeneFilterSettings>; annotation_tsv?: string; gtf?: string; expression_matrix?: string;
   } | undefined;
-  const [settings, setSettings] = useState<GeneFilterSettings>(() => ({...defaults, ...saved?.config,
+  const [settings, setSettings] = useState<GeneFilterSettings>(() => ({...defaults,
+    // Missing fields in a saved legacy config retain their historical false
+    // meaning. Recommended defaults are for a new configuration only.
+    ...(saved ? {exclude_mitochondrial:false, exclude_pseudogenes:false} : {}), ...saved?.config,
     annotation_path:saved?.annotation_tsv ?? saved?.gtf ?? "",
     expression_matrix_path:saved?.expression_matrix ?? ""}));
   const [list, setList] = useState(settings.excluded_genes.join("\n"));

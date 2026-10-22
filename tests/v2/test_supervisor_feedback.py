@@ -266,20 +266,15 @@ def _api_catalog_fixture(tmp_path, *, clip=False):
     return runtime, client, context, project, saved.json()["selection_id"], comparisons
 
 
-def test_enrichment_and_rbp_saved_selection_are_comparison_scoped(tmp_path):
+def test_unverified_event_catalog_cannot_define_gene_enrichment_background(tmp_path):
     from katana_next.domain.models import JobStatus
     runtime, client, context, project, selection, comparisons = _api_catalog_fixture(tmp_path)
     for workflow, name in [("prioritize.enrichment", "Gene-set enrichment"), ("prioritize.rbp_support", "RBP declared-set enrichment")]:
         started = client.post(f"/api/projects/{project}/workflows/{workflow}/run", json={"parameters": {"selection_id": selection}, "force": False})
         assert started.status_code == 200, started.text
         finished = runtime.jobs.wait(started.json()["job_id"], timeout=90)
-        assert finished.status == JobStatus.COMPLETE, finished.error
-        artifact = next(a for a in context.catalog.list_artifacts(project, analysis_id=workflow, kind="table") if a.name == name)
-        result = pd.read_parquet(artifact.path)
-        assert set(result.comparison_id) == {comparisons[0]}
-        assert result.selected_genes.eq(2).all()
-        assert result.background_genes.eq(6).all()
-        assert result.fdr.notna().all()
+        assert finished.status == JobStatus.FAILED
+        assert "foregrounds only" in finished.error
 
 
 def test_clip_enrichment_workflow_runs_exact_matching_and_provenance(tmp_path):

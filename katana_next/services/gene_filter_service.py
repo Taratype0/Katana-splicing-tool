@@ -19,14 +19,19 @@ def configure_gene_filter(projects, context, request):
     values = request.model_dump() if hasattr(request, "model_dump") else dict(request)
     annotation = values.pop("annotation_path", "") or ""
     expression = values.pop("expression_matrix_path", "") or ""
-    config = GeneFilterConfig.from_mapping(values)
+    # Direct Python callers and typed API requests use the same new-scope
+    # defaults. This does not change legacy manifest decoding.
+    config = GeneFilterConfig.from_mapping({**GeneFilterConfig.for_new_analysis().to_dict(), **values})
     original_path = Path(context.manifest.metadata.get("gene_filter_source_manifest", context.manifest_path))
     _, original = projects.manifests.load(original_path)
     if not config.active:
         return projects.open_project(original_path)
     if not any(asset.kind in {"rmats_result", "deg_result", "dtu_result", "dexseq_result"} for asset in original.assets):
         raise ValueError("Project gene exclusion currently applies to bulk DEG/DAS/DTU inputs.")
-    settings = {"config": config.to_dict()}
+    settings = {"config": config.to_dict(),
+                "application_stage": "post_import_downstream_scope",
+                "upstream_model_exclusions": "not_verified",
+                "upstream_refit_performed": False}
     if annotation:
         path = Path(annotation).expanduser().resolve()
         if not path.is_file():

@@ -14,8 +14,10 @@ class OpenProjectRequest(ApiModel):
 
 
 class ConfigureGeneFilterRequest(ApiModel):
-    exclude_mitochondrial: bool = False
-    exclude_pseudogenes: bool = False
+    # Defaults apply only to a newly requested isolated scope. Opening an existing
+    # manifest never injects these settings or changes its statistical history.
+    exclude_mitochondrial: bool = True
+    exclude_pseudogenes: bool = True
     exclude_rrna: bool = False
     protein_coding_only: bool = False
     excluded_genes: list[str] = Field(default_factory=list)

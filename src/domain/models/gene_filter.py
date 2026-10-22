@@ -17,6 +17,11 @@ class GeneFilterConfig:
     min_expression: float = 0.0
     min_samples: int = 1
 
+    @classmethod
+    def for_new_analysis(cls) -> GeneFilterConfig:
+        """Approved defaults for a newly created analysis, never legacy loading."""
+        return cls(exclude_mitochondrial=True, exclude_pseudogenes=True)
+
     @property
     def active(self) -> bool:
         return any((self.exclude_mitochondrial, self.exclude_pseudogenes,

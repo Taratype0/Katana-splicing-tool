@@ -806,7 +806,7 @@ class CrossComparisonWorkflow(WorkflowBase):
 
 
 class CandidateEvidenceWorkflow(WorkflowBase):
-    version = "2.1.2"
+    version = "2.2.0"
     definition = WorkflowDefinition(
         workflow_id="prioritize.evidence",
         workspace_id="prioritize",
@@ -850,6 +850,8 @@ class CandidateEvidenceWorkflow(WorkflowBase):
                 dtu = dtu[dtu["comparison_id"].isin(selected)]
         job.report(0.35, "Joining transparent evidence dimensions")
         candidates = build_candidate_evidence(events, deg, dtu, parameters)
+        from katana_next.science.enrichment import attach_native_gene_measurement_flags
+        candidates = attach_native_gene_measurement_flags(candidates, events, deg, dtu)
         labels = {c.contrast_id: c.label for c in context.manifest.contrasts}
         candidates["display_row"] = candidate_display_labels(candidates, labels)
         candidates = candidates[[c for c in candidates if c != "ranking_score"] + ["ranking_score"]]

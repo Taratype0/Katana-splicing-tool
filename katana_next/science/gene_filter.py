@@ -10,6 +10,19 @@ from src.analysis.gene_filter import project_gene_filter, gene_filter_signature
 from src.domain.models.gene_filter import GeneFilterConfig
 
 
+def new_project_gene_filter_metadata() -> dict:
+    """Explicit defaults; a source result is never relabelled as a new model fit.
+
+    This metadata is installed only by an explicit new-project creation path.
+    Native upstream pre-statistics provenance, when present, remains a separate
+    input artifact and must be verified by its importer.
+    """
+    return {"config": GeneFilterConfig.for_new_analysis().to_dict(),
+            "application_stage": "before_package_workflows",
+            "upstream_model_exclusions": "not_verified",
+            "upstream_refit_performed": False}
+
+
 def filter_config(manifest) -> GeneFilterConfig:
     return GeneFilterConfig.from_mapping(manifest.metadata.get("gene_filter", {}).get("config"))
 

@@ -38,6 +38,190 @@ def enrichment_background(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFra
     return frame.loc[eligible].copy(), audit
 
 
+DETECTED_BACKGROUND_SOURCES = ("detected_union", "das", "deg", "dtu", "dexseq")
+_ASSAY_PREFIX = {"das": "as", "deg": "deg", "dtu": "dtu", "dexseq": "dexseq"}
+
+
+def native_background_source_provenance(context, source) -> dict:
+    """Trace a full native-result background without claiming external certification.
+
+    The package can verify which files and complete local artifacts were read.
+    It cannot discover an undisclosed user truncation of an imported file; that
+    delivery-completeness limitation is recorded explicitly, never hidden behind
+    a `certified=True` declaration. Explicit hit-only/subset inputs are refused.
+    """
+    from katana_next.infrastructure.fingerprints import fingerprint_file, fingerprint_value
+    from katana_next.workflows.sources import validate_source
+    native = {"differential.as": "Differential AS events",
+              "differential.deg": "Differentially expressed genes",
+              "differential.dtu": "DTU and exon-usage evidence"}
+    known = {**native, "prioritize.evidence": "Candidate evidence matrix"}
+
+    def check_scope(metadata):
+        scope = str(metadata.get("result_scope", metadata.get("source_result_scope", "not_declared"))).casefold()
+        if (metadata.get("significant_only") is True or metadata.get("filtered_to_significant") is True
+                or metadata.get("full_results") is False
+                or scope in {"significant_only", "hits_only", "significant", "selected", "subset", "top_n", "foreground_only"}):
+            raise ValueError("Significant-only or subset inputs can be foregrounds only; provide the complete native result background.")
+        return scope
+
+    def artifact_record(artifact):
+        validate_source(context, artifact)
+        if artifact.analysis_id not in known or artifact.name != known[artifact.analysis_id]:
+            raise ValueError("A complete native result source is required for background; custom/hit-only tables can be foregrounds only.")
+        scope = check_scope(artifact.metadata)
+        identity = fingerprint_file(artifact.path, force_full=True)
+        observed = fingerprint_value({"run": artifact.run_fingerprint, "name": artifact.name,
+                                      "path": artifact.path.name, "content": identity.model_dump(mode="json")})
+        if artifact.metadata.get("artifact_contract_version") == "3.0-correctness" and observed != artifact.fingerprint:
+            raise ValueError("Background source content changed after its recorded run completed.")
+        return {"artifact_id": artifact.artifact_id, "analysis_id": artifact.analysis_id,
+                "path": str(artifact.path), "sha256": identity.digest,
+                "rows": artifact.row_count, "source_result_scope": scope}
+
+    records = [artifact_record(source)]
+    parents = []
+    if source.analysis_id == "prioritize.evidence":
+        parents = [context.catalog.get_artifact(identifier) for identifier in source.parent_artifact_ids]
+        if not parents or any(p is None or p.analysis_id not in native for p in parents):
+            raise ValueError("Candidate background has no traceable complete native parent results; rebuild from complete imported result files.")
+        records.extend(artifact_record(parent) for parent in parents)
+    analyses = {p.analysis_id for p in parents} if parents else {source.analysis_id}
+    kinds = set()
+    for analysis, values in (("differential.as", {"rmats_result"}), ("differential.deg", {"deg_result"}),
+                             ("differential.dtu", {"dtu_result", "dexseq_result"})):
+        if analysis in analyses:
+            kinds.update(values)
+    scopes = set(source.contrast_ids or [c.contrast_id for c in context.manifest.contrasts])
+    inputs = []
+    snapshots = {str(f.path.resolve()): f for f in context.snapshot.input_fingerprints}
+    for asset in context.manifest.assets:
+        if asset.kind not in kinds or asset.metadata.get("contrast_id") not in scopes:
+            continue
+        scope = check_scope(asset.metadata)
+        recorded = snapshots.get(str(asset.path.resolve()))
+        if recorded is None or fingerprint_file(asset.path, force_full=recorded.hash_method == "sha256-full") != recorded:
+            raise ValueError("Native background input changed or was not fingerprinted in this project snapshot.")
+        identity = fingerprint_file(asset.path, force_full=True)
+        inputs.append({"asset_id": asset.asset_id, "kind": asset.kind, "contrast_id": asset.metadata.get("contrast_id"),
+                       "path": str(asset.path), "sha256": identity.digest, "source_result_scope": scope})
+    if not inputs:
+        raise ValueError("No complete native input file is traceable for this background; a detection flag alone is insufficient.")
+    return {"schema": "katana.native_result_background_provenance/v1", "artifacts": records,
+            "native_inputs": inputs, "local_content_verification": "file hashes and completed artifact lineage checked",
+            "delivery_completeness": "not_independently_verified",
+            "completeness_assumption": "all rows in the registered native result inputs; explicit significant-only or subset inputs rejected",
+            "external_execution_certification": "not_asserted"}
+
+
+def _declared_flag(values: pd.Series, name: str) -> pd.Series:
+    """Accept typed flags, never Python's truthiness of strings such as 'False'."""
+    def flag(value):
+        if pd.isna(value):
+            return False
+        if isinstance(value, str):
+            if value.strip().casefold() in {"true", "1"}:
+                return True
+            if value.strip().casefold() in {"false", "0", ""}:
+                return False
+            raise ValueError(f"Invalid detected/tested flag in {name}: {value!r}")
+        if value in (True, False, 0, 1):
+            return bool(value)
+        raise ValueError(f"Invalid detected/tested flag in {name}: {value!r}")
+    return values.map(flag).astype(bool)
+
+
+def detected_gene_background(frame: pd.DataFrame, source: str = "detected_union") -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Select only observed/testable genes, with an auditable assay scope.
+
+    A GTF, genome-wide gene list, significance-only list or positive-count cutoff
+    invented here is not a detection universe. Callers supply their native
+    measured/tested flags. Non-significant eligible genes remain in background.
+    Library mapping and canonical-gene deduplication happen later, unchanged.
+    """
+    if source not in DETECTED_BACKGROUND_SOURCES:
+        raise ValueError(f"Unknown detected background source: {source}")
+    if source == "detected_union":
+        flags = []
+        assay_masks = []
+        for prefix in ("as", "deg", "dtu", "dexseq"):
+            columns = [c for c in (f"{prefix}_detected", f"{prefix}_eligible", f"{prefix}_tested", f"{prefix}_available") if c in frame]
+            if columns:
+                flags.extend(columns)
+                assay_masks.append(pd.concat([_declared_flag(frame[c], c) for c in columns], axis=1).all(axis=1))
+        if assay_masks:
+            # The union is a deliberately labelled multi-assay universe, not a
+            # per-assay background and never a reference annotation universe.
+            measured = pd.concat(assay_masks, axis=1).any(axis=1)
+        elif any(c in frame for c in ("detected", "measurement_eligible", "tested")):
+            flags = [c for c in ("detected", "measurement_eligible", "tested") if c in frame]
+            measured = pd.concat([_declared_flag(frame[c], c) for c in flags], axis=1).all(axis=1)
+        else:
+            raise ValueError("Detected enrichment background requires native detected/tested/available evidence; a reference gene list is not a measured background.")
+    else:
+        prefix = _ASSAY_PREFIX[source]
+        flags = [c for c in (f"{prefix}_detected", f"{prefix}_eligible", f"{prefix}_tested", f"{prefix}_available") if c in frame]
+        if not flags:
+            raise ValueError(f"No {source.upper()} detection/testability evidence is available; another assay or a genome-wide annotation cannot substitute.")
+        measured = pd.concat([_declared_flag(frame[c], c) for c in flags], axis=1).all(axis=1)
+    if "measurement_eligible" in frame and "measurement_eligible" not in flags:
+        measured &= _declared_flag(frame.measurement_eligible, "measurement_eligible")
+        flags.append("measurement_eligible")
+    if {"model_status", "pvalue"} <= set(frame):
+        measured &= pd.to_numeric(frame.pvalue, errors="coerce").between(0, 1)
+        failed = frame.model_status.fillna("").astype(str).str.casefold().str.contains(
+            r"failed|error|insufficient|not_tested|not_computed|unavailable|skipped", regex=True)
+        measured &= ~failed
+        if "pvalue" not in flags:
+            flags.extend(["model_status", "pvalue"])
+    columns = [c for c in ("row_id", "comparison_id", "cell_type", "assay", "gene_id", "gene_symbol") if c in frame]
+    audit = frame[columns].copy()
+    audit["background_eligible"] = measured
+    audit["background_reason"] = measured.map({True: "native_detected_or_testable", False: "not_detected_or_not_testable"})
+    audit["background_source"] = source
+    audit["detection_evidence_columns"] = ";".join(flags)
+    audit["detection_threshold_policy"] = "native caller eligibility; no additional count or significance threshold"
+    return frame.loc[measured].copy(), audit
+
+
+def attach_native_gene_measurement_flags(candidates: pd.DataFrame, events: pd.DataFrame,
+                                        deg: pd.DataFrame, usage: pd.DataFrame) -> pd.DataFrame:
+    """Carry caller eligibility into a gene table without changing its statistics.
+
+    In particular, the presence of an rMATS row alone cannot override the native
+    every-sample read-support flag. This adapter never applies a new count or
+    significance threshold, and never interprets a reference annotation as data.
+    """
+    result = candidates.copy()
+    keys = ["comparison_id", "gene_id"]
+    target = pd.MultiIndex.from_frame(result[keys])
+
+    def add(column, frame, eligible):
+        measured = frame.loc[eligible, keys].drop_duplicates() if len(frame) else pd.DataFrame(columns=keys)
+        result[column] = target.isin(pd.MultiIndex.from_frame(measured))
+
+    if len(events):
+        if "measurement_eligible" not in events:
+            raise ValueError("Candidate background requires native AS measurement eligibility; rebuild the quality input explicitly.")
+        eligible = _declared_flag(events.measurement_eligible, "measurement_eligible")
+        if "fdr" in events:
+            eligible &= pd.to_numeric(events.fdr, errors="coerce").between(0, 1)
+        add("as_eligible", events, eligible)
+    else:
+        result["as_eligible"] = False
+    if len(deg):
+        add("deg_tested", deg, pd.to_numeric(deg.deg_fdr, errors="coerce").between(0, 1))
+    else:
+        result["deg_tested"] = False
+    for prefix, kind in (("dtu", "dtu_result"), ("dexseq", "dexseq_result")):
+        if len(usage):
+            kinds = usage.get("source_kind", pd.Series("dtu_result", index=usage.index))
+            add(f"{prefix}_tested", usage, kinds.eq(kind) & pd.to_numeric(usage.dtu_fdr, errors="coerce").between(0, 1))
+        else:
+            result[f"{prefix}_tested"] = False
+    return result
+
+
 def canonical_gene_mapping(frame: pd.DataFrame) -> tuple[pd.Series, dict[str, str], pd.DataFrame]:
     """One biological gene per ID, with ambiguous symbol aliases kept out of tests."""
     ids = frame.get("gene_id", pd.Series("", index=frame.index)).map(gene_token)

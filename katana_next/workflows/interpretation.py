@@ -8,7 +8,7 @@ import pandas as pd
 
 from katana_next.domain.models import AnalysisArtifact
 from katana_next.infrastructure.jobs import JobContext
-from katana_next.science.enrichment import canonical_gene_mapping, map_gene_sets, overrepresentation, declared_gene_sets, library_overrepresentation, fill_gene_symbols, enrichment_background
+from katana_next.science.enrichment import canonical_gene_mapping, map_gene_sets, overrepresentation, declared_gene_sets, library_overrepresentation, fill_gene_symbols, detected_gene_background, native_background_source_provenance, _declared_flag
 from katana_next.science.isoform import (
     dominant_isoform_switches,
     isoform_contrast_summary,
@@ -51,6 +51,13 @@ def _selection_frame(context: ProjectContext, parameters: dict[str, Any]) -> tup
         frame = selection_rows(context, parameters, source, frame)
     else:
         frame = frame[frame["evidence_dimensions"].fillna(0).gt(0)]
+    foreground = parameters.get("foreground_source", "candidate_union")
+    if foreground != "candidate_union":
+        prefix = "as" if foreground == "das" else foreground
+        column = f"{prefix}_supported"
+        if column not in frame:
+            raise ValueError(f"The selected source has no declared {foreground.upper()} foreground flags.")
+        frame = frame.loc[_declared_flag(frame[column], column)].copy()
     return frame, source
 
 
@@ -60,30 +67,73 @@ def _selection_genes(context: ProjectContext, parameters: dict[str, Any]) -> tup
 
 
 def _comparison_selection_mask(candidates: pd.DataFrame, selected: pd.DataFrame) -> pd.Series:
-    keys = ["comparison_id", "canonical_gene_id"] if "comparison_id" in candidates and "comparison_id" in selected else ["canonical_gene_id"]
+    keys = [c for c in ("comparison_id", "cell_type", "assay") if c in candidates and c in selected] + ["canonical_gene_id"]
     chosen = pd.MultiIndex.from_frame(selected[keys].drop_duplicates())
     return pd.Series(pd.MultiIndex.from_frame(candidates[keys]).isin(chosen), index=candidates.index)
 
 
+def _background_artifact(context, parameters, foreground):
+    # A hit-only/custom selection is a foreground, never its own background.
+    if foreground.analysis_id != "prioritize.evidence":
+        complete = _latest_table(context, "prioritize.evidence", "Candidate evidence matrix", parameters)
+        if complete is not None:
+            return complete
+    return foreground
+
+
 def _candidate_background(context, parameters, source, selected):
-    candidates = annotated_gene_source(context, source)
+    background_source = _background_artifact(context, parameters, source)
+    provenance = native_background_source_provenance(context, background_source)
+    candidates = annotated_gene_source(context, background_source)
+    if any(c in selected and c not in candidates for c in ("cell_type", "assay")):
+        raise ValueError("No complete measured background matches the selected cell type / assay scope.")
     if parameters.get("contrast_ids") and "comparison_id" in candidates:
         candidates = candidates[candidates.comparison_id.isin(parameters["contrast_ids"])].copy()
-    if parameters.get("selection_id") and "comparison_id" in selected and "comparison_id" in candidates:
-        candidates = candidates[candidates.comparison_id.isin(selected.comparison_id)].copy()
+    if parameters.get("selection_id"):
+        scope = [c for c in ("comparison_id", "cell_type", "assay") if c in selected and c in candidates]
+        if scope:
+            chosen_scopes = pd.MultiIndex.from_frame(selected[scope].drop_duplicates())
+            candidates = candidates.loc[pd.MultiIndex.from_frame(candidates[scope]).isin(chosen_scopes)].copy()
     if candidates.empty:
         raise ValueError("The saved selection does not cover the requested comparison; choose a matching selection.")
-    candidates, audit = enrichment_background(candidates)
+    background = parameters.get("background_source", "match_foreground")
+    if background == "match_foreground":
+        foreground = parameters.get("foreground_source", "candidate_union")
+        background = "detected_union" if foreground == "candidate_union" else foreground
+    candidates, audit = detected_gene_background(candidates, background)
+    audit.attrs["native_background_provenance"] = provenance
     canonical, aliases, mapping_audit = canonical_gene_mapping(candidates)
     candidates = candidates.assign(canonical_gene_id=canonical)
     candidates["selected_input"] = _comparison_selection_mask(candidates, selected)
+    candidates["foreground_source"] = parameters.get("foreground_source", "candidate_union")
+    candidates["background_source"] = background
     if not parameters.get("selection_id") and "evidence_dimensions" in candidates:
         candidates["selected_input"] &= candidates.evidence_dimensions.fillna(0).gt(0)
     return candidates, audit, aliases, mapping_audit
 
 
+def _enrichment_groups(candidates):
+    keys = [c for c in ("comparison_id", "cell_type", "assay") if c in candidates]
+    if not keys:
+        return [("selection", candidates)]
+    if len(keys) == 1:
+        return candidates.groupby(keys[0], sort=False, dropna=False)
+    return ((" | ".join(f"{k}={v}" for k, v in zip(keys, scope, strict=True)), group)
+            for scope, group in candidates.groupby(keys, sort=False, dropna=False))
+
+
+_ENRICHMENT_SCOPE_PARAMETERS = (
+    ParameterDefinition("foreground_source", "Foreground evidence", "select", "candidate_union",
+                        "Candidate union is explicitly multi-assay. Per-assay foregrounds use the existing supported flags without introducing a new significance cutoff.",
+                        ("candidate_union", "das", "deg", "dtu", "dexseq")),
+    ParameterDefinition("background_source", "Detected background", "select", "match_foreground",
+                        "Match the foreground assay by default. Only native detected/tested/available genes in the same contrast and cell type are eligible; never all reference genes.",
+                        ("match_foreground", "detected_union", "das", "deg", "dtu", "dexseq")),
+)
+
+
 class GeneSetEnrichmentWorkflow(WorkflowBase):
-    version = "2.3.1"
+    version = "2.4.0"
     definition = WorkflowDefinition(
         workflow_id="prioritize.enrichment",
         workspace_id="prioritize",
@@ -95,6 +145,7 @@ class GeneSetEnrichmentWorkflow(WorkflowBase):
         supports_contrast_selection=True,
         expected_artifacts=4,
         parameters=(
+            *_ENRICHMENT_SCOPE_PARAMETERS,
             ParameterDefinition("selection_id", "Saved gene selection", "selection", "", "Optional saved annotated gene/event/module-member selection; otherwise evidence-supported candidates are used."),
             ParameterDefinition("minimum_overlap", "Minimum overlapping genes (display only)", "number", 2, "Applied after BH correction; zero-overlap eligible gene sets stay in the testing family.", minimum=1, step=1),
             ParameterDefinition("ontology_category", "Show GO / pathway category", "select", "All", "Display filter only; full results and the declared FDR family are unchanged. GO classification requires a versioned OBO resource.", ("All", "GO BP", "GO MF", "GO CC", "KEGG", "Unclassified")),
@@ -108,7 +159,10 @@ class GeneSetEnrichmentWorkflow(WorkflowBase):
 
     def parent_artifacts(self, context: ProjectContext, parameters: dict[str, Any]) -> list[AnalysisArtifact]:
         artifact = selected_source(context, parameters) or _latest_table(context, "prioritize.evidence", "Candidate evidence matrix", parameters)
-        return [artifact] if artifact else []
+        if artifact is None:
+            return []
+        background = _background_artifact(context, parameters, artifact)
+        return [artifact] if background.artifact_id == artifact.artifact_id else [artifact, background]
 
     def input_paths(self, context: ProjectContext, parameters: dict[str, Any]) -> list[Path]:
         return [*super().input_paths(context, parameters), *(artifact.path for artifact in self.parent_artifacts(context, parameters))]
@@ -122,19 +176,25 @@ class GeneSetEnrichmentWorkflow(WorkflowBase):
         if mapped_by_library.eq(0).any():
             raise ValueError("Annotation libraries have no mapped background genes: " + ", ".join(mapped_by_library[mapped_by_library.eq(0)].index) + ". Check species and identifier mapping, not biological enrichment.")
         results = []
-        groups = candidates.groupby("comparison_id", sort=False) if "comparison_id" in candidates else [("selection", candidates)]
+        groups = _enrichment_groups(candidates)
         for comparison, group in groups:
             background = set(group.canonical_gene_id) - {""}
             chosen = group.selected_input
             part = library_overrepresentation(set(group.loc[chosen, "canonical_gene_id"]), background, gene_sets,
                                       minimum_overlap=int(parameters.get("minimum_overlap", 2)))
-            part["comparison_id"] = comparison
+            part["comparison_id"] = group.comparison_id.iloc[0] if "comparison_id" in group else "selection"
+            part["background_scope_id"] = str(comparison)
+            for column in ("cell_type", "assay"):
+                if column in group:
+                    part[column] = group[column].iloc[0]
+            part["foreground_source"] = parameters.get("foreground_source", "candidate_union")
+            part["background_source"] = group.background_source.iloc[0]
             results.append(part)
         result = pd.concat(results, ignore_index=True) if results else pd.DataFrame()
         if not result.empty:
             from katana_next.science.statistics import bh_adjust
             result["fdr"] = bh_adjust(result.pvalue)
-            result["row_id"] = result.comparison_id + "::" + result.term
+            result["row_id"] = result.background_scope_id + "::" + result.term
             result["fdr_family"] = "all eligible comparison-by-library-term tests in this run"
             result = result.sort_values(["fdr", "comparison_id", "term"])
         if result.empty:
@@ -145,7 +205,8 @@ class GeneSetEnrichmentWorkflow(WorkflowBase):
         category = parameters.get("ontology_category", "All")
         if not result.empty and category not in {"All", "Unclassified"} and not result.ontology_category.eq(category).any():
             raise ValueError(f"No terms classified as {category}; attach a versioned GO ontology or explicitly classified library. This is not a negative enrichment result.")
-        writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version, common_metadata={"question": self.definition.question, "method": self.definition.method, "analysis_unit": self.definition.analysis_unit, "interpretation": "Terms with low FDR and coherent overlapping genes prioritize biological themes; they do not establish mechanism.", "limitations": self.definition.limitations, "background_definition": "genes with available evidence in this contrast intersected with all mapped genes in the same annotation library; pre-annotation counts remain in the table"})
+        writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version, common_metadata={"question": self.definition.question, "method": self.definition.method, "analysis_unit": self.definition.analysis_unit, "interpretation": "Terms with low FDR and coherent overlapping genes prioritize biological themes; they do not establish mechanism.", "limitations": self.definition.limitations, "background_definition": "native detected/testable genes for the declared assay and comparison/cell type, intersected with mapped genes in each library; never the reference genome gene list", "foreground_source": parameters.get("foreground_source", "candidate_union"), "background_source": candidates.background_source.iloc[0] if len(candidates) else parameters.get("background_source"), "report_input_lists": "output-directory links; full foreground/background gene lists are not embedded in report prose", "historical_background_policy": "Existing runs retain their original measured-union background and are not relabelled or recomputed."})
+        writer.common_metadata["native_background_provenance"] = background_audit.attrs["native_background_provenance"]
         table = writer.table("Gene-set enrichment", "gene_set_enrichment.parquet", result, entity_type="gene_set", parents=(source.artifact_id,))
         writer.table("Enrichment gene inputs by comparison", "gene_inputs.parquet", candidates, entity_type="gene_input_audit", parents=(source.artifact_id,))
         writer.table("Enrichment background eligibility", "background_eligibility.parquet", background_audit, entity_type="background_audit", parents=(source.artifact_id,))
@@ -163,7 +224,7 @@ class GeneSetEnrichmentWorkflow(WorkflowBase):
 
 
 class RbpSupportWorkflow(WorkflowBase):
-    version = "2.2.0"
+    version = "2.3.0"
     definition = WorkflowDefinition(
         workflow_id="prioritize.rbp_support",
         workspace_id="prioritize",
@@ -175,14 +236,17 @@ class RbpSupportWorkflow(WorkflowBase):
         analysis_unit="declared RBP membership or target set and candidate gene",
         expected_artifacts=5,
         supports_contrast_selection=True,
-        parameters=(ParameterDefinition("selection_id", "Saved gene selection", "selection", "", "Optional candidate-gene subset."), ParameterDefinition("minimum_overlap", "Minimum overlapping genes", "number", 1, "Minimum RBP-set overlap.", minimum=1, step=1)),
+        parameters=(*_ENRICHMENT_SCOPE_PARAMETERS, ParameterDefinition("selection_id", "Saved gene selection", "selection", "", "Optional candidate-gene subset."), ParameterDefinition("minimum_overlap", "Minimum overlapping genes", "number", 1, "Minimum RBP-set overlap.", minimum=1, step=1)),
         required_asset_kinds=("rbp_gene_sets",),
         limitations="RBP overlap prioritizes regulators or targets and is never reported as causal control.",
     )
 
     def parent_artifacts(self, context: ProjectContext, parameters: dict[str, Any]) -> list[AnalysisArtifact]:
         artifact = selected_source(context, parameters) or _latest_table(context, "prioritize.evidence", "Candidate evidence matrix", parameters)
-        return [artifact] if artifact else []
+        if artifact is None:
+            return []
+        background = _background_artifact(context, parameters, artifact)
+        return [artifact] if background.artifact_id == artifact.artifact_id else [artifact, background]
 
     def input_paths(self, context: ProjectContext, parameters: dict[str, Any]) -> list[Path]:
         return [*super().input_paths(context, parameters), *(artifact.path for artifact in self.parent_artifacts(context, parameters))]
@@ -195,23 +259,30 @@ class RbpSupportWorkflow(WorkflowBase):
         gene_sets, set_audit = map_gene_sets(libraries, aliases)
         if not any(gene_sets.values()):
             raise ValueError("RBP resources have no mapped measured-background genes; check species and identifiers, not biological enrichment.")
-        groups = candidates.groupby("comparison_id", sort=False) if "comparison_id" in candidates else [("selection", candidates)]
+        groups = _enrichment_groups(candidates)
         results, membership_rows = [], []
         for comparison, group in groups:
             selected_genes = set(group.loc[group.selected_input, "canonical_gene_id"]) - {""}
             background = set(group.canonical_gene_id) - {""}
             part = overrepresentation(selected_genes, background, gene_sets, minimum_overlap=int(parameters.get("minimum_overlap", 1)))
-            part["comparison_id"] = comparison
+            part["comparison_id"] = group.comparison_id.iloc[0] if "comparison_id" in group else "selection"
+            part["background_scope_id"] = str(comparison)
+            for column in ("cell_type", "assay"):
+                if column in group:
+                    part[column] = group[column].iloc[0]
+            part["foreground_source"] = parameters.get("foreground_source", "candidate_union")
+            part["background_source"] = group.background_source.iloc[0]
             results.append(part)
             for rbp, members in gene_sets.items():
                 for gene in sorted(selected_genes & members):
-                    membership_rows.append({"row_id": f"{comparison}::{rbp}::{gene}", "comparison_id": comparison, "rbp_or_set": rbp, "gene_id": gene})
+                    membership_rows.append({"row_id": f"{comparison}::{rbp}::{gene}", "comparison_id": group.comparison_id.iloc[0] if "comparison_id" in group else "selection", "background_scope_id": str(comparison), "rbp_or_set": rbp, "gene_id": gene,
+                                            **{c: group[c].iloc[0] for c in ("cell_type", "assay") if c in group}})
         enrichment = pd.concat(results, ignore_index=True) if results else pd.DataFrame()
         if not enrichment.empty:
             from katana_next.science.statistics import bh_adjust
             enrichment["fdr"] = bh_adjust(enrichment.pvalue)
             enrichment["fdr_family"] = "all eligible comparison-by-RBP-set tests in this run"
-            enrichment["row_id"] = enrichment.comparison_id + "::" + enrichment.term
+            enrichment["row_id"] = enrichment.background_scope_id + "::" + enrichment.term
         if enrichment.empty:
             enrichment = pd.DataFrame(
                 columns=[
@@ -228,7 +299,7 @@ class RbpSupportWorkflow(WorkflowBase):
                     "genes",
                 ]
             )
-        membership = pd.DataFrame(membership_rows, columns=["row_id", "comparison_id", "rbp_or_set", "gene_id"])
+        membership = pd.DataFrame(membership_rows) if membership_rows else pd.DataFrame(columns=["row_id", "comparison_id", "background_scope_id", "rbp_or_set", "gene_id"])
         target_genes = set().union(*gene_sets.values()) if gene_sets else set()
         selected_candidates = candidates[candidates.selected_input]
         matched = selected_candidates[
@@ -247,6 +318,11 @@ class RbpSupportWorkflow(WorkflowBase):
         matched["is_rbp_or_target"] = matched["supporting_rbp_sets"].ne("")
         writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version, common_metadata={"question": self.definition.question, "method": self.definition.method, "analysis_unit": self.definition.analysis_unit, "interpretation": "Use these results for mechanism prioritization only. Motif/eCLIP and expression association are separate supporting layers.", "limitations": self.definition.limitations})
         writer.common_metadata["resource_semantics"] = "RBP membership is not RBP-target regulation. Consult Annotation resource provenance for each declared set."
+        writer.common_metadata["native_background_provenance"] = background_audit.attrs["native_background_provenance"]
+        writer.common_metadata["foreground_source"] = parameters.get("foreground_source", "candidate_union")
+        writer.common_metadata["background_source"] = candidates.background_source.iloc[0] if len(candidates) else parameters.get("background_source")
+        writer.common_metadata["background_definition"] = "native detected/testable RBP and non-RBP genes in the same comparison/cell type/assay; never reference-wide genes or only the RBP subset"
+        writer.common_metadata["report_input_lists"] = "output-directory links; full gene lists are not embedded in report prose"
         writer.table("RBP background eligibility", "background_eligibility.parquet", background_audit, entity_type="background_audit", parents=(source.artifact_id,))
         writer.table("RBP gene inputs by comparison", "gene_inputs.parquet", candidates, entity_type="gene_input_audit", parents=(source.artifact_id,))
         writer.table("Annotation resource provenance", "annotation_resources.parquet", resource_audit, entity_type="resource_audit")

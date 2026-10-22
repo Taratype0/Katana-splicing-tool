@@ -34,6 +34,43 @@ class ProjectService:
         self.manifests = ManifestStore()
         self._projects: dict[str, ProjectContext] = {}
 
+    def create_bulk_project(self, manifest: ProjectManifest, manifest_path: str | Path) -> ProjectContext:
+        """Create a new bulk analysis with explicit approved exclusion defaults.
+
+        Existing projects are opened with ``open_project`` and retain their exact
+        saved configuration. This creation path validates the required annotation
+        before writing anything; it does not refit imported differential results.
+        """
+        path = Path(manifest_path).expanduser().resolve()
+        if path.exists():
+            raise FileExistsError("New project creation cannot overwrite an existing manifest.")
+        self._validate_output_root(manifest.output_root)
+        if manifest.output_root.exists() and any(manifest.output_root.iterdir()):
+            raise ValueError("New project creation requires an empty output root; existing results are preserved.")
+        if not any(a.kind in {"rmats_result", "deg_result", "dtu_result", "dexseq_result"}
+                   for a in manifest.assets):
+            raise ValueError("Bulk project creation requires declared bulk differential input assets.")
+        from katana_next.science.gene_filter import gene_filter_details, new_project_gene_filter_metadata
+        metadata = dict(manifest.metadata)
+        metadata.setdefault("gene_filter", new_project_gene_filter_metadata())
+        candidate = manifest.model_copy(update={"metadata": metadata})
+        details = gene_filter_details(candidate)
+        if details.get("active"):
+            metadata["gene_filter_identity"] = details["identity"]
+        candidate = candidate.model_copy(update={"metadata": metadata})
+        required = [a.path for a in candidate.assets if a.required]
+        required.extend(p for sample in candidate.samples for p in sample.assets.values())
+        missing = [p for p in required if not p.is_file()]
+        if missing:
+            raise FileNotFoundError(f"Project input is missing: {missing[0]}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        # Exclusive creation closes the check/write race without replacing a
+        # project another process may just have created.
+        with path.open("x", encoding="utf-8") as handle:
+            json.dump(candidate.model_dump(mode="json"), handle, indent=2, ensure_ascii=False)
+        return self.open_project(path)
+
     def open_project(self, manifest_path: str | Path) -> ProjectContext:
         path, manifest = self.manifests.load(manifest_path)
         if manifest.metadata.get("gene_filter_identity"):
