@@ -1,0 +1,3 @@
+sample,condition,biological_unit_id,donor_id,cell_type,display_name
+DONOR_A_TCELL,control,UNIT_A,DONOR_A,T_cell,Donor A T cells
+DONOR_B_TCELL,treatment,UNIT_B,DONOR_B,T_cell,Donor B T cells

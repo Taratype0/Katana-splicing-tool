@@ -30,6 +30,7 @@ dependencies = [
 [project.scripts]
 katana-open = "katana_next.launcher:main"
 katana-next = "katana_next.cli:main"
+katana-contracts = "katana_next.contracts.cli:main"
 katana-cosplice = "katana_cosplice.cli:main"
 katana-splice = "katana_cosplice.cli:main"
 katana-splice-network = "katana_cosplice.cli:main"
@@ -47,6 +48,10 @@ katana-next-migrate = "katana_next.migration:main"
 katana-next-acceptance = "scripts.run_v2_acceptance:main"
 
 [project.optional-dependencies]
+contracts = [
+  "jsonschema>=4.18,<5",
+  "pydantic>=2.9,<3",
+]
 next = [
   "beautifulsoup4>=4.12,<5",
   "requests>=2.32,<3",
@@ -71,6 +76,7 @@ namespaces = false
 
 [tool.setuptools.package-data]
 "katana_next.science" = ["rbp_sequence_browser.html", "motiftrace_windows.html", "motiftrace_consequences.html", "motiftrace_parallel.html", "rbp_evidence_layers.json"]
+"katana_next.contracts" = ["schemas/*.json", "data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

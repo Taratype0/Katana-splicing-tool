@@ -1,0 +1,3 @@
+sample,condition,biological_unit_id,donor_id,display_name,batch
+CONTROL_1,control,UNIT_CONTROL_1,,Control biological sample 1,BATCH_A
+TREATMENT_1,treatment,UNIT_TREATMENT_1,,Treatment biological sample 1,BATCH_A

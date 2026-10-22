@@ -1,0 +1,1175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:katana:contract:1.0.0",
+  "title": "Katana project, input and result contract v1",
+  "description": "T09 structural contract. Referential integrity, method/unit/status compatibility and path/hash checks are performed by the semantic validator. Definitions are data contracts, not scientific algorithms.",
+  "$ref": "#/$defs/project",
+  "$defs": {
+    "project": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "project"
+        },
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assay_mode": {
+          "enum": [
+            "bulk_rna",
+            "single_cell_rna",
+            "single_nucleus_rna"
+          ]
+        },
+        "analysis_level": {
+          "enum": [
+            "bulk",
+            "cell",
+            "pseudobulk"
+          ]
+        },
+        "input_kind": {
+          "enum": [
+            "bulk_fastq",
+            "genome_bam",
+            "processed_counts",
+            "processed_results",
+            "longread_results"
+          ]
+        },
+        "intent": {
+          "enum": [
+            "import",
+            "analyze",
+            "report"
+          ]
+        },
+        "samples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sample"
+          }
+        },
+        "contrasts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/contrast"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/asset"
+          }
+        },
+        "methods": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/method"
+          }
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/run"
+          }
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/result"
+          }
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "project_id",
+        "display_name",
+        "assay_mode",
+        "analysis_level",
+        "input_kind",
+        "intent",
+        "samples",
+        "contrasts",
+        "references",
+        "assets",
+        "methods",
+        "runs",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "asset": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "asset"
+        },
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "role": {
+          "enum": [
+            "input",
+            "reference",
+            "result",
+            "evidence"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "project_relative",
+                "local_absolute",
+                "remote"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "extensions": {
+              "type": "object",
+              "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "availability": {
+          "enum": [
+            "present",
+            "remote",
+            "missing",
+            "not_checked"
+          ]
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "sample_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "reference_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "lane_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+        },
+        "measurement_unit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "Declared input/output measurement unit; null for not applicable or explicitly unknown. Never infer UMI/read/PSI scale from a filename."
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "asset_id",
+        "role",
+        "format",
+        "location",
+        "availability",
+        "sha256",
+        "bytes",
+        "sample_ids",
+        "reference_id",
+        "measurement_unit"
+      ],
+      "additionalProperties": false
+    },
+    "method": {
+      "type": "object",
+      "properties": {
+        "method_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "tool_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tool_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workflow_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workflow_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "operation": {
+          "enum": [
+            "import",
+            "compute",
+            "annotate",
+            "diagnostic",
+            "render"
+          ]
+        },
+        "measurement_unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inference_unit": {
+          "type": "string",
+          "enum": [
+            "biological_sample",
+            "donor",
+            "cell",
+            "gene_pair",
+            "event_pair",
+            "gene",
+            "event",
+            "transcript",
+            "exon_bin",
+            "junction",
+            "module",
+            "motif",
+            "sequence",
+            "sequence_position",
+            "cohort",
+            "none"
+          ],
+          "description": "Declared native independent/test unit. Cell and matched gene-pair statistics retain their source identity; this is not automatic method qualification."
+        },
+        "effect_scale": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "statistics_origin": {
+          "enum": [
+            "native_import",
+            "computed",
+            "descriptive",
+            "not_applicable"
+          ]
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+        }
+      },
+      "required": [
+        "method_id",
+        "tool_name",
+        "tool_version",
+        "workflow_id",
+        "workflow_version",
+        "source_sha256",
+        "operation",
+        "measurement_unit",
+        "inference_unit",
+        "effect_scale",
+        "statistics_origin"
+      ],
+      "additionalProperties": false
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "run"
+        },
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "method_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "execution_kind": {
+          "enum": [
+            "new_computation",
+            "import",
+            "render"
+          ]
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "blocked",
+            "pending",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "omitted"
+          ]
+        },
+        "sample_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "contrast_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "input_asset_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "reference_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "parent_run_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "seed": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "software": {
+          "type": "object",
+          "properties": {
+            "package_version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_commit": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "python_version": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "container_digest": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "extensions": {
+              "type": "object",
+              "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+            }
+          },
+          "required": [
+            "package_version",
+            "source_commit",
+            "python_version",
+            "container_digest"
+          ],
+          "additionalProperties": false
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_uri": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "source_schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "source_version": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "source_artifact_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "description": "For imports, a source asset_id in this project; retain foreign/native artifact labels in provenance.extensions."
+            },
+            "extensions": {
+              "type": "object",
+              "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+            },
+            "source_completion": {
+              "enum": [
+                "completed",
+                "failed",
+                "cancelled",
+                "unknown",
+                "not_applicable"
+              ]
+            }
+          },
+          "required": [
+            "source_uri",
+            "source_schema",
+            "source_version",
+            "source_artifact_id",
+            "source_completion"
+          ],
+          "additionalProperties": false
+        },
+        "execution_evidence": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "verified",
+                "reported",
+                "not_applicable"
+              ]
+            },
+            "receipt_asset_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+              },
+              "uniqueItems": true,
+              "minItems": 0
+            },
+            "extensions": {
+              "type": "object",
+              "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+            }
+          },
+          "required": [
+            "status",
+            "receipt_asset_ids"
+          ],
+          "additionalProperties": false
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+                },
+                "detail": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "extensions": {
+                  "type": "object",
+                  "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+                }
+              },
+              "required": [
+                "code",
+                "detail"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "run_id",
+        "method_id",
+        "execution_kind",
+        "status",
+        "sample_ids",
+        "contrast_ids",
+        "input_asset_ids",
+        "reference_ids",
+        "parent_run_ids",
+        "parameters",
+        "seed",
+        "software",
+        "provenance",
+        "execution_evidence",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "result"
+        },
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "result_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entity_unit": {
+          "enum": [
+            "gene",
+            "event",
+            "transcript",
+            "exon_bin",
+            "junction",
+            "module",
+            "motif",
+            "RBP",
+            "sample",
+            "cell",
+            "donor",
+            "pair",
+            "report",
+            "locus",
+            "mixed"
+          ]
+        },
+        "measurement_unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inference_unit": {
+          "type": "string",
+          "enum": [
+            "biological_sample",
+            "donor",
+            "cell",
+            "gene_pair",
+            "event_pair",
+            "gene",
+            "event",
+            "transcript",
+            "exon_bin",
+            "junction",
+            "module",
+            "motif",
+            "sequence",
+            "sequence_position",
+            "cohort",
+            "none"
+          ],
+          "description": "Declared native independent/test unit. Cell and matched gene-pair statistics retain their source identity; this is not automatic method qualification."
+        },
+        "statistics_origin": {
+          "enum": [
+            "native_import",
+            "computed",
+            "descriptive",
+            "not_applicable"
+          ]
+        },
+        "contrast_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "not_computed",
+            "blocked",
+            "failed",
+            "cancelled",
+            "omitted",
+            "not_estimable",
+            "unverified",
+            "inapplicable"
+          ]
+        },
+        "row_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "tested_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "significant_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "findings": {
+          "enum": [
+            "not_applicable",
+            "not_assessed",
+            "has_findings",
+            "zero_findings"
+          ]
+        },
+        "output_asset_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "tested_universe_asset_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "family_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "columns": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+                },
+                "detail": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "extensions": {
+                  "type": "object",
+                  "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+                }
+              },
+              "required": [
+                "code",
+                "detail"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+        }
+      },
+      "required": [
+        "kind",
+        "schema_version",
+        "result_id",
+        "run_id",
+        "endpoint",
+        "entity_unit",
+        "measurement_unit",
+        "inference_unit",
+        "statistics_origin",
+        "contrast_id",
+        "status",
+        "row_count",
+        "tested_count",
+        "significant_count",
+        "findings",
+        "output_asset_ids",
+        "tested_universe_asset_id",
+        "family_id",
+        "columns",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "sample": {
+      "type": "object",
+      "properties": {
+        "sample_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "biological_unit_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "donor_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cell_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "source_assay": {
+          "enum": [
+            "bulk_rna",
+            "single_cell_rna",
+            "single_nucleus_rna"
+          ]
+        },
+        "covariates": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+        },
+        "aggregation": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "source_assay": {
+                  "enum": [
+                    "single_cell_rna",
+                    "single_nucleus_rna"
+                  ]
+                },
+                "group_by": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true,
+                  "minItems": 1
+                },
+                "source_asset_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+                  },
+                  "uniqueItems": true,
+                  "minItems": 1
+                },
+                "mapping_status": {
+                  "enum": [
+                    "declared",
+                    "verified",
+                    "unknown"
+                  ]
+                },
+                "extensions": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "source_assay",
+                "group_by",
+                "source_asset_ids",
+                "mapping_status"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sample_id",
+        "display_name",
+        "biological_unit_id",
+        "donor_id",
+        "group",
+        "cell_type",
+        "source_assay",
+        "covariates"
+      ],
+      "additionalProperties": false
+    },
+    "contrast": {
+      "type": "object",
+      "properties": {
+        "contrast_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "group_difference",
+            "linear_combination"
+          ]
+        },
+        "sample_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "effect_direction": {
+          "enum": [
+            "numerator_minus_denominator",
+            "declared_linear_combination"
+          ]
+        },
+        "model_formula": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "paired": {
+          "type": "boolean"
+        },
+        "numerator_sample_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "denominator_sample_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "weights": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "pair_ids": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+        }
+      },
+      "required": [
+        "contrast_id",
+        "display_name",
+        "kind",
+        "sample_ids",
+        "effect_direction",
+        "model_formula",
+        "paired"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "group_difference"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "numerator_sample_ids",
+              "denominator_sample_ids"
+            ],
+            "properties": {
+              "effect_direction": {
+                "const": "numerator_minus_denominator"
+              }
+            },
+            "not": {
+              "required": [
+                "weights"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "linear_combination"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "weights"
+            ],
+            "properties": {
+              "effect_direction": {
+                "const": "declared_linear_combination"
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "numerator_sample_ids"
+                  ]
+                },
+                {
+                  "required": [
+                    "denominator_sample_ids"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "reference": {
+      "type": "object",
+      "properties": {
+        "reference_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "taxon_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "genome_build": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "annotation_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "identity_status": {
+          "enum": [
+            "known",
+            "unresolved"
+          ]
+        },
+        "asset_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 0
+        },
+        "extensions": {
+          "type": "object",
+          "description": "Versioned namespaced metadata only; extensions must not redefine core contract fields."
+        }
+      },
+      "required": [
+        "reference_id",
+        "taxon_id",
+        "genome_build",
+        "annotation_version",
+        "identity_status",
+        "asset_ids"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

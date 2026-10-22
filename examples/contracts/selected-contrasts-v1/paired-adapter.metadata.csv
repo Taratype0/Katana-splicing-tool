@@ -1,0 +1,7 @@
+sample,condition,biological_unit_id,donor_id
+baseline1,Control,unit1,donor1
+baseline2,Control,unit2,donor2
+baseline3,Control,unit3,donor3
+treated1,Treated,unit1,donor1
+treated2,Treated,unit2,donor2
+treated3,Treated,unit3,donor3
