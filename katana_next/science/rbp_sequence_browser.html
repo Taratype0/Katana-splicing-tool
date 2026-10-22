@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Katana MotifTrace | SE RNA motif evidence</title>
+<style>
+:root{--ink:#183c48;--muted:#536c74;--paper:#f8f7f1;--line:#d3dedb;--teal:#286c70;--hit:#f6b982;--warn:#805016}*{box-sizing:border-box}body{margin:0;background:linear-gradient(130deg,#edf4f1,var(--paper) 45%);color:var(--ink);font:15px/1.6 "IBM Plex Sans","Microsoft YaHei",sans-serif}header,main{max-width:1380px;margin:auto;padding:24px}h1{font:36px/1.2 Georgia,serif;margin:8px 0}h2{font:25px Georgia,serif}h3{margin:12px 0}small,.muted{color:var(--muted)}.tag{color:var(--teal);letter-spacing:.12em;font-size:12px}.notice{border-left:4px solid var(--teal);padding:12px 16px;background:#e5efeb}.warning{border-color:#b57c32;background:#f4eddf}.layout{display:grid;grid-template-columns:310px minmax(0,1fr);gap:22px}.panel{background:#fffdf9;border:1px solid var(--line);border-radius:8px;padding:18px;margin-bottom:18px;min-width:0}label{display:block;font-weight:600;margin:14px 0 5px}input,select,button{font:inherit;border:1px solid #a9bcba;border-radius:4px;background:white;padding:8px;width:100%;color:var(--ink)}select{max-width:100%}button{width:auto;cursor:pointer;margin:5px 8px 4px 0;border-color:var(--teal)}button:hover{background:#e7f0eb}.sequence{white-space:pre-wrap;overflow-wrap:anywhere;font:15px/2 "Consolas",monospace;letter-spacing:1px;padding:12px;background:#f0f4f0;border-radius:4px}.sequence mark{background:var(--hit);color:#482b16}.join{color:#b54e37;font-weight:bold;user-select:none}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:12px;line-height:1.5}th,td{text-align:left;padding:7px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--teal);white-space:nowrap}.map{display:block;width:100%;height:50px;background:#f0f5f2}.logo{width:100%;height:175px;max-width:730px}.summary{display:flex;gap:10px;flex-wrap:wrap}.metric{background:#edf3ee;padding:9px 12px;border-radius:4px}details{margin:12px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere}.position{font-family:Consolas,monospace}a{color:var(--teal)}.empty{padding:16px;color:var(--warn)}@media(max-width:850px){.layout{grid-template-columns:1fr}header,main{padding:14px}h1{font-size:29px}.panel{padding:13px}}
+</style>
+<style>.position{overflow-wrap:anywhere;word-break:break-word}.layout>aside,.layout>section{min-width:0}@media(max-width:850px){.layout{grid-template-columns:minmax(0,1fr)}button{max-width:100%}}</style>
+<header><div class="tag">KATANA MOTIFTRACE / RNA SEQUENCE EVIDENCE</div><h1>Katana MotifTrace</h1><p>SE事件 → RNA序列 → RBP motif。浏览已完成的分析；页面不会启动量化、DAS拟合、CLIP或富集任务。</p><div class="notice">筛选只改变显示，不改变背景、原始P值或FDR家族。序列命中不是本样本实际结合，也不是功能或因果证据。</div><div id="custom-note" class="notice warning" hidden></div></header>
+<main><div class="layout"><aside><div class="panel"><h2>选择事件与模式</h2>
+<label for="case">DAS对比</label><select id="case"></select>
+<label for="event-search">基因 / 事件 / 坐标</label><input id="event-search" placeholder="例如 Tjap1 或 chr17">
+<label><input id="show-bg" type="checkbox" style="width:auto"> 同时显示冻结背景事件</label><select id="event" size="7" aria-label="SE event"></select><small id="event-count"></small>
+<label for="model-search">RBP / 模型 / 来源</label><input id="model-search" placeholder="例如 PTBP1、mCross、RCRUNCH"><label id="custom-filter-label" hidden><input id="custom-filter" type="checkbox" style="width:auto"> 仅显示自定义motif库</label><select id="model" size="7" aria-label="Motif model"></select><small id="model-count"></small>
+<p><button id="export-rna">导出当前事件RNA FASTA</button><button id="export-hits">导出当前事件 × 当前motif全部命中 TSV</button></p>
+<small>短外显子不会因不足50nt而从事件中删除；物理上无法容纳的motif/窗口为NA，不填零。</small></div><div class="panel"><h3>资源与统计范围</h3><div id="inventory"></div><details><summary>冻结方法与参数</summary><pre id="plan"></pre></details><div id="attachments"></div></div></aside>
+<section><div class="panel"><div id="event-title"></div><p id="event-meta" class="position"></p><div id="event-summary" class="summary"></div><p class="muted">坐标为0-based半开区间；RNA按5′→3′显示。DNA参考按链取回并拼接，不是新测的逐分子或全长定相RNA。</p></div>
+<div class="panel"><h2>Motif本身与来源</h2><div id="model-title"></div><svg id="logo" class="logo" role="img" aria-label="Native motif logo"></svg><p id="logo-note" class="muted"></p><details><summary>全部RBP、物种与证据来源（共享模型不能唯一指认蛋白）</summary><div class="scroll"><table id="sources"></table></div></details></div>
+<div id="matched-panel" class="panel"><h2>计数与覆盖率滑窗并列查看</h2><div id="matched-content"></div></div>
+<div id="sequences"></div><div class="panel"><h2>该模型的完整序列 / 短外显子 / 接头检验</h2><p>公共模型读取原统计结果；自定义模型仅显示其已声明任务的独立结果，预览模式无P/FDR。不会因选中事件而重新检验。DAS FDR与motif富集q不是同一个量；NA表示不可估计，不是阴性。</p><div class="scroll"><table id="stats"></table></div></div>
+<div class="panel"><h2>本对比的全库结果概览</h2><p id="family"></p><div class="scroll"><table id="overview"></table></div><div class="notice warning">PWM位点使用原冻结的相对理论最佳词分数≥0.8标记候选，仅用于位置展示，不参与富集推断，也不是site P值。短事件最强低分位置另标“不是binding hit”。无CLIP或功能实验时，不生成“已验证结合”标签。</div></div></section></div></main>
+<script id="rbp-data" type="application/json">__RBP_DATA__</script>
+<script>
+"use strict";
+const D=JSON.parse(document.getElementById("rbp-data").textContent),$=id=>document.getElementById(id),NS="http://www.w3.org/2000/svg";
+const regions={cassette_exon:"可变外显子本体",inclusion_junctions:"包含形式：只计严格跨接头的位置",skipping_junction:"跳过形式：只计严格跨新接头的位置",short_exon_lt50:"短于50nt完整外显子",short_exon_1_9:"1–9nt分层",short_exon_10_19:"10–19nt分层",short_exon_20_49:"20–49nt分层",full_exon_sliding:"整段外显子逐碱基滑窗"};
+let currentEvent,currentModel,exported=[];
+function el(tag,text,attrs={}){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);return n}
+function svg(tag,attrs={}){const n=document.createElementNS(NS,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);return n}
+function fmt(v){return v===null||v===undefined?"NA":typeof v==="number"?(Math.abs(v)>0&&Math.abs(v)<.001?v.toExponential(3):Number(v.toPrecision(5)).toString()):String(v)}
+function table(node,heads,rows){node.replaceChildren();const tr=el("tr");heads.forEach(x=>tr.append(el("th",x)));node.append(tr);rows.forEach(row=>{const r=el("tr");row.forEach(x=>r.append(el("td",fmt(x))));node.append(r)})}
+function option(node,value,label){const first=node.options.length===0;node.append(el("option",label,{value}));if(first)node.value=value}
+D.cases.forEach(c=>option($("case"),c,c));
+$("plan").textContent=JSON.stringify({public_library:D.plan,user_library:D.custom?.plan||null},null,2);
+if(D.custom){$("custom-note").hidden=false;$("custom-note").textContent=D.custom.mode==="preview_only"?"已加载自定义motif库：仅预览位置和logo，没有计算该库P/FDR。原公共库结果不变。":"自定义库已经独立计算：其q值仅属于自定义模型、声明对比及全部预设端点/窗口的单独BH家族，不能与公共库q直接比较或宣称更灵敏；该选择可能是事后分析。原公共库结果不变。"}
+$("custom-filter-label").hidden=!D.custom;
+$("inventory").textContent=`${D.model_count.toLocaleString()}个去重模型；${D.source_count.toLocaleString()}条来源映射。不是同等数量的独立RBP或实验。${D.species} / ${D.genome_build}`;
+const inProject=location.pathname.startsWith("/api/projects/");
+if(!inProject)$("attachments").append(el("p","离线浏览包含全部事件RNA、模型、位置图及摘要。上方FASTA/TSV导出可直接使用；全量统计和命中附件请在Katana项目中打开本报告后下载。",{class:"notice warning"}));
+D.attachments.forEach(a=>{const p=el("p");if(inProject){const link=el("a",a.label,{href:a.url});link.download="";p.append(link)}else p.append(el("span",a.label+"（项目附件）",{class:"muted"}));$("attachments").append(p)});
+function updateEvents(initial=false){const query=$("event-search").value.toLowerCase(),all=D.events[$("case").value];const rows=all.filter(e=>($("show-bg").checked||e.role!=="bg")&&[e.gene_symbol,e.gene_id,e.event_id].join(" ").toLowerCase().includes(query));const previous=$("event").value;$("event").replaceChildren();rows.forEach(e=>option($("event"),e.event_id,`${e.gene_symbol||e.gene_id} · ${e.cassette_length}nt · ${e.role}`));if(rows.some(e=>e.event_id===previous))$("event").value=previous;else if(initial){const example=rows.find(e=>e.gene_symbol==="Tjap1"&&e.cassette_length===30);if(example)$("event").value=example.event_id}$("event-count").textContent=`${rows.length}个事件；背景${all.filter(e=>e.role==="bg").length}个。未做基因合并。`;render()}
+function updateModels(initial=false){
+const query=$("model-search").value.toLowerCase(),previous=$("model").value;
+const rows=Object.entries(D.models).filter(([id,m])=>(!$("custom-filter").checked||m.origin==="user_custom")&&[id,m.RBPs,m.sources,m.evidence,m.native_ids].join(" ").toLowerCase().includes(query));
+$("model").replaceChildren();rows.slice(0,120).forEach(([id,m])=>option($("model"),id,`${m.origin==="user_custom"?"[自定义] ":""}${m.RBPs} · ${m.kind} · ${m.width}nt · ${id}`));
+if(rows.slice(0,120).some(([id])=>id===previous))$("model").value=previous;else if(initial){const example=rows.find(([id,m])=>m.pattern==="CTCT[CT][CT]");if(example){if(![...$("model").options].some(o=>o.value===example[0]))option($("model"),example[0],`${example[1].RBPs} · consensus · 6nt · ${example[0]}`);$("model").value=example[0]}}
+$("model-count").textContent=`${rows.length}个匹配模型，列表显示前120个；输入完整模型ID可精确查找。`;render()
+}
+function project(form,start,stop,event){let offset=0,blocks=[];form.blocks.forEach(([a,b])=>{const left=Math.max(start,offset),right=Math.min(stop,offset+b-a);if(right>left)blocks.push(event.strand==="+"?[a+left-offset,a+right-offset]:[b-(right-offset),b-(left-offset)]);offset+=b-a});return blocks}
+function scan(form,m,event){const dna=form.RNA.replaceAll("U","T"),w=m.width,joins=form.junctions,bg=D.backgrounds[$("case").value],found=[];let eligible=0,best=null;const re=m.kind==="consensus"?new RegExp("^(?:"+m.pattern+")$"):null;for(let a=0;a+w<=dna.length;a++){if(joins.length&&!joins.some(j=>a<j&&a+w>j))continue;const word=dna.slice(a,a+w);if(!/^[ACGT]+$/.test(word))continue;eligible++;let relative=null,match=false;if(re)match=re.test(word);else{relative=1;for(let j=0;j<w;j++){const row=m.matrix[j].map((x,k)=>(20*x+.1*bg[k])/20.1);relative*=row["ACGT".indexOf(word[j])]/Math.max(...row)}match=relative>=.8;if(best===null||relative>best.relative)best={start:a,stop:a+w,relative}}if(match)found.push({start:a,stop:a+w,relative,label:re?"exact_native_consensus_match":"PWM_relative_ge0.8_candidate"})}if(m.kind==="PWM"&&event.cassette_length<50&&best&&!found.some(h=>h.start===best.start))found.push({...best,label:"short_event_best_subthreshold_NOT_binding_hit"});return{eligible,hits:found.sort((a,b)=>a.start-b.start).map(h=>({...h,RNA:form.RNA.slice(h.start,h.stop),blocks:project(form,h.start,h.stop,event)}))}}
+function drawLogo(m){const node=$("logo"),matrix=m.matrix||[...m.pattern.matchAll(/\[([ACGT]+)\]|([ACGT])/g)].map(x=>[..."ACGT"].map(b=>(x[1]||x[2]).includes(b)?1/(x[1]||x[2]).length:0));const colors=["#2d8b64","#397bab","#bd8e2d","#bb5550"],W=28;node.replaceChildren();node.setAttribute("viewBox",`0 0 ${matrix.length*W+35} 160`);matrix.forEach((row,i)=>{const info=2+row.reduce((s,p)=>s+(p>0?p*Math.log2(p):0),0);let bottom=132;row.map((p,k)=>({p,k})).sort((a,b)=>a.p-b.p).forEach(({p,k})=>{const h=p*info*53;if(h<.1)return;node.append(svg("rect",{x:24+i*W,y:bottom-h,width:24,height:h,fill:colors[k]}));if(h>10){const text=svg("text",{x:36+i*W,y:bottom-h/2+4,"text-anchor":"middle","font-size":Math.min(18,h*.85),fill:"white","font-weight":700});text.textContent="ACGU"[k];node.append(text)}bottom-=h});const tick=svg("text",{x:36+i*W,y:150,"text-anchor":"middle","font-size":10});tick.textContent=i+1;node.append(tick)});$("logo-note").textContent=m.kind==="PWM"?"原生数值矩阵的信息量logo（总高最多2 bits），不是当前样本的结合测量。":"原生consensus允许碱基的示意logo，不冒充实验PWM。"}
+function render(){
+const caseId=$("case").value,event=D.events[caseId]?.find(e=>e.event_id===$("event").value),id=$("model").value,m=D.models[id];
+$("export-rna").disabled=!(event&&m);$("export-hits").disabled=!(event&&m);
+if(!event||!m){
+  for(const key of ["event-title","event-meta","event-summary","model-title","logo","logo-note","sources","stats","overview","family","matched-content"])$(key).replaceChildren();
+  $("sequences").replaceChildren(el("p","没有匹配的事件或模型。",{class:"empty"}));exported=[];currentEvent=null;currentModel=null;return
+}
+currentEvent=event;currentModel=m;
+const matched=$("matched-content");matched.replaceChildren();
+if(D.matched_windows){const base=inProject?D.matched_windows.url:D.matched_windows.offline_file;matched.append(el("a","打开原114模型计数 × 覆盖率滑窗 / 原P与独立FDR / 实验旁证",{href:base+"#"+new URLSearchParams({case:caseId,pattern:m.pattern||""}),target:"_blank",rel:"noopener"}),el("p","保留各方法456,000项原家族；有实验旁证但未过阈值的窗口单独标记，不升级显著性。自定义库及无作者对应模型未计算计数对照，不能视为阴性。离线使用时需保留同目录配套滑窗报告。"))}else matched.append(el("p","未注册计数/覆盖率配对结果：未计算，不是阴性。此页已有完整序列结果保持原统计家族。"));
+$("event-title").replaceChildren(el("h2",`${event.gene_symbol||event.gene_id} · ${event.gene_id}`));
+$("event-meta").textContent=event.event_id;
+$("event-summary").replaceChildren(...[`长度 ${event.cassette_length}nt`,`原DAS ΔPSI ${fmt(event.dpsi)}`,`原DAS FDR ${fmt(event.DAS_FDR)}`,`角色 ${event.role}`].map(x=>el("span",x,{class:"metric"})));
+$("model-title").replaceChildren(el("h3",`${m.RBPs} · ${id}`),el("p",m.pattern?m.pattern.replaceAll("T","U"):m.kind+" · "+m.width+"nt"));
+drawLogo(m);table($("sources"),["RBP","物种","证据类别","来源","原始ID"],D.sources[id].map(s=>[s.RBP,s.species,s.evidence,s.source,s.native_id]));
+$("sequences").replaceChildren();exported=[];
+event.forms.forEach(form=>{
+  const result=scan(form,m,event),panel=el("div",undefined,{class:"panel"});
+  panel.append(el("h3",regions[form.region]),el("p",`${form.RNA.length}nt；${result.eligible}个物理合格放置；${result.hits.length}个匹配/明确标记候选。`));
+  if(!result.eligible)panel.append(el("p","NA：没有可容纳该模式的完整有效位置，不代表零结合。",{class:"empty"}));
+  const map=svg("svg",{viewBox:`0 0 ${Math.max(form.RNA.length,1)} 20`,class:"map",role:"img","aria-label":"RNA motif positions"});
+  map.append(svg("rect",{x:0,y:9,width:form.RNA.length,height:2,fill:"#709b99"}));
+  result.hits.forEach(h=>{
+    const rect=svg("rect",{x:h.start,y:5,width:h.stop-h.start,height:10,fill:h.label.includes("subthreshold")?"#c2c2b8":"#d88a43"}),title=svg("title");
+    title.textContent=`[${h.start},${h.stop}) ${h.RNA}`;rect.append(title);map.append(rect)
+  });
+  form.junctions.forEach(j=>map.append(svg("line",{x1:j,x2:j,y1:0,y2:20,stroke:"#b34940","stroke-width":.4})));panel.append(map);
+  const seq=el("pre",undefined,{class:"sequence"});
+  for(let a=0;a<form.RNA.length;a++){
+    if(form.junctions.includes(a))seq.append(el("span","|",{class:"join",title:"Splice junction; not an extra RNA base"}));
+    const hit=result.hits.some(h=>h.start<=a&&a<h.stop),n=el(hit?"mark":"span",form.RNA[a]);n.title=`RNA ${a+1} (1-based)`;seq.append(n)
+  }
+  panel.append(seq);const hitsTable=el("table"),scroll=el("div",undefined,{class:"scroll"});
+  table(hitsTable,["RNA区间 [start,stop)","实际RNA","基因组分段（RNA顺序）","候选类别","相对PWM分数"],result.hits.slice(0,200).map(h=>[`${h.start}–${h.stop}`,h.RNA,event.chr+":"+JSON.stringify(h.blocks)+" ("+event.strand+")",h.label,h.relative]));
+  scroll.append(hitsTable);panel.append(scroll);
+  if(result.hits.length>200)panel.append(el("small","表格仅显示前200项；当前事件 × 当前模型的导出保留全部。"));
+  $("sequences").append(panel);
+  result.hits.forEach(h=>exported.push({contrast:caseId,event_id:event.event_id,gene_id:event.gene_id,gene_symbol:event.gene_symbol,model_id:id,RBPs:m.RBPs,region:form.region,RNA_start0:h.start,RNA_stop_exclusive:h.stop,matched_RNA:h.RNA,chr:event.chr,strand:event.strand,genomic_blocks_json:JSON.stringify(h.blocks),candidate_class:h.label,relative_PWM_likelihood:h.relative,DAS_dpsi:event.dpsi,DAS_FDR:event.DAS_FDR}))
+});
+const userModel=m.origin==="user_custom";
+table($("stats"),["序列范围","方向","前景N","背景N","原分数均值差","原始P",userModel?"自定义家族q":"原公共家族q"],(D.scalar[caseId][id]||[]).map(row=>[regions[row[0]]||row[0],...row.slice(1)]));
+$("family").textContent=userModel?(D.custom.mode==="preview_only"?"当前为自定义模型位置预览：未计算P/FDR。下方无推断结果，不是阴性。":`当前是自定义库的独立BH家族：${D.custom.family_size.toLocaleString()}项可估计检验，涵盖 ${D.cases.join("、")} 的全部声明模型、方向、端点和窗口。不能与原公共家族q直接比较。`):`原公共库FDR家族：${D.family_size.toLocaleString()}项可估计检验；包含 ${D.frozen_cases.join("、")} 的全部冻结模型、方向、端点及窗口。当前过滤不缩小家族。`;
+const summary=userModel?D.custom.summary:D.summary;
+table($("overview"),["范围","可估计项","q<0.05项","最小全家族q"],summary.filter(r=>r.contrast===caseId).map(r=>[regions[r.scope]||r.scope,r.estimable,r.significant_tests,r.minimum_q]))
+}
+function download(name,text,type){const url=URL.createObjectURL(new Blob([text],{type})),a=el("a",undefined,{href:url,download:name});a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+$("export-rna").onclick=()=>{if(!currentEvent)return;download("SE_reference_RNA.fasta",currentEvent.forms.map(f=>`>${$("case").value}|${currentEvent.gene_id}|${currentEvent.event_id}|${f.region}\n${f.RNA}\n`).join(""),"text/plain;charset=utf-8")};
+$("export-hits").onclick=()=>{if(!currentEvent)return;const keys=["contrast","event_id","gene_id","gene_symbol","model_id","RBPs","region","RNA_start0","RNA_stop_exclusive","matched_RNA","chr","strand","genomic_blocks_json","candidate_class","relative_PWM_likelihood","DAS_dpsi","DAS_FDR"];download("SE_reference_motif_positions.tsv",keys.join("\t")+"\n"+exported.map(r=>keys.map(k=>r[k]===null?"":String(r[k]).replaceAll("\t"," ").replaceAll("\n"," ")).join("\t")).join("\n"),"text/tab-separated-values;charset=utf-8")};
+$("case").onchange=()=>updateEvents(true);$("event-search").oninput=()=>updateEvents();$("show-bg").onchange=()=>updateEvents();$("event").onchange=render;$("model-search").oninput=()=>updateModels();$("custom-filter").onchange=()=>updateModels();$("model").onchange=render;updateModels(true);updateEvents(true);
+</script></html>

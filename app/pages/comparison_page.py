@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QCheckBox,
-    QComboBox,
     QLineEdit,
     QLabel,
     QPushButton,
@@ -22,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.widgets.page_header import PageHeader
 from src.services.project_service import ProjectService
 
 
@@ -30,36 +30,33 @@ class ComparisonPage(QWidget):
         super().__init__()
         self.project_service = project_service
         self.on_confirm = on_confirm
+        self.header = PageHeader(
+            "Pairing and canonical direction",
+            "Choose which detected comparisons continue downstream, verify source files, and preserve their analysis order.",
+            "02 · Experimental design",
+        )
         self.label = QLabel("Comparison pairing will appear here.")
         self.label.setWordWrap(True)
+        self.label.setObjectName("contextPanel")
         self.confirm_button = QPushButton("Confirm")
+        self.confirm_button.setProperty("class", "primary")
         self.confirm_button.clicked.connect(self._confirm_pairing)
         self.confirm_button.setMaximumWidth(120)
-        self.confirm_button.setStyleSheet(
-            "QPushButton { background-color: #2563EB; color: white; border-radius: 6px; padding: 6px 12px; font-weight: 600; }"
-            "QPushButton:disabled { background-color: #64748B; color: #E2E8F0; }"
-        )
         self.move_up_button = QPushButton("Move up")
         self.move_down_button = QPushButton("Move down")
         self.move_up_button.clicked.connect(self._move_selected_up)
         self.move_down_button.clicked.connect(self._move_selected_down)
         self.move_up_button.setEnabled(False)
         self.move_down_button.setEnabled(False)
-        self.table = QTableWidget(0, 18)
+        self.table = QTableWidget(0, 12)
         self.table.setHorizontalHeaderLabels(
             [
                 "Use",
                 "Display Name",
                 "rMATS Source",
                 "DEG Source",
-                "Read AS Experiment",
-                "Read AS Control",
-                "Read DEG Experiment",
-                "Read DEG Control",
-                "Final Experiment",
-                "Final Control",
-                "Reverse AS",
-                "Reverse DEG",
+                "Canonical AS Direction",
+                "Canonical DEG Direction",
                 "rMATS File",
                 "DEG File",
                 "Open rMATS",
@@ -77,6 +74,8 @@ class ComparisonPage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        layout.addWidget(self.header)
         layout.addWidget(self.label)
         button_row = QHBoxLayout()
         button_row.addWidget(self.confirm_button)
@@ -118,13 +117,12 @@ class ComparisonPage(QWidget):
         comparisons = list(self.project_service.available_comparisons_for_display())
         selected_ids = set(project.selected_comparison_ids)
         self.label.setText(
-            "Pair rMATS and DEG comparisons here. Read AS Experiment/Control and Read DEG Experiment/Control show the "
-            "direction detected from each source file. Final Experiment/Control is your manually selected canonical splicing-side direction. "
-            "DEXSeq and DTU inherit that same canonical AS/rMATS direction. Reverse AS and Reverse DEG independently flip the standardized splicing and DEG values relative to those source directions. "
-            "DEG final direction is therefore controlled separately from the splicing-side canonical direction. "
-            "Confirm saves your chosen final direction and flip settings for downstream analysis. Display Name and reverse settings defined here are inherited by the next page: Comparison Sets. "
+            "Pair rMATS and DEG comparisons here. Canonical AS and DEG directions are read-only and inherited from the "
+            "detected comparison/configuration; downstream modules use standardized dPSI and standardized log2FC. "
+            "DEXSeq and DTU inherit the canonical AS/rMATS direction. "
+            "Confirm saves the selected comparisons and display order. Display names are inherited by Comparison Sets. "
             "Use controls whether a detected comparison flows into Comparison Sets and Analysis, without changing the raw Project scan. "
-            "Source name columns show the display orientation after reverse, while file matching keeps the original source names.\n"
+            "Legacy reverse settings remain readable for old projects but are no longer editable in this page.\n"
             f"Detected comparisons: {len(comparisons)} | Enabled for downstream steps: {len(selected_ids)}"
         )
         self.confirm_button.setText("Confirmed" if project.pairing_confirmed else "Confirm")
@@ -143,9 +141,6 @@ class ComparisonPage(QWidget):
             )
             self.table.setCellWidget(row, 0, use_box)
 
-            rmats_left, rmats_right = comparison.display_source_groups("rmats")
-            deg_left, deg_right = comparison.display_source_groups("deg")
-
             display_edit = QLineEdit(comparison.display_resolved_name)
             display_edit.setToolTip(
                 "Display name is saved by stable comparison_id.\n"
@@ -160,7 +155,7 @@ class ComparisonPage(QWidget):
             rmats_name_item.setData(Qt.ItemDataRole.UserRole, (comparison.comparison_id, "rmats_name"))
             rmats_name_item.setToolTip(
                 f"Original source name: {comparison.source_name('rmats')}\n"
-                f"Display after Reverse AS: {comparison.display_source_name('rmats')}\n"
+                f"Resolved display name: {comparison.display_source_name('rmats')}\n"
                 f"Matched file: {comparison.rmats_file_label}"
             )
             self.table.setItem(row, 2, rmats_name_item)
@@ -169,135 +164,73 @@ class ComparisonPage(QWidget):
             deg_name_item.setData(Qt.ItemDataRole.UserRole, (comparison.comparison_id, "deg_name"))
             deg_name_item.setToolTip(
                 f"Original source name: {comparison.source_name('deg')}\n"
-                f"Display after Reverse DEG: {comparison.display_source_name('deg')}\n"
+                f"Resolved display name: {comparison.display_source_name('deg')}\n"
                 f"Matched file: {comparison.deg_file_label}"
             )
             self.table.setItem(row, 3, deg_name_item)
 
-            rmats_left_item = QTableWidgetItem(rmats_left or "")
-            rmats_left_item.setFlags(rmats_left_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            rmats_left_item.setToolTip(
-                f"Detected from rMATS source name.\n"
-                f"Original source: {comparison.source_name('rmats')}\n"
-                f"Display after Reverse AS: {comparison.display_source_name('rmats')}"
+            as_direction_item = QTableWidgetItem(self._format_groups(comparison.final_as_groups))
+            as_direction_item.setFlags(as_direction_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            as_direction_item.setToolTip(
+                "Read-only canonical splicing direction. standardized_dPSI > 0 means greater "
+                "event usage/inclusion on the left side. DEXSeq and DTU inherit this direction."
             )
-            self.table.setItem(row, 4, rmats_left_item)
+            self.table.setItem(row, 4, as_direction_item)
 
-            rmats_right_item = QTableWidgetItem(rmats_right or "")
-            rmats_right_item.setFlags(rmats_right_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            rmats_right_item.setToolTip(
-                f"Detected from rMATS source name.\n"
-                f"Original source: {comparison.source_name('rmats')}\n"
-                f"Display after Reverse AS: {comparison.display_source_name('rmats')}"
+            deg_direction_item = QTableWidgetItem(self._format_groups(comparison.final_deg_groups))
+            deg_direction_item.setFlags(deg_direction_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            deg_direction_item.setToolTip(
+                "Read-only canonical transcript direction. standardized_log2FC > 0 means greater "
+                "expression on the left side."
             )
-            self.table.setItem(row, 5, rmats_right_item)
-
-            deg_left_item = QTableWidgetItem(deg_left or "")
-            deg_left_item.setFlags(deg_left_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            deg_left_item.setToolTip(
-                f"Detected from DEG source name.\n"
-                f"Original source: {comparison.source_name('deg')}\n"
-                f"Display after Reverse DEG: {comparison.display_source_name('deg')}"
-            )
-            self.table.setItem(row, 6, deg_left_item)
-
-            deg_right_item = QTableWidgetItem(deg_right or "")
-            deg_right_item.setFlags(deg_right_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            deg_right_item.setToolTip(
-                f"Detected from DEG source name.\n"
-                f"Original source: {comparison.source_name('deg')}\n"
-                f"Display after Reverse DEG: {comparison.display_source_name('deg')}"
-            )
-            self.table.setItem(row, 7, deg_right_item)
-
-            final_experiment_box = self._build_direction_combo(
-                comparison.comparison_id,
-                "experiment_group",
-                comparison.experiment_group or comparison.source_experiment_group or rmats_left or deg_left,
-                self._comparison_group_options(comparison),
-            )
-            self.table.setCellWidget(row, 8, final_experiment_box)
-
-            final_control_box = self._build_direction_combo(
-                comparison.comparison_id,
-                "control_group",
-                comparison.control_group or comparison.source_control_group or rmats_right or deg_right,
-                self._comparison_group_options(comparison),
-            )
-            self.table.setCellWidget(row, 9, final_control_box)
-
-            reverse_as_box = QCheckBox()
-            reverse_as_box.setChecked(comparison.reverse_splicing)
-            reverse_as_box.stateChanged.connect(
-                lambda state, comparison_id=comparison.comparison_id: self._update_reverse_splicing(
-                    comparison_id,
-                    state == Qt.CheckState.Checked.value,
-                )
-            )
-            self.table.setCellWidget(row, 10, reverse_as_box)
-
-            reverse_deg_box = QCheckBox()
-            reverse_deg_box.setChecked(comparison.reverse_deg)
-            reverse_deg_box.stateChanged.connect(
-                lambda state, comparison_id=comparison.comparison_id: self._update_reverse_deg(
-                    comparison_id,
-                    state == Qt.CheckState.Checked.value,
-                )
-            )
-            self.table.setCellWidget(row, 11, reverse_deg_box)
+            self.table.setItem(row, 5, deg_direction_item)
 
             rmats_file_item = QTableWidgetItem(comparison.rmats_file_label)
             rmats_file_item.setToolTip(comparison.rmats_file_label)
             rmats_file_item.setFlags(rmats_file_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, 12, rmats_file_item)
+            self.table.setItem(row, 6, rmats_file_item)
 
             deg_file_item = QTableWidgetItem(comparison.deg_file_label)
             deg_file_item.setToolTip(comparison.deg_file_label)
             deg_file_item.setFlags(deg_file_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, 13, deg_file_item)
+            self.table.setItem(row, 7, deg_file_item)
 
             open_rmats_button = self._build_open_button(
                 comparison.rmats_path,
                 label="Open",
                 tooltip=comparison.rmats_file_label,
             )
-            self.table.setCellWidget(row, 14, open_rmats_button)
+            self.table.setCellWidget(row, 8, open_rmats_button)
 
             open_deg_button = self._build_open_button(
                 comparison.deg_path,
                 label="Open",
                 tooltip=comparison.deg_file_label,
             )
-            self.table.setCellWidget(row, 15, open_deg_button)
+            self.table.setCellWidget(row, 9, open_deg_button)
 
             rmats_mode_item = QTableWidgetItem(comparison.detected_rmats_modes_label)
             rmats_mode_item.setFlags(rmats_mode_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, 16, rmats_mode_item)
+            self.table.setItem(row, 10, rmats_mode_item)
 
             remove_button = QPushButton("Remove")
             remove_button.clicked.connect(
                 lambda _checked=False, comparison_id=comparison.comparison_id: self._remove_comparison(comparison_id)
             )
-            self.table.setCellWidget(row, 17, remove_button)
+            self.table.setCellWidget(row, 11, remove_button)
 
         self.table.setColumnWidth(0, 44)
         self.table.setColumnWidth(1, 200)
         self.table.setColumnWidth(2, 200)
         self.table.setColumnWidth(3, 200)
-        self.table.setColumnWidth(4, 124)
-        self.table.setColumnWidth(5, 124)
-        self.table.setColumnWidth(6, 124)
-        self.table.setColumnWidth(7, 124)
-        self.table.setColumnWidth(8, 148)
-        self.table.setColumnWidth(9, 148)
+        self.table.setColumnWidth(4, 220)
+        self.table.setColumnWidth(5, 220)
+        self.table.setColumnWidth(6, 240)
+        self.table.setColumnWidth(7, 240)
+        self.table.setColumnWidth(8, 96)
+        self.table.setColumnWidth(9, 96)
         self.table.setColumnWidth(10, 90)
         self.table.setColumnWidth(11, 90)
-        self.table.setColumnWidth(12, 220)
-        self.table.setColumnWidth(13, 220)
-        self.table.setColumnWidth(14, 96)
-        self.table.setColumnWidth(15, 96)
-        self.table.setColumnWidth(16, 90)
-        self.table.setColumnWidth(17, 90)
         self.table.blockSignals(False)
         self._is_refreshing = False
         self.table.horizontalScrollBar().setValue(self._pending_hscroll)
@@ -352,26 +285,6 @@ class ComparisonPage(QWidget):
         self.project_service.rename_comparison(comparison_id, new_text)
         self.refresh()
 
-    def _update_reverse_splicing(self, comparison_id: str, checked: bool) -> None:
-        if self._is_refreshing:
-            return
-        self.project_service.invalidate_pairing_confirmation()
-        self.project_service.update_comparison_settings(
-            comparison_id,
-            reverse_splicing=checked,
-        )
-        self.refresh()
-
-    def _update_reverse_deg(self, comparison_id: str, checked: bool) -> None:
-        if self._is_refreshing:
-            return
-        self.project_service.invalidate_pairing_confirmation()
-        self.project_service.update_comparison_settings(
-            comparison_id,
-            reverse_deg=checked,
-        )
-        self.refresh()
-
     def _confirm_pairing(self) -> None:
         try:
             self.project_service.confirm_pairing()
@@ -414,57 +327,6 @@ class ComparisonPage(QWidget):
             return
         self.project_service.move_comparison_down(comparison_id)
         self.refresh()
-
-    def _build_direction_combo(
-        self,
-        comparison_id: str,
-        field_name: str,
-        current_value: str | None,
-        options: list[str],
-    ) -> QComboBox:
-        combo = QComboBox()
-        combo.setEditable(False)
-        values = [value for value in options if value]
-        if current_value and current_value not in values:
-            values.append(current_value)
-        combo.addItems(values)
-        if current_value in values:
-            combo.setCurrentText(current_value)
-        elif values:
-            combo.setCurrentIndex(0)
-        combo.currentTextChanged.connect(
-            lambda text, cid=comparison_id, field=field_name: self._update_final_direction(cid, field, text)
-        )
-        return combo
-
-    def _update_final_direction(self, comparison_id: str, field_name: str, value: str) -> None:
-        if self._is_refreshing:
-            return
-        kwargs = {field_name: value}
-        self.project_service.invalidate_pairing_confirmation()
-        self.project_service.update_comparison_settings(comparison_id, **kwargs)
-        self.refresh()
-
-    @staticmethod
-    def _comparison_group_options(comparison) -> list[str]:
-        values = [
-            comparison.source_experiment_group,
-            comparison.source_control_group,
-            comparison.experiment_group,
-            comparison.control_group,
-        ]
-        for source in ("rmats", "deg"):
-            left, right = comparison.source_groups(source)
-            values.extend([left, right])
-        seen: set[str] = set()
-        ordered: list[str] = []
-        for value in values:
-            cleaned = (value or "").strip()
-            if not cleaned or cleaned in seen:
-                continue
-            seen.add(cleaned)
-            ordered.append(cleaned)
-        return ordered
 
     def _build_open_button(self, path: Path | None, *, label: str, tooltip: str) -> QPushButton:
         button = QPushButton(label)
@@ -536,34 +398,3 @@ class ComparisonPage(QWidget):
         if left and right:
             return f"{left} vs {right}"
         return "missing"
-
-    @staticmethod
-    def _derive_reverse_state(
-        source_experiment: str | None,
-        source_control: str | None,
-        experiment_group: str | None,
-        control_group: str | None,
-        fallback: bool,
-    ) -> bool:
-        if not source_experiment or not source_control or not experiment_group or not control_group:
-            return fallback
-        if experiment_group == source_experiment and control_group == source_control:
-            return False
-        if experiment_group == source_control and control_group == source_experiment:
-            return True
-        return fallback
-
-    @staticmethod
-    def _derive_analysis_direction(
-        source_experiment: str | None,
-        source_control: str | None,
-        experiment_group: str | None,
-        control_group: str | None,
-    ) -> str:
-        if not source_experiment or not source_control or not experiment_group or not control_group:
-            return "custom"
-        if experiment_group == source_experiment and control_group == source_control:
-            return "experiment_vs_control"
-        if experiment_group == source_control and control_group == source_experiment:
-            return "control_vs_experiment"
-        return "custom"

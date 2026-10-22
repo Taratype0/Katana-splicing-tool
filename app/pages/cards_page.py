@@ -415,7 +415,7 @@ class CardsPage(QWidget):
         output_path, _ = QFileDialog.getSaveFileName(
             self,
             f"Export Current Card as {fmt.upper()}",
-            str(Path.cwd() / default_name),
+            str(self.project_service.default_export_path(default_name)),
             f"{fmt.upper()} Files (*.{fmt})",
         )
         if not output_path:

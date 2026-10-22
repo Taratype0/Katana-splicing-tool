@@ -1,4 +1,0 @@
-sample,condition,biological_unit_id,donor_id,technical_replicate_of,display_name
-CONTROL_1,control,UNIT_CONTROL_1,DONOR_CONTROL_1,,Control primary library
-CONTROL_1_LIBRARY_2,control,UNIT_CONTROL_1,DONOR_CONTROL_1,CONTROL_1,Control second technical library
-TREATMENT_1,treatment,UNIT_TREATMENT_1,DONOR_TREATMENT_1,,Treatment primary library

@@ -1,0 +1,72 @@
+{
+  "version": "1.0.0",
+  "title_en": "RBP evidence in three complementary layers",
+  "title_zh": "RBP证据的三个互补层次",
+  "shared_boundary_en": "Keep contrasts, units, denominators and each original P/FDR separate. Missing evidence is not a negative result. Switching views does not run an analysis.",
+  "shared_boundary_zh": "各对比、分析单位、分母及各自原P/FDR分别保留；缺证据不是阴性，切换展示不会运行分析。",
+  "layers": [
+    {
+      "id": "identity",
+      "number": 1,
+      "title_en": "RBP identity annotations",
+      "title_zh": "RBP身份注释",
+      "question_en": "Which candidate genes are annotated RBPs or members of explicitly declared target sets?",
+      "question_zh": "候选基因中哪些是已注释RBP，或属于明确声明的靶基因集合？",
+      "value_en": "Retains the original gene-list annotation and enrichment for candidate prioritization and overview.",
+      "value_zh": "保留原基因名单注释与富集，用于候选优先级和整体趋势。",
+      "unit_en": "Candidate gene and declared gene set, not a motif site.",
+      "unit_zh": "候选基因与声明的基因集合，不是motif位点。",
+      "boundary_en": "RBP membership is not RBP-target regulation. Declared target-set overlap is not direct binding at a splice event or proof of causal control.",
+      "boundary_zh": "RBP身份不等于RBP调控靶标；靶集合重合也不证明某剪切位点的直接结合或调控因果。",
+      "workflow_id": "prioritize.rbp_support"
+    },
+    {
+      "id": "regulation",
+      "number": 2,
+      "title_en": "Upstream motif / CLIP regulatory clues",
+      "title_zh": "上游motif/CLIP调控线索",
+      "question_en": "Are motifs or reference CLIP peaks associated with the neighbourhood of DAS events?",
+      "question_zh": "DAS邻近序列是否富集motif或与参考CLIP结合峰重合？",
+      "value_en": "Retains boundary motif enrichment and reference binding evidence to prioritize candidate splicing regulators, including intronic sites.",
+      "value_zh": "保留边界motif富集和参考结合证据，包括内含子位点，用于寻找可能的剪切调控者。",
+      "unit_en": "Event neighbourhood, matched-gene comparison and documented reference binding experiment.",
+      "unit_zh": "事件邻近区域、匹配基因比较及有来源身份的参考结合实验。",
+      "boundary_en": "Motif association is not binding. CLIP supports binding in its documented target/biosample, not automatically in the current samples. Upstream regulation remains a hypothesis; an intronic hit is not a mature-RNA sequence removed by DAS.",
+      "boundary_zh": "motif关联不等于结合；CLIP仅支持其原靶标/样本中的结合，不自动证明当前样本结合或上游因果。内含子命中不是被DAS删除的成熟RNA序列。",
+      "workflow_id": "prioritize.rbp_mechanism"
+    },
+    {
+      "id": "consequence",
+      "number": 3,
+      "title_en": "MotifTrace RNA sequence consequences",
+      "title_zh": "MotifTrace序列后果",
+      "question_en": "Which exact motif loci are retained, lost or formed at a new junction, and how does their sample-resolved availability change?",
+      "question_zh": "两种RNA中哪些精确motif位点保留、丢失或在新连接产生，其逐样本可用性如何改变？",
+      "value_en": "Links actual altered reference RNA, split genomic loci, PSI, compatible transcript fractions and available expression evidence.",
+      "value_zh": "把实际改变的参考RNA、分块位点、PSI、兼容转录本比例和可用表达证据连接起来。",
+      "unit_en": "Local RNA pair and physical locus; cohort/window P remains a separate association unit.",
+      "unit_zh": "局部RNA对及物理位点；群体/窗口P仍属于另一层统计单位。",
+      "boundary_en": "Reference motif opportunity is not measured occupancy, phased full-length RNA or a causal functional effect. A cohort motif-window P is not an event/site P. Missing DEXSeq or target-matched CLIP stays unavailable.",
+      "boundary_zh": "参考序列机会量不等于实测占据、相位化全长RNA或功能因果；群体窗口P不能当事件/位点P。缺DEXSeq或靶标匹配CLIP仍标缺失。",
+      "workflow_id": "prioritize.motiftrace_consequences"
+    }
+  ],
+  "workflow_layers": {
+    "prioritize.rbp_support": "identity",
+    "prioritize.event_motifs": "regulation",
+    "prioritize.binding_evidence": "regulation",
+    "prioritize.binding_enrichment": "regulation",
+    "prioritize.se_rbp_impact": "consequence",
+    "prioritize.rbp_sequence_results": "consequence",
+    "prioritize.motiftrace_consequences": "consequence",
+    "prioritize.motiftrace_usage": "consequence",
+    "prioritize.motiftrace_parallel": "consequence"
+  },
+  "sequence_scope_layers": {
+    "boundary_association": "regulation",
+    "se_sequence_impact": "consequence",
+    "completed_sequence_maps": "consequence",
+    "event_consequences": "consequence",
+    "completed_parallel_models": "consequence"
+  }
+}

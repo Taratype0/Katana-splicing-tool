@@ -1,5 +1,0 @@
-sample,condition,biological_unit_id,donor_id,display_name,batch
-DONOR_A_CONTROL,control,UNIT_A,DONOR_A,Donor A control,BATCH_A
-DONOR_A_TREATMENT,treatment,UNIT_A,DONOR_A,Donor A treatment,BATCH_A
-DONOR_B_CONTROL,control,UNIT_B,DONOR_B,Donor B control,BATCH_A
-DONOR_B_TREATMENT,treatment,UNIT_B,DONOR_B,Donor B treatment,BATCH_A

@@ -1,0 +1,68 @@
+name: Katana software baseline
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  application:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      MPLBACKEND: Agg
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install application from source
+        run: python -m pip install -e ".[next,next-dev]"
+      - name: Validate installed dependencies
+        run: python -m pip check
+      - name: Validate software, scientific readers and report routes
+        run: >-
+          python -m pytest -q
+          tests/public_baseline
+          tests/v2/test_complete_report.py
+          tests/v2/test_report_revision_contract.py
+          tests/v2/test_english_report_policy.py
+          tests/v2/test_motiftrace_windows.py
+          tests/v2/test_motiftrace_parallel.py
+          tests/v2/test_motiftrace_consequences.py
+          tests/v2/test_frozen_psi.py
+          tests/v2/test_psi_enhancement.py
+          tests/v2/test_cosplice_empty_optional_table.py
+          tests/test_cosplice.py::test_audit_and_matrix_preserve_sample_order
+          tests/test_cosplice.py::test_tom_backbone_strengthens_shared_neighbors
+          tests/test_cosplice.py::test_metadata_rejects_duplicate_normalized_sample_ids
+          tests/test_cosplice.py::test_project_facade_exposes_contracts_without_running_analysis
+          tests/test_runtime_discovery.py
+          tests/test_portable_report_metadata.py
+
+  interface:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pnpm
+        run: npm install --global pnpm@11.25.0
+      - name: Install locked interface dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test interface
+        run: pnpm test
+      - name: Build interface
+        run: pnpm build

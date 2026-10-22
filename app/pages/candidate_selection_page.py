@@ -2,24 +2,44 @@ from __future__ import annotations
 
 import pandas as pd
 from pandas.api.types import is_bool_dtype, is_numeric_dtype
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, QThread, QTimer, Signal, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
+    QDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
+    QProgressBar,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
+from app.pages.module_details import module_detail
 from src.services.project_service import ProjectService
+
+
+class CandidateRankingLoadWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, project_service: ProjectService) -> None:
+        super().__init__()
+        self.project_service = project_service
+
+    def run(self) -> None:
+        try:
+            frame = self.project_service.preview_candidate_gene_screening(allow_generate=True)
+        except Exception as exc:
+            self.failed.emit(str(exc))
+            return
+        self.finished.emit(frame)
 
 
 class CandidateSelectionPage(QWidget):
@@ -42,7 +62,7 @@ class CandidateSelectionPage(QWidget):
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search candidate genes for this comparison")
-        self.search.textChanged.connect(self.refresh)
+        self.search.textChanged.connect(self._schedule_refresh)
 
         self.top_n = QSpinBox()
         self.top_n.setRange(1, 500)
@@ -50,8 +70,14 @@ class CandidateSelectionPage(QWidget):
 
         self.load_button = QPushButton("Load Candidate Ranking")
         self.load_button.clicked.connect(self._load_candidate_ranking)
+        self.detail_button = QPushButton("Detail")
+        self.detail_button.clicked.connect(self._show_detail_dialog)
         self.reset_button = QPushButton("Reset Top 20")
         self.reset_button.clicked.connect(self._reset_top_n)
+        self.load_progress = QProgressBar()
+        self.load_progress.setRange(0, 0)
+        self.load_progress.setMaximumWidth(180)
+        self.load_progress.setVisible(False)
 
         self.gene_input = QLineEdit()
         self.gene_input.setPlaceholderText("Search/add candidate gene by symbol or gene_id")
@@ -95,9 +121,11 @@ class CandidateSelectionPage(QWidget):
 
         controls = QHBoxLayout()
         controls.addWidget(self.load_button)
+        controls.addWidget(self.detail_button)
         controls.addWidget(QLabel("Default top N"))
         controls.addWidget(self.top_n)
         controls.addWidget(self.reset_button)
+        controls.addWidget(self.load_progress)
         controls.addSpacing(16)
         controls.addWidget(self.search, 1)
 
@@ -143,6 +171,28 @@ class CandidateSelectionPage(QWidget):
         self._current_catalog = pd.DataFrame()
         self._current_selected = pd.DataFrame()
         self._tab_keys: list[str] = []
+        self._candidate_load_thread: QThread | None = None
+        self._candidate_load_worker: CandidateRankingLoadWorker | None = None
+        self._max_catalog_display_rows = 1000
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(300)
+        self._search_timer.timeout.connect(self.refresh)
+
+    def _show_detail_dialog(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Module details")
+        dialog.resize(760, 420)
+        layout = QVBoxLayout(dialog)
+        viewer = QTextEdit(dialog)
+        viewer.setReadOnly(True)
+        viewer.setPlainText(module_detail("5.3.selection"))
+        close_button = QPushButton("Close", dialog)
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(viewer, 1)
+        layout.addWidget(close_button)
+        QTimer.singleShot(0, dialog.showMaximized)
+        dialog.exec()
 
     def refresh(self) -> None:
         project = self.project_service.current_project
@@ -174,7 +224,8 @@ class CandidateSelectionPage(QWidget):
         catalog = self.project_service.candidate_selection_catalog(comparison_id, allow_generate=False)
         catalog = self._apply_catalog_search(catalog)
         self._current_catalog = catalog.copy()
-        self._populate_table(self.catalog_table, catalog)
+        catalog_display = catalog.head(self._max_catalog_display_rows).copy()
+        self._populate_table(self.catalog_table, catalog_display)
 
         selected, _meta = self.project_service.candidate_selection_frame(
             comparison_id,
@@ -186,6 +237,7 @@ class CandidateSelectionPage(QWidget):
             column
             for column in [
                 "rank",
+                "ranking_score",
                 "gene_symbol",
                 "gene_id",
                 "n_rMATS_significant_events",
@@ -193,6 +245,13 @@ class CandidateSelectionPage(QWidget):
                 "significant_as_event_ids",
                 "significant_as_event_list",
                 "as_event_summary",
+                "cross_candidate_pattern",
+                "cross_candidate_comparisons",
+                "cross_comparison_effect_summary",
+                "shared_candidate",
+                "specific_candidate",
+                "gained_candidate",
+                "lost_candidate",
                 "candidate_tier",
                 "evidence_class",
                 "direction_class",
@@ -220,15 +279,44 @@ class CandidateSelectionPage(QWidget):
         self.selection_status.setText(
             f"Selected genes: {len(self.project_service.candidate_selection_genes_for_display(comparison_id))} | "
             f"Blacklist genes: {len(blacklist)} | "
+            + (
+                f"Catalog preview shows first {len(catalog_display)} of {len(catalog)} filtered genes. "
+                if len(catalog) > len(catalog_display)
+                else ""
+            )
+            +
             "Each comparison tab keeps its own independent selection / blacklist. "
             "Downstream evidence heatmap / candidate cards use only the current comparison selection and exclude blacklist genes."
         )
+
+    def _schedule_refresh(self) -> None:
+        self._search_timer.start()
 
     def _load_candidate_ranking(self) -> None:
         comparison_id = self._current_comparison_id()
         if not comparison_id:
             return
-        frame = self.project_service.preview_candidate_gene_screening(allow_generate=True)
+        if self._candidate_load_thread is not None:
+            self.selection_status.setText("Candidate ranking is already loading.")
+            return
+        self._set_loading(True)
+        self.selection_status.setText("Loading candidate ranking cache or generating 5.3.1 candidate table...")
+        self._candidate_load_thread = QThread(self)
+        self._candidate_load_worker = CandidateRankingLoadWorker(self.project_service)
+        self._candidate_load_worker.moveToThread(self._candidate_load_thread)
+        self._candidate_load_thread.started.connect(self._candidate_load_worker.run)
+        self._candidate_load_worker.finished.connect(self._on_candidate_ranking_loaded)
+        self._candidate_load_worker.failed.connect(self._on_candidate_ranking_failed)
+        self._candidate_load_worker.finished.connect(self._candidate_load_thread.quit)
+        self._candidate_load_worker.failed.connect(self._candidate_load_thread.quit)
+        self._candidate_load_thread.finished.connect(self._cleanup_candidate_loader)
+        self._candidate_load_thread.start()
+
+    def _on_candidate_ranking_loaded(self, frame: pd.DataFrame) -> None:
+        comparison_id = self._current_comparison_id()
+        if not comparison_id:
+            self.refresh()
+            return
         if frame is not None and not frame.empty:
             existing = self.project_service.candidate_selection_genes_for_display(comparison_id)
             if not existing:
@@ -242,7 +330,32 @@ class CandidateSelectionPage(QWidget):
                 self.selection_status.setText(
                     "Candidate ranking is still unavailable for this project/comparison. Check cached inputs and try again."
                 )
+        else:
+            self.selection_status.setText("Candidate ranking loaded. Selection is comparison-specific and deduplicated by gene.")
         self.refresh()
+
+    def _on_candidate_ranking_failed(self, message: str) -> None:
+        self.selection_status.setText(f"Candidate ranking failed: {message}")
+
+    def _cleanup_candidate_loader(self) -> None:
+        self._set_loading(False)
+        if self._candidate_load_worker is not None:
+            self._candidate_load_worker.deleteLater()
+        if self._candidate_load_thread is not None:
+            self._candidate_load_thread.deleteLater()
+        self._candidate_load_worker = None
+        self._candidate_load_thread = None
+
+    def _set_loading(self, loading: bool) -> None:
+        self.load_button.setEnabled(not loading)
+        self.reset_button.setEnabled(not loading)
+        self.add_gene_button.setEnabled(not loading)
+        self.add_from_catalog_button.setEnabled(not loading)
+        self.remove_gene_button.setEnabled(not loading)
+        self.add_blacklist_button.setEnabled(not loading)
+        self.add_blacklist_from_catalog_button.setEnabled(not loading)
+        self.remove_blacklist_button.setEnabled(not loading)
+        self.load_progress.setVisible(loading)
 
     def _refresh_tabs(self) -> None:
         comparisons = self.project_service.selected_comparisons_for_display()
@@ -273,7 +386,16 @@ class CandidateSelectionPage(QWidget):
         if frame.empty or not query:
             return frame
         mask = pd.Series(False, index=frame.index)
-        for column in ("gene_symbol", "gene_id", "candidate_tier", "evidence_class", "direction_class"):
+        for column in (
+            "gene_symbol",
+            "gene_id",
+            "candidate_tier",
+            "evidence_class",
+            "direction_class",
+            "cross_candidate_pattern",
+            "cross_candidate_comparisons",
+            "cross_comparison_effect_summary",
+        ):
             if column in frame.columns:
                 mask |= frame[column].fillna("").astype(str).str.lower().str.contains(query, na=False)
         return frame.loc[mask].copy()
@@ -308,8 +430,7 @@ class CandidateSelectionPage(QWidget):
         genes = self._selected_catalog_genes()
         if not comparison_id or not genes:
             return
-        for gene in genes:
-            self.project_service.add_candidate_selection_gene(comparison_id, gene)
+        self.project_service.add_candidate_selection_genes(comparison_id, genes)
         self.refresh()
 
     def _remove_selected_genes(self) -> None:
@@ -338,8 +459,7 @@ class CandidateSelectionPage(QWidget):
         genes = self._selected_catalog_genes()
         if not comparison_id or not genes:
             return
-        for gene in genes:
-            self.project_service.add_candidate_blacklist_gene(comparison_id, gene)
+        self.project_service.add_candidate_blacklist_genes(comparison_id, genes)
         self.refresh()
 
     def _blacklist_selected_catalog_genes(self) -> None:
@@ -414,7 +534,14 @@ class CandidateSelectionPage(QWidget):
                     item.setText(str(value))
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 table.setItem(row_idx, col_idx, item)
-        table.resizeColumnsToContents()
+        if len(working) <= 250:
+            table.resizeColumnsToContents()
+        else:
+            for col_idx, column in enumerate(working.columns):
+                width = 120
+                if str(column) in {"gene_symbol", "gene_id", "significant_as_event_list", "as_event_summary"}:
+                    width = 190
+                table.setColumnWidth(col_idx, width)
         table.setSortingEnabled(True)
 
     @staticmethod

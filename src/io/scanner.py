@@ -101,7 +101,9 @@ class ProjectScanner:
             project_name=root.name,
             project_root=root,
             config_path=root / ".katana_project.yaml",
-            output_root=root / "katana_output",
+            # Output is intentionally user-selected. Never infer an analysis
+            # destination from the project or application working directory.
+            output_root=None,
             input_paths=merged_input_paths,
         )
 
@@ -133,6 +135,7 @@ class ProjectScanner:
         self._reconcile_source_mappings(project)
         self._merge_alias_comparisons(project)
         self._resolve_missing_source_paths(project)
+        self._normalize_deg_direction_from_contrasts(project)
         self._notify(progress_callback, "Validating detected inputs...")
         project.scan_messages = self._build_scan_messages(project)
         project.scan_messages = self.validator.validate_project(project)
@@ -329,8 +332,14 @@ class ProjectScanner:
                     contrast = (row.get("contrast") or "").strip()
                     if not contrast:
                         continue
-                    treatment = (row.get("treatment") or "").strip() or None
-                    control = (row.get("control") or "").strip() or None
+                    treatment = self._row_value(
+                        row,
+                        ("treatment", "target", "experiment", "case"),
+                    )
+                    control = self._row_value(
+                        row,
+                        ("control", "reference", "baseline"),
+                    )
                     comparison = comparisons_by_id.get(contrast)
                     if comparison is None:
                         comparison = ComparisonDefinition(comparison_id=contrast)
@@ -354,6 +363,15 @@ class ProjectScanner:
 
         project.available_comparisons = sorted(project.available_comparisons, key=lambda item: item.comparison_id)
 
+    @staticmethod
+    def _row_value(row: dict[str, str], keys: tuple[str, ...]) -> str | None:
+        normalized = {str(key).strip().lower(): value for key, value in row.items() if key is not None}
+        for key in keys:
+            value = (normalized.get(key) or "").strip()
+            if value:
+                return value
+        return None
+
     def _derive_source_names_from_groups(
         self,
         comparison: ComparisonDefinition,
@@ -369,7 +387,6 @@ class ProjectScanner:
             return
 
         forward_vs = f"{treatment}_vs_{control}"
-        reverse_vs = f"{control}_vs_{treatment}"
         dashed = f"{treatment}-{control}"
 
         if comparison.rmats_name is None:
@@ -383,7 +400,69 @@ class ProjectScanner:
         if comparison.quant_name is None:
             comparison.quant_name = forward_vs
         if comparison.deg_name is None:
-            comparison.deg_name = reverse_vs
+            comparison.deg_name = forward_vs
+
+    def _normalize_deg_direction_from_contrasts(self, project: ProjectConfig) -> None:
+        """Keep DEG defaults aligned to the contrastsheet experiment/control direction.
+
+        Older Katana scans wrote DEG source names as control_vs_experiment because
+        some DESeq2 pipelines name files in the opposite order.  The user-facing
+        default should instead follow the configured treatment/target side; the
+        actual file path can still point to either naming convention.
+        """
+        for comparison in project.available_comparisons:
+            experiment = comparison.experiment_group or comparison.source_experiment_group
+            control = comparison.control_group or comparison.source_control_group
+            if not experiment or not control:
+                self._normalize_deg_direction_from_name_tokens(comparison)
+                continue
+
+            forward = f"{experiment}_vs_{control}"
+            reverse = f"{control}_vs_{experiment}"
+            deg_stem = (
+                comparison.deg_path.stem.replace(".deseq2.results", "")
+                if comparison.deg_path is not None
+                else None
+            )
+
+            if comparison.deg_name is None:
+                comparison.deg_name = forward
+            if (
+                not comparison.reverse_deg
+                and comparison.deg_name == reverse
+                and comparison.comparison_id == forward
+            ):
+                comparison.deg_name = forward
+            if (
+                not comparison.reverse_deg
+                and comparison.deg_name == reverse
+                and deg_stem == forward
+            ):
+                comparison.deg_name = forward
+
+            self._normalize_deg_direction_from_name_tokens(comparison)
+
+    def _normalize_deg_direction_from_name_tokens(self, comparison: ComparisonDefinition) -> None:
+        if comparison.reverse_deg:
+            return
+        left, right = comparison.source_groups("deg")
+        if not left or not right:
+            return
+        if self._looks_like_control(left) and self._looks_like_experiment(right):
+            comparison.deg_name = ComparisonDefinition._swap_comparison_name(
+                comparison.deg_name or comparison.comparison_id,
+                True,
+            )
+
+    @staticmethod
+    def _looks_like_experiment(label: str) -> bool:
+        lowered = label.lower()
+        return any(token in lowered for token in ("treatment", "treated", "target", "case", "experiment"))
+
+    @staticmethod
+    def _looks_like_control(label: str) -> bool:
+        lowered = label.lower()
+        return any(token in lowered for token in ("control", "ctrl", "reference", "baseline", "vehicle", "mock"))
 
     def _discover_isoform_samples(self, project: ProjectConfig, index: ScanIndex) -> list[IsoformSampleDefinition]:
         samples: list[IsoformSampleDefinition] = []
@@ -401,6 +480,7 @@ class ProjectScanner:
                     quant_sf=quant_file,
                     sample_group=sample_group,
                     comparison_id=comparison_id,
+                    condition=sample_group,
                 )
             )
         return samples
@@ -461,6 +541,46 @@ class ProjectScanner:
             if not comparison_id:
                 continue
             comparison = comparisons_by_id.get(comparison_id)
+            if comparison is None:
+                saved_aliases = {
+                    str(value)
+                    for key in (
+                        "comparison_id",
+                        "display_name",
+                        "rmats_name",
+                        "deg_name",
+                        "suppa_name",
+                        "dexseq_name",
+                        "dtu_name",
+                        "quant_name",
+                        "sashimi_name",
+                        "bam_group_name",
+                    )
+                    if (value := item.get(key))
+                }
+                experiment = item.get("experiment_group") or item.get("source_experiment_group")
+                control = item.get("control_group") or item.get("source_control_group")
+                if experiment and control:
+                    saved_aliases.update(
+                        {
+                            f"{experiment}_vs_{control}",
+                            f"{control}_vs_{experiment}",
+                            f"{experiment}-{control}",
+                            f"{control}-{experiment}",
+                            f"{experiment} vs {control}",
+                        }
+                    )
+                alias_matches = [
+                    candidate
+                    for candidate in project.available_comparisons
+                    if saved_aliases.intersection(self._comparison_aliases(candidate))
+                ]
+                if alias_matches:
+                    comparison = max(alias_matches, key=self._comparison_priority)
+                    old_id = comparison.comparison_id
+                    comparison.comparison_id = comparison_id
+                    comparisons_by_id.pop(old_id, None)
+                    comparisons_by_id[comparison_id] = comparison
             if comparison is None:
                 has_meaningful_saved_state = any(
                     item.get(field)

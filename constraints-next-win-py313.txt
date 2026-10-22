@@ -1,0 +1,14 @@
+# Scientific/runtime versions verified on Windows Python 3.13.
+# Install in an isolated pip venv; do not inherit Conda site packages.
+numpy==2.3.5
+pandas==2.3.3
+scipy==1.16.3
+scikit-learn==1.7.2
+statsmodels==0.14.5
+matplotlib==3.10.6
+PySide6==6.9.2
+pyarrow==21.0.0
+numba==0.62.1
+umap-learn==0.5.12
+biopython==1.88
+duckdb==1.5.5

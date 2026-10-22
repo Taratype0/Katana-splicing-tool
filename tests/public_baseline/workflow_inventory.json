@@ -1,0 +1,573 @@
+{
+  "schema": "katana.public_workflow_baseline/v1",
+  "source": "English-only frozen usable application",
+  "workflow_count": 54,
+  "workflows": [
+    {
+      "workflow_id": "project.audit",
+      "version": "2.2.0",
+      "parameter_defaults": {
+        "design_factors": "condition",
+        "design_references": "{}",
+        "include_batch": false,
+        "pairing": "auto"
+      }
+    },
+    {
+      "workflow_id": "quality.stable_as",
+      "version": "2.2.0",
+      "parameter_defaults": {
+        "stability_profile": "balanced",
+        "fdr": 0.05,
+        "min_abs_dpsi": 0.1,
+        "min_reads": 10.0,
+        "min_supported_replicates": 2,
+        "min_direction_consistency": 0.75,
+        "apply_measurement_se_gate": false,
+        "max_measurement_se": 0.12
+      }
+    },
+    {
+      "workflow_id": "quality.read_coverage_bias",
+      "version": "1.1.1",
+      "parameter_defaults": {}
+    },
+    {
+      "workflow_id": "quality.read_calibration",
+      "version": "1.3.1",
+      "parameter_defaults": {
+        "simulated_events": 200,
+        "replicates": 3,
+        "seed": 1701,
+        "include_count_thinning": false,
+        "include_heldout_replicates": false,
+        "heldout_event_cap": 0,
+        "predictive_draws": 2000,
+        "prediction_model": "legacy",
+        "matrix_artifact_id": ""
+      }
+    },
+    {
+      "workflow_id": "landscape.bulk",
+      "version": "2.0.0",
+      "parameter_defaults": {
+        "quality_artifact_id": "",
+        "max_pca_events": 2000
+      }
+    },
+    {
+      "workflow_id": "differential.as",
+      "version": "2.0.0",
+      "parameter_defaults": {
+        "quality_artifact_id": ""
+      }
+    },
+    {
+      "workflow_id": "differential.deg",
+      "version": "2.0.0",
+      "parameter_defaults": {
+        "fdr": 0.05,
+        "min_abs_log2fc": 1.0
+      }
+    },
+    {
+      "workflow_id": "differential.dtu",
+      "version": "2.2.0",
+      "parameter_defaults": {
+        "fdr": 0.05
+      }
+    },
+    {
+      "workflow_id": "differential.cross_comparison",
+      "version": "2.1.1",
+      "parameter_defaults": {
+        "membership_mode": "exact_event",
+        "event_set": "stable_significant",
+        "min_reads": 0,
+        "min_supported_replicates": 2
+      }
+    },
+    {
+      "workflow_id": "differential.replicate_interaction",
+      "version": "3.0.1",
+      "parameter_defaults": {
+        "design_path": "",
+        "reference_a": "",
+        "reference_b": "",
+        "r_library": "",
+        "min_reads": 10,
+        "min_replicates": 2
+      }
+    },
+    {
+      "workflow_id": "differential.expression_response",
+      "version": "1.0.1",
+      "parameter_defaults": {
+        "config_path": ""
+      }
+    },
+    {
+      "workflow_id": "differential.exploratory_event_interaction",
+      "version": "2.3.0",
+      "parameter_defaults": {
+        "min_reads": 10,
+        "min_replicates": 2,
+        "event_set": "stable_significant",
+        "selection_id": ""
+      }
+    },
+    {
+      "workflow_id": "prioritize.evidence",
+      "version": "2.1.2",
+      "parameter_defaults": {
+        "fdr": 0.05,
+        "deg_min_abs_log2fc": 1.0
+      }
+    },
+    {
+      "workflow_id": "interpretation.joint_response",
+      "version": "1.0.1+english.20261021",
+      "parameter_defaults": {}
+    },
+    {
+      "workflow_id": "interpretation.joint_pathways",
+      "version": "1.0.0+english.20261021",
+      "parameter_defaults": {}
+    },
+    {
+      "workflow_id": "prioritize.enrichment",
+      "version": "2.3.1",
+      "parameter_defaults": {
+        "selection_id": "",
+        "minimum_overlap": 2,
+        "ontology_category": "All",
+        "bubble_x": "gene_ratio",
+        "top_terms": 12
+      }
+    },
+    {
+      "workflow_id": "prioritize.rbp_mechanism",
+      "version": "1.6.1",
+      "parameter_defaults": {
+        "selection_id": "",
+        "sequence_scope": "boundary_association",
+        "parallel_bundle_asset_id": "",
+        "model_ids": "",
+        "cluster_permutations": 999,
+        "bundle_asset_id": "",
+        "window_bundle_asset_id": "",
+        "view_scope": "selected_comparison",
+        "custom_motif_path": "",
+        "custom_motif_mode": "preview_only",
+        "window_bp": 100,
+        "motif_evidence": "all_evidence_separate",
+        "site_pvalue": 0.0001,
+        "binding_mode": "if_configured"
+      }
+    },
+    {
+      "workflow_id": "prioritize.se_rbp_impact",
+      "version": "1.0.1",
+      "parameter_defaults": {
+        "selection_id": "",
+        "motif_evidence": "all_evidence_separate",
+        "site_pvalue": 0.0001
+      }
+    },
+    {
+      "workflow_id": "prioritize.rbp_sequence_results",
+      "version": "1.2.0",
+      "parameter_defaults": {
+        "selection_id": "",
+        "bundle_asset_id": "",
+        "window_bundle_asset_id": "",
+        "view_scope": "selected_comparison",
+        "custom_motif_path": "",
+        "custom_motif_mode": "preview_only"
+      }
+    },
+    {
+      "workflow_id": "prioritize.motiftrace_consequences",
+      "version": "1.0.1",
+      "parameter_defaults": {
+        "selection_id": "",
+        "custom_motif_path": "",
+        "model_ids": "",
+        "cluster_permutations": 999
+      }
+    },
+    {
+      "workflow_id": "prioritize.motiftrace_usage",
+      "version": "1.0.0+english.20261021",
+      "parameter_defaults": {
+        "usage_table_path": "",
+        "motif_bundle_path": "",
+        "gene_id": "",
+        "prepared_case_path": "",
+        "completed_analysis_path": ""
+      }
+    },
+    {
+      "workflow_id": "prioritize.motiftrace_parallel",
+      "version": "1.0.0",
+      "parameter_defaults": {
+        "parallel_bundle_asset_id": ""
+      }
+    },
+    {
+      "workflow_id": "prioritize.rbp_support",
+      "version": "2.2.0",
+      "parameter_defaults": {
+        "selection_id": "",
+        "minimum_overlap": 1
+      }
+    },
+    {
+      "workflow_id": "prioritize.binding_evidence",
+      "version": "1.0.3",
+      "parameter_defaults": {
+        "selection_id": "",
+        "window_bp": 100
+      }
+    },
+    {
+      "workflow_id": "prioritize.binding_enrichment",
+      "version": "1.0.2",
+      "parameter_defaults": {
+        "selection_id": "",
+        "window_bp": 100
+      }
+    },
+    {
+      "workflow_id": "prioritize.isoform_support",
+      "version": "2.1.1",
+      "parameter_defaults": {}
+    },
+    {
+      "workflow_id": "prioritize.isoform_consequences",
+      "version": "1.2.1",
+      "parameter_defaults": {
+        "max_schematics": 12
+      }
+    },
+    {
+      "workflow_id": "prioritize.selected_gene_views",
+      "version": "2.1.4",
+      "parameter_defaults": {
+        "selection_id": "",
+        "events_per_gene": 3,
+        "rows_per_page": 40
+      }
+    },
+    {
+      "workflow_id": "prioritize.event_motifs",
+      "version": "2.4.1",
+      "parameter_defaults": {
+        "selection_id": "",
+        "mode": "calibrated",
+        "motif_evidence": "all_evidence_separate",
+        "site_pvalue": 0.0001,
+        "window_bp": 100,
+        "score_threshold": 0.85
+      }
+    },
+    {
+      "workflow_id": "validate.native_sashimi",
+      "version": "2.0.2",
+      "parameter_defaults": {
+        "selection_id": "",
+        "max_events": 10,
+        "view": "readable"
+      }
+    },
+    {
+      "workflow_id": "validate.perturbation",
+      "version": "1.0.1+english.20261021",
+      "parameter_defaults": {
+        "gene": "",
+        "selection_id": "",
+        "min_mapq": 20,
+        "min_anchor": 8
+      }
+    },
+    {
+      "workflow_id": "validate.replicate_robustness",
+      "version": "1.0.0+english.20261021",
+      "parameter_defaults": {}
+    },
+    {
+      "workflow_id": "programs.djexpress",
+      "version": "1.0.0",
+      "parameter_defaults": {
+        "counts": "",
+        "traits": "",
+        "gene_expression": "",
+        "gtf": "",
+        "rscript": "",
+        "input_kind": "junction_counts"
+      }
+    },
+    {
+      "workflow_id": "programs.cosplice",
+      "version": "2.4.0",
+      "parameter_defaults": {
+        "scope": "discovery",
+        "force_engine": false,
+        "max_events": 0,
+        "bootstrap_iterations": 50,
+        "uncertainty_role": "diagnostic_only",
+        "membership_policy": "backbone_confidence_only"
+      }
+    },
+    {
+      "workflow_id": "programs.psi_network",
+      "version": "1.3.0",
+      "parameter_defaults": {
+        "rscript": "",
+        "filter_profile": "coverage_variable",
+        "max_features": 2000,
+        "method": "bicor",
+        "signed": true,
+        "soft_power": 6,
+        "min_valid_fraction": 0.8,
+        "min_variance": 0.0025,
+        "min_range": 0.5,
+        "min_alternative_fraction": 0.1,
+        "feature_space_id": "",
+        "training_traits": "",
+        "trait_prediction_method": "validated_hierarchy",
+        "training_reference_scores": "",
+        "reference_space_id": ""
+      }
+    },
+    {
+      "workflow_id": "programs.psi_projection",
+      "version": "1.2.0",
+      "parameter_defaults": {
+        "model": "",
+        "psi": "",
+        "samples": "",
+        "feature_space_id": "",
+        "traits": "",
+        "min_observed_fraction": 0.8,
+        "projection_method": "auto",
+        "reference_scores": "",
+        "reference_space_id": "",
+        "min_loading_fraction": 0.8
+      }
+    },
+    {
+      "workflow_id": "programs.module_functions",
+      "version": "1.0.0",
+      "parameter_defaults": {
+        "source_artifact_id": "",
+        "libraries": "{}"
+      }
+    },
+    {
+      "workflow_id": "programs.hub_events",
+      "version": "1.0.1",
+      "parameter_defaults": {
+        "source_artifact_id": "",
+        "condition_scope": "all_and_conditions",
+        "bootstrap_iterations": 100,
+        "seed": 20261018,
+        "top_fraction": 0.1,
+        "minimum_kme": 0.7,
+        "minimum_selection_frequency": 0.7,
+        "minimum_valid_bootstrap_fraction": 0.8,
+        "minimum_pair_coverage": 0.8
+      }
+    },
+    {
+      "workflow_id": "programs.explain_expression",
+      "version": "1.2.0+english.20261021",
+      "parameter_defaults": {
+        "config_path": ""
+      }
+    },
+    {
+      "workflow_id": "programs.diagnostics",
+      "version": "1.2.2",
+      "parameter_defaults": {
+        "matrix_artifact_id": "",
+        "max_pairs_per_module": 5000,
+        "include_batch": false,
+        "seed": 1701
+      }
+    },
+    {
+      "workflow_id": "programs.external_validation",
+      "version": "1.1.1",
+      "parameter_defaults": {
+        "matrix_artifact_id": "",
+        "permutations": 1000,
+        "soft_power": 0,
+        "min_module_size": 5,
+        "memory_budget_gb": 4.0,
+        "seed": 43
+      }
+    },
+    {
+      "workflow_id": "single_cell.audit",
+      "version": "2.0.0",
+      "parameter_defaults": {
+        "min_cells_per_donor_cell_type": 20
+      }
+    },
+    {
+      "workflow_id": "single_cell.quantify",
+      "version": "2.1.2",
+      "parameter_defaults": {
+        "source": "precomputed",
+        "min_cell_event_reads": 1,
+        "cell_barcode_tag": "CB",
+        "umi_tag": "UB",
+        "min_mapping_quality": 20,
+        "max_reads_per_bam": 0
+      }
+    },
+    {
+      "workflow_id": "single_cell.landscape",
+      "version": "2.1.1",
+      "parameter_defaults": {
+        "min_total_reads": 10,
+        "min_unit_fraction": 0.7,
+        "min_psi_variance": 0.0025,
+        "max_events": 500,
+        "heatmap_events": 60,
+        "random_seed": 17
+      }
+    },
+    {
+      "workflow_id": "single_cell.cell_embedding",
+      "version": "1.3.0",
+      "parameter_defaults": {
+        "mode": "splicing",
+        "min_reads": 10,
+        "min_feature_fraction": 0.2,
+        "min_observed_features": 5,
+        "max_features": 500,
+        "n_neighbors": 15,
+        "min_dist": 0.3,
+        "pca_components": 30,
+        "cluster_cells": false,
+        "clustering_neighbors": 15,
+        "clustering_resolution": 1.0,
+        "random_seed": 17,
+        "gene_filter": "",
+        "expression_overlay_gene": "",
+        "evaluate_cell_types": true
+      }
+    },
+    {
+      "workflow_id": "single_cell.differential",
+      "version": "2.1.4",
+      "parameter_defaults": {
+        "numerator": "",
+        "denominator": "",
+        "min_total_reads": 10,
+        "min_donors_per_condition": 2,
+        "fdr": 0.05,
+        "min_abs_dpsi": 0.1,
+        "bootstrap_iterations": 200,
+        "adjust_for_batch": true,
+        "random_seed": 17
+      }
+    },
+    {
+      "workflow_id": "single_cell.isoform_usage",
+      "version": "1.0.2",
+      "parameter_defaults": {
+        "counts_path": "",
+        "numerator": "",
+        "denominator": "",
+        "min_donors": 3,
+        "min_gene_count": 20,
+        "min_expressing_cells": 5,
+        "rarefaction_depth": 20,
+        "rarefaction_draws": 30,
+        "adjust_batch": true,
+        "seed": 17,
+        "plot_transcripts": 30,
+        "plot_genes": 6
+      }
+    },
+    {
+      "workflow_id": "single_cell.import_marvel",
+      "version": "1.0.0+english.20261021",
+      "parameter_defaults": {
+        "config_path": ""
+      }
+    },
+    {
+      "workflow_id": "single_cell.import_longread_isoforms",
+      "version": "1.0.0+english.20261021",
+      "parameter_defaults": {
+        "config_path": ""
+      }
+    },
+    {
+      "workflow_id": "single_cell.programs",
+      "version": "2.2.1",
+      "parameter_defaults": {
+        "min_cell_event_reads": 1,
+        "min_cell_fraction": 0.08,
+        "min_state_cells": 40,
+        "state_neighbors": 15,
+        "state_permutations": 100,
+        "state_fdr": 0.1,
+        "min_independent_donors": 15,
+        "min_unit_reads": 10,
+        "min_unit_fraction": 0.7,
+        "min_psi_variance": 0.0025,
+        "min_module_size": 5,
+        "max_events": 0,
+        "bootstrap_iterations": 20,
+        "soft_power": 6,
+        "random_seed": 17
+      }
+    },
+    {
+      "workflow_id": "single_cell.sashimi",
+      "version": "1.1.2",
+      "parameter_defaults": {
+        "selection_id": "",
+        "flank": 150,
+        "min_mapq": 20
+      }
+    },
+    {
+      "workflow_id": "single_cell.benchmark",
+      "version": "2.2.2",
+      "parameter_defaults": {
+        "min_cell_event_reads": 1,
+        "min_donors": 15,
+        "min_unit_reads": 10,
+        "min_unit_fraction": 0.7,
+        "min_psi_variance": 0.0025,
+        "min_module_size": 5,
+        "max_events": 300,
+        "neighbors": 15,
+        "bootstrap_iterations": 10,
+        "soft_power": 6,
+        "random_seed": 17
+      }
+    },
+    {
+      "workflow_id": "reports.bundle",
+      "version": "2.0.9+english.20261021",
+      "parameter_defaults": {
+        "latest_only": true,
+        "include_result_files": true
+      }
+    },
+    {
+      "workflow_id": "reports.interpreted_bundle",
+      "version": "1.3.0+english.20261021",
+      "parameter_defaults": {
+        "config_path": ""
+      }
+    }
+  ]
+}

@@ -1,16 +1,8 @@
 @echo off
 setlocal
-
-set ROOT=%~dp0
-
-if exist "%ROOT%dist\KatanaSplicingTool\KatanaSplicingTool.exe" (
-  start "" "%ROOT%dist\KatanaSplicingTool\KatanaSplicingTool.exe"
-  exit /b 0
+cd /d "%~dp0"
+if not exist ".venv-next\Scripts\python.exe" (
+  echo Run powershell -File scripts\bootstrap_katana_next.ps1 -SkipFrontendBuild first.
+  exit /b 1
 )
-
-if exist "%ROOT%.venv\Scripts\python.exe" (
-  "%ROOT%.venv\Scripts\python.exe" -m app.main
-  exit /b %errorlevel%
-)
-
-python -m app.main
+".venv-next\Scripts\python.exe" -m katana_next.launcher --mode browser %*

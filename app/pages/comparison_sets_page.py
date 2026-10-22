@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.widgets.page_header import PageHeader
 from src.services.project_service import ProjectService
 
 
@@ -24,15 +25,18 @@ class ComparisonSetsPage(QWidget):
         super().__init__()
         self.project_service = project_service
         self.on_confirm = on_confirm
+        self.header = PageHeader(
+            "Comparison sets",
+            "Define explicit A-versus-B comparison pairs for cross-comparison analysis without changing the underlying comparisons.",
+            "03 · Cross-comparison design",
+        )
         self.label = QLabel("Define pairwise comparisons for program comparison analysis.")
         self.label.setWordWrap(True)
+        self.label.setObjectName("contextPanel")
         self.confirm_button = QPushButton("Confirm")
+        self.confirm_button.setProperty("class", "primary")
         self.confirm_button.clicked.connect(self._confirm_comparison_sets)
         self.confirm_button.setMaximumWidth(120)
-        self.confirm_button.setStyleSheet(
-            "QPushButton { background-color: #2563EB; color: white; border-radius: 6px; padding: 6px 12px; font-weight: 600; }"
-            "QPushButton:disabled { background-color: #64748B; color: #E2E8F0; }"
-        )
         self.table = QTableWidget(0, 10)
         self.table.setHorizontalHeaderLabels(
             [
@@ -68,6 +72,9 @@ class ComparisonSetsPage(QWidget):
         button_row.addStretch(1)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        layout.addWidget(self.header)
         layout.addWidget(self.label)
         layout.addLayout(button_row)
         layout.addWidget(self.table, 1)

@@ -1,33 +1,46 @@
-# Python cache / bytecode
+# Local installations and generated state
+.venv*/
+venv/
+node_modules/
 __pycache__/
 *.py[cod]
-
-# Local environments
-.venv/
-venv/
-.python-version
-
-# Build / packaging artifacts
-build/
-dist/
-*.egg-info/
-.eggs/
-
-# Test / tool caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-
-# IDE / editor
-.vscode/
-.idea/
-
-# Local project state / generated previews
-.katana_project.yaml
-analysis_export.png
-tmp_manifest_check.py
-noDP_KOvsWT.tsv
-
-# Local outputs
+*.egg-info/
+build/
+dist/
+!apps/web/dist/
+!apps/web/dist/**
+*.tsbuildinfo
+.runtime/
+.runtime-*/
+runtime/
+workspace/
+results/
 katana_output/
+outputs/
+logs/
 *.log
+*.pid
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+
+# Research data and credentials never belong in the software repository
+*.bam
+*.bai
+*.cram
+*.crai
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.sra
+*.sif
+*.pem
+*.ppk
+id_rsa*
+id_ed25519*

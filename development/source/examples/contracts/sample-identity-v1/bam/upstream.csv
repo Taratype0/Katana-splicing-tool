@@ -1,3 +1,0 @@
-sample,genome_bam,bai
-CONTROL_1,placeholder_alignments/CONTROL_1.sorted.bam,placeholder_alignments/CONTROL_1.sorted.bam.bai
-TREATMENT_1,placeholder_alignments/TREATMENT_1.sorted.bam,placeholder_alignments/TREATMENT_1.sorted.bam.bai

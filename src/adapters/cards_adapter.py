@@ -9,11 +9,28 @@ from matplotlib import cm
 
 
 class CardsAdapter:
+    @staticmethod
+    def _safe_text(value, default: str = "") -> str:
+        if value is None:
+            return default
+        try:
+            if pd.isna(value):
+                return default
+        except (TypeError, ValueError):
+            pass
+        text = str(value).strip()
+        return text if text else default
+
+    @staticmethod
+    def _safe_float(value, default: float = 0.0) -> float:
+        number = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+        return float(number) if pd.notna(number) else default
+
     def render_cards(self, shortlist: pd.DataFrame, expression_support: pd.DataFrame, output_root: Path) -> list[Path]:
         output_root.mkdir(parents=True, exist_ok=True)
         generated: list[Path] = []
         for _, row in shortlist.iterrows():
-            display_group = str(row.get("display_group", "shortlist"))
+            display_group = self._safe_text(row.get("display_group"), "shortlist")
             outdir = output_root / self._sanitize(display_group)
             outdir.mkdir(parents=True, exist_ok=True)
             fig = plt.figure(figsize=(14, 4.8))
@@ -23,7 +40,7 @@ class CardsAdapter:
 
             self._plot_abs_dpsi(ax1, row)
             self._plot_signed_dpsi(ax2, row)
-            self._plot_expression(ax3, expression_support, str(row.get("GeneID", "")))
+            self._plot_expression(ax3, expression_support, self._safe_text(row.get("GeneID", "")))
 
             title = f"{row.get('geneSymbol', '')} | {row.get('event_type', '')} | {display_group}"
             subtitle = (
@@ -35,7 +52,7 @@ class CardsAdapter:
             fig.suptitle(title + "\n" + subtitle, fontsize=11)
             plt.tight_layout(rect=[0, 0, 1, 0.88])
 
-            out_png = outdir / f"{self._sanitize(str(row.get('geneSymbol', 'gene')))}__{self._sanitize(str(row.get('event_type', 'event')))}__card.png"
+            out_png = outdir / f"{self._sanitize(self._safe_text(row.get('geneSymbol'), 'gene'))}__{self._sanitize(self._safe_text(row.get('event_type'), 'event'))}__card.png"
             plt.savefig(out_png, dpi=300)
             plt.close()
             generated.append(out_png)
@@ -44,8 +61,8 @@ class CardsAdapter:
     def _plot_abs_dpsi(self, ax, row: pd.Series) -> None:
         labels = [str(row.get("comparison_A", "")), str(row.get("comparison_B", ""))]
         vals = [
-            float(row.get("abs_dPSI_A", 0) or 0),
-            float(row.get("abs_dPSI_B", 0) or 0),
+            self._safe_float(row.get("abs_dPSI_A", 0)),
+            self._safe_float(row.get("abs_dPSI_B", 0)),
         ]
         ax.bar([0, 1], vals, color=["#4C78A8", "#E45756"])
         ax.set_xticks([0, 1])
@@ -56,8 +73,8 @@ class CardsAdapter:
     def _plot_signed_dpsi(self, ax, row: pd.Series) -> None:
         labels = [str(row.get("comparison_A", "")), str(row.get("comparison_B", ""))]
         vals = [
-            float(row.get("dPSI_A", 0) or 0),
-            float(row.get("dPSI_B", 0) or 0),
+            self._safe_float(row.get("dPSI_A", 0)),
+            self._safe_float(row.get("dPSI_B", 0)),
         ]
         ax.axhline(0, linewidth=1, color="black")
         ax.bar([0, 1], vals, color=["#4C78A8", "#E45756"])

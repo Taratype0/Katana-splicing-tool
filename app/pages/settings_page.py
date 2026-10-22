@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtWidgets import (
     QComboBox,
@@ -31,6 +32,8 @@ class SettingsPage(QWidget):
         self.output_label = QLabel("Output directory: not set")
         self.output_button = QPushButton("Choose Output Directory")
         self.output_button.clicked.connect(self._choose_output_directory)
+        self.migrate_output_button = QPushButton("Migrate Existing Outputs")
+        self.migrate_output_button.clicked.connect(self._migrate_output_directory)
         self.input_rmats_label = QLabel("Input rMATS root: auto")
         self.input_rmats_button = QPushButton("Choose rMATS Root")
         self.input_rmats_button.clicked.connect(lambda: self._choose_input_directory("rmats_root", "Select rMATS Root"))
@@ -64,6 +67,9 @@ class SettingsPage(QWidget):
         self.sashimi_label = QLabel("rmats2sashimiplot: not set")
         self.sashimi_button = QPushButton("Choose rmats2sashimiplot Directory")
         self.sashimi_button.clicked.connect(self._choose_sashimi)
+        self.samtools_label = QLabel("samtools: not set")
+        self.samtools_button = QPushButton("Choose samtools")
+        self.samtools_button.clicked.connect(self._choose_samtools)
         self.suppa_label = QLabel("SUPPA: not set")
         self.suppa_button = QPushButton("Choose SUPPA Directory")
         self.suppa_button.clicked.connect(self._choose_suppa)
@@ -73,9 +79,12 @@ class SettingsPage(QWidget):
         self.gtf_label = QLabel("GTF: not set")
         self.gtf_button = QPushButton("Choose GTF")
         self.gtf_button.clicked.connect(self._choose_gtf)
-        self.fasta_label = QLabel("FASTA: not set")
-        self.fasta_button = QPushButton("Choose FASTA")
-        self.fasta_button.clicked.connect(self._choose_fasta)
+        self.genome_fasta_label = QLabel("Genome FASTA: not set")
+        self.genome_fasta_button = QPushButton("Choose Genome FASTA")
+        self.genome_fasta_button.clicked.connect(lambda: self._choose_fasta("genome_fasta"))
+        self.transcript_fasta_label = QLabel("Transcript FASTA: not set")
+        self.transcript_fasta_button = QPushButton("Choose Transcript FASTA")
+        self.transcript_fasta_button.clicked.connect(lambda: self._choose_fasta("transcript_fasta"))
         self.details = QTextEdit()
         self.details.setReadOnly(True)
         layout = QVBoxLayout(self)
@@ -85,6 +94,7 @@ class SettingsPage(QWidget):
         row = QHBoxLayout()
         row.addWidget(self.output_label)
         row.addWidget(self.output_button)
+        row.addWidget(self.migrate_output_button)
         layout.addLayout(row)
         self._add_row(layout, self.input_rmats_label, self.input_rmats_button)
         self._add_row(layout, self.input_deg_label, self.input_deg_button)
@@ -106,6 +116,10 @@ class SettingsPage(QWidget):
         row_tools_2.addWidget(self.sashimi_label)
         row_tools_2.addWidget(self.sashimi_button)
         layout.addLayout(row_tools_2)
+        row_tools_native = QHBoxLayout()
+        row_tools_native.addWidget(self.samtools_label)
+        row_tools_native.addWidget(self.samtools_button)
+        layout.addLayout(row_tools_native)
         row_tools_3 = QHBoxLayout()
         row_tools_3.addWidget(self.suppa_label)
         row_tools_3.addWidget(self.suppa_button)
@@ -119,9 +133,13 @@ class SettingsPage(QWidget):
         row3.addWidget(self.gtf_button)
         layout.addLayout(row3)
         row4 = QHBoxLayout()
-        row4.addWidget(self.fasta_label)
-        row4.addWidget(self.fasta_button)
+        row4.addWidget(self.genome_fasta_label)
+        row4.addWidget(self.genome_fasta_button)
         layout.addLayout(row4)
+        row5 = QHBoxLayout()
+        row5.addWidget(self.transcript_fasta_label)
+        row5.addWidget(self.transcript_fasta_button)
+        layout.addLayout(row5)
         layout.addWidget(self.details)
 
     def refresh(self) -> None:
@@ -135,6 +153,7 @@ class SettingsPage(QWidget):
             return
         self.rmats_mode.setCurrentText(project.selected_rmats_mode)
         self.output_label.setText(f"Output directory: {project.output_root}")
+        self.migrate_output_button.setEnabled(self.project_service.can_migrate_current_output_root())
         self.input_rmats_label.setText(f"Input rMATS root: {project.input_paths.get('rmats_root', 'auto')}")
         self.input_deg_label.setText(f"Input DEG root: {project.input_paths.get('deg_root', 'auto')}")
         self.input_suppa_label.setText(f"Input SUPPA root: {project.input_paths.get('suppa_root', 'auto')}")
@@ -146,10 +165,14 @@ class SettingsPage(QWidget):
         self.rscript_label.setText(f"Rscript: {project.tool_paths.get('rscript', 'not set')}")
         self.jutils_label.setText(f"Jutils: {project.tool_paths.get('jutils', 'not set')}")
         self.sashimi_label.setText(f"rmats2sashimiplot: {project.tool_paths.get('rmats2sashimiplot', 'not set')}")
+        self.samtools_label.setText(f"samtools: {project.tool_paths.get('samtools', 'PATH lookup')}")
         self.suppa_label.setText(f"SUPPA: {project.tool_paths.get('suppa', 'not set')}")
         self.bam_label.setText(f"BAM root: {project.tool_paths.get('bam_root', 'not set')}")
         self.gtf_label.setText(f"GTF: {project.tool_paths.get('gtf', 'not set')}")
-        self.fasta_label.setText(f"FASTA: {project.tool_paths.get('fasta', 'not set')}")
+        genome_fasta = self.project_service._resolve_fasta_path("genome")
+        transcript_fasta = self.project_service._resolve_fasta_path("transcript")
+        self.genome_fasta_label.setText(f"Genome FASTA: {genome_fasta or 'not set'}")
+        self.transcript_fasta_label.setText(f"Transcript FASTA: {transcript_fasta or 'not set'}")
         self.details.setPlainText(
             "\n".join(
                 [
@@ -165,6 +188,7 @@ class SettingsPage(QWidget):
                     "",
                     f"Jutils path: {project.tool_paths.get('jutils', 'not set')}",
                     f"rmats2sashimiplot path: {project.tool_paths.get('rmats2sashimiplot', 'not set')}",
+                    f"samtools path: {project.tool_paths.get('samtools', 'PATH lookup')}",
                     f"SUPPA path: {project.tool_paths.get('suppa', 'not set')}",
                     f"BAM root: {project.tool_paths.get('bam_root', 'not set')}",
                     f"Output directory: {project.output_root}",
@@ -204,7 +228,42 @@ class SettingsPage(QWidget):
         )
         if not folder:
             return
-        self.project_service.update_output_root(folder)
+        try:
+            self.project_service.update_output_root(folder)
+        except RuntimeError as exc:
+            QMessageBox.critical(self, "Invalid Output Directory", str(exc))
+            return
+        self.refresh()
+
+    def _migrate_output_directory(self) -> None:
+        project = self.project_service.current_project
+        if project is None:
+            return
+        if not self.project_service.can_migrate_current_output_root():
+            QMessageBox.information(
+                self,
+                "No Katana Outputs Detected",
+                "The current directory does not contain a recognizable Katana output tree. "
+                "Use Choose Output Directory to change the path without moving input files.",
+            )
+            return
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select New Output Directory",
+            str(Path(project.output_root).parent if project.output_root else project.project_root),
+        )
+        if not folder:
+            return
+        try:
+            result = self.project_service.migrate_output_root(folder)
+        except RuntimeError as exc:
+            QMessageBox.critical(self, "Output Migration Failed", str(exc))
+            return
+        QMessageBox.information(
+            self,
+            "Output Migration Finished",
+            f"Moved {result.moved_entries} top-level output entries to:\n{result.destination}",
+        )
         self.refresh()
 
     def _choose_rscript(self) -> None:
@@ -230,6 +289,22 @@ class SettingsPage(QWidget):
     def _choose_sashimi(self) -> None:
         self._choose_tool_directory("rmats2sashimiplot", "Select rmats2sashimiplot Directory")
 
+    def _choose_samtools(self) -> None:
+        project = self.project_service.current_project
+        if project is None:
+            return
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select samtools executable",
+            str(project.project_root),
+            "Executables (*.exe);;All Files (*)",
+        )
+        if not file_path:
+            return
+        project.tool_paths["samtools"] = file_path
+        self.project_service.save_project_config()
+        self.refresh()
+
     def _choose_suppa(self) -> None:
         self._choose_tool_directory("suppa", "Select SUPPA Directory")
 
@@ -252,7 +327,7 @@ class SettingsPage(QWidget):
         self.project_service.save_project_config()
         self.refresh()
 
-    def _choose_fasta(self) -> None:
+    def _choose_fasta(self, key: str = "fasta") -> None:
         project = self.project_service.current_project
         if project is None:
             return
@@ -264,7 +339,9 @@ class SettingsPage(QWidget):
         )
         if not file_path:
             return
-        project.tool_paths["fasta"] = file_path
+        project.tool_paths[key] = file_path
+        if key == "transcript_fasta":
+            project.tool_paths["fasta"] = file_path
         self.project_service.save_project_config()
         self.refresh()
 

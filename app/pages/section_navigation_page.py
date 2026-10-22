@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class SectionNavigationPage(QWidget):
@@ -17,35 +26,58 @@ class SectionNavigationPage(QWidget):
         self.on_open_section = on_open_section
         self.columns = max(1, int(columns))
 
-        title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 18px; font-weight: 700;")
+        header = QFrame()
+        header.setObjectName("pageHeader")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(22, 20, 22, 20)
+        header_layout.setSpacing(6)
 
+        overline = QLabel("WORKFLOW STAGE")
+        overline.setObjectName("pageOverline")
+        title_label = QLabel(title)
+        title_label.setObjectName("pageTitle")
         description_label = QLabel(description)
+        description_label.setObjectName("pageDescription")
         description_label.setWordWrap(True)
+        header_layout.addWidget(overline)
+        header_layout.addWidget(title_label)
+        header_layout.addWidget(description_label)
 
         grid = QGridLayout()
-        grid.setHorizontalSpacing(14)
-        grid.setVerticalSpacing(14)
+        grid.setContentsMargins(0, 6, 0, 0)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(16)
 
         for index, (label, body, target) in enumerate(sections):
-            card = QWidget()
+            card = QFrame()
+            card.setObjectName("navigationCard")
+            card.setMinimumHeight(178)
+            card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(12, 12, 12, 12)
+            card_layout.setContentsMargins(18, 16, 18, 16)
+            card_layout.setSpacing(9)
+
+            route_number = target.split(" ", 1)[0]
+            route = QLabel(route_number)
+            route.setObjectName("routePill")
 
             heading = QLabel(label)
-            heading.setStyleSheet("font-size: 15px; font-weight: 700;")
+            heading.setObjectName("cardTitle")
+            heading.setWordWrap(True)
 
             text = QLabel(body)
+            text.setObjectName("cardBody")
             text.setWordWrap(True)
 
-            button = QPushButton(f"Open {label}")
+            button = QPushButton("Open workspace")
+            button.setProperty("class", "primary")
             button.clicked.connect(lambda _checked=False, route=target: self._open(route))
 
+            card_layout.addWidget(route, 0, Qt.AlignmentFlag.AlignLeft)
             card_layout.addWidget(heading)
             card_layout.addWidget(text)
             card_layout.addStretch(1)
             card_layout.addWidget(button)
-            card.setStyleSheet("QWidget { border: 1px solid #3a3a3a; border-radius: 8px; }")
             if self.columns == 1:
                 grid.addWidget(card, index, 0)
             else:
@@ -55,9 +87,9 @@ class SectionNavigationPage(QWidget):
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.addWidget(title_label)
-        content_layout.addWidget(description_label)
+        content_layout.setContentsMargins(2, 2, 10, 18)
+        content_layout.setSpacing(16)
+        content_layout.addWidget(header)
         content_layout.addLayout(grid)
         content_layout.addStretch(1)
 

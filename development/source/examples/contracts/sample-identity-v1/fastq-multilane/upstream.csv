@@ -1,5 +1,0 @@
-sample,fastq_1,fastq_2,strandedness
-CONTROL_1,placeholder_reads/CONTROL_1_L001_R1.fastq.gz,placeholder_reads/CONTROL_1_L001_R2.fastq.gz,reverse
-CONTROL_1,placeholder_reads/CONTROL_1_L002_R1.fastq.gz,placeholder_reads/CONTROL_1_L002_R2.fastq.gz,reverse
-TREATMENT_1,placeholder_reads/TREATMENT_1_L001_R1.fastq.gz,placeholder_reads/TREATMENT_1_L001_R2.fastq.gz,reverse
-TREATMENT_1,placeholder_reads/TREATMENT_1_L002_R1.fastq.gz,placeholder_reads/TREATMENT_1_L002_R2.fastq.gz,reverse

@@ -4,19 +4,82 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "katana-splicing-tool"
-version = "0.1.0"
-description = "Interactive local RNA splicing and transcriptome integration tool."
+version = "2.0.0b2+baseline.20261022"
+description = "Artifact-driven bulk and single-cell RNA splicing evidence workspace."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "PySide6>=6.6",
   "matplotlib>=3.8",
-  "numpy>=1.26",
-  "pandas>=2.2",
+  "bamnostic>=1.3",
+  "numpy>=1.26,<3",
+  "biopython>=1.84,<2",
+  "pandas>=2.2,<3",
   "PyYAML>=6.0",
   "seaborn>=0.13",
+  "scipy>=1.11,<2",
+  "scikit-learn>=1.4",
+  "networkx>=3.2",
+  "igraph>=1.0",
+  "leidenalg>=0.12",
+  "statsmodels>=0.14",
+  "dynamicTreeCut==0.1.1",
+  "umap-learn>=0.5.7",
 ]
 
-[tool.setuptools]
-packages = ["app", "app.pages", "app.widgets", "src", "src.analysis", "src.adapters", "src.domain", "src.domain.models", "src.domain.rules", "src.io", "src.io.loaders", "src.services", "src.visualization"]
+[project.scripts]
+katana-open = "katana_next.launcher:main"
+katana-next = "katana_next.cli:main"
+katana-cosplice = "katana_cosplice.cli:main"
+katana-splice = "katana_cosplice.cli:main"
+katana-splice-network = "katana_cosplice.cli:main"
+katana-cosplice-publication-benchmark = "katana_cosplice.publication_benchmark:main"
+katana-cosplice-input-benchmark = "katana_cosplice.input_mode_benchmark:main"
+katana-cosplice-locked-ablation = "scripts.run_locked_three_arm_ablation:main"
+katana-cosplice-locked-panel-report = "katana_cosplice.locked_panel_report:main"
+katana-cosplice-real-count-ablation = "scripts.run_real_count_four_arm_ablation:main"
+katana-cosplice-membership-validation = "scripts.validate_membership_confidence_panel:main"
+katana-next-api = "katana_next.api.main:main"
+katana-next-desktop = "katana_next.desktop:main"
+katana-next-fixture = "katana_next.fixtures:main"
+katana-next-full-fixture = "katana_next.full_fixture:main"
+katana-next-migrate = "katana_next.migration:main"
+katana-next-acceptance = "scripts.run_v2_acceptance:main"
 
+[project.optional-dependencies]
+next = [
+  "beautifulsoup4>=4.12,<5",
+  "requests>=2.32,<3",
+  "duckdb>=1.1",
+  "fastapi>=0.115",
+  "pydantic>=2.9",
+  "pyarrow>=17",
+  "reportlab>=4.2",
+  "vl-convert-python>=1.8,<2",
+  "matplotlib-venn>=1.1,<2",
+  "uvicorn[standard]>=0.30",
+]
+next-dev = [
+  "httpx>=0.27",
+  "pytest>=8.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app", "app.*", "katana_cosplice", "katana_cosplice.*", "katana_next", "katana_next.*", "scripts", "src", "src.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"katana_next.science" = ["rbp_sequence_browser.html", "motiftrace_windows.html", "motiftrace_consequences.html", "motiftrace_parallel.html", "rbp_evidence_layers.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [
+  ".git",
+  ".venv",
+  "build",
+  "dist",
+  "katana_output",
+  "software",
+]
+python_files = ["test_*.py"]

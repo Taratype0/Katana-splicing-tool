@@ -1,0 +1,1629 @@
+{
+  "schema_version": "1.0",
+  "scope": "Conservative production dependency closure of apps/web/pnpm-lock.yaml; it includes required and optional dependency snapshots and may exceed modules retained by the browser bundler. This is not a claim that every listed package is present in emitted JavaScript.",
+  "source_lockfile": "apps/web/pnpm-lock.yaml",
+  "source_lockfile_sha256": "bc33571650e63761cd0ceb8da746215eabad9ee542b75f9aba64cd75257edfcd",
+  "packages": [
+    {
+      "package": "@fontsource/ibm-plex-sans",
+      "version": "5.3.0",
+      "declared_license": "OFL-1.1",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-fontsource__ibm-plex-sans-5.3.0/LICENSE",
+          "sha256": "d0283623ef57e722fd0eb688a8041589670c608ab780cd3612d06ba6f153d3fd",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/fontsource/font-files.git",
+        "directory": "fonts/google/ibm-plex-sans"
+      }
+    },
+    {
+      "package": "@fontsource/newsreader",
+      "version": "5.3.0",
+      "declared_license": "OFL-1.1",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-fontsource__newsreader-5.3.0/LICENSE",
+          "sha256": "26028ec4e13b650065fa525a09532176f8a668b76ff849ea01c564a7480f91e7",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/fontsource/font-files.git",
+        "directory": "fonts/google/newsreader"
+      }
+    },
+    {
+      "package": "@tanstack/query-core",
+      "version": "5.102.8",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-tanstack__query-core-5.102.8/LICENSE",
+          "sha256": "a405ee70c632bb938acb7ac5f210e814409b3760ea9d2329d8ed8ffcfd11a0e7",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/TanStack/query.git",
+        "directory": "packages/query-core"
+      }
+    },
+    {
+      "package": "@tanstack/react-query",
+      "version": "5.102.8",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-tanstack__react-query-5.102.8/LICENSE",
+          "sha256": "a405ee70c632bb938acb7ac5f210e814409b3760ea9d2329d8ed8ffcfd11a0e7",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/TanStack/query.git",
+        "directory": "packages/react-query"
+      }
+    },
+    {
+      "package": "@tanstack/react-table",
+      "version": "8.21.3",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-tanstack__react-table-8.21.3/LICENSE",
+          "sha256": "9db3f8ddd7031ab264b99bec49c221155d0c8649b53dd4aa007f2041d36cdf5f",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/TanStack/table.git",
+        "directory": "packages/react-table"
+      }
+    },
+    {
+      "package": "@tanstack/react-virtual",
+      "version": "3.14.11",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-tanstack__react-virtual-3.14.11/LICENSE",
+          "sha256": "a405ee70c632bb938acb7ac5f210e814409b3760ea9d2329d8ed8ffcfd11a0e7",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/TanStack/virtual.git",
+        "directory": "packages/react-virtual"
+      }
+    },
+    {
+      "package": "@tanstack/table-core",
+      "version": "8.21.3",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-tanstack__table-core-8.21.3/LICENSE",
+          "sha256": "9db3f8ddd7031ab264b99bec49c221155d0c8649b53dd4aa007f2041d36cdf5f",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/TanStack/table.git",
+        "directory": "packages/table-core"
+      }
+    },
+    {
+      "package": "@tanstack/virtual-core",
+      "version": "3.17.9",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-tanstack__virtual-core-3.17.9/LICENSE",
+          "sha256": "a405ee70c632bb938acb7ac5f210e814409b3760ea9d2329d8ed8ffcfd11a0e7",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/TanStack/virtual.git",
+        "directory": "packages/virtual-core"
+      }
+    },
+    {
+      "package": "@types/estree",
+      "version": "1.0.9",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-types__estree-1.0.9/LICENSE",
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/estree"
+      }
+    },
+    {
+      "package": "@types/geojson",
+      "version": "7946.0.16",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-types__geojson-7946.0.16/LICENSE",
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/geojson"
+      }
+    },
+    {
+      "package": "ansi-regex",
+      "version": "6.3.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-ansi-regex-6.3.0/license",
+          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+          "upstream_file": "license"
+        }
+      ],
+      "upstream_repository": "chalk/ansi-regex"
+    },
+    {
+      "package": "ansi-styles",
+      "version": "6.2.3",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-ansi-styles-6.2.3/license",
+          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+          "upstream_file": "license"
+        }
+      ],
+      "upstream_repository": "chalk/ansi-styles"
+    },
+    {
+      "package": "cliui",
+      "version": "9.0.1",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-cliui-9.0.1/LICENSE.txt",
+          "sha256": "2dc0465729366c3a7890dfa9e972a1ba7048a26c02116fb8b419a6a1ac110149",
+          "upstream_file": "LICENSE.txt"
+        }
+      ],
+      "upstream_repository": "yargs/cliui"
+    },
+    {
+      "package": "commander",
+      "version": "2.20.3",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-commander-2.20.3/LICENSE",
+          "sha256": "04512a63dce4d2d506ad612dc0bd7681ccf6e3655f7b6eaef7dfac8323d1ec0b",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/tj/commander.js.git"
+      }
+    },
+    {
+      "package": "commander",
+      "version": "7.2.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-commander-7.2.0/LICENSE",
+          "sha256": "04512a63dce4d2d506ad612dc0bd7681ccf6e3655f7b6eaef7dfac8323d1ec0b",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/tj/commander.js.git"
+      }
+    },
+    {
+      "package": "d3-array",
+      "version": "3.2.4",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-array-3.2.4/LICENSE",
+          "sha256": "3e6849627f74ff73c257a3ae1efb574015d94fc1035c05ec3c15805165efcbc4",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-array.git"
+      }
+    },
+    {
+      "package": "d3-color",
+      "version": "3.1.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-color-3.1.0/LICENSE",
+          "sha256": "faa682e3e430941f958d26180458f5934a62f58dac4d70ccdd15608c15d0f884",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-color.git"
+      }
+    },
+    {
+      "package": "d3-delaunay",
+      "version": "6.0.4",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-delaunay-6.0.4/LICENSE",
+          "sha256": "582c3022bd01942336095f92b58a90b1be624dc547d987555c6c956512dd24c1",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-delaunay.git"
+      }
+    },
+    {
+      "package": "d3-dispatch",
+      "version": "3.0.1",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-dispatch-3.0.1/LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-dispatch.git"
+      }
+    },
+    {
+      "package": "d3-dsv",
+      "version": "3.0.1",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-dsv-3.0.1/LICENSE",
+          "sha256": "7842a82012622e5a37bfe4f6c1b67cd3bae6350716b5bf87f36cea0bdc1319dc",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-dsv.git"
+      }
+    },
+    {
+      "package": "d3-ease",
+      "version": "3.0.1",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-ease-3.0.1/LICENSE",
+          "sha256": "b989d9085148d21ff64a75e14462aefa06b2589a55553b07b1460c70081c7d08",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-ease.git"
+      }
+    },
+    {
+      "package": "d3-force",
+      "version": "3.0.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-force-3.0.0/LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-force.git"
+      }
+    },
+    {
+      "package": "d3-format",
+      "version": "3.1.2",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-format-3.1.2/LICENSE",
+          "sha256": "2a6d2d5f32ba0b755ddbc1c833f766e30cdbe6ebe9a6d4e3e24427721f0b63d3",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-format.git"
+      }
+    },
+    {
+      "package": "d3-geo-projection",
+      "version": "4.0.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-geo-projection-4.0.0/LICENSE",
+          "sha256": "8f4c30fd14045812de501fb1329e900c7507f96cfba1104caae929f0b217613d",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-geo-projection.git"
+      }
+    },
+    {
+      "package": "d3-geo",
+      "version": "3.1.1",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-geo-3.1.1/LICENSE",
+          "sha256": "3e3edc1224eec9c39cd26491a21304a62883c1e5b6a65c5283ccc7a6cc94baee",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-geo.git"
+      }
+    },
+    {
+      "package": "d3-hierarchy",
+      "version": "3.1.2",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-hierarchy-3.1.2/LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-hierarchy.git"
+      }
+    },
+    {
+      "package": "d3-interpolate",
+      "version": "3.0.1",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-interpolate-3.0.1/LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-interpolate.git"
+      }
+    },
+    {
+      "package": "d3-path",
+      "version": "3.1.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-path-3.1.0/LICENSE",
+          "sha256": "a09b0d6d76e768fca2085fad05743ee81ddd11946bcda160a3cf5e1081a479aa",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-path.git"
+      }
+    },
+    {
+      "package": "d3-quadtree",
+      "version": "3.0.1",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-quadtree-3.0.1/LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-quadtree.git"
+      }
+    },
+    {
+      "package": "d3-scale-chromatic",
+      "version": "3.1.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-scale-chromatic-3.1.0/LICENSE",
+          "sha256": "0986d93944902cca9af86824b6a641b4b7c2d10602fc510c433a8bcd443919fe",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-scale-chromatic.git"
+      }
+    },
+    {
+      "package": "d3-scale",
+      "version": "4.0.2",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-scale-4.0.2/LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-scale.git"
+      }
+    },
+    {
+      "package": "d3-shape",
+      "version": "3.2.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-shape-3.2.0/LICENSE",
+          "sha256": "faa682e3e430941f958d26180458f5934a62f58dac4d70ccdd15608c15d0f884",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-shape.git"
+      }
+    },
+    {
+      "package": "d3-time-format",
+      "version": "4.1.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-time-format-4.1.0/LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-time-format.git"
+      }
+    },
+    {
+      "package": "d3-time",
+      "version": "3.1.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-time-3.1.0/LICENSE",
+          "sha256": "faa682e3e430941f958d26180458f5934a62f58dac4d70ccdd15608c15d0f884",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-time.git"
+      }
+    },
+    {
+      "package": "d3-timer",
+      "version": "3.0.1",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-d3-timer-3.0.1/LICENSE",
+          "sha256": "e008c5e25a6be382593089c29bfabbc553c6378eee02895aec46ce396cc404ee",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/d3/d3-timer.git"
+      }
+    },
+    {
+      "package": "delaunator",
+      "version": "5.1.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-delaunator-5.1.0/LICENSE",
+          "sha256": "0b348fff56384b43dbb37593906904e56d0f9deb51eae590d4dc6d427fbf1808",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/mapbox/delaunator.git"
+      }
+    },
+    {
+      "package": "emoji-regex",
+      "version": "10.6.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-emoji-regex-10.6.0/LICENSE-MIT.txt",
+          "sha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+          "upstream_file": "LICENSE-MIT.txt"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/mathiasbynens/emoji-regex.git"
+      }
+    },
+    {
+      "package": "escalade",
+      "version": "3.2.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-escalade-3.2.0/license",
+          "sha256": "9a9edad7baae52622bddf3c15b2ef8a33d2c89f2d25408ad13e8a7481c6b0c97",
+          "upstream_file": "license"
+        }
+      ],
+      "upstream_repository": "lukeed/escalade"
+    },
+    {
+      "package": "fast-json-patch",
+      "version": "3.1.1",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-fast-json-patch-3.1.1/LICENSE.txt",
+          "sha256": "26593d78926902a82eb9bc7e40d1811fc381055f23516b92fe48ca8399bf02df",
+          "upstream_file": "LICENSE.txt"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git://github.com/Starcounter-Jack/JSON-Patch.git"
+      }
+    },
+    {
+      "package": "get-caller-file",
+      "version": "2.0.5",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-get-caller-file-2.0.5/LICENSE.md",
+          "sha256": "902dbb4154679fb2b8d7c33878183f45b268d01eae5e5033dddaa8852d45f213",
+          "upstream_file": "LICENSE.md"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/stefanpenner/get-caller-file.git"
+      }
+    },
+    {
+      "package": "get-east-asian-width",
+      "version": "1.6.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-get-east-asian-width-1.6.0/license",
+          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+          "upstream_file": "license"
+        }
+      ],
+      "upstream_repository": "sindresorhus/get-east-asian-width"
+    },
+    {
+      "package": "iconv-lite",
+      "version": "0.6.3",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-iconv-lite-0.6.3/LICENSE",
+          "sha256": "ac779f7314c74f232ef847ea86e714abe25cf6eeb5cc97b69451b74e2af6492d",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git://github.com/ashtuchkin/iconv-lite.git"
+      }
+    },
+    {
+      "package": "internmap",
+      "version": "2.0.3",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-internmap-2.0.3/LICENSE",
+          "sha256": "9ea8903938dab5f12c4572d60725069bec2d1b0dc3bcc210b09bae946a5ebb1f",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/mbostock/internmap.git"
+      }
+    },
+    {
+      "package": "json-stringify-pretty-compact",
+      "version": "4.0.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-json-stringify-pretty-compact-4.0.0/LICENSE",
+          "sha256": "2d51145876dda3dd13253463b852aa83b78aa598b90fca1709f39f1740ff9a2f",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": "lydell/json-stringify-pretty-compact"
+    },
+    {
+      "package": "lucide-react",
+      "version": "1.42.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-lucide-react-1.42.0/LICENSE",
+          "sha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/lucide-icons/lucide.git",
+        "directory": "packages/lucide-react"
+      }
+    },
+    {
+      "package": "react-dom",
+      "version": "19.2.8",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-react-dom-19.2.8/LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/react/react.git",
+        "directory": "packages/react-dom"
+      }
+    },
+    {
+      "package": "react",
+      "version": "19.2.8",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-react-19.2.8/LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/react/react.git",
+        "directory": "packages/react"
+      }
+    },
+    {
+      "package": "robust-predicates",
+      "version": "3.0.3",
+      "declared_license": "Unlicense",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-robust-predicates-3.0.3/LICENSE",
+          "sha256": "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/mourner/robust-predicates.git"
+      }
+    },
+    {
+      "package": "rw",
+      "version": "1.3.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-rw-1.3.3/LICENSE",
+          "sha256": "e273680c43c2ab5bb3b50af28de6a08000b333396834db7bf6129cd6f130c9cd",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "http://github.com/mbostock/rw.git"
+      }
+    },
+    {
+      "package": "safer-buffer",
+      "version": "2.1.2",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-safer-buffer-2.1.2/LICENSE",
+          "sha256": "4bc935e71be198c67ddf3c2b5fddb195f6edc182bfc155a96a6db61b44b494b9",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/ChALkeR/safer-buffer.git"
+      }
+    },
+    {
+      "package": "scheduler",
+      "version": "0.27.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-scheduler-0.27.0/LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/facebook/react.git",
+        "directory": "packages/scheduler"
+      }
+    },
+    {
+      "package": "semver",
+      "version": "7.8.5",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-semver-7.8.5/LICENSE",
+          "sha256": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/npm/node-semver.git"
+      }
+    },
+    {
+      "package": "string-width",
+      "version": "7.2.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-string-width-7.2.0/license",
+          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+          "upstream_file": "license"
+        }
+      ],
+      "upstream_repository": "sindresorhus/string-width"
+    },
+    {
+      "package": "strip-ansi",
+      "version": "7.2.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-strip-ansi-7.2.0/license",
+          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+          "upstream_file": "license"
+        }
+      ],
+      "upstream_repository": "chalk/strip-ansi"
+    },
+    {
+      "package": "topojson-client",
+      "version": "3.1.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-topojson-client-3.1.0/LICENSE",
+          "sha256": "4c4d15b635e04e691825a76db7d33f7f2033b55669a7430011694f31e6c65999",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/topojson/topojson-client.git"
+      }
+    },
+    {
+      "package": "tslib",
+      "version": "2.8.1",
+      "declared_license": "0BSD",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-tslib-2.8.1/LICENSE.txt",
+          "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751",
+          "upstream_file": "LICENSE.txt"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/Microsoft/tslib.git"
+      }
+    },
+    {
+      "package": "vega-canvas",
+      "version": "2.0.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-canvas-2.0.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": "vega/vega"
+    },
+    {
+      "package": "vega-crossfilter",
+      "version": "5.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-crossfilter-5.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-dataflow",
+      "version": "6.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-dataflow-6.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-embed",
+      "version": "7.2.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-embed-7.2.0/LICENSE",
+          "sha256": "32df67148f0fc3db0eb9e263a7b75d07f1eb14c61955005a4a39c6918d10d137",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+http://github.com/vega/vega-embed.git"
+      }
+    },
+    {
+      "package": "vega-encode",
+      "version": "5.2.2",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-encode-5.2.2/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-event-selector",
+      "version": "4.0.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-event-selector-4.0.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": "vega/vega"
+    },
+    {
+      "package": "vega-expression",
+      "version": "6.1.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-expression-6.1.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-expression",
+      "version": "6.2.2",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-expression-6.2.2/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-force",
+      "version": "5.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-force-5.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-format",
+      "version": "2.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-format-2.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-functions",
+      "version": "6.2.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-functions-6.2.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-geo",
+      "version": "5.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-geo-5.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-hierarchy",
+      "version": "5.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-hierarchy-5.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-interpreter",
+      "version": "2.3.2",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-interpreter-2.3.2/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-label",
+      "version": "2.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-label-2.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-lite",
+      "version": "6.4.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-lite-6.4.3/LICENSE",
+          "sha256": "f618900fd0d64046963b29f40590cdd1e341a2f41449f99110d82fd81fea808c",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega-lite.git"
+      }
+    },
+    {
+      "package": "vega-loader",
+      "version": "5.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-loader-5.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-parser",
+      "version": "7.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-parser-7.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-projection",
+      "version": "2.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-projection-2.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-regression",
+      "version": "2.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-regression-2.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-runtime",
+      "version": "7.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-runtime-7.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-scale",
+      "version": "8.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-scale-8.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-scenegraph",
+      "version": "5.3.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-scenegraph-5.3.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-schema-url-parser",
+      "version": "3.0.2",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-schema-url-parser-3.0.2/LICENSE",
+          "sha256": "eeb1606fda238f623c36d1eb5e27c33b986a446445340b220c141097424af045",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": "git@github.com:vega/schema.git"
+    },
+    {
+      "package": "vega-selections",
+      "version": "6.1.5",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-selections-6.1.5/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-statistics",
+      "version": "2.0.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-statistics-2.0.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": "vega/vega"
+    },
+    {
+      "package": "vega-themes",
+      "version": "3.0.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-themes-3.0.0/LICENSE",
+          "sha256": "ceb75fa4fbebbc381c0465442a502ffc13b73f36ccb385a66bcd5f55869e3979",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega-themes.git"
+      }
+    },
+    {
+      "package": "vega-time",
+      "version": "3.3.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-time-3.3.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-tooltip",
+      "version": "1.1.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-tooltip-1.1.0/LICENSE",
+          "sha256": "93cd20d9cee8c77c080d1a585e3b07644ad2c8e9ccdfc86e350136884d62d935",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega-tooltip.git"
+      }
+    },
+    {
+      "package": "vega-transforms",
+      "version": "5.2.2",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-transforms-5.2.2/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-typings",
+      "version": "2.3.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-typings-2.3.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-util",
+      "version": "2.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-util-2.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-view-transforms",
+      "version": "5.2.2",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-view-transforms-5.2.2/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-view",
+      "version": "6.2.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-view-6.2.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-voronoi",
+      "version": "5.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-voronoi-5.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega-wordcloud",
+      "version": "5.1.3",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-wordcloud-5.1.3/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "vega",
+      "version": "6.4.0",
+      "declared_license": "BSD-3-Clause",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-vega-6.4.0/LICENSE",
+          "sha256": "63727832aaf62004a2b249c933e327f3c90caf49e41a72f4bf436edf632cbda8",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "git+https://github.com/vega/vega.git"
+      }
+    },
+    {
+      "package": "wrap-ansi",
+      "version": "9.0.2",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-wrap-ansi-9.0.2/license",
+          "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+          "upstream_file": "license"
+        }
+      ],
+      "upstream_repository": "chalk/wrap-ansi"
+    },
+    {
+      "package": "y18n",
+      "version": "5.0.8",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-y18n-5.0.8/LICENSE",
+          "sha256": "2034cce3b6fafcddd642c4175e01d3ddfc332a53b9f20fdc46b1466dc89ac469",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": "yargs/y18n"
+    },
+    {
+      "package": "yargs-parser",
+      "version": "22.0.0",
+      "declared_license": "ISC",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-yargs-parser-22.0.0/LICENSE.txt",
+          "sha256": "365496ca1f56da40b23c9815fc40fa9005847b2f8f8fd1c1a4929ef25ec8cd1d",
+          "upstream_file": "LICENSE.txt"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/yargs/yargs-parser.git"
+      }
+    },
+    {
+      "package": "yargs",
+      "version": "18.0.0",
+      "declared_license": "MIT",
+      "source": "installed npm package matching committed pnpm lockfile",
+      "license_files": [
+        {
+          "path": "THIRD_PARTY_LICENSES/npm-yargs-18.0.0/LICENSE",
+          "sha256": "2f1a503bfab84b3ba7393627308b3274501e459e3b5185bbb56bbf16cb1602d4",
+          "upstream_file": "LICENSE"
+        }
+      ],
+      "upstream_repository": {
+        "type": "git",
+        "url": "https://github.com/yargs/yargs.git"
+      }
+    }
+  ]
+}

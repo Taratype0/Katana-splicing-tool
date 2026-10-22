@@ -1,2 +1,1 @@
-# Preserve development source and hashed synthetic fixture bytes on all platforms.
-development/** -text
+* -text

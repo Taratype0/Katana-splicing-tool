@@ -1,0 +1,32 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { expect, it, vi } from "vitest";
+import { DesignEditor } from "./DesignEditor";
+import { api } from "../api";
+
+it("requires explicit load, validation and save; never launches analysis", async () => {
+  const load = vi.spyOn(api, "editableDesign").mockResolvedValue({revision: "r1", samples: [{sample_id: "s1", biological_sample_id: "d1", condition: "WT", batch: null, attributes: {genotype: "WT"}}]});
+  const edit = vi.spyOn(api, "editDesign").mockResolvedValue({applied: false, review: {batch_design: {reason: "No batch supplied"}} as never});
+  const run = vi.spyOn(api, "runWorkflow");
+  const saved = vi.fn();
+  render(<QueryClientProvider client={new QueryClient()}><DesignEditor projectId="p" onSaved={saved}/></QueryClientProvider>);
+  expect(load).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Load editable design"));
+  fireEvent.change(await screen.findByLabelText("s1 genotype"), {target: {value: "MUT"}});
+  fireEvent.change(screen.getByLabelText("Reason for change"), {target: {value: "Correct genotype"}});
+  expect(screen.getByText("Save design revision")).toBeDisabled();
+  fireEvent.click(screen.getByText("Validate changes"));
+  expect(await screen.findByRole("status")).toHaveTextContent("Validated");
+  expect(edit).toHaveBeenLastCalledWith("p", expect.objectContaining({revision: "r1", reason: "Correct genotype"}), false);
+  expect(screen.getByText("Save design revision")).not.toBeDisabled();
+  fireEvent.change(screen.getByLabelText("s1 condition"), {target: {value: "MUT"}});
+  expect(screen.getByText("Save design revision")).toBeDisabled();
+  fireEvent.click(screen.getByText("Validate changes"));
+  await vi.waitFor(() => expect(screen.getByText("Save design revision")).not.toBeDisabled());
+  const refreshed = {snapshot: {project_id: "p", manifest_fingerprint: "new"}};
+  edit.mockResolvedValueOnce({applied: true, revision: "r2", review: {} as never, project: refreshed as never});
+  fireEvent.click(screen.getByText("Save design revision"));
+  await vi.waitFor(() => expect(saved).toHaveBeenCalledWith(refreshed));
+  expect(run).not.toHaveBeenCalled();
+  vi.restoreAllMocks();
+});

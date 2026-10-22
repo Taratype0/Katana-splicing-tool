@@ -4,7 +4,7 @@ import pandas as pd
 
 from src.analysis.common import EVENT_TYPES, event_uid_from_row, normalize_gene_id
 from src.domain.models.analysis import AnalysisRequest
-from src.domain.models.project import ComparisonDefinition, ProjectConfig
+from src.domain.models.project import ProjectConfig
 
 
 class SplicingProgramComparator:
