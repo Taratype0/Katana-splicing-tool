@@ -86,6 +86,10 @@ def main() -> None:
         args.outdir.mkdir(parents=True)
         (args.outdir / "REPORT.html").write_text("<html><body>Transport fixture. No scientific report.</body></html>")
         write(args.outdir / "report-manifest.json", {"fixture": True, "scientific_execution": False})
+        write(args.outdir / "flow.acceptance.json", {
+            "schema": "test.nextflow_transport_acceptance/v1",
+            "status": "passed", "fixture": True, "scientific_execution": False,
+        })
 
 
 if __name__ == "__main__":
