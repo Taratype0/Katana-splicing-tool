@@ -15,6 +15,15 @@ VERSION = "observed-network-report-v1"
 BLUE, RED = "#2863A5", "#C63F4A"
 
 
+def _significant_enrichment_display(tested, *, fdr=.05, per_module_library=2):
+    """Select report terms only; never alter the full native correction family."""
+    import pandas as pd
+    values = pd.to_numeric(tested["FDR"], errors="coerce")
+    return (tested.loc[values.between(0, fdr, inclusive="both")]
+            .sort_values(["FDR", "pvalue", "term"], kind="stable")
+            .groupby(["module", "library"], sort=False).head(per_module_library).copy())
+
+
 def matched_module_associations(scores, samples, contrasts):
     """Run the frozen binary-trait adapter within each exact declared contrast.
 
@@ -454,15 +463,19 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
         save(fig, "matched_module_effects", "Module activity: declared experimental comparisons", "Only exact contrastsheet arms are compared. Colour shows a frozen-PC mean difference; full original Welch P/FDR and the complete three-row-per-module correction families are exported. No biological rescue label is inferred.", data=effects.rename_axis("module").reset_index(), unit="module_contrast", full_table="matched_module_tests_full_family.tsv")
     if len(tested):
         # Main report display only. Full tested terms are written above.
-        shown = tested.sort_values(["FDR", "pvalue", "term"], kind="stable").groupby(["module", "library"], sort=False).head(2).copy()
+        shown = _significant_enrichment_display(tested)
         fig, ax = plt.subplots(figsize=(12, max(5, len(shown) * .2)), layout="constrained")
         shown = shown.sort_values(["module", "library", "FDR", "term"], kind="stable")
         x = -np.log10(shown.FDR.clip(lower=1e-300))
-        ax.scatter(x, range(len(shown)), s=20 + 12 * shown.overlap_count, c=[BLUE if q < .05 else "#A5ADB7" for q in shown.FDR], alpha=.8)
+        ax.scatter(x, range(len(shown)), s=20 + 12 * shown.overlap_count, color=BLUE, alpha=.8)
         ax.set(yticks=range(len(shown)), yticklabels=[f"{r.module} | {r.library} | {r.term}"[:125] for r in shown.itertuples()], xlabel="−log10(native BH FDR)")
         ax.tick_params(axis="y", labelsize=6)
+        if shown.empty:
+            ax.text(.5, .5, "No module GO / KEGG terms meet native FDR <= 0.05",
+                    ha="center", va="center", transform=ax.transAxes)
+            ax.axis("off")
         plotted_terms = shown.assign(plot_neglog10_fdr=x.to_numpy(), plot_point_area=20 + 12 * shown.overlap_count.to_numpy())
-        save(fig, "module_enrichment_overview", "GO / KEGG coverage across all modules", "Display: two lowest-FDR terms per module and library, including nonsignificant terms in grey. Point area follows overlap count. Complete tests, all input and contributing genes, actual measured background and unchanged P/FDR are exported; this figure does not filter modules.", data=plotted_terms, unit="module_term_test", full_table="module_enrichment.tsv.gz")
+        save(fig, "module_enrichment_overview", "Significant module GO / KEGG enrichment", "Display: native FDR <= 0.05 only, at most two lowest-FDR terms per module and library. No significant terms is shown explicitly. Point area follows overlap count. Complete tests including nonsignificant terms, all input and contributing genes, measured background and unchanged P/FDR are exported; module membership is unchanged.", data=plotted_terms, unit="module_term_test", full_table="module_enrichment.tsv.gz")
     for module in modules:
         subset = members.loc[members.module.eq(module)]
         if module in scores.columns:

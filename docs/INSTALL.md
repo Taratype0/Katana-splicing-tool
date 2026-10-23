@@ -2,6 +2,11 @@
 
 ## Source checkout
 
+For the distinction between integrated Nextflow task environments and a direct
+Python/Conda installation, see [Runtime environments](RUNTIME_ENVIRONMENTS.md).
+That page records which dependency checks exist and which container/lock work
+is still pending; selecting a container profile is not a completed installation.
+
 The supported installation route for this baseline is an editable source checkout with Python 3.11 or newer. Use a fresh environment so an older installation cannot supply hidden dependencies.
 
 ```sh

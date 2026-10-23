@@ -1,0 +1,9 @@
+# Bootstrap for direct Python/CLI/browser use, not the Nextflow task runtime.
+# Python 3.13 is the repository's Windows/Linux CI target. This is a development
+# specification, not a solved lock or a complete scientific environment.
+name: katana-standalone
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip

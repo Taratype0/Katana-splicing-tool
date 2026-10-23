@@ -16,7 +16,7 @@ import pandas as pd
 from .comparisons import BLUE, RED, _safe
 from .sources import digest
 
-VERSION = 'completed-motif-report-v1'
+VERSION = 'completed-motif-report-v2'
 SEQUENCE_FILES = ('ANALYSIS_PLAN_BEFORE_SCORING.json', 'FROZEN_SELECTED_EVENTS.tsv',
                   'PAIRED_FORM_INSTANCE_CHANGES.tsv.gz', 'ACTUAL_RNA_FORMS.tsv.gz',
                   'ACTUAL_LOCUS_HITS.tsv.gz', 'PAIRED_FORM_NORMALIZED_SCORES.tsv.gz')
@@ -24,6 +24,50 @@ STAT_FILES = ('NEW_WINDOW_AND_FULL_SEQUENCE_TESTS.tsv.gz', 'NEW_CLUSTER_FWER.tsv
 TEST_COLUMNS = ['event_type', 'direction', 'model_id', 'RBP', 'region', 'method', 'window_nt',
                 'window_start0', 'n_matched_gene_pairs', 'paired_rank_Z', 'mean_paired_score_difference',
                 'raw_P_new_paired_swaps', 'q_new_window_family', 'status']
+RANK_COLUMNS = ['q_new_window_family', 'raw_P_new_paired_swaps', 'event_type',
+                'direction', 'region', 'method', 'window_nt', 'window_start0']
+
+
+def _best_recorded_tests(chunk, existing):
+    """Select one actual row per model, keeping its P/q/effect paired.
+
+    This is a descriptive ranking across already corrected tests, not a new
+    model-level hypothesis or a new correction family.
+    """
+    valid = chunk.loc[chunk.q_new_window_family.notna() & chunk.raw_P_new_paired_swaps.notna()]
+    for token, part in valid.groupby('model_id', sort=False):
+        candidate = part.sort_values(RANK_COLUMNS, kind='stable').iloc[0]
+        key = tuple(candidate[column] for column in RANK_COLUMNS)
+        if token not in existing or key < existing[token][0]:
+            existing[token] = key, candidate.to_dict()
+
+
+def _motif_ranking(summary, best, models):
+    records = []
+    for item in summary.to_dict('records'):
+        token = item['model_id']
+        record = dict(item)
+        record.update({column: np.nan for column in TEST_COLUMNS if column not in record})
+        if token in best:
+            record.update(best[token][1])
+        record['model_id'] = token
+        record['RBP'] = str(models[token].get('RBPs', token))
+        matrix = _matrix(models[token])
+        record['motif_sequence'] = (''.join('ACGU'[i] for i in matrix.argmax(axis=1))
+                                    if matrix is not None else 'not_available')
+        record['sequence_representation'] = ('literal' if models[token].get('matrix') is None
+                                              else 'maximum-probability PWM consensus')
+        record['test_scope'] = ('not_estimable' if token not in best else
+                                'full_sequence_test' if record['window_nt'] == 0 else 'window_test')
+        q = record['q_new_window_family']
+        record['significance'] = ('not_estimable' if pd.isna(q) else
+                                  'recorded_test_FDR_le_0.05' if q <= .05 else 'not_significant')
+        record['correction_scope'] = 'complete comparison window/full-sequence test family; not model-level FDR'
+        records.append(record)
+    result = pd.DataFrame(records).sort_values(
+        ['q_new_window_family', 'raw_P_new_paired_swaps', 'model_id'], kind='stable', na_position='last')
+    result.insert(0, 'display_rank', range(1, len(result) + 1))
+    return result
 
 
 def verify_completed_motif_family(source, completion_proof, *, comparison_id, proof_kind='native', native_job_id=None):
@@ -177,7 +221,7 @@ def _catalogue_browser(models):
     data = json.dumps(records, allow_nan=False).replace('<', '\\u003c')
     return '''<!doctype html><html lang="en"><meta charset="utf-8"><title>All MotifTrace models</title>
 <style>body{font:15px Arial;color:#1e2630;margin:28px}article{border:1px solid #ddd;padding:14px;margin:15px 0}pre{white-space:pre-wrap}button,input{padding:7px;margin:4px}svg{max-width:100%}</style>
-<h1>Complete MotifTrace model catalogue</h1><p>Every declared model and native assignment. Catalogue order is not statistical ranking. Logos describe recorded sequence preference, not measured binding.</p>
+<h1>Complete MotifTrace model catalogue</h1><p>Every declared model, native assignment and available recorded-test summary. The displayed order is descriptive: selected native test FDR, paired P, then model ID. Test-family FDR is not whole-model FDR. Logos describe recorded sequence preference, not measured binding.</p>
 <input id="query" placeholder="Model or RBP"><button id="previous">Previous</button><button id="next">Next</button><span id="count"></span><main id="models"></main>
 <script id="catalogue" type="application/json">''' + data + '''</script><script>
 const all=JSON.parse(document.getElementById('catalogue').textContent);let page=0;const size=20;
@@ -229,8 +273,11 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                                   'complete_manifest_sha256': evidence['manifest_sha256'],
                                   'completion_proof_sha256': evidence['proof_sha256'], 'proof_kind': proof_kind,
                                   'native_P_q_FWER_unchanged': True, 'new_scans': 0, 'new_statistical_tests': 0,
-                                  'profile_ranking': 'minimum native window-family q, raw P, model ID; no model-level FDR',
-                                  'RNA_example_rule': 'earliest stable event with complete local forms within display limit and changing instance; first stable model',
+                                  'profile_ranking': 'minimum native window-family q, paired raw P from that same test, model ID; no model-level FDR',
+                                  'main_motif_limit': 10,
+                                  'main_motif_ranking': 'one recorded test per model: q, paired raw P, stable test coordinates; models ordered by that q, P, model ID; all models in outputs',
+                                  'significance_rule': 'native selected-test FDR <= 0.05; not a whole-model test',
+                                  'RNA_example_rule': 'for each ranked model, earliest stable changing event with complete local forms within display limit; unavailable examples explicitly labelled',
                                   'RNA_example_max_nt': example_max_nt}, indent=2), encoding='utf-8')
 
     def link(role, path, label, unit):
@@ -250,7 +297,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
         tables.append({'name': name, 'path': str(path), 'chapter': 7, 'unit': unit, 'contrast_id': comparison_id})
         return path
 
-    def figure(name, title, caption, frame, unit, full=(), *, size=(10, 5), links=()):
+    def figure(name, title, caption, frame, unit, full=(), *, size=(10, 5), links=(), output_only=False):
         fig = Figure(figsize=size); FigureCanvasAgg(fig)
         data = table(frame, name + '-plot-data', unit)
         def save():
@@ -259,7 +306,8 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
             fig.savefig(path.with_suffix('.svg'), bbox_inches='tight', facecolor='white')
             panels.append({'id': _safe(stem + '-' + name), 'title': title + ' | ' + comparison_id,
                            'path': str(path), 'chapter': 7, 'contrast_id': comparison_id, 'policy': None,
-                           'caption': caption, 'metadata': {'das_scope': scope, 'statistical_family_split': False},
+                           'caption': caption, 'output_only': output_only,
+                           'metadata': {'das_scope': scope, 'statistical_family_split': False},
                            'data_links': [link('plot_data', data, 'Plot data', unit),
                                           *[link('full_results', path, label, source_unit) for path, label, source_unit in full],
                                           *links, link('methods', methods, 'Methods', 'method_record')]})
@@ -284,7 +332,8 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                               ('consequence_direction', 'sequence-opportunity', 'PSI-weighted local sequence opportunity')]:
         counts = changes.groupby(['event_type', field]).size().unstack(fill_value=0).reindex(types, fill_value=0)
         fig, save = figure(name, title, 'Complete recorded instance counts; descriptive local sequence availability, not measured binding or occupancy.',
-                           counts.rename_axis('event_type').reset_index(), 'motif_instance_count', full_instances)
+                           counts.rename_axis('event_type').reset_index(), 'motif_instance_count', full_instances,
+                           output_only=field == 'consequence_direction')
         ax = fig.subplots(); bottom = np.zeros(len(counts))
         for state in counts:
             y = counts[state].to_numpy(); ax.bar(counts.index, y, bottom=bottom, color=colors.get(state, '#6993BF'), label=state); bottom += y
@@ -297,7 +346,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                        'All models are retained in catalogue order, without model-level significance claims. For large catalogues, axis labels are sampled for readability; every model remains in the full browser and count table.',
                        counts.rename_axis('model_id').reset_index(), 'model_instance_count', full_instances,
                        size=(11, min(18, max(5, .28 * len(counts) + 2))),
-                       links=[link('full_results', catalogue_path, 'All models browser', 'motif_model')])
+                       links=[link('full_results', catalogue_path, 'All models browser', 'motif_model')], output_only=True)
     ax = fig.subplots(); left = np.zeros(len(counts))
     for state in counts:
         values = counts[state].to_numpy(); ax.barh(range(len(counts)), values, left=left, color=colors.get(state, '#CDD1D6'), label=state); left += values
@@ -305,56 +354,14 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
     ax.set_yticks(positions, [str(models[counts.index[i]].get('RBPs', counts.index[i])) for i in positions], fontsize=7)
     ax.invert_yaxis(); ax.legend(frameon=False); ax.set_xlabel('Recorded local RNA motif instances'); save()
 
-    mature = forms.loc[forms.role.eq('foreground') & forms.layer.eq('mature_local_form')]
-    lengths = mature.groupby('event_id').length.max()
-    changing = changes.loc[changes.instance_state.ne('retained')]
-    candidates = sorted(set(lengths[lengths.le(example_max_nt)].index) & set(changing.event_id))
-    example = None
-    for event in candidates:
-        choices = mature.loc[mature.event_id.eq(event)].sort_values('region', kind='stable')
-        complete_forms = choices.sequence_RNA.notna() & choices.length.gt(0) & choices.length.le(example_max_nt)
-        complete_forms &= choices.sequence_RNA.astype(str).str.len().eq(choices.length)
-        if len(choices) >= 2 and choices.region.nunique() >= 2 and complete_forms.all():
-            ids = sorted(set(changing.loc[changing.event_id.eq(event), 'model_id'].astype(str)))
-            if ids:
-                example = event, ids[0], choices
-                break
-    if example is None:
-        unavailable.append({'chapter': 7, 'title': 'Compact target motif / RNA example',
-                            'reason': 'No eligible changing instance with at least two complete local forms inside the display length limit. Complete RNA forms, models and hits remain available.'})
-    else:
-        event, model_id, chosen_forms = example
-        chosen_hits = hits.loc[hits.event_id.eq(event) & hits.model_id.eq(model_id)].copy()
-        hit_path = table(chosen_hits, 'target-RNA-exact-sites', 'motif_site')
-        matrix = _matrix(models[model_id])
-        pwm = pd.DataFrame(matrix, columns=list('ACGU')) if matrix is not None else pd.DataFrame(columns=list('ACGU'))
-        pwm.insert(0, 'position_1based', range(1, len(pwm) + 1)); pwm.insert(0, 'model_id', model_id)
-        pwm_path = table(pwm, 'target-PWM-matrix', 'PWM_position')
-        fig, save = figure('target-RNA-context', 'Actual local RNA sequence and target motif',
-                           'Deterministic compact catalogue example, not biological prioritisation. Full RNA forms and original half-open hit coordinates are retained. PWM logos describe sequence preference, not affinity or binding.',
-                           chosen_forms, 'RNA_form', [(source / 'ACTUAL_RNA_FORMS.tsv.gz', 'All actual RNA forms', 'RNA_form'),
-                                                     (source / 'ACTUAL_LOCUS_HITS.tsv.gz', 'All native motif sites', 'motif_site')],
-                           size=(12, max(6, 2 + sum(np.ceil(chosen_forms.length / 80)) * .25)),
-                           links=[link('plot_data', hit_path, 'Displayed motif positions', 'motif_site'),
-                                  link('plot_data', pwm_path, 'Target PWM values', 'PWM_position')])
-        axes = fig.subplots(2, 1, gridspec_kw={'height_ratios': [1, 2]}); _logo(axes[0], models[model_id])
-        axes[0].set_title(str(models[model_id].get('RBPs', model_id))); axes[1].axis('off')
-        lines = []
-        for row in chosen_forms.itertuples():
-            lines.append(str(row.region) + ' · ' + str(row.length) + ' nt')
-            sequence = str(row.sequence_RNA)
-            lines.extend(f'{start + 1:4d}  {sequence[start:start + 80]}' for start in range(0, len(sequence), 80))
-            exact = chosen_hits.loc[chosen_hits.form.eq(row.region)]
-            lines.append('RNA half-open intervals: ' + ', '.join(f'{int(r.RNA_start0)}–{int(r.RNA_end0)}' for r in exact.itertuples()))
-        axes[1].text(0, 1, '\n'.join(lines), va='top', transform=axes[1].transAxes, fontfamily='DejaVu Sans Mono', fontsize=7)
-        fig.suptitle(str(event), fontsize=6, wrap=True); save()
-
     test_source = source / 'NEW_WINDOW_AND_FULL_SEQUENCE_TESTS.tsv.gz'
     aggregate = {token: {'model_id': token, 'RBP': str(model.get('RBPs', token)), 'all_test_rows': 0,
                         'estimable_tests': 0, 'window_q_lt_0_05': 0,
                         'eligible_recorded_windows': 0,
                         'minimum_full_family_window_q': np.nan, 'minimum_raw_window_P': np.nan} for token, model in models.items()}
+    selected_tests = {}
     for chunk in _read(test_source, chunksize=50000, usecols=TEST_COLUMNS, low_memory=False):
+        _best_recorded_tests(chunk, selected_tests)
         if not set(chunk.model_id.astype(str)) <= set(models):
             raise ValueError('Window test family contains undeclared models.')
         for token, part in chunk.groupby('model_id', sort=False):
@@ -365,10 +372,99 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                 if values.notna().any():
                     item[name] = float(values.min()) if pd.isna(item[name]) else min(item[name], float(values.min()))
     summary = pd.DataFrame(aggregate.values()).sort_values(['minimum_full_family_window_q', 'minimum_raw_window_P', 'model_id'], kind='stable', na_position='last')
+    ranking = _motif_ranking(summary, selected_tests, models)
+    ranking_path = table(ranking, 'all-motif-ranked-recorded-tests', 'motif_model_recorded_test')
+    top10 = ranking.head(10).copy()
+    top10_path = table(top10, 'top10-motif-recorded-tests', 'motif_model_recorded_test')
+    # The complete browser contains every model and its actual selected native
+    # test, including non-estimable models. No min-q value is relabelled as a
+    # new model-wide FDR and no P is taken from a different test row.
+    catalogue_models = {}
+    for row in ranking.astype(object).where(ranking.notna(), None).to_dict('records'):
+        catalogue_models[row['model_id']] = {**models[row['model_id']], 'recorded_test_summary': row}
+    catalogue_path.write_text(_catalogue_browser(catalogue_models), encoding='utf-8')
+    mature = forms.loc[forms.role.eq('foreground') & forms.layer.eq('mature_local_form')]
+    compact_forms = {}
+    for event, choices in mature.groupby('event_id', sort=True):
+        choices = choices.sort_values('region', kind='stable')
+        complete_forms = choices.sequence_RNA.notna() & choices.length.gt(0) & choices.length.le(example_max_nt)
+        complete_forms &= choices.sequence_RNA.astype(str).str.len().eq(choices.length)
+        if len(choices) >= 2 and choices.region.nunique() >= 2 and complete_forms.all():
+            compact_forms[event] = choices
+    example_count = 0
+    for record in top10.to_dict('records'):
+        token = record['model_id']
+        rank = record['display_rank']
+        name = 'top10-motif-' + str(rank).zfill(2) + '-' + _safe(token)
+        model_changes = changes.loc[changes.model_id.eq(token)]
+        changing_events = sorted(set(model_changes.loc[model_changes.instance_state.ne('retained'), 'event_id']) & compact_forms.keys())
+        all_events = sorted(set(model_changes.event_id) & compact_forms.keys())
+        event = next(iter(changing_events or all_events), None)
+        chosen_forms = compact_forms.get(event, mature.iloc[:0])
+        chosen_hits = hits.loc[hits.event_id.eq(event) & hits.model_id.eq(token)].copy()
+        hit_path = table(chosen_hits, name + '-exact-sites', 'motif_site')
+        form_path = table(chosen_forms, name + '-RNA-forms', 'RNA_form')
+        matrix = _matrix(models[token])
+        pwm = pd.DataFrame(matrix, columns=list('ACGU')) if matrix is not None else pd.DataFrame(columns=list('ACGU'))
+        pwm.insert(0, 'position_1based', range(1, len(pwm) + 1)); pwm.insert(0, 'model_id', token)
+        pwm_path = table(pwm, name + '-PWM-matrix', 'PWM_position')
+        pvalue, qvalue = record['raw_P_new_paired_swaps'], record['q_new_window_family']
+        stats = ('P = not estimable; FDR = not estimable' if pd.isna(qvalue) else
+                 f'P = {pvalue:.4g}; test-family FDR = {qvalue:.4g}; ' +
+                 ('significant (FDR <= 0.05)' if qvalue <= .05 else 'not significant (FDR > 0.05)'))
+        test_label = ('No estimable native test is available for this recorded motif.' if pd.isna(qvalue) else
+                      f"{record['event_type']} / {record['direction']} / {record['region']} / {record['method']}; "
+                      f"{record['test_scope']}, start {record['window_start0']}, width {record['window_nt']} nt")
+        caption = (f'Top {rank} / {len(top10)} displayed models. {stats}. '
+                   'Ranking uses the lowest recorded test-family FDR per model, its paired P, then model ID; '
+                   'the displayed FDR belongs to that window/full-sequence test, not a whole-model hypothesis. '
+                   'Logo/consensus describes sequence preference, not measured binding. The local RNA example is descriptive, '
+                   'and does not itself carry the aggregate test P/FDR. All models and complete tests are in the outputs.')
+        fig, save = figure(name, f'Top motif {rank}: {record["RBP"]} | {token}', caption,
+                           pd.DataFrame([record]), 'motif_model_recorded_test',
+                           [(ranking_path, 'All ranked models and native test statistics', 'motif_model_recorded_test'),
+                            (test_source, 'Complete native test family', 'motif_window_test'),
+                            (source / 'ACTUAL_RNA_FORMS.tsv.gz', 'All actual RNA forms', 'RNA_form'),
+                            (source / 'ACTUAL_LOCUS_HITS.tsv.gz', 'All native motif sites', 'motif_site')],
+                           size=(12, max(6, 3 + sum(np.ceil(chosen_forms.length / 80)) * .25)),
+                           links=[link('plot_data', hit_path, 'Displayed motif positions', 'motif_site'),
+                                  link('plot_data', form_path, 'Displayed RNA forms', 'RNA_form'),
+                                  link('plot_data', pwm_path, 'Target motif sequence / PWM', 'PWM_position'),
+                                  link('full_results', top10_path, 'Top 10 statistics', 'motif_model_recorded_test')])
+        axes = fig.subplots(2, 1, gridspec_kw={'height_ratios': [1, 2]})
+        _logo(axes[0], models[token])
+        axes[0].set_title(f'{record["RBP"]} | {record["motif_sequence"]}\n{stats}', fontsize=10)
+        axes[1].axis('off')
+        lines = [test_label, 'Exact native test scope; no model-level FDR.', '']
+        if event is None:
+            lines += ['No eligible complete local RNA example within the display length limit.',
+                      'The recorded target motif is shown above; all RNA forms and hits remain in outputs.']
+            unavailable.append({'chapter': 7, 'title': f'Compact RNA example | {token} | {comparison_id}',
+                                'reason': 'No eligible complete local RNA forms for this ranked model within the display length limit; its recorded motif and available statistical evidence are retained.'})
+        else:
+            example_count += 1
+            lines.append('Illustrative local RNA event: ' + str(event))
+            for row in chosen_forms.itertuples():
+                lines.append(str(row.region) + ' | ' + str(row.length) + ' nt')
+                sequence = str(row.sequence_RNA)
+                lines.extend(f'{start + 1:4d}  {sequence[start:start + 80]}' for start in range(0, len(sequence), 80))
+                exact = chosen_hits.loc[chosen_hits.form.eq(row.region)]
+                lines.append('RNA half-open sites: ' + (', '.join(f'{int(r.RNA_start0)}-{int(r.RNA_end0)}' for r in exact.itertuples()) or 'none recorded'))
+        # Native event IDs and dense hit lists can be much longer than an RNA
+        # line. Wrap the display only; complete identities/sites stay in TSVs.
+        import textwrap
+        display_lines = [part for line in lines for part in
+                         (textwrap.wrap(line, width=100, break_on_hyphens=False) or [''])]
+        text_height = max(2, len(display_lines) * .13)
+        fig.set_size_inches(12, max(6, text_height + 2.2))
+        axes[0].get_gridspec().set_height_ratios([1.2, text_height])
+        axes[1].text(0, 1, '\n'.join(display_lines), va='top', transform=axes[1].transAxes,
+                     fontfamily='DejaVu Sans Mono', fontsize=7)
+        fig.tight_layout(); save()
     fig, save = figure('window-statistics-all-models', 'All-model completed window statistics',
                        'Minimum native window-family q/P defines descriptive catalogue order, not model-level FDR. All declared models and complete original test families are retained; no P/q is recalculated.',
                        summary, 'motif_model_summary', [(test_source, 'Complete native test family', 'motif_window_test')],
-                       size=(11, min(18, max(5, .28 * len(summary) + 2))))
+                       size=(11, min(18, max(5, .28 * len(summary) + 2))), output_only=True)
     ax = fig.subplots(); shown = summary.iloc[::-1]
     ax.barh(range(len(shown)), shown.estimable_tests, color=BLUE); ax.barh(range(len(shown)), shown.window_q_lt_0_05, color=RED)
     positions = np.arange(len(shown)) if len(shown) <= 60 else np.unique(np.linspace(0, len(shown) - 1, 60).astype(int))
@@ -397,7 +493,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
         profile['plotted_minus_log10_q'] = -np.log10(np.maximum(profile.q_new_window_family, np.nextafter(0., 1.)))
         fig, save = figure('window-profile-' + _safe(token), 'Complete recorded window profile | ' + token,
                            'One complete native position grid, selected descriptively by minimum full-family q/P and stable coordinates. Position gaps/NA remain; native P/q are unmodified and no model-level test is created.',
-                           profile, 'motif_window_test', [(test_source, 'Complete native test family', 'motif_window_test')], size=(11, 8))
+                           profile, 'motif_window_test', [(test_source, 'Complete native test family', 'motif_window_test')], size=(11, 8), output_only=True)
         axes = fig.subplots(3, 1, sharex=True)
         for ax, column, color in zip(axes, ['mean_paired_score_difference', 'paired_rank_Z', 'plotted_minus_log10_q'], [RED, BLUE, BLUE]):
             ax.plot(profile.window_start0, profile[column], color=color); ax.set_ylabel(column, fontsize=8)
@@ -414,7 +510,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
     fig, save = figure('whole-family-cluster-null', 'Whole-family maximum-cluster null',
                        f'All {len(null)} native paired-swap maximum-cluster values from one complete family. Original cluster FWER and common null are retained, without per-model recalculation.',
                        histogram, 'null_histogram_bin', [(null_path, 'All native null values', 'permutation'),
-                                                          (source / 'NEW_CLUSTER_FWER.tsv', 'Complete cluster FWER results', 'motif_cluster')])
+                                                          (source / 'NEW_CLUSTER_FWER.tsv', 'Complete cluster FWER results', 'motif_cluster')], output_only=True)
     ax = fig.subplots(); ax.bar(edges[:-1], counts, width=np.diff(edges), align='edge', color=BLUE)
     ax.set(xlabel='Maximum cluster mass across the complete comparison family', ylabel='Paired swaps'); save()
     # Keep the established sequence/statistical attachments first, then retain
@@ -437,6 +533,8 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
     audit = {'schema': VERSION, 'comparison_id': comparison_id, 'models': len(models),
              'selected_events': len(selected), 'statistical_test_rows': int(summary.all_test_rows.sum()),
              'null_values': len(null), 'figures': len(panels), 'all_declared_models_retained': True,
+             'top_motif_cards': len(top10), 'top_motif_RNA_examples': example_count,
+             'main_motif_limit': 10, 'model_level_FDR_created': False,
              'native_P_q_FWER_unchanged': True, 'statistical_family_split': False,
              'new_scans': 0, 'new_statistical_tests': 0, 'originals_unchanged': True,
              'complete_manifest_sha256': evidence['manifest_sha256'], 'proof_sha256': evidence['proof_sha256'],

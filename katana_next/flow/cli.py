@@ -116,6 +116,23 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="action", required=True)
     command = sub.add_parser("export-pipeline")
     command.add_argument("--outdir", required=True, type=Path)
+    command = sub.add_parser("seal-existing", help="Seal explicitly bounded historical results without running analysis")
+    command.add_argument("--descriptor", required=True, type=Path)
+    command.add_argument("--out", required=True, type=Path)
+    command.add_argument("--allowed-root", required=True, action="append", type=Path)
+    command.add_argument("--completion-evidence", action="append", default=[], type=Path)
+    command.add_argument("--family-root", action="append", default=[], type=Path)
+    command.add_argument("--include-file", action="append", default=[], type=Path)
+    command.add_argument("--purpose", choices=("report-results", "analysis-inputs"), default="report-results")
+    command.add_argument("--exclude-exports", action="store_true", help="Analysis-inputs only; retain original export pointers as provenance")
+    command = sub.add_parser("adopt-existing", help="Copy a sealed historical snapshot and preserve its native evidence")
+    command.add_argument("--source", required=True, type=Path)
+    command.add_argument("--outdir", required=True, type=Path)
+    command = sub.add_parser("bind-existing", help="Verify an explicit compute overlay retains the original study/design")
+    command.add_argument("--adoption", required=True, type=Path)
+    command.add_argument("--project", required=True, type=Path)
+    command.add_argument("--contrast-id", required=True, action="append")
+    command.add_argument("--out", required=True, type=Path)
     for action in ("plan", "preflight"):
         command = sub.add_parser(action)
         command.add_argument("--project", type=Path)
@@ -148,6 +165,17 @@ def main(argv=None):
             if args.action == "export-pipeline":
                 from .distribution import export_pipeline
                 result = {"pipeline": str(export_pipeline(args.outdir))}
+            elif args.action == "seal-existing":
+                from .adoption import seal_existing_results
+                result = seal_existing_results(args.descriptor, args.out, allowed_roots=args.allowed_root,
+                    completion_evidence=args.completion_evidence, family_roots=args.family_root,
+                    include_files=args.include_file, purpose=args.purpose, include_exports=not args.exclude_exports)
+            elif args.action == "adopt-existing":
+                from .adoption import adopt_existing_results
+                result = adopt_existing_results(args.source, args.outdir)
+            elif args.action == "bind-existing":
+                from .adoption import create_identity_projection
+                result = create_identity_projection(args.adoption, args.project, args.out, contrast_ids=args.contrast_id)
             elif args.action in {"plan", "preflight"}:
                 if args.out and args.out.exists():
                     raise ValueError("Refusing to overwrite an existing plan or readiness receipt")

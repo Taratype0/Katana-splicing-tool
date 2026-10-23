@@ -78,6 +78,10 @@ def test_network_views_keep_all_events_grey_measured_background_and_sources(tmp_
     tested = pd.read_csv(out / "tables/module_enrichment.tsv.gz", sep="\t")
     assert len(tested) == 4
     assert tested.background_genes.eq(4).all()
+    shown = pd.read_csv(out / "tables/module_enrichment_overview-plot-data.tsv", sep="\t")
+    assert shown.empty  # Native FDRs are all > .05; do not promote the best terms.
+    overview = next(a for a in result['artifacts'] if a['path'].endswith('module_enrichment_overview.png'))
+    assert 'FDR <= 0.05 only' in overview['metadata']['caption']
     assert len(pd.read_csv(out / "tables/all_module_members.tsv", sep="\t")) == 5
     assert len(pd.read_csv(out / "tables/all_event_psi.tsv.gz", sep="\t")) == 5
     page = (out / "browser/ALL_MODULES.html").read_text(encoding="utf-8")
@@ -86,6 +90,20 @@ def test_network_views_keep_all_events_grey_measured_background_and_sources(tmp_
     assert len(list((out / "figures").glob("*.png"))) >= 10
     assert before == {p.name: sha256(p.read_bytes()).hexdigest() for p in src.iterdir()}
     assert all(a["project_id"] == "test-project" for a in result["artifacts"])
+
+
+def test_enrichment_display_filters_before_ranking_without_mutating_full_results():
+    from katana_next.reports.network_views import _significant_enrichment_display
+    native = pd.DataFrame({'module': ['M1'] * 5 + ['M2'], 'library': ['GO'] * 6,
+                           'term': ['absent', 'boundary', 'best', 'missing', 'invalid', 'other'],
+                           'FDR': [.9, .05, .001, np.nan, -.1, .01],
+                           'pvalue': [.5, .01, .0001, np.nan, -.01, .001]})
+    original = native.copy(deep=True)
+    shown = _significant_enrichment_display(native)
+    assert shown.term.tolist() == ['best', 'other', 'boundary']
+    assert shown.FDR.le(.05).all()
+    assert shown.loc[shown.term.eq('boundary'), 'FDR'].iloc[0] == .05
+    pd.testing.assert_frame_equal(native, original)
 
 
 def test_native_running_receipt_cannot_create_views(tmp_path):

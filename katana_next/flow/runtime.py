@@ -455,6 +455,27 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
                "dependency_receipts": [{"task_id": key, **file_record(value[0])}
                                        for key, value in sorted(parents.items())]}
     try:
+        if task.get("adapter") == "historical.adopt":
+            from .adoption import import_adopted_artifacts
+            declared = task.get("inputs", {})
+            if not declared.get("adoption") or not declared.get("identity_projection"):
+                raise ValueError("Historical adoption requires an immutable source and explicit study-identity projection")
+            if parents:
+                raise ValueError("A historical input adoption task cannot masquerade as a scientific continuation")
+            imported = import_adopted_artifacts(declared["adoption"], declared["identity_projection"],
+                manifest_path, directory / "historical-inputs",
+                artifact_ids=task.get("parameters", {}).get("artifact_ids"))
+            receipt.update(status="completed", artifacts=imported["artifacts"],
+                generated_artifacts=imported["artifacts"], inputs=imported["inputs"],
+                outputs=imported["outputs"], producer_markers=imported["producer_markers"],
+                execution_evidence=imported["evidence"], parameters=task.get("parameters", {}),
+                finished_at=datetime.now(timezone.utc).isoformat())
+            if file_hash(manifest_path) != manifest_sha:
+                raise ValueError("Compute project changed during historical input adoption")
+            receipt["receipt_sha256"] = canonical_hash(receipt)
+            write_json(receipt_path, receipt)
+            validate_receipt(receipt_path, plan=plan, task=task)
+            return receipt_path
         from katana_next.domain.models import InputAsset
         derived_assets = []
         for parent_id, (_path, parent) in parents.items():

@@ -96,7 +96,12 @@ def test_complete_family_render_preserves_values_all_models_and_gaps(completed, 
     root, proof = completed
     before = {p.name: sha(p) for p in root.iterdir()}
     views = render(root, proof, tmp_path / 'report')
-    assert len(views['panels']) == 8
+    assert len(views['panels']) == 10
+    assert views['audit']['top_motif_cards'] == 3
+    assert views['audit']['top_motif_RNA_examples'] == 1
+    main = [p for p in views['panels'] if not p['output_only']]
+    assert len(main) == 4
+    assert not any('window profile' in p['title'] or 'maximum-cluster null' in p['title'] for p in main)
     assert views['audit']['models'] == 3
     assert views['audit']['statistical_test_rows'] == 9
     assert views['audit']['null_values'] == 5
@@ -193,9 +198,77 @@ def test_additional_authenticated_member_must_verify_before_render(completed, tm
 def test_no_eligible_example_is_explicit_not_fabricated(completed, tmp_path):
     root, proof = completed
     views = render(root, proof, tmp_path / 'tiny-display', example_max_nt=1)
-    assert len(views['panels']) == 7
+    assert len(views['panels']) == 10
+    assert views['audit']['top_motif_cards'] == 3
+    assert views['audit']['top_motif_RNA_examples'] == 0
     assert any('No eligible' in x['reason'] for x in views['unavailable'])
     assert not (tmp_path / 'tiny-display' / 'target-RNA-context-plot-data.tsv').exists()
+
+
+def test_recorded_model_ranking_keeps_p_q_and_effect_from_same_native_test():
+    from katana_next.reports.motif_views import _best_recorded_tests, _motif_ranking
+
+    rows = pd.DataFrame([
+        dict(model_id='m', q_new_window_family=.04, raw_P_new_paired_swaps=.02,
+             event_type='SE', direction='up', region='inclusion', method='native', window_nt=5,
+             window_start0=10, mean_paired_score_difference=.7),
+        dict(model_id='m', q_new_window_family=.1, raw_P_new_paired_swaps=.001,
+             event_type='SE', direction='up', region='inclusion', method='native', window_nt=5,
+             window_start0=0, mean_paired_score_difference=-.3),
+    ])
+    best = {}
+    _best_recorded_tests(rows.iloc[1:], best)
+    _best_recorded_tests(rows.iloc[:1], best)
+    ranking = _motif_ranking(pd.DataFrame([{'model_id': 'm'}]), best, {'m': {'sequence': 'AUG'}})
+    chosen = ranking.iloc[0]
+    assert chosen.raw_P_new_paired_swaps == .02
+    assert chosen.q_new_window_family == .04
+    assert chosen.mean_paired_score_difference == .7
+    assert chosen.window_start0 == 10
+    assert chosen.significance == 'recorded_test_FDR_le_0.05'
+    assert 'not model-level FDR' in chosen.correction_scope
+
+
+def test_top10_distinct_models_keep_every_model_and_significance_in_outputs(completed, tmp_path):
+    root, proof = completed
+    planpath = root / SEQUENCE_FILES[0]
+    plan = json.loads(planpath.read_text())
+    plan['models'] = {f'm{i:02}': {'sequence': 'AUG', 'RBPs': f'Rbp{i}'} for i in range(12)}
+    write_json(planpath, plan)
+    changes = pd.read_csv(root / SEQUENCE_FILES[2], sep='\t', dtype=str).iloc[:1]
+    all_changes, all_hits, tests = [], [], []
+    for i, token in enumerate(plan['models']):
+        change = changes.copy(); change['model_id'] = token; all_changes.append(change)
+        all_hits.append(dict(event_id='E1', model_id=token, form='inclusion', RNA_start0=2, RNA_end0=5, hit_RNA='AUG'))
+        tests.append(dict(event_type='SE', direction='inclusion_up', model_id=token, RBP=f'Rbp{i}',
+                          region='inclusion', method='native', window_nt=5, window_start0=0,
+                          n_matched_gene_pairs=3, paired_rank_Z=1., mean_paired_score_difference=.2,
+                          raw_P_new_paired_swaps=(i+1)/200, q_new_window_family=(i+1)/100, status='estimable'))
+    pd.concat(all_changes).to_csv(root / SEQUENCE_FILES[2], sep='\t', index=False)
+    pd.DataFrame(all_hits).to_csv(root / SEQUENCE_FILES[4], sep='\t', index=False)
+    pd.DataFrame(tests).to_csv(root / STAT_FILES[0], sep='\t', index=False, float_format='%.17g')
+    marker = root / 'COMPLETE.json'; complete = json.loads(marker.read_text())
+    for name in complete['members']:
+        complete['members'][name] = dict(sha256=sha(root/name), bytes=(root/name).stat().st_size)
+    write_json(marker, complete)
+    receipt = json.loads(proof.read_text()); receipt['complete_manifest']['SHA256'] = sha(marker); write_json(proof, receipt)
+    before = {p.name: sha(p) for p in root.iterdir()}
+    out = tmp_path/'top10'
+    result = render(root, proof, out)
+    cards = [p for p in result['panels'] if p['title'].startswith('Top motif')]
+    assert len(cards) == result['audit']['top_motif_cards'] == 10
+    assert result['audit']['top_motif_RNA_examples'] == 10
+    assert all(not p['output_only'] and p['contrast_id'] == 'B_vs_A' for p in cards)
+    assert all('P =' in p['caption'] and 'FDR =' in p['caption'] for p in cards)
+    assert 'not significant' in cards[-1]['caption']
+    complete_ranking = pd.read_csv(out/'all-motif-ranked-recorded-tests.tsv', sep='\t', float_precision='round_trip')
+    assert complete_ranking.model_id.tolist() == [f'm{i:02}' for i in range(12)]
+    assert complete_ranking.loc[4, 'significance'] == 'recorded_test_FDR_le_0.05'
+    assert complete_ranking.loc[5, 'significance'] == 'not_significant'
+    assert set(complete_ranking.motif_sequence) == {'AUG'}
+    assert len(pd.read_csv(out/'top10-motif-recorded-tests.tsv', sep='\t')) == 10
+    assert 'm11' in (out/'ALL_MOTIF_MODELS.html').read_text()
+    assert before == {p.name: sha(p) for p in root.iterdir()}
 
 
 @pytest.mark.parametrize('mutation', ['partial', 'split', 'sha', 'missing', 'foreign', 'no_proof'])

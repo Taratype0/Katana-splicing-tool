@@ -21,7 +21,7 @@ from typing import Any
 from unittest.mock import patch
 
 
-ADAPTERS = frozenset({"reference.bed12", "qc.genebody", "qc.sequencing", "network.fit",
+ADAPTERS = frozenset({"reference.bed12", "qc.genebody", "qc.sequencing", "as.input_projection", "network.fit",
                       "network.bootstrap", "network.associate", "network.annotate",
                       "mapp.prepare", "mapp.maei"})
 _PLOT_LOCK = RLock()
@@ -48,10 +48,12 @@ def _executable(value: Any, default: str) -> str:
     name = str(value or default)
     executable = shutil.which(name)
     if executable:
-        return str(Path(executable).resolve())
+        # Preserve a venv's lexical bin/python path: resolving its symlink
+        # before invocation would select the base environment instead.
+        return str(Path(executable).absolute())
     candidate = Path(name).expanduser()
     if candidate.is_file() and (os.name == "nt" or os.access(candidate, os.X_OK)):
-        return str(candidate.resolve())
+        return str(candidate.absolute())
     raise ValueError(f"Executable is unavailable: {name}")
 
 
@@ -139,7 +141,15 @@ def readiness(spec: dict) -> list[str]:
         except (ValueError, OSError, KeyError, TypeError) as exc:
             return [str(exc)]
         return []
+    from .dependency_checks import python_dependency_issues
+    issues.extend(python_dependency_issues(spec, resolve_executable=_executable))
+    if issues:
+        # In particular, mapp_inputs imports Bio via isoform_consequences.
+        # Report a broken runtime before importing that adapter or touching
+        # scientific inputs; do not fall through to a later missing-Bio crash.
+        return issues
     required = {
+        "as.input_projection": ("source", "project"),
         "reference.bed12": ("gtf",), "qc.genebody": ("bam", "reference_bed"),
         "network.fit": ("config",), "network.bootstrap": ("config",),
         "network.associate": ("config",), "network.annotate": ("config",),
@@ -166,11 +176,19 @@ def readiness(spec: dict) -> list[str]:
     try:
         if adapter == "network.fit" and not issues:
             rscript = parameters.get("rscript")
+            cfg = None
             if inputs.get("config"):
                 from katana_cosplice.config import load_config
                 cfg = load_config(inputs["config"])
                 cfg.validate()
                 rscript = rscript or cfg.network.wgcna_rscript
+            if inputs.get("project") and "project" not in deferred and "network_scope" in parameters:
+                from katana_next.infrastructure.manifest_store import ManifestStore
+                from .network_inputs import network_scope_identity, validate_external_network_config
+                manifest = ManifestStore().load(inputs["project"])[1]
+                identity = network_scope_identity(manifest, parameters)
+                if cfg is not None:
+                    validate_external_network_config(cfg, manifest, identity, _sha)
             if not rscript and inputs.get("project"):
                 if "project" in deferred:
                     # A raw resource template deliberately has no fabricated
@@ -341,6 +359,11 @@ def execute_stage(spec: dict, output_dir: str | Path) -> dict:
     adapter = _adapter(spec)
     if adapter == "reference.bed12":
         evidence, paths = _gtf_bed12(spec, out)
+    elif adapter == "as.input_projection":
+        from .eligibility_projection import project_existing_as
+        evidence = project_existing_as(spec['inputs']['source'], spec['inputs']['project'],
+            out / 'projection', contrast_ids=spec.get('scope', {}).get('contrast_ids', []))
+        paths = sorted((out / 'projection').iterdir())
     elif adapter == "qc.genebody":
         evidence, paths = _gene_body(spec, out)
     elif adapter.startswith("network."):
@@ -366,6 +389,22 @@ def execute_stage(spec: dict, output_dir: str | Path) -> dict:
     else:  # readiness has already rejected unsupported adapters.
         raise ValueError(adapter)
     records = _ledger(paths, adapter)
+    identity = evidence.get("network_identity") if adapter.startswith("network.") else None
+    if identity:
+        for record in records:
+            metadata = record.setdefault("metadata", {})
+            metadata.update(network_identity=identity, interpretation_status=identity["sample_size_status"])
+            if identity["network_scope"] == "contrast":
+                metadata["data_links"] = [{**link, "contrast_id": identity["contrast_ids"][0]}
+                                          for link in metadata.get("data_links", [])]
+    if adapter == 'as.input_projection':
+        for record in records:
+            if Path(record['path']).name == 'measured_as_input_projection.parquet':
+                record.update(analysis_id='flow.as_input_projection', kind='table',
+                    name='Measured AS input with current RS eligibility', entity_type='splice_event',
+                    metadata={'read_support_policy': evidence['read_support_policy'],
+                        'scientific_model_fitted': False, 'native_statistics_reestimated': False,
+                        'source_result_modified': False})
     receipt = {"schema": "katana.flow.stage/v1", "adapter": adapter,
                "status": "not_applicable" if evidence.get("status") == "not_applicable" else "complete",
                "outputs": records, "evidence": evidence}
@@ -422,7 +461,10 @@ def _gene_body(spec: dict, out: Path) -> tuple[dict, list[Path]]:
     from katana_next.science.coverage_bias import read_gene_body_coverage
     inputs, parameters = spec["inputs"], spec.get("parameters") or {}
     sample = str(parameters.get("sample_id") or spec.get("scope", {}).get("sample_id", ""))
-    bam, bed = Path(inputs["bam"]).resolve(), Path(inputs["reference_bed"]).resolve()
+    # Keep the owned staged BAM path: its adjacent index may be a separate
+    # symlink to another immutable upstream task directory. Resolving the BAM
+    # would silently lose that valid adjacent index before native RSeQC opens it.
+    bam, bed = Path(inputs["bam"]).expanduser().absolute(), Path(inputs["reference_bed"]).resolve()
     bed_chroms: set[str] = set()
     rows = 0
     with bed.open(encoding="utf-8") as stream:
@@ -491,7 +533,8 @@ def _gene_body(spec: dict, out: Path) -> tuple[dict, list[Path]]:
     plot = out / "gene_body_coverage.png"
     fig.savefig(plot, dpi=160); plt.close(fig)
     return {"sample_id": sample, "native_sample_label": native_sample,
-            "bam": str(bam), "reference_bed_sha256": _sha(bed),
+            "bam": str(bam), "bam_resolved_source": str(bam.resolve()),
+            "reference_bed_sha256": _sha(bed),
             "reference_transcripts": rows, "min_transcript_length": minimum,
             "measurement": "RSeQC gene-body coverage; not FastQC per-base quality",
             "project_asset": {"kind": "gene_body_coverage", "path": str(destination),
@@ -607,8 +650,21 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
     adapter = _adapter(spec)
     projection = None
     manifest = None
+    identity = None
+    # Only new explicitly scoped flow tasks use the six-sample exploratory
+    # contract. Old sealed tasks and standalone CoSplice retain their contract.
+    if "network_scope" in parameters:
+        from .network_inputs import network_scope_identity, verify_network_engine_scope
+        manifest = _network_project(spec)
+        identity = network_scope_identity(manifest, parameters)
+        for key, value in identity.items():
+            if key in spec.get("scope", {}) and spec["scope"][key] != value:
+                raise ValueError("Network task scope and reproducible parameters disagree")
     if inputs.get("config"):
         config = load_config(inputs["config"])
+        if identity and adapter == "network.fit":
+            from .network_inputs import validate_external_network_config
+            validate_external_network_config(config, manifest, identity, _sha)
     elif adapter == "network.fit" and inputs.get("project"):
         from .network_inputs import prepare_project_network
         config,projection,manifest = prepare_project_network(inputs["project"],out / "prepared_inputs",parameters,_sha)
@@ -619,6 +675,8 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
     source_root = Path(inputs["engine_root"]).resolve() if inputs.get("engine_root") else None
     if adapter != "network.fit" and source_root is None:
         raise ValueError("A verified network.fit dependency must supply inputs.engine_root")
+    if source_root is not None and identity:
+        verify_network_engine_scope(source_root, identity)
     engine = out / "engine"
     if source_root is not None and (source_root == engine or engine in source_root.parents or source_root in engine.parents):
         raise ValueError("Network source and isolated stage output overlap")
@@ -629,6 +687,8 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
         if source is not None and source.is_dir():
             shutil.copytree(source, engine / prefix)
     config.output_dir = engine
+    if identity:
+        config.network.minimum_network_samples = identity["minimum_network_samples"]
     if adapter == "network.fit":
         from katana_next.workflows.programs import (
             configure_production_membership, configure_production_modules,
@@ -672,6 +732,10 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
                     else:
                         pipeline.run_stage(stage)
                     ran.append(stage)
+            if identity:
+                marker = engine / "network_scope.json"
+                marker.write_text(json.dumps(identity, indent=2), encoding="utf-8")
+                verify_network_engine_scope(engine, identity)
             outputs = pipeline.fit_network(name); ran.append(f"network_{name}")
             target = engine / "04_network" / name
             if not (target / "event_linkage.npy").is_file():
@@ -690,11 +754,20 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
             precomputed, enrichment_paths = _network_enrichment(spec, engine)
             paths.extend(enrichment_paths)
     paths.append(resolved)
+    if identity:
+        marker = engine / "network_scope.json"
+        if not marker.is_file():
+            marker.write_text(json.dumps(identity, indent=2), encoding="utf-8")
+        verify_network_engine_scope(engine, identity)
+        paths.append(marker)
     evidence = {"engine_root": str(engine), "resolved_config": str(resolved),
             "source_engine_root": str(source_root) if source_root else None, "executed_stages": ran,
             "fit_algorithm_unchanged": True, "original_output_modified": False,
             "dependency_compatibility": "dynamicTreeCut0.1.1 ordinal ranks retain exact values with integer index dtype",
             "analysis_id": "programs.cosplice"}
+    if identity:
+        evidence["network_identity"] = identity
+        evidence["interpretation_status"] = identity["sample_size_status"]
     if adapter in {"network.associate", "network.annotate"}:
         evidence["precomputed_views"] = precomputed
     if projection:
@@ -754,7 +827,8 @@ def _network_enrichment(spec, engine):
         libraries[key] = str(asset.path)
     if not libraries or any(not Path(value).is_file() for value in libraries.values()):
         raise ValueError("Module GO/KEGG enrichment requires explicit matched GMT libraries")
-    assignments = pd.read_csv(engine / "04_network/observed/event_module_assignments.tsv",sep="\t")
+    network_name = str(spec.get("parameters", {}).get("network_name", "observed"))
+    assignments = pd.read_csv(engine / "04_network" / network_name / "event_module_assignments.tsv",sep="\t")
     annotation = pd.read_csv(engine / "02_matrix/event_metadata.tsv",sep="\t")
     tested, background = enrich_modules(assignments,annotation,libraries)
     symbol = next(key for key in ("gene_symbol", "gene_name") if key in annotation)

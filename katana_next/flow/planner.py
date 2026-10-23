@@ -116,12 +116,35 @@ def create_plan(project, config):
         add("coverage-summary", "quality.read_coverage_bias", coverage_tasks)
 
     network = settings.get("network", {})
-    inputs = {"config": local(network["config"])} if network.get("config") else {"project": str(project_path)}
-    add("network-fit", "flow.network.fit", ["audit"], network.get("parameters", {}),
-        {"unit": "measurable_cohort_PSI"}, adapter="network.fit", inputs=inputs)
-    for stage in ("bootstrap", "associate", "annotate"):
-        add("network-" + stage, "flow.network." + stage, ["network-fit"],
-            network.get("parameters", {}), {"unit": "module", "contrast_ids": contrasts}, adapter="network." + stage, inputs=inputs)
+    from .network_inputs import network_scope_identity
+    network_scope = network.get("scope", "contrast")
+    if network_scope not in {"contrast", "cohort"}:
+        raise ValueError("network.scope must be contrast or cohort")
+    configurations = network.get("configs", {})
+    if not isinstance(configurations, dict) or set(configurations) - set(contrasts):
+        raise ValueError("network.configs must map selected comparison IDs to their scoped configurations")
+    if network_scope == "cohort" and configurations:
+        raise ValueError("Per-comparison network.configs cannot be used for a cohort discovery")
+    for comparison_ids in ([[cid] for cid in contrasts] if network_scope == "contrast" else [contrasts]):
+        params = dict(network.get("parameters", {}))
+        if "network_scope" in params and params["network_scope"] != network_scope:
+            raise ValueError("network.scope conflicts with network.parameters.network_scope")
+        params.update(network_scope=network_scope, contrast_ids=comparison_ids)
+        identity = network_scope_identity(manifest, params)
+        params.update(identity)
+        suffix = "-" + _token(comparison_ids[0]) if network_scope == "contrast" else ""
+        fit_id = "network-fit" + suffix
+        inputs = {"project": str(project_path)}
+        configuration = configurations.get(comparison_ids[0]) if network_scope == "contrast" else None
+        configuration = configuration or network.get("config")
+        if configuration:
+            inputs["config"] = local(configuration)
+        scope = {**identity, "unit": "measurable_contrast_PSI" if network_scope == "contrast" else "measurable_cohort_PSI"}
+        add(fit_id, "flow.network.fit", ["audit"], params, scope,
+            adapter="network.fit", inputs=inputs)
+        for stage in ("bootstrap", "associate", "annotate"):
+            add("network-" + stage + suffix, "flow.network." + stage, [fit_id],
+                params, {**identity, "unit": "module"}, adapter="network." + stage, inputs=inputs)
 
     interactions = settings.get("interactions", [])
     if not isinstance(interactions, list):
@@ -204,6 +227,15 @@ def preflight_plan(plan):
         if task.get("adapter"):
             from .stages import readiness
             try:
+                if task.get("adapter") == "historical.adopt":
+                    from .adoption import validate_identity_projection
+                    inputs = task.get("inputs", {})
+                    if not inputs.get("adoption") or not inputs.get("identity_projection"):
+                        raise ValueError("Historical adoption requires explicit source and study-identity projection")
+                    validate_identity_projection(inputs["adoption"], inputs["identity_projection"], path)
+                    if task.get("dependencies"):
+                        raise ValueError("Historical input transport must not masquerade as scientific continuation")
+                    continue
                 deferred = list(task.get("dependency_inputs", {}))
                 by_id = {t["id"]: t for t in plan["tasks"]}
                 if task.get("adapter") == "mapp.maei" and any(by_id[d].get("adapter") == "mapp.prepare" for d in task["dependencies"]):

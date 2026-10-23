@@ -61,7 +61,9 @@ def test_ordinary_das_switch_does_not_weaken_required_rs_motif_inputs(study):
     assert motif["selection"]["event_set"] == "stable_significant"
     overlap = next(t for t in plan["tasks"] if t["id"] == "overlap")
     assert overlap["parameters"]["event_set"] == "significant"
-    assert next(t for t in plan["tasks"] if t["id"] == "network-fit")["scope"]["unit"] == "measurable_cohort_PSI"
+    network = next(t for t in plan["tasks"] if t.get("adapter") == "network.fit")
+    assert network["scope"]["unit"] == "measurable_contrast_PSI"
+    assert network["scope"]["contrast_ids"] == ["perturbation-vs-baseline"]
 
 
 def test_real_audit_quality_and_as_chain_isolated_and_reusable(study, tmp_path):

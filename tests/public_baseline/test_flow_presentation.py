@@ -121,7 +121,7 @@ def test_generic_network_complete_views_never_repeat_completed_stats(tmp_path, m
     assert audit["network_discovery_runs"] == audit["new_trait_fits"] == 0
     assert audit["new_module_ora"] is False
     assert not result["extra_views"][0]["unavailable"]
-    assert "e5" in (root / "presentation/network/browser/ALL_MODULES.html").read_text()
+    assert "e5" in (root / "presentation/network/browser/ALL_MODULES.html").read_text(encoding="utf-8")
     assert (root / "presentation/network/tables/matched_module_tests_full_family.tsv").read_bytes() == (source / "associate-engine/full.tsv").read_bytes()
     for item in result["extra_assets"]:
         if item["path"].endswith(".png"):
@@ -133,6 +133,120 @@ def test_generic_network_complete_views_never_repeat_completed_stats(tmp_path, m
     changed.write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="member changed"):
         validate_network_view_proof(root / "presentation/network-inputs.json", [], proof["contrasts"])
+
+
+def _two_contrast_network_collection(tmp_path):
+    """Two independent six-sample completed fixtures, not discovery runs."""
+    from katana_next.reports.network_views import matched_module_associations
+    tasks, products, contrasts, sources = [], {}, [], []
+    sample_ids = [f"{group}{rep}" for group in ("B", "A", "C") for rep in (1, 2, 3)]
+    for number, group in enumerate(("B", "C")):
+        old_plan, old_receipts, _, source = _network_collection(tmp_path / f"scope-{number}")
+        cid = group + "_vs_A"
+        contrast = {"contrast_id": cid, "numerator": {"sample_ids": [f"{group}{rep}" for rep in (1, 2, 3)]},
+                    "denominator": {"sample_ids": [f"A{rep}" for rep in (1, 2, 3)]}}
+        wanted = set(contrast["numerator"]["sample_ids"] + contrast["denominator"]["sample_ids"])
+        chosen = [sample for sample in sample_ids if sample in wanted]
+        identity = {"network_scope": "contrast", "contrast_ids": [cid], "sample_ids": chosen,
+                    "biological_sample_ids": chosen, "n_samples": 6, "minimum_network_samples": 6,
+                    "sample_size_status": "small_sample_exploratory"}
+        fit = source / "fit-engine"
+        samples = pd.read_csv(fit / "02_matrix/sample_metadata_resolved.tsv", sep="\t")
+        samples = samples[samples.sample_id.isin(chosen)]
+        samples.to_csv(fit / "02_matrix/sample_metadata_resolved.tsv", sep="\t", index=False)
+        native = fit / "04_network/observed"
+        scores = pd.read_csv(native / "module_program_scores.tsv", sep="\t", index_col=0).loc[chosen]
+        scores.to_csv(native / "module_program_scores.tsv", sep="\t")
+        psi = pd.read_csv(native / "selected_event_matrix.tsv", sep="\t", index_col=0)[chosen]
+        psi.to_csv(native / "selected_event_matrix.tsv", sep="\t")
+        write_json(fit / "network_scope.json", identity)
+        full, selected, audit = matched_module_associations(scores, samples, [contrast])
+        full.to_csv(source / "associate-engine/full.tsv", sep="\t", index=False)
+        selected.to_csv(source / "associate-engine/selected.tsv", sep="\t", index=False)
+        write_json(source / "associate-engine/audit.json", audit)
+        for previous in old_plan["tasks"]:
+            key = previous["id"]
+            task_id = f"{key}-{number}"
+            task = {**previous, "id": task_id, "dependencies": [] if key == "fit" else [f"fit-{number}"],
+                    "parameters": {**identity, "network_name": "observed"}, "scope": identity.copy()}
+            tasks.append(task)
+            old = old_receipts[key][1]
+            paths = [Path(record["path"]) for record in old["outputs"]]
+            if key == "fit":
+                paths.append(fit / "network_scope.json")
+            products[task_id] = paths, {**old["execution_evidence"], "network_identity": identity}
+        contrasts.append(contrast)
+        sources.append(source)
+    project = {"project_id": "study", "name": "Independent contrast fixture", "contrasts": contrasts,
+               "samples": [{"sample_id": sid, "biological_sample_id": sid, "condition": sid[0]} for sid in sample_ids]}
+    return (*_fixture_collection(tmp_path / "collection", project, tasks, products), sources)
+
+
+def test_two_contrast_networks_reach_seven_chapter_report_without_collapsing(tmp_path, monkeypatch):
+    from katana_next.reports.engine import Builder, ASSET_ROOT
+    from katana_next.reports.sources import load_source
+    plan, receipts, transport, sources = _two_contrast_network_collection(tmp_path)
+    before = {str(path): file_hash(path) for source in sources for path in source.rglob("*") if path.is_file()}
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Completed independent network statistics cannot be fitted again by reporting")
+    monkeypatch.setattr("katana_next.reports.network_views.matched_module_associations", forbidden)
+    monkeypatch.setattr("katana_next.workflows.module_functions.enrich_modules", forbidden)
+    root = tmp_path / "collection"
+    result = build_presentation_assets(root, plan, receipts, transport)
+    assets = result["extra_assets"]
+    assert len({a["artifact_id"] for a in assets}) == len(assets)
+    assert {tuple(a["contrast_ids"]) for a in assets} == {("B_vs_A",), ("C_vs_A",)}
+    proof_paths = sorted((root / "presentation").glob("network-*-inputs.json"))
+    assert len(proof_paths) == 2
+    for proof_path, source in zip(proof_paths, sources):
+        proof = json.loads(proof_path.read_text())
+        identity = proof["network_identity"]
+        cid = identity["contrast_ids"][0]
+        scope_dir = proof_path.with_name(proof_path.name.removesuffix("-inputs.json"))
+        assert identity["n_samples"] == 6
+        assert pd.read_csv(scope_dir / "tables/all_event_psi.tsv.gz", sep="\t", index_col=0).columns.tolist() == identity["sample_ids"]
+        table = scope_dir / "tables/matched_module_tests_full_family.tsv"
+        assert table.read_bytes() == (source / "associate-engine/full.tsv").read_bytes()
+        assert set(pd.read_csv(table, sep="\t").contrast_id) == {cid}
+        background = pd.read_csv(scope_dir / "tables/enrichment_background.tsv", sep="\t")
+        assert set(background.gene_symbol) == {"G1", "G2", "G3", "G4"}  # measured, including grey
+        persisted = json.loads((scope_dir / "artifact-records.json").read_text())
+        assert all(a["contrast_ids"] == [cid] for a in persisted)
+        assert all(a["metadata"]["network_identity"] == identity for a in persisted)
+        assert all(link["contrast_id"] == cid for a in persisted for link in a["metadata"].get("data_links", []))
+    # Exercise the real final chapter/panel renderer, not only the task graph.
+    output = tmp_path / "report"
+    output.mkdir()
+    shutil.copytree(ASSET_ROOT, output / "assets")
+    descriptor = {"project_manifest": str(root / "project.json"), "artifacts": [],
+                  "extra_assets": assets, "report_require_plot_data": True}
+    loaded = load_source(descriptor)
+    builder = Builder(loaded, output, "stable_significant")
+    builder.collect_rich({"artifacts": assets})
+    builder.write()
+    panels = [p for p in builder.panels if p["chapter"] == 6 and not p.get("output_only")]
+    assert {p["contrast_id"] for p in panels} == {"B_vs_A", "C_vs_A"}
+    assert len({p["id"] for p in panels}) == len(panels)
+    assert all(p["metadata"]["network_identity"]["n_samples"] == 6 for p in panels)
+    assert all(link["contrast_id"] == p["contrast_id"] for p in panels for link in p["data_links"])
+    html = (output / "REPORT.html").read_text(encoding="utf-8")
+    assert all(f'id="chapter-{chapter}"' in html for chapter in range(1, 8))
+    assert 'data-contrast="B_vs_A"' in html and 'data-contrast="C_vs_A"' in html
+    assert "Small-sample exploratory network" in html
+    assert before == {str(path): file_hash(path) for source in sources for path in source.rglob("*") if path.is_file()}
+    # A valid completed receipt from the other fit is still the wrong lifecycle.
+    first, second = (json.loads(path.read_text()) for path in proof_paths)
+    first["task_receipts"][1] = second["task_receipts"][1]
+    write_json(proof_paths[0], first)
+    with pytest.raises(ValueError, match="different contrast/sample scopes"):
+        validate_network_view_proof(proof_paths[0], [], first["contrasts"])
+
+
+def test_network_presentation_rejects_missing_followup_for_any_fit(tmp_path):
+    plan, receipts, transport, _ = _two_contrast_network_collection(tmp_path)
+    plan["tasks"] = [task for task in plan["tasks"] if task["id"] != "annotate-0"]
+    with pytest.raises(ValueError, match="all four completed network stages for every fit"):
+        build_presentation_assets(tmp_path / "collection", plan, receipts, transport)
 
 
 def test_generic_motif_views_verify_complete_family_and_keep_all_models(completed, tmp_path):
@@ -148,7 +262,9 @@ def test_generic_motif_views_verify_complete_family_and_keep_all_models(complete
     assert view["audit"]["proof_kind"] == "flow"
     assert view["audit"]["models"] == 3
     assert view["audit"]["new_scans"] == view["audit"]["new_statistical_tests"] == 0
-    assert len(view["panels"]) == 8
+    assert len(view["panels"]) == 10
+    assert view["audit"]["top_motif_cards"] == 3
+    assert sum(not panel.get("output_only") for panel in view["panels"]) == 4
     assert before == {path.name: file_hash(path) for path in source.iterdir()}
 
 

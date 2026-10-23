@@ -13,19 +13,129 @@ from katana_cosplice.utils import normalize_sample_id
 from katana_next.infrastructure.manifest_store import ManifestStore
 
 
+def network_scope_identity(manifest, parameters):
+    """Bind a discovery to its exact biological samples, independently of labels.
+
+    Missing scope is the historical cohort contract. New flow plans explicitly
+    choose contrast; persisted plans and the standalone engine keep their rules.
+    """
+    scope = parameters.get("network_scope", "cohort")
+    if scope not in {"contrast", "cohort"}:
+        raise ValueError("network.scope must be contrast or cohort")
+    known = {c.contrast_id: c for c in manifest.contrasts}
+    contrasts = list(parameters.get("contrast_ids") or [])
+    if len(set(contrasts)) != len(contrasts) or set(contrasts) - set(known):
+        raise ValueError("Network scope needs unique declared contrast IDs")
+    if scope == "contrast":
+        if len(contrasts) != 1:
+            raise ValueError("Each contrast network must declare exactly one comparison")
+        contrast = known[contrasts[0]]
+        wanted = set(contrast.numerator.sample_ids) | set(contrast.denominator.sample_ids)
+        samples = [s for s in manifest.samples if s.sample_id in wanted]
+    else:
+        samples = list(manifest.samples)
+    sample_ids = [s.sample_id for s in samples]
+    biological_ids = [s.biological_sample_id for s in samples]
+    if len(set(sample_ids)) != len(sample_ids) or len(set(biological_ids)) != len(biological_ids):
+        raise ValueError("Network discovery requires distinct independent biological samples; technical records cannot inflate n")
+    minimum = 6 if scope == "contrast" else 15
+    if len(samples) < minimum:
+        raise ValueError(f"{scope} network requires at least {minimum} independent biological samples")
+    identity = {"network_scope": scope, "contrast_ids": contrasts,
+                "sample_ids": sample_ids, "biological_sample_ids": biological_ids,
+                "n_samples": len(samples), "minimum_network_samples": minimum,
+                "sample_size_status": "small_sample_exploratory" if len(samples) < 15 else "standard_sample_count"}
+    for key, value in identity.items():
+        if key in parameters and parameters[key] != value:
+            raise ValueError(f"Network {key} disagrees with the declared project scope")
+    return identity
+
+
+def validate_external_network_config(config, manifest, identity, sha):
+    """Reject an external config that silently widens or changes a contrast.
+
+    The same native rMATS vectors and their exact side order must be bound to
+    the declared samples; an unrelated cohort YAML cannot masquerade as a fit.
+    """
+    from katana_cosplice.audit import load_sample_metadata, resolve_rmats_root
+    from katana_cosplice.matrix import _candidate_sources, _group_samples
+    samples = load_sample_metadata(config.sample_metadata)
+    if set(samples.sample_id) != set(identity["sample_ids"]):
+        raise ValueError("External network configuration samples do not exactly match the task scope")
+    if "biological_sample_id" not in samples:
+        raise ValueError("Scoped external network configuration requires biological_sample_id metadata")
+    expected_units = dict(zip(identity["sample_ids"], identity["biological_sample_ids"]))
+    if samples.set_index("sample_id").biological_sample_id.astype(str).to_dict() != expected_units:
+        raise ValueError("External network biological units differ from the declared project")
+    selected = load_sample_metadata(config.sample_metadata, config.selected_conditions)
+    if set(selected.sample_id) != set(identity["sample_ids"]):
+        raise ValueError("External network selected_conditions changes the declared sample scope")
+    if identity["network_scope"] != "contrast":
+        return
+    if config.matrix_input.input_mode != "rmats_events":
+        raise ValueError("Contrast flow configuration currently requires declared rMATS sources")
+    cid = identity["contrast_ids"][0]
+    assets = [a for a in manifest.assets if a.kind == "rmats_result"
+              and a.metadata.get("contrast_id") == cid
+              and str(a.metadata.get("mode", config.rmats_mode)).upper() == config.rmats_mode]
+    by_digest = {}
+    for asset in assets:
+        digest = sha(asset.path)
+        expected = asset.metadata.get("upstream_sha256") or asset.metadata.get("sha256")
+        if expected and expected != digest:
+            raise ValueError("Declared contrast rMATS source fingerprint changed")
+        by_digest.setdefault(digest, []).append(asset)
+    root = resolve_rmats_root(config.rmats_root)
+    groups = sorted(samples.condition.unique().tolist(), key=len, reverse=True)
+    sources, counts = _candidate_sources(root, config.rmats_mode, groups)
+    if len(sources) != len(groups) * 5 or any(n != 1 for n in counts.values()):
+        raise ValueError("External contrast configuration needs one unambiguous native source per group and event class")
+    for (group, event), (path, side) in sources.items():
+        order = _group_samples(root / "bamlist" / f"{group}_bamlist.txt")
+        if set(order) != set(samples.loc[samples.condition.eq(group), "sample_id"]):
+            raise ValueError("External rMATS bamlist differs from the scoped sample metadata")
+        matches = by_digest.get(sha(path), [])
+        valid = False
+        for asset in matches:
+            arm_order = ("denominator", "numerator") if asset.metadata.get("reverse_direction", False) else ("numerator", "denominator")
+            arm = arm_order[side - 1]
+            if (str(asset.metadata.get("event_type") or asset.path.name.split(".")[0]) == event
+                    and order == list(asset.metadata.get(arm + "_sample_ids") or [])):
+                valid = True
+        if not valid:
+            raise ValueError("External network rMATS source or native sample order is outside this exact contrast")
+
+
+def verify_network_engine_scope(engine, identity):
+    """Followups cannot consume another contrast's fit, even with equal n."""
+    marker = Path(engine) / "network_scope.json"
+    if not marker.is_file() or json.loads(marker.read_text(encoding="utf-8")) != identity:
+        raise ValueError("Network fit dependency scope does not match this exact task")
+    samples = pd.read_csv(Path(engine) / "02_matrix/sample_metadata_resolved.tsv", sep="\t", dtype=str)
+    if (not samples.sample_id.is_unique or set(samples.sample_id) != set(identity["sample_ids"])):
+        raise ValueError("Network fit matrix includes missing or foreign samples")
+    if "biological_sample_id" not in samples:
+        raise ValueError("Scoped network fit matrix requires biological_sample_id metadata")
+    units = samples.set_index("sample_id").biological_sample_id.astype(str).to_dict()
+    if units != dict(zip(identity["sample_ids"], identity["biological_sample_ids"])):
+        raise ValueError("Network fit matrix biological units differ from the task scope")
+
+
 def prepare_project_network(project_path, out, parameters, sha):
     """Project existing complete rMATS files; no alignment or AS refitting."""
     _, manifest = ManifestStore().load(project_path)
+    identity = network_scope_identity(manifest, parameters)
+    selected_samples = [s for s in manifest.samples if s.sample_id in set(identity["sample_ids"])]
     if not manifest.samples:
         raise ValueError("Network discovery requires the declared biological-sample cohort")
     if any(normalize_sample_id(s.sample_id) != s.sample_id for s in manifest.samples):
         raise ValueError("Sample IDs must be stable identifiers; paths or BAM suffixes belong in sample assets")
     rows = []
-    conditions = list(dict.fromkeys(s.condition for s in manifest.samples))
+    conditions = list(dict.fromkeys(s.condition for s in selected_samples))
     aliases = {condition: f"group{index:04d}" for index,condition in enumerate(conditions,1)}
-    groups = {c:[s.sample_id for s in manifest.samples if s.condition == c] for c in conditions}
+    groups = {c:[s.sample_id for s in selected_samples if s.condition == c] for c in conditions}
     sample_condition = {s.sample_id:s.condition for s in manifest.samples}
-    for sample in manifest.samples:
+    for sample in selected_samples:
         rows.append({**sample.attributes,"sample_id":sample.sample_id,
                      "biological_sample_id":sample.biological_sample_id,
                      "condition":aliases[sample.condition],"condition_label":sample.condition,
@@ -47,6 +157,8 @@ def prepare_project_network(project_path, out, parameters, sha):
             continue
         metadata = asset.metadata
         cid = metadata.get("contrast_id")
+        if identity["network_scope"] == "contrast" and cid not in identity["contrast_ids"]:
+            continue
         if cid not in contrasts:
             raise ValueError(f"rMATS resource has an undeclared comparison: {asset.asset_id}")
         contrast = contrasts[cid]
@@ -61,7 +173,7 @@ def prepare_project_network(project_path, out, parameters, sha):
                 raise ValueError(f"{cid}: one rMATS arm must represent one declared condition")
             condition = next(iter(labels))
             if set(groups[condition]) != set(observed):
-                raise ValueError(f"{cid}: partial-condition rMATS arms cannot define this full-cohort network matrix")
+                raise ValueError(f"{cid}: rMATS arms differ from the scoped network samples")
             arms[arm] = (condition,observed)
         order = ("denominator","numerator") if metadata.get("reverse_direction",False) else ("numerator","denominator")
         first,second = (arms[arm] for arm in order)
@@ -109,7 +221,7 @@ def prepare_project_network(project_path, out, parameters, sha):
     if available != {"SE","A3SS","A5SS","MXE","RI"}:
         raise ValueError("The network measurement source must retain all five rMATS event-class schemas")
     mapping_path = out / "rmats_projection.mapping.json"
-    mapping_path.write_text(json.dumps({"projection":mapping,"condition_aliases":aliases,
+    mapping_path.write_text(json.dumps({"projection":mapping,"condition_aliases":aliases,"network_identity":identity,
                            "sample_identity_preserved":True,"source_results_modified":False},indent=2),encoding="utf-8")
     config = CoSpliceConfig(project_name=manifest.name,rmats_root=root,sample_metadata=samples_path,
         output_dir=out / "engine",gtf=manifest.annotation.gtf,genome_fasta=manifest.annotation.genome_fasta,
@@ -121,8 +233,9 @@ def prepare_project_network(project_path, out, parameters, sha):
         config.network.wgcna_rscript = str(rscript)
     config.network.min_module_size = 20
     config.network.wgcna_merge_cut_height = .25
+    config.network.minimum_network_samples = identity["minimum_network_samples"]
     return config,{"condition_aliases":aliases,"projection_mapping":str(mapping_path),
-                   "transport_inputs":str(out),"statistics_refitted":False},manifest
+                   "transport_inputs":str(out),"statistics_refitted":False,"network_identity":identity},manifest
 
 
 def restore_condition_labels(engine, aliases):

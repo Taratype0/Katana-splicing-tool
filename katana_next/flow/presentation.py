@@ -65,6 +65,44 @@ def _verified_view_files(root, proof, task_values):
     return verified
 
 
+def _network_task_identity(task, project):
+    """Re-derive a scoped task's samples from the immutable study declaration."""
+    parameters = task.get("parameters", {})
+    if "network_scope" not in parameters:
+        return None  # Preserve historical single-cohort plans and their proofs.
+    from types import SimpleNamespace
+    from .network_inputs import network_scope_identity
+    study = SimpleNamespace(
+        samples=[SimpleNamespace(sample_id=row["sample_id"], biological_sample_id=row["biological_sample_id"])
+                 for row in project["samples"]],
+        contrasts=[SimpleNamespace(contrast_id=row["contrast_id"],
+                    numerator=SimpleNamespace(sample_ids=row["numerator"]["sample_ids"]),
+                    denominator=SimpleNamespace(sample_ids=row["denominator"]["sample_ids"]))
+                   for row in project["contrasts"]])
+    identity = network_scope_identity(study, parameters)
+    if any(task.get("scope", {}).get(key) != value for key, value in identity.items()):
+        raise ValueError("Network presentation task parameters and sample scope disagree")
+    return identity
+
+
+def _network_lifecycles(plan, receipts):
+    """Group all four completed stages by their actual fit dependency."""
+    network = [task for task in plan["tasks"] if task.get("adapter", "").startswith("network.")]
+    fits = {task["id"]: {"network.fit": (task, receipts[task["id"]][1])}
+            for task in network if task["adapter"] == "network.fit"}
+    for task in network:
+        if task["adapter"] == "network.fit":
+            continue
+        parents = [identifier for identifier in task.get("dependencies", []) if identifier in fits]
+        if len(parents) != 1 or task["adapter"] in fits[parents[0]]:
+            raise ValueError("Each network followup needs one unique fitted lifecycle")
+        fits[parents[0]][task["adapter"]] = task, receipts[task["id"]][1]
+    required = {"network.fit", "network.bootstrap", "network.associate", "network.annotate"}
+    if any(set(stages) != required for stages in fits.values()):
+        raise ValueError("The fixed network report needs all four completed network stages for every fit")
+    return fits
+
+
 def validate_network_view_proof(completion_path, input_paths, contrasts):
     """Authenticate local/cluster task receipts without inventing Slurm records."""
     path = Path(completion_path).resolve()
@@ -88,17 +126,39 @@ def validate_network_view_proof(completion_path, input_paths, contrasts):
     if set(records) != required:
         raise ValueError("Network fit, bootstrap, association and annotation must all actually complete")
     fit_task, fit = records["network.fit"]
+    identity = _network_task_identity(fit_task, read_json(root / "project.json"))
+    if identity != proof.get("network_identity"):
+        raise ValueError("Network presentation identity differs from its fitted sample population")
     engine = fit.get("execution_evidence", {}).get("engine_root")
-    expected = {"network.fit": "network_observed", "network.bootstrap": "consensus_modules",
-                "network.associate": "associate_observed_declared_contrasts", "network.annotate": "annotate_modules"}
+    name = str(fit_task.get("parameters", {}).get("network_name", "observed"))
+    expected = {"network.fit": "network_" + name, "network.bootstrap": "consensus_modules",
+                "network.associate": "associate_" + name + "_declared_contrasts", "network.annotate": "annotate_modules"}
     for adapter, (task, value) in records.items():
         evidence = value.get("execution_evidence", {})
+        if identity and (_network_task_identity(task, read_json(root / "project.json")) != identity or
+                         evidence.get("network_identity") != identity):
+            raise ValueError("Network presentation stages belong to different contrast/sample scopes")
         if expected[adapter] not in evidence.get("executed_stages", []):
             raise ValueError("A network stage has no actual native calculation evidence")
         if adapter != "network.fit" and (fit_task["id"] not in task.get("dependencies", []) or
                                          evidence.get("source_engine_root") != engine):
             raise ValueError("Network postprocessing belongs to another fitted module population")
     verified = _verified_view_files(root, proof, task_values)
+    if identity:
+        import pandas as pd
+        marker = _inside(root, proof["scope_marker"])
+        sample_metadata = _inside(root, proof["sample_metadata"])
+        if marker not in verified or sample_metadata not in verified or read_json(marker) != identity:
+            raise ValueError("Scoped network presentation needs the actual verified fit scope marker and samples")
+        samples = pd.read_csv(sample_metadata, sep="\t", dtype=str)
+        if (not samples.sample_id.is_unique or set(samples.sample_id) != set(identity["sample_ids"])):
+            raise ValueError("Network report contains missing or foreign fitted samples")
+        if ("biological_sample_id" not in samples or
+            samples.set_index("sample_id").biological_sample_id.to_dict() !=
+                dict(zip(identity["sample_ids"], identity["biological_sample_ids"]))):
+            raise ValueError("Network report biological units differ from the fitted sample population")
+        if [row["contrast_id"] for row in contrasts] != identity["contrast_ids"]:
+            raise ValueError("Network report comparisons differ from this fitted scope")
     if not set(map(lambda item: Path(item).resolve(), input_paths)) <= set(verified):
         raise ValueError("Every plotted network population must be in the exact completed task ledgers")
     precomputed = {name: _inside(root, relative) for name, relative in proof["precomputed"].items()}
@@ -107,7 +167,8 @@ def validate_network_view_proof(completion_path, input_paths, contrasts):
     for name in ("linkage", "bootstrap_members", "bootstrap_modules"):
         if _inside(root, proof[name]) not in verified:
             raise ValueError("Network tree and module bootstrap need their actual saved numerical products")
-    precomputed["provenance"] = {"source_task_id": fit_task["id"], "flow_plan_id": plan["plan_id"]}
+    precomputed["provenance"] = {"source_task_id": fit_task["id"], "flow_plan_id": plan["plan_id"],
+                                 "network_identity": identity}
     return NETWORK_SCOPE, None, precomputed, [*paths, *verified]
 
 
@@ -167,20 +228,26 @@ def build_presentation_assets(root, plan, receipts, transport):
     declared = {task["id"]: task for task in plan["tasks"]}
     selected = plan.get("contrast_ids", [c["contrast_id"] for c in project["contrasts"]])
     contrasts = [c for cid in selected for c in project["contrasts"] if c["contrast_id"] == cid]
-    network = {task.get("adapter"): (task, receipts[task["id"]][1]) for task in plan["tasks"]
-               if task.get("adapter", "").startswith("network.")}
-    if network:
-        required = {"network.fit", "network.bootstrap", "network.associate", "network.annotate"}
-        if set(network) != required:
-            raise ValueError("The fixed network report needs all four completed network stages")
+    lifecycles = _network_lifecycles(plan, receipts)
+    for fit_id, network in lifecycles.items():
         fit_task, fit = network["network.fit"]
+        identity = _network_task_identity(fit_task, project)
+        scoped_contrasts = ([c for cid in identity["contrast_ids"] for c in contrasts if c["contrast_id"] == cid]
+                            if identity else contrasts)
+        if identity and [c["contrast_id"] for c in scoped_contrasts] != identity["contrast_ids"]:
+            raise ValueError("A fitted network comparison is absent from the selected report")
+        if not identity and len(lifecycles) != 1:
+            raise ValueError("Multiple network fits need explicit contrast/cohort identities")
+        suffix = "-" + _safe(fit_id) + "-" + canonical_hash(fit_id)[:8] if identity else ""
+        display_contrast = identity["contrast_ids"][0] if identity and identity["network_scope"] == "contrast" else None
+        name = str(fit_task.get("parameters", {}).get("network_name", "observed"))
         engine = Path(fit["execution_evidence"]["engine_root"])
-        names = {"assignments_path": "04_network/observed/event_module_assignments.tsv",
-                 "scores_path": "04_network/observed/module_program_scores.tsv",
-                 "psi_path": "04_network/observed/selected_event_matrix.tsv",
+        names = {"assignments_path": f"04_network/{name}/event_module_assignments.tsv",
+                 "scores_path": f"04_network/{name}/module_program_scores.tsv",
+                 "psi_path": f"04_network/{name}/selected_event_matrix.tsv",
                  "annotation_path": "02_matrix/event_metadata.tsv",
                  "samples_path": "02_matrix/sample_metadata_resolved.tsv",
-                 "edges_path": "04_network/observed/network_edges.tsv"}
+                 "edges_path": f"04_network/{name}/network_edges.tsv"}
         native = {key: engine / relative for key, relative in names.items()}
         members = [proof_member(fit_task["id"], path) for path in native.values()]
         precomputed = {}
@@ -191,7 +258,7 @@ def build_presentation_assets(root, plan, receipts, transport):
                 precomputed[key] = translated_path(path).relative_to(root).as_posix()
         if set(precomputed) != {"full_tests", "selected_tests", "trait_audit", "tested", "background", "input_genes"}:
             raise ValueError("Network views require the complete already computed contrast and ORA families")
-        linkage = engine / "04_network/observed/event_linkage.npy"
+        linkage = engine / f"04_network/{name}/event_linkage.npy"
         members.append(proof_member(fit_task["id"], linkage))
         bootstrap_task, bootstrap = network["network.bootstrap"]
         boot_root = Path(bootstrap["execution_evidence"]["engine_root"]) / "04c_consensus_modules"
@@ -199,19 +266,45 @@ def build_presentation_assets(root, plan, receipts, transport):
         boot_modules = boot_root / "consensus_module_summary.tsv"
         members += [proof_member(bootstrap_task["id"], path) for path in (boot_members, boot_modules)]
         proof = {"schema": NETWORK_PROOF_SCHEMA, "status": "completed", "plan_id": plan["plan_id"],
-                 "contrasts": contrasts, "source_project_manifest_sha256": plan["project_manifest_sha256"],
+                 "contrasts": scoped_contrasts, "source_project_manifest_sha256": plan["project_manifest_sha256"],
                  "task_receipts": [task_record(task["id"]) for task, _value in network.values()],
                  "files": members, "precomputed": precomputed,
                  "linkage": translated_path(linkage).relative_to(root).as_posix(),
                  "bootstrap_members": translated_path(boot_members).relative_to(root).as_posix(),
                  "bootstrap_modules": translated_path(boot_modules).relative_to(root).as_posix()}
-        proof_path = write_json(directory / "network-inputs.json", proof)
+        if identity:
+            marker = engine / "network_scope.json"
+            members.append(proof_member(fit_id, marker))
+            proof.update(network_identity=identity,
+                         scope_marker=translated_path(marker).relative_to(root).as_posix(),
+                         sample_metadata=translated_path(native["samples_path"]).relative_to(root).as_posix())
+        proof_path = write_json(directory / ("network" + suffix + "-inputs.json"), proof)
         from katana_next.reports.network_views import build_network_assets
         rendered = build_network_assets(**{key: translated_path(path) for key, path in native.items()},
-                                       contrasts=contrasts, completion_manifest=proof_path,
-                                       output_dir=directory / "network", project_id=project["project_id"])
+                                       contrasts=scoped_contrasts, completion_manifest=proof_path,
+                                       output_dir=directory / ("network" + suffix), project_id=project["project_id"])
         for artifact in rendered["artifacts"]:
             artifact.setdefault("metadata", {})["source_project_manifest_sha256"] = project_sha
+            if identity:
+                artifact["artifact_id"] += "-" + canonical_hash(identity)[:16]
+                artifact["metadata"]["network_identity"] = identity
+                artifact["metadata"]["interpretation_status"] = identity["sample_size_status"]
+            if display_contrast:
+                artifact["contrast_ids"] = [display_contrast]
+                artifact["name"] += " | " + display_contrast
+                artifact["metadata"]["caption"] += (f" Independent {display_contrast} network; "
+                    f"{identity['n_samples']} declared biological samples. "
+                    + ("Small-sample exploratory network; bootstrap is not independent validation."
+                       if identity["sample_size_status"] == "small_sample_exploratory" else ""))
+                for link in artifact["metadata"].get("data_links", []):
+                    link["contrast_id"] = display_contrast
+        for entry in rendered["unavailable"]:
+            if display_contrast:
+                entry["contrast_id"] = display_contrast
+                entry["title"] += " | " + display_contrast
+        # Persist the same identities returned to collection; an exported
+        # registry must not revert to cohort-wide labels after relocation.
+        write_json(directory / ("network" + suffix) / "artifact-records.json", rendered["artifacts"])
         results["extra_assets"].extend(rendered["artifacts"])
         results["extra_views"].append({"project_id": project["project_id"], "source_project_manifest_sha256": project_sha,
                                        "status": "complete", "unavailable": rendered["unavailable"]})
