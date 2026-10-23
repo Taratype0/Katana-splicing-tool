@@ -6,6 +6,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -69,8 +70,30 @@ def main():
             assert not (work/'genome.fasta').is_symlink()
         cases.append({'case':label, 'exit_code':result.returncode, 'inputs_unchanged':True,
                       'source_sha256':{k:v[0] for k,v in before.items()}})
+    # Exercise the production Docker profile, not a test-only UID override.
+    ownership = root/'ownership'
+    ownership.mkdir()
+    (ownership/'main.nf').write_text(
+        "nextflow.enable.dsl=2\nprocess OWNERSHIP {\n"
+        "container 'quay.io/biocontainers/gffread:0.12.1--h8b12597_0'\n"
+        "memory '1 GB'\noutput: path 'protected/**'\nscript:\n"
+        "'''\nmkdir -m 700 protected\nid -u > protected/uid\nid -g > protected/gid\n'''\n}\n"
+        "workflow { OWNERSHIP() }\n")
+    pipeline = Path(__file__).resolve().parents[1]
+    result = subprocess.run(runtime + ['run','main.nf','-c',str(pipeline/'nextflow.config'),
+        '-profile','docker','--outdir',str(ownership/'output'),'-ansi-log','false'],
+        cwd=ownership,text=True,capture_output=True,timeout=300)
+    (ownership/'stdout.txt').write_text(result.stdout)
+    (ownership/'stderr.txt').write_text(result.stderr)
+    assert result.returncode == 0, (result.stdout,result.stderr)
+    private = list((ownership/'work').glob('*/*/protected'))
+    assert len(private)==1
+    assert int((private[0]/'uid').read_text())==os.getuid()
+    assert int((private[0]/'gid').read_text())==os.getgid()
+    assert private[0].stat().st_uid==os.getuid()
     receipt = {'schema':'katana.reference_preparation_check/v1','status':'passed',
                'actual_nextflow_and_gffread_container':True, 'cases':cases,
+               'production_docker_profile_private_directory_ownership':{'uid':os.getuid(),'gid':os.getgid()},
                'module_sha256':digest(module.with_suffix('.nf'))}
     (root/'acceptance.json').write_text(json.dumps(receipt, indent=2)+'\n')
     print(json.dumps(receipt))

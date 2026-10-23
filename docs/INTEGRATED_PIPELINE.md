@@ -71,6 +71,11 @@ controls admission; there is no hidden four-task concurrency cap. Standalone
 local execution without containers uses `-profile local` with the native
 environment already available.
 Do not use a local executor on a shared login node for heavy analyses.
+The Docker profile runs tasks with the invoking Linux user's UID/GID so tools
+such as STAR can create private directories that Nextflow can still collect.
+If site configuration replaces `docker.runOptions`, retain
+`--user $(id -u):$(id -g)` alongside any additional options. Apptainer and
+Singularity retain their native caller-identity behavior.
 
 ### Resume an unchanged downstream plan
 
