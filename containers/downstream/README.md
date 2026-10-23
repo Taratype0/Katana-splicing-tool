@@ -11,13 +11,13 @@ or a compatible Apptainer/Singularity setup must already be available on the
 execution host. Nextflow and Java run on that host; Katana's native dependencies
 run inside the image.
 
-There is no published registry image yet. The earlier runtime-check image and
-wheel are identified in the [runtime validation record](../../docs/validation/downstream-runtime-20261023.md).
-That archive does not contain later development fixes. Build a new matching
-wheel/image for the intended revision and retain its build receipt. After full
-workflow acceptance, the release instructions can use the accepted immutable
-image reference; [generic workflow evidence](../../docs/validation/generic-pipeline-20261023.md)
-is recorded separately.
+There is no published registry image yet. The current local development image
+is `katana-downstream:dev-b0fbd72`; its matching wheel, image ID, archive checksum
+and observed checks are in the [current acceptance record](../../docs/validation/current-container-20261023.md).
+The [earlier runtime record](../../docs/validation/downstream-runtime-20261023.md)
+refers to an older image. For later source revisions, build a matching wheel and
+image and retain their receipt. [Generic workflow evidence](../../docs/validation/generic-pipeline-20261023.md)
+is recorded separately from image installation checks.
 
 ## Build locally
 

@@ -10,7 +10,34 @@ Use the **`codex/package-development`** branch for the packaged workflow describ
 | [Standalone Linux Conda](RUNTIME_ENVIRONMENTS.md#standalone-linux-environment) | The full native downstream runtime for direct CLI, Python and browser use | Linux x86-64 and Conda or micromamba |
 | [Python source installation](#source-checkout) | Browser, CLI, reports and Python analyses | Python 3.11 or newer; selected native computations need their additional runtime |
 
-The Linux standalone and container runtimes and Windows Python/browser route have [recorded acceptance results](validation/downstream-runtime-20261023.md). These apply to the exact wheel/image hashes in that record. The previous runtime-check archive does not contain subsequent development changes; build a matching wheel and image for the source revision you intend to run. No Katana image has been published to a registry and no PyPI release is advertised. [Generic workflow acceptance](validation/generic-pipeline-20261023.md) is recorded separately and will determine the first release image and its immutable install reference.
+For the current development image and its matching wheel, use the
+[current container acceptance record](validation/current-container-20261023.md).
+The [earlier runtime record](validation/downstream-runtime-20261023.md) documents
+the standalone Linux and Windows Python/browser installations; its older image
+does not include subsequent workflow/report fixes. Match the wheel, image and
+source revision instead of selecting by version string alone. No Katana image
+has been published to a registry and no PyPI release is advertised.
+[Generic workflow acceptance](validation/generic-pipeline-20261023.md) is tracked
+separately from installation checks.
+
+### Load the current development container
+
+On a Linux x86-64 Docker host, place the supplied archive and checksum file in
+the same directory, then run:
+
+```sh
+sha256sum --check SHA256SUMS
+docker load -i katana-downstream-dev-b0fbd72-linux-amd64.tar.gz
+docker image inspect katana-downstream:dev-b0fbd72 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+docker run --rm --network none katana-downstream:dev-b0fbd72 katana-flow --help
+```
+
+Compare the image ID with the current acceptance record. The archive is a local
+development deliverable, not a registry download; users without it can follow
+the [build instructions](../containers/downstream/README.md#build-locally).
+The host needs Docker and, for the integrated pipeline, Java/Nextflow. Katana's
+Python/R/native dependencies are inside the image; a host Conda environment is
+not needed. Standalone CLI/browser users can use the locked Conda route below.
 
 Installation does not require recreating an existing analysis plan. To resume
 unchanged downstream work, use the original `--flow_plan` path with `-resume`

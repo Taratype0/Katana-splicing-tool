@@ -11,12 +11,12 @@ report and browser dependencies without PySide6. Neither route supplies study
 references: FASTA/GTF, motif libraries, CLIP peaks and pathway databases remain
 explicit, versioned inputs.
 
-The previously accepted runtime image is a local Linux x86-64 development
-artifact identified by its exact wheel and image hashes. It does not contain
-later source changes. Build a matching wheel and new image from the intended
-revision; do not use the old runtime archive as the current pipeline release.
-No registry image or PyPI package release is claimed. See [container build/load
-instructions](../containers/downstream/README.md). A complete runtime is a
+The current Linux x86-64 development image is identified in the
+[current container record](validation/current-container-20261023.md), including
+its matching source commit, wheel, image ID and export checksum. Older runtime
+archives remain historical evidence. Build a matching wheel and image when
+changing the software revision. No registry image or PyPI release is claimed.
+See [container build/load instructions](../containers/downstream/README.md). A complete runtime is a
 prerequisite for scientific workflow acceptance, not a substitute for it.
 The [generic workflow record](validation/generic-pipeline-20261023.md) tracks
 existing-result execution separately from those installation checks.

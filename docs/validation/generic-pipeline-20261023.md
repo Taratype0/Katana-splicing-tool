@@ -87,8 +87,11 @@ The installed wheel also generated and passed the complete report from the
 verified collection outside the source checkout, using Python isolated mode.
 This final check rendered existing results only and executed no scientific task.
 
-A container built from the final reviewed revision must be checked and
-identified separately before a release image is advertised.
+The later [current-container acceptance](current-container-20261023.md) records
+the matching development image, rebuilt wheel and disconnected installation
+checks. That image also rendered this existing collection through the complete
+report acceptance gate without rerunning calculations. The older wheel hash
+above remains the identity of this original acceptance step.
 
 This check does not add FASTQ/BAM upstream scientific acceptance, execute public
 data, resume a paused research study, validate every optional resource/model
