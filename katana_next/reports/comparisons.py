@@ -435,6 +435,12 @@ def _grouped_cross_views(view, members, identity, available, title, policy=None,
     result = {}
     for group in view.project['report_contrast_groups']:
         axes = group['contrast_ids']
+        if len(axes) < 2:
+            entry = {'status': 'not_applicable', 'contrast_ids': list(axes),
+                     'reason': 'Cross-comparison analysis requires at least two selected comparisons.'}
+            view.audit.append({'analysis': title, 'group_id': group['group_id'], **entry})
+            result[group['group_id']] = entry
+            continue
         missing = [cid for cid in axes if cid not in available]
         if missing:
             view.audit.append({'analysis': title, 'group_id': group['group_id'], 'status': 'not_computed',

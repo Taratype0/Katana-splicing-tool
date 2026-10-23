@@ -29,6 +29,11 @@ def test_only_requested_comparisons_get_independent_expensive_tasks(study):
     assert all(t["parameters"]["background_source"] == "match_foreground" for t in enrichment)
     assert all(t["parameters"]["contrast_ids"] == ["perturbation-vs-baseline"] for t in enrichment)
     assert all(t["level"] < 12 for t in plan["tasks"])
+    assert not any(t["id"] == "overlap" for t in plan["tasks"])
+    assert plan["applicability"]["cross_comparison"]["status"] == "not_applicable"
+    multiple = create_plan(study, {})
+    assert any(t["id"] == "overlap" for t in multiple["tasks"])
+    assert multiple["applicability"]["cross_comparison"]["status"] == "applicable"
 
 
 def test_complete_report_does_not_silently_disable_missing_computations(study):
@@ -59,7 +64,8 @@ def test_ordinary_das_switch_does_not_weaken_required_rs_motif_inputs(study):
     plan = create_plan(study, {"event_set": "significant", "contrast_ids": ["perturbation-vs-baseline"]})
     motif = next(t for t in plan["tasks"] if t["workflow_id"] == "prioritize.motiftrace_consequences")
     assert motif["selection"]["event_set"] == "stable_significant"
-    overlap = next(t for t in plan["tasks"] if t["id"] == "overlap")
+    multiple = create_plan(study, {"event_set": "significant"})
+    overlap = next(t for t in multiple["tasks"] if t["id"] == "overlap")
     assert overlap["parameters"]["event_set"] == "significant"
     network = next(t for t in plan["tasks"] if t.get("adapter") == "network.fit")
     assert network["scope"]["unit"] == "measurable_contrast_PSI"

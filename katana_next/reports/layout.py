@@ -112,6 +112,10 @@ def render(builder):
     sections = []
     for number, (title, note) in CHAPTERS.items():
         blocks = []
+        if number == 4 and len(project.get('contrasts', [])) == 1:
+            blocks.append('<div class="status-panel"><strong>Cross-comparison: not applicable</strong>'
+                          'One comparison was selected. Overlap and between-comparison direction analyses require '
+                          'at least two comparisons. Any separately declared interaction model is reported independently.</div>')
         if number == 7:
             blocks.extend(_rbp_summary(r) for r in builder.enrichment_summaries)
         chapter_items = _ordered_panels(builder, number)

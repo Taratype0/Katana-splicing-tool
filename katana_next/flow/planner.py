@@ -76,7 +76,8 @@ def create_plan(project, config):
     for suffix in ("as", "deg", "dtu"):
         add(suffix, "differential." + suffix, ["quality"], {"contrast_ids": contrasts})
     add("evidence", "prioritize.evidence", ["as", "deg", "dtu"], {"contrast_ids": contrasts, "event_set": event_set})
-    add("overlap", "differential.cross_comparison", ["as"], {"contrast_ids": contrasts, "event_set": event_set})
+    if len(contrasts) >= 2:
+        add("overlap", "differential.cross_comparison", ["as"], {"contrast_ids": contrasts, "event_set": event_set})
     parallel_settings = settings.get("parameters", {}).get("prioritize.motiftrace_parallel", {})
     parallel_requested = bool(parallel_settings.get("parallel_bundle_asset_id")) or any(
         asset.kind == "motiftrace_parallel_results" for asset in manifest.assets)
@@ -191,6 +192,10 @@ def create_plan(project, config):
                       "project_id": manifest.project_id, "package_version": package_version,
                       "report_specification": "report-approved-20261022-01", "report_profile": "complete",
                       "contrast_ids": contrasts, "event_set": event_set,
+                      "applicability": {"cross_comparison": {
+                          "status": "applicable" if len(contrasts) >= 2 else "not_applicable",
+                          "reason": "At least two selected comparisons are required for cross-comparison analysis.",
+                          "contrast_ids": list(contrasts)}},
                       "configuration": settings, "tasks": tasks})
 
 

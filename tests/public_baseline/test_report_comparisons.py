@@ -73,6 +73,9 @@ def test_complete_report_views_keep_both_policies_units_and_native_values(tmp_pa
     monkeypatch.setattr(comparisons._Views, "figure", capture)
     result = build_comparison_views({"contrasts": [_contrast()], "assets": []}, artifacts, tmp_path / "report")
     assert result["new_scientific_fits"] == 0 and result["source_invariance"]["unchanged"]
+    assert all(group['status'] == 'not_applicable'
+               for family in result['cross_comparison'].values() for group in family['groups'].values())
+    assert not any(panel['chapter'] == 4 for panel in result['panels'])
     assert result["policy_data"]["significant"]["B_vs_A"]["events"] == 2
     assert result["policy_data"]["stable_significant"]["B_vs_A"]["events"] == 1
     tops = {x["analysis"] + "-" + str(x["policy"]): x for x in result["top10"]}
