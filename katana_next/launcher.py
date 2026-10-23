@@ -1,4 +1,4 @@
-"""Start Katana in a browser or a desktop window using one local service."""
+"""Open Katana in a browser backed by a local Python analysis service."""
 from __future__ import annotations
 
 import argparse
@@ -171,7 +171,8 @@ def choose_mode() -> str | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=["choose", "browser", "desktop"], default="choose")
+    parser.add_argument("--mode", choices=["choose", "browser", "desktop"], default="browser",
+                        help="Open in a browser by default; choose and desktop are compatibility modes.")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--runtime-root", type=Path, default=Path(__file__).resolve().parents[2] / "katana-next-runs" / "launcher-runtime")
     parser.add_argument("--no-open", action="store_true", help="Start or check the server and print the URL without opening a window.")

@@ -58,6 +58,12 @@ jobs:
           tests/test_cosplice.py::test_project_facade_exposes_contracts_without_running_analysis
           tests/test_runtime_discovery.py
           tests/test_portable_report_metadata.py
+      - name: Validate browser entry and compatibility routes
+        run: >-
+          python -m pytest -q
+          tests/v2/test_launcher.py
+          tests/v2/test_interface_scroll.py
+          -k "not real_pythonw"
 
   package-wheel:
     runs-on: ubuntu-latest

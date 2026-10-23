@@ -2,7 +2,7 @@
 
 **RNA splicing analysis, MotifTrace and co-splicing networks.**
 
-Katana integrates RNA-seq splicing, expression and transcript-usage results to help researchers identify candidate genes and inspect their sequence changes, regulatory context and read support. Analyses can be explored in a desktop application or browser, run from the command line, or called from Python. Completed results can be assembled into study reports.
+Katana integrates RNA-seq splicing, expression and transcript-usage results to help researchers identify candidate genes and inspect their sequence changes, regulatory context and read support. Analyses can be explored in a browser, run from the command line, or called from Python. Completed results can be assembled into study reports.
 
 ## Inputs
 
@@ -45,7 +45,7 @@ MotifTrace supports new sequence analyses and imports of compatible completed se
 
 The development package provides `from katana_motiftrace import MotifTrace`,
 `katana-motiftrace` commands, and a shared MotifTrace mode selector in the
-desktop/browser application. See [MotifTrace inputs, API and commands](docs/MOTIFTRACE.md)
+browser interface. See [MotifTrace inputs, API and commands](docs/MOTIFTRACE.md)
 for the six analysis/import modes, requirements and examples.
 
 ### Katana-Splice-Network
@@ -67,11 +67,15 @@ The development package provides `katana-report` and `from katana_next.reports i
 
 Reports retain significant and non-significant results and document actual filtering and exclusions. Unrun analyses and missing matching downstream results are identified. Report generation reads completed analyses; it does not infer experimental purpose or rescue, generate a validation programme, or rerun upstream processing. Selected gene/event dossiers remain separate interactive analyses.
 
-### Desktop interaction
+### Browser interaction
 
-The desktop application lets users open projects, inspect samples and designs, select comparisons and parameters, follow task status, filter result tables, save candidate genes or events, inspect gene cards and figures, and export results. MotifTrace, networks and reports are accessible through their analysis pages.
+The browser interface lets users open projects, inspect samples and designs, select comparisons and parameters, follow task status, filter result tables, save candidate genes or events, inspect gene cards and figures, and export results. MotifTrace, networks and reports are accessible through their analysis pages.
 
-Desktop and browser interfaces use the same analysis service. The CLI and Python interface support scripted and server-side use. [MotifTrace](docs/MOTIFTRACE.md) has dedicated API and command-line examples; other modules remain available through the shared workflow commands as their packaged interfaces are finalized.
+The browser connects to a Katana Python service running locally or on the analysis server. The service accesses project files and runs calculations; the browser displays results and controls jobs. Offline report HTML remains available for reading completed results and does not start new analyses. The CLI and Python interface support scripted and server-side use. [MotifTrace](docs/MOTIFTRACE.md) has dedicated API and command-line examples; other modules remain available through the shared workflow commands as their packaged interfaces are finalized.
+
+The browser is the current interface and release target. Existing desktop and mode-chooser entry points remain available for compatibility; a new standalone desktop distribution is not planned.
+
+The [target gene/event report workflow](docs/TARGET_REPORTS.md) describes how saved selections will connect browser exploration with local or server-side gene cards, Sashimi and per-target exports, and distinguishes existing components from the remaining integration work.
 
 ## Outputs
 
@@ -91,10 +95,10 @@ Activate the environment with `.venv\Scripts\Activate.ps1` in Windows PowerShell
 
 ```sh
 python -m pip install -e ".[next]"
-python -m katana_next.launcher --mode browser --runtime-root ../katana-runtime
+katana-open --runtime-root ../katana-runtime
 ```
 
-Open an existing Katana project or migrate a compatible legacy project, check the samples and inputs, then select the analysis. Use `--mode desktop` for the desktop application. The command line and Python interface call the same analyses; for example, export a reproducibility package from an existing project:
+`katana-open` opens the browser by default. On a server, add `--no-open` to start or reuse the Python service and print its URL without opening a window; see [server access](docs/INSTALL.md#server-access). Open an existing Katana project or migrate a compatible legacy project, check the samples and inputs, then select the analysis. Explicit `--mode desktop` and `--mode choose` retain the existing compatibility modes. The command line and Python interface call the same analyses; for example, export a reproducibility package from an existing project:
 
 ```sh
 python -m katana_next.cli --project path/to/katana.project.json run reports.bundle
@@ -106,7 +110,7 @@ Inputs are currently registered in a project configuration. Sample/contrast-shee
 
 The analyses described above are implemented in the existing Katana application and include both new calculations and completed-result imports. The source installation provides interface, CLI and Python access.
 
-Current development packages these capabilities for general distribution, including independent installation, dependency separation, input adapters, local/server execution and reports for new projects. Standalone distributions and complete Nextflow downstream integration still require packaging and acceptance work; a published PyPI installation command is not yet provided here.
+Current development packages these capabilities for general distribution, including independent installation, dependency separation, input adapters, local/server execution and reports for new projects. Release packaging and complete Nextflow downstream integration still require acceptance work; a published PyPI installation command is not yet provided here.
 
 Further technical details are in [methods](docs/METHODS.md) and [development documentation](docs/development/ARCHITECTURE.md).
 

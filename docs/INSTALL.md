@@ -22,18 +22,22 @@ Or on Linux/macOS:
 . .venv/bin/activate
 ```
 
-Then install and start the application:
+Then install and start the browser interface:
 
 ```sh
 python -m pip install -e ".[next,next-dev]"
-python -m katana_next.launcher --mode browser --port 8765 --runtime-root ../katana-runtime
+katana-open --port 8765 --runtime-root ../katana-runtime
 ```
 
 The `next` extra supplies the application service, artifact storage and report dependencies. `next-dev` supplies test dependencies. The current package still declares desktop/GUI dependencies even in browser mode; this is not a minimal headless distribution.
 
-The launcher prints its actual URL. If the requested port is occupied, it can select another free port. Launch logs and service metadata go into the external runtime directory. Desktop mode is available with `--mode desktop` where Qt WebEngine and a graphical session are supported.
+The launcher opens a browser by default and prints its actual URL. If the requested port is occupied, it can select another free port. Launch logs and service metadata go into the external runtime directory. `python -m katana_next.launcher` provides the same entry point when invoking a specific Python environment.
+
+The browser is the current interface and release target. Explicit `--mode desktop` and `--mode choose` retain the existing compatibility modes where Qt WebEngine and a graphical session are supported; a new standalone desktop distribution is not a current release target.
 
 ## Browser interface
+
+The browser communicates with a Katana Python service on the machine that holds the project files and runs its calculations. Closing a browser tab does not turn an active job into a completed result. Offline report HTML can display saved results but does not provide this execution service.
 
 The checkout includes `apps/web/dist`, so a frontend build is not required for ordinary startup. To modify and rebuild it, install a compatible Node.js and pnpm environment and run:
 
@@ -45,6 +49,22 @@ cd ../..
 ```
 
 Do not copy `node_modules` into a release. Preserve bundled dependency and font licenses when redistributing a built interface.
+
+### Server access
+
+On the analysis server, start or reuse the service without opening a graphical window:
+
+```sh
+katana-open --no-open --port 8765 --runtime-root ~/katana-runtime
+```
+
+The service listens on the server's loopback address. From your local machine, forward its printed port over your existing SSH connection, for example:
+
+```sh
+ssh -L 8765:127.0.0.1:8765 user@server
+```
+
+Open `http://127.0.0.1:8765/` in your local browser. Replace `user@server` with your login and server; if the launcher selected another port, use that port on the server side of the forwarding rule. Analysis inputs and BAMs stay on the machine running the service. Cluster job submission still uses the configured execution route; opening the browser does not submit a Slurm job or start an analysis.
 
 ## Optional scientific tools and resources
 

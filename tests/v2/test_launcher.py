@@ -4,17 +4,17 @@ import subprocess
 from pathlib import Path
 from unittest.mock import Mock
 
-from katana_next import launcher
+from katana_next import __version__, launcher
 
 
 def test_health_requires_a_katana_inventory(monkeypatch):
-    responses = iter([{"status": "ok"}, [{"workspace_id": name} for name in ("project", "differential", "programs", "reports")]])
+    responses = iter([{"status": "ok", "version": __version__}, [{"workspace_id": name} for name in ("project", "differential", "programs", "reports")]])
     monkeypatch.setattr(launcher.urllib.request, "urlopen", lambda *a, **kw: io.BytesIO(json.dumps(next(responses)).encode()))
     assert launcher.service_ready("http://127.0.0.1:8765/")
 
 
 def test_foreign_service_not_mistaken_for_katana(monkeypatch):
-    responses = iter([{"status": "ok"}, [{"workspace_id": "other"}]])
+    responses = iter([{"status": "ok", "version": __version__}, [{"workspace_id": "other"}]])
     monkeypatch.setattr(launcher.urllib.request, "urlopen", lambda *a, **kw: io.BytesIO(json.dumps(next(responses)).encode()))
     assert not launcher.service_ready("http://127.0.0.1:8765/")
 
@@ -67,6 +67,51 @@ def test_browser_mode_opens_only_after_health_check(monkeypatch, tmp_path):
     opener.assert_called_once_with(url, new=2)
 
 
+def test_default_mode_opens_browser_without_chooser_or_desktop(monkeypatch, tmp_path):
+    from katana_next import desktop
+
+    url = "http://127.0.0.1:8765/"
+    calls = []
+
+    def ready_service(*args):
+        calls.append("service_ready")
+        return url
+
+    def open_browser(actual_url, *, new):
+        assert actual_url == url and new == 2
+        calls.append("browser_opened")
+        return True
+
+    chooser = Mock(side_effect=AssertionError("Default startup must not open a chooser"))
+    desktop_window = Mock(side_effect=AssertionError("Default startup must not open a desktop window"))
+    monkeypatch.setattr(launcher, "ensure_service", ready_service)
+    monkeypatch.setattr(launcher.webbrowser, "open", open_browser)
+    monkeypatch.setattr(launcher, "choose_mode", chooser)
+    monkeypatch.setattr(desktop, "run_desktop", desktop_window)
+    monkeypatch.setattr(launcher.sys, "argv", ["katana-open", "--runtime-root", str(tmp_path)])
+
+    launcher.main()
+
+    assert calls == ["service_ready", "browser_opened"]
+    chooser.assert_not_called()
+    desktop_window.assert_not_called()
+
+
+def test_explicit_choose_mode_remains_available(monkeypatch, tmp_path):
+    url = "http://127.0.0.1:8765/"
+    chooser = Mock(return_value="browser")
+    opener = Mock(return_value=True)
+    monkeypatch.setattr(launcher, "choose_mode", chooser)
+    monkeypatch.setattr(launcher, "ensure_service", lambda *args: url)
+    monkeypatch.setattr(launcher.webbrowser, "open", opener)
+    monkeypatch.setattr(launcher.sys, "argv", ["katana-open", "--mode", "choose", "--runtime-root", str(tmp_path)])
+
+    launcher.main()
+
+    chooser.assert_called_once_with()
+    opener.assert_called_once_with(url, new=2)
+
+
 def test_script_no_open_does_not_create_a_window(monkeypatch, tmp_path):
     monkeypatch.setattr(launcher, "ensure_service", lambda *a: "http://127.0.0.1:8765/")
     opener = Mock()
@@ -94,10 +139,13 @@ def test_desktop_connects_to_same_service(monkeypatch, tmp_path):
 
 def test_root_launchers_target_current_application():
     root = Path(__file__).resolve().parents[2]
-    assert "katana_next.launcher" in (root / "launch_katana.bat").read_text()
-    assert "--mode browser" in (root / "Open_Katana_Web.bat").read_text()
-    assert "--mode desktop" in (root / "Open_Katana_App.bat").read_text()
-    assert "app.main" not in (root / "launch_katana.bat").read_text()
+    default = (root / "launch_katana.bat").read_text()
+    browser = (root / "scripts/launch_katana_next.ps1").read_text()
+    desktop = (root / "scripts/launch_katana_next_desktop.ps1").read_text()
+    assert "katana_next.launcher --mode browser" in default
+    assert '"katana_next.launcher", "--mode", "browser"' in browser
+    assert "katana_next.launcher --mode desktop" in desktop
+    assert "app.main" not in default + browser + desktop
 
 
 def test_pythonw_logs_streams_before_starting_qt(tmp_path, monkeypatch):
