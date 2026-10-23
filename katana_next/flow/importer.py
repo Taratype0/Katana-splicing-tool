@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import copy
+import csv
+import io
 import shutil
 from pathlib import Path, PurePosixPath
 
@@ -101,6 +103,7 @@ def import_bundle(bundle, project_template, outdir):
         comparisons.append(comparison)
         contrast_index[cid] = row
     annotation, assets = {"genome_build": genome_build}, []
+    normalized_members = {}
     chosen_mode = template.get("rmats_mode", "JCEC")
     if chosen_mode not in {"JC", "JCEC"}:
         raise ValueError("Explicit JC or JCEC mode is required")
@@ -115,10 +118,42 @@ def import_bundle(bundle, project_template, outdir):
             by_sample[item["sample_id"]]["assets"][{"quant": "quant_sf"}.get(kind, kind)] = relative
         mapped = {"rmats": "rmats_result", "deg": "deg_result", "dtu": "dtu_result", "dexseq": "dexseq_result",
                   "normalized_counts": "normalized_counts", "raw_counts": "raw_counts", "qc": "sequencing_qc"}.get(kind)
+        native_exon = (kind == "auxiliary" and relative.startswith("dexseq_exon/")
+                       and PurePosixPath(relative).name.startswith("DEXSeqResults."))
+        projection = None
+        asset_relative = relative
+        if kind == "dexseq" or native_exon:
+            # The upstream ledger historically called perGeneQValue 'dexseq'
+            # and kept the actual exon-bin results as an auxiliary native CSV.
+            # Preserve both native files; only exon rows enter exon inference.
+            text = paths[relative].read_text(encoding="utf-8-sig")
+            if not text.strip():
+                raise ValueError("Empty native DEXSeq table: " + relative)
+            delimiter = "\t" if "\t" in text.splitlines()[0] else ","
+            rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+            if (not rows or not {"groupID", "padj"}.issubset(rows[0]) or
+                    len(rows[0]) != len(set(rows[0])) or any(len(row) != len(rows[0]) for row in rows[1:])):
+                raise ValueError("Invalid native DEXSeq table: " + relative)
+            exon_level = "featureID" in rows[0]
+            if native_exon and not exon_level:
+                raise ValueError("Native exon results lack featureID: " + relative)
+            mapped = "dexseq_result" if exon_level else "dexseq_gene_result"
+            projection = {"native_path": relative, "native_sha256": item["sha256"],
+                          "unit": "exon_bin" if exon_level else "gene",
+                          "native_delimiter": delimiter, "native_statistics_recomputed": False}
+            if exon_level and delimiter != "\t":
+                asset_relative = f"adapters/native-{index}.dexseq-exons.tsv"
+                buffer = io.StringIO(newline="")
+                csv.writer(buffer, delimiter="\t", lineterminator="\n").writerows(rows)
+                normalized_members[asset_relative] = buffer.getvalue().encode("utf-8")
         if not mapped:
             continue
         cid = item.get("comparison_id")
         metadata = {"upstream_sha256": item["sha256"], "upstream_artifact": copy.deepcopy(item)}
+        if projection:
+            metadata["native_table_projection"] = projection
+            if item.get("native_fold_change_direction"):
+                metadata["native_fold_change_direction"] = item["native_fold_change_direction"]
         if kind == "qc":
             metadata.update({key: item[key] for key in ("sample_id", "mate", "method", "qc_type", "qc_phase") if key in item})
         if cid:
@@ -143,7 +178,7 @@ def import_bundle(bundle, project_template, outdir):
                                 denominator_sample_ids=source["rmats_sample_order"][row["control"]])
             elif kind == "deg":
                 metadata["reverse_direction"] = row["deg_target"] != row["treatment"]
-        assets.append({"asset_id": f"native-{index}", "kind": mapped, "path": relative, "required": True, "metadata": metadata})
+        assets.append({"asset_id": f"native-{index}", "kind": mapped, "path": asset_relative, "required": True, "metadata": metadata})
     for asset in template.get("assets", []):
         asset = copy.deepcopy(asset)
         path = Path(asset["path"])
@@ -171,9 +206,15 @@ def import_bundle(bundle, project_template, outdir):
         shutil.copyfile(path, destination)
         if file_sha256(path) != file_sha256(destination):
             raise ValueError("Imported native bytes changed while copying")
+    for relative, content in normalized_members.items():
+        destination = out / "bundle" / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(content)
     write_json(out / "project.json", payload)
     write_json(out / "import.receipt.json", {"schema": "katana.flow.import/v1", "status": "completed",
                "source_manifest_sha256": file_sha256(bundle / "manifest.json"), "samples": len(samples),
                "comparisons": len(comparisons), "files_verified": len(paths), "mode": chosen_mode,
-               "source_statistics_refitted": False})
+               "source_statistics_refitted": False,
+               "format_projections": [{"path": relative, "sha256": file_sha256(out / "bundle" / relative)}
+                                      for relative in normalized_members]})
     return out / "project.json"

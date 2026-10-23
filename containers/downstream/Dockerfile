@@ -17,9 +17,6 @@ ENV PATH=/opt/conda/bin:$PATH \
     HOME=/tmp
 RUN python -m pip install --no-cache-dir --no-build-isolation --require-hashes --no-deps -r /opt/katana-build/locks/pip-linux-64.lock \
     && python -m pip check
-COPY wheel/ /opt/katana-build/wheel/
-RUN python -m pip install --no-cache-dir --no-deps /opt/katana-build/wheel/*.whl \
-    && python -m pip check
 FROM ${BASE_IMAGE}
 USER root
 COPY --from=builder /opt/conda/ /opt/conda/
@@ -36,6 +33,11 @@ ENV PATH=/opt/conda/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     MPLBACKEND=Agg \
     HOME=/tmp
+# Install the changing application after the fixed native environment is copied.
+# Package-only updates can reuse the large, unchanged dependency layer.
+COPY wheel/ /opt/katana-build/wheel/
+RUN python -m pip install --no-cache-dir --no-deps /opt/katana-build/wheel/*.whl \
+    && python -m pip check
 COPY check_downstream_environment.py /opt/katana/check_downstream_environment.py
 COPY build-inputs.json /opt/katana/build-inputs.json
 # Nextflow supplies /bin/bash and the task command. No host activation needed.

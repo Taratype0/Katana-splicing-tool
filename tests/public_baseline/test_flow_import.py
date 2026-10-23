@@ -58,6 +58,39 @@ def test_import_rejects_ambiguous_rmats_sample_vectors(tmp_path):
         import_bundle(root, template, tmp_path / "bad")
 
 
+def test_native_dexseq_csv_preserves_exons_and_separate_gene_screen(tmp_path):
+    import csv
+    from katana_next.infrastructure.manifest_store import ManifestStore
+    from katana_next.workflows.bulk import _audit_asset
+    root, manifest, template = bundle(tmp_path)
+    members = [
+        ('dexseq', 'perGeneQValue.B_vs_A.csv', 'groupID,padj\ng1,0.02\n'),
+        ('auxiliary', 'DEXSeqResults.B_vs_A.csv',
+         'groupID,featureID,pvalue,padj,log2fold_A_B\ng1,E001,1e-310,2e-310,-0.7\ng1,E002,NA,NA,0.5\n')]
+    before = {}
+    for kind, name, content in members:
+        path = root / 'dexseq_exon' / name
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(content)
+        before[path] = (path.read_bytes(), path.stat().st_mtime_ns)
+        manifest['artifacts'].append({'kind': kind, 'relative_path': 'dexseq_exon/' + name,
+            'comparison_id': 'B_vs_A', 'status': 'available', 'bytes': path.stat().st_size,
+            'sha256': file_sha256(path), 'native_fold_change_direction': 'control_over_treatment_native_header_authoritative'})
+    write_json(root / 'manifest.json', manifest)
+    project = import_bundle(root, template, tmp_path / 'imported')
+    _, imported = ManifestStore().load(project)
+    exon = next(a for a in imported.assets if a.kind == 'dexseq_result')
+    gene = next(a for a in imported.assets if a.kind == 'dexseq_gene_result')
+    assert _audit_asset(exon.kind, exon.path)[0] == 'pass'
+    assert gene.metadata['native_table_projection']['unit'] == 'gene'
+    actual = list(csv.reader(exon.path.open(), delimiter='\t'))
+    expected = list(csv.reader((root / 'dexseq_exon/DEXSeqResults.B_vs_A.csv').open()))
+    assert actual == expected  # no float roundtrip, FDR underflow or NA substitution
+    assert before == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in before}
+    assert (project.parent / 'bundle/dexseq_exon/DEXSeqResults.B_vs_A.csv').read_bytes() == before[root / 'dexseq_exon/DEXSeqResults.B_vs_A.csv'][0]
+    assert len(json.loads((project.parent / 'import.receipt.json').read_text())['format_projections']) == 1
+
+
 def recorded_metadata(root, manifest, **overrides):
     record = {"reference_declarations": {"genome_build": "test-build", "annotation_release": "release-7",
                "validation": "user_declared_labels_not_independently_verified"},
