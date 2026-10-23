@@ -78,6 +78,17 @@ def test_explicit_r_libraries_rejected_before_R_probe(image, tmp_path, monkeypat
     boundary.validate_runtime_settings({"r_library": str(image / "library"), "genome_fasta": "/mounted/data/genome.fa"})
 
 
+def test_container_checks_fimo_below_imported_input_root(image, tmp_path, monkeypatch):
+    monkeypatch.setattr(boundary.shutil, "which", lambda value: str(value))
+    worker = write_json(tmp_path / "bundle/resources/fimo.json", {"python": sys.executable})
+    project = {"input_root": "bundle", "assets": [{"kind": "fimo_runtime", "path": "resources/fimo.json"}]}
+    task = {"workflow_id": "prioritize.rbp_mechanism"}
+    boundary.validate_task_runtime_boundaries(task, project=project, project_path=tmp_path / "project.json")
+    write_json(worker, {"python": str(tmp_path / "host/python")})
+    with pytest.raises(ValueError, match="external host path"):
+        boundary.validate_task_runtime_boundaries(task, project=project, project_path=tmp_path / "project.json")
+
+
 def test_direct_task_rejects_host_runtime_before_creating_output(image, tmp_path, monkeypatch):
     from katana_next.flow import runtime
     planned, project, value, task = plan(tmp_path, parameters={"r_library": str(tmp_path / "host-library")})

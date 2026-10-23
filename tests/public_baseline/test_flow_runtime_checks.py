@@ -70,6 +70,25 @@ def test_runtime_cli_records_failure_and_exits_nonzero(tmp_path, monkeypatch, ca
     assert main(["runtime-check", "--plan", str(plan), "--project", str(project), "--task-id", "selected", "--out", str(output)]) == 1
 
 
+@pytest.mark.parametrize("absolute_root", [False, True])
+def test_imported_fimo_resource_uses_project_input_root(tmp_path, monkeypatch, absolute_root):
+    root = tmp_path / "bundle"
+    write_json(root / "resources/worker.json", {"python": "declared-worker"})
+    # A same-named file beside the manifest must never shadow the input asset.
+    write_json(tmp_path / "resources/worker.json", {"python": "wrong-worker"})
+    plan, project = planned(tmp_path, workflow="prioritize.rbp_mechanism",
+                            assets=[{"kind": "fimo_runtime", "path": "resources/worker.json"}])
+    value = json.loads(project.read_text(encoding="utf-8"))
+    value["input_root"] = str(root) if absolute_root else "bundle"
+    write_json(project, value)
+    seen = []
+    monkeypatch.setattr(runtime_checks, "require_python_imports", lambda executable, modules: seen.append(executable))
+    monkeypatch.setattr(stages, "_executable", lambda value, default: str(value or default))
+    result = runtime_checks.check_task_runtime(plan, "selected", project_path=project)
+    assert result["status"] == "ready", result
+    assert seen[-1] == "declared-worker" and "wrong-worker" not in seen
+
+
 def test_unknown_runtime_task_cannot_be_probed(tmp_path):
     plan, _ = planned(tmp_path)
     with pytest.raises(ValueError, match="absent from the sealed plan"):

@@ -80,6 +80,17 @@ def validate_runtime_settings(settings):
             validate_runtime_settings(item)
 
 
+def project_asset_path(asset, project, project_path):
+    """Resolve assets against input_root, as the project manifest reader does."""
+    path = Path(asset["path"])
+    if path.is_absolute():
+        return path
+    root = Path(project.get("input_root", "."))
+    if not root.is_absolute():
+        root = Path(project_path).resolve().parent / root
+    return root / path
+
+
 def validate_task_runtime_boundaries(task, *, project=None, project_path=None):
     """Shared probe/direct-task gate; it does not create any output directory."""
     if not in_container():
@@ -102,7 +113,5 @@ def validate_task_runtime_boundaries(task, *, project=None, project_path=None):
         for asset in project.get("assets", []):
             if asset.get("kind") != "fimo_runtime":
                 continue
-            path = Path(asset["path"])
-            if not path.is_absolute():
-                path = Path(project_path).parent / path
+            path = project_asset_path(asset, project, project_path)
             validate_runtime_settings(json.loads(path.read_text(encoding="utf-8-sig")))

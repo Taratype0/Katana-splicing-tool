@@ -29,7 +29,7 @@ def check_task_runtime(plan_path, task_id, *, project_path=None, runtime_label=N
     project = {}
     if project_path is not None:
         project = json.loads(Path(project_path).read_text(encoding="utf-8-sig"))
-    from .container_runtime import sanitize_container_environment, validate_task_runtime_boundaries
+    from .container_runtime import sanitize_container_environment, validate_task_runtime_boundaries, project_asset_path
     removed_environment = sanitize_container_environment()
     try:
         validate_task_runtime_boundaries(task, project=project, project_path=project_path)
@@ -90,9 +90,7 @@ def check_task_runtime(plan_path, task_id, *, project_path=None, runtime_label=N
             if not resources:
                 raise ValueError("Motif enrichment runtime probe requires the declared fimo_runtime resource")
             for index, asset in enumerate(resources):
-                path = Path(asset["path"])
-                if not path.is_absolute():
-                    path = Path(project_path).parent / path
+                path = project_asset_path(asset, project, project_path)
                 config = json.loads(path.read_text(encoding="utf-8-sig"))
                 if config.get("wsl_distribution"):
                     raise ValueError("Pipeline task runtime requires a native FIMO worker configuration; a Windows WSL launcher is not portable inside its container")
