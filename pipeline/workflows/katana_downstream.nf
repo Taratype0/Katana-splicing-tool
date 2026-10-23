@@ -10,6 +10,7 @@ include { KATANA_FLOW_TASK as LANDSCAPE } from '../modules/local/flow_task'
 include { KATANA_FLOW_TASK as EVIDENCE } from '../modules/local/flow_task'
 include { KATANA_FLOW_TASK as ENRICHMENT } from '../modules/local/flow_task'
 include { KATANA_FLOW_TASK as MOTIFTRACE } from '../modules/local/flow_task'
+include { KATANA_FLOW_RESOURCE_TASK as MOTIFTRACE_RESOURCE } from '../modules/local/flow_task_resources'
 include { KATANA_FLOW_TASK as OVERLAP } from '../modules/local/flow_task'
 include { KATANA_FLOW_TASK as QC } from '../modules/local/flow_task'
 include { KATANA_FLOW_TASK as REFERENCE } from '../modules/local/flow_task'
@@ -54,8 +55,15 @@ def readyTasks(plan, group, completed) {
     def dependent = waiting.combine(finished, by: 0)
         .map { dependency, spec, planFile, result -> tuple(groupKey(spec.id, spec.dependencies.size()), spec, planFile, result) }
         .groupTuple()
-        .map { key, specs, plans, results -> tuple(specs[0], plans[0], results) }
+        .map { key, specs, plans, results -> tuple(specs[0], plans[0], results.sort(false) { it.name }) }
     direct.mix(dependent)
+}
+
+def motifRuntimeInputs(spec) {
+    // Custom models are task data, not installed software. Declare them as path
+    // inputs so Docker/Apptainer can see them and changed bytes invalidate cache.
+    def model = spec.parameters?.custom_motif_path
+    model ? [file(model, checkIfExists: true)] : []
 }
 
 workflow KATANA_DOWNSTREAM {
@@ -89,7 +97,11 @@ workflow KATANA_DOWNSTREAM {
     molecular = AS.out.result.mix(DEG.out.result, DTU.out.result)
     EVIDENCE(readyTasks(plan, 'evidence', molecular), project_root, project_filename)
     ENRICHMENT(readyTasks(plan, 'enrichment', EVIDENCE.out.result), project_root, project_filename)
-    MOTIFTRACE(readyTasks(plan, 'motiftrace', AS.out.result), project_root, project_filename)
+    motif_tasks = readyTasks(plan, 'motiftrace', AS.out.result)
+    MOTIFTRACE(motif_tasks.filter { spec, planFile, results -> !spec.parameters?.custom_motif_path }, project_root, project_filename)
+    motif_resource_tasks = motif_tasks.filter { spec, planFile, results -> spec.parameters?.custom_motif_path }
+        .map { spec, planFile, results -> tuple(spec, planFile, results, motifRuntimeInputs(spec)) }
+    MOTIFTRACE_RESOURCE(motif_resource_tasks, project_root, project_filename)
     OVERLAP(readyTasks(plan, 'overlap', molecular), project_root, project_filename)
     REFERENCE(readyTasks(plan, 'reference', AUDIT.out.result), project_root, project_filename)
     QC(readyTasks(plan, 'qc', AUDIT.out.result.mix(REFERENCE.out.result)), project_root, project_filename)
@@ -102,9 +114,9 @@ workflow KATANA_DOWNSTREAM {
 
     all_results = AUDIT.out.result.mix(QUALITY.out.result, AS.out.result, DEG.out.result,
         DTU.out.result, LANDSCAPE.out.result, EVIDENCE.out.result, ENRICHMENT.out.result,
-        MOTIFTRACE.out.result, OVERLAP.out.result, REFERENCE.out.result, QC.out.result, COVERAGE.out.result,
+        MOTIFTRACE.out.result, MOTIFTRACE_RESOURCE.out.result, OVERLAP.out.result, REFERENCE.out.result, QC.out.result, COVERAGE.out.result,
         NETWORK_FIT.out.result, NETWORK_FOLLOWUP.out.result, INTERACTION.out.result,
-        MAPP_PREPARE.out.result, MAPP.out.result).toList()
+        MAPP_PREPARE.out.result, MAPP.out.result).toSortedList { a, b -> a.name <=> b.name }
     KATANA_FLOW_COLLECT(plan, all_results)
     KATANA_FLOW_REPORT(KATANA_FLOW_COLLECT.out.collection)
 

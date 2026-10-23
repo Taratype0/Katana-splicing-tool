@@ -53,3 +53,6 @@ jobs:
           python -B pipeline/tools/check_reference_preparation.py \
             --nextflow-command-json "$runtime_command" \
             --outdir "$RUNNER_TEMP/katana-reference-preparation"
+          python -B pipeline/tools/check_export_order.py \
+            --nextflow-command-json "$runtime_command" \
+            --outdir "$RUNNER_TEMP/katana-export-order"

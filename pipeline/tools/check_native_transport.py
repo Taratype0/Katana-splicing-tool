@@ -30,7 +30,7 @@ def tasks() -> list[dict]:
     return [task("alpha", "audit", []), task("beta", "audit", [], 8),
             task("gamma", "quality", ["alpha"]), task("delta", "as", ["gamma"]),
             task("epsilon", "quality", ["beta"]), task("zeta", "as", ["epsilon"]),
-            task("eta", "motiftrace", ["delta"]), task("omega", "network_fit", ["alpha"]),
+            task("eta", "motiftrace", ["delta"]), task("theta", "motiftrace", ["delta"]), task("omega", "network_fit", ["alpha"]),
             task("network-summary", "network_followup", ["omega"])]
 
 
@@ -40,6 +40,11 @@ def make_case(root: Path, *, failure: bool = False, runtime_failure: bool = Fals
     (root / "configuration").mkdir()
     (root / "project/project.json").write_text("{}\n", encoding="utf-8")
     planned = tasks()
+    models = root / 'external-models'
+    models.mkdir()
+    model = models / 'custom.tsv'
+    model.write_text('model\tconsensus\nfixture\tACGU\n')
+    next(task for task in planned if task['id'] == 'theta')['parameters'] = {'custom_motif_path': str(model.resolve())}
     if failure:
         planned[1]["fail"] = True
     if runtime_failure:
@@ -141,6 +146,7 @@ def main() -> None:
                "container_execution_tested": False, "missing_container_blocks_host_fallback": True,
                "missing_dexseq_image_blocks_raw_entry_before_submission": True,
                "resume_all_cached": True, "completed_worker_bytes_and_mtimes_unchanged": True,
+               "external_custom_motif_file_staged": True,
                "native_reference_filter": filtering[0]}
     (root / "acceptance.receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"status": "passed_native_transport_only", "receipt": str(root / "acceptance.receipt.json")}))

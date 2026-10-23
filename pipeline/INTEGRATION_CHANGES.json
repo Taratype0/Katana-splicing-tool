@@ -176,7 +176,7 @@
     {
       "path": "workflows/katana_core.nf",
       "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
-      "integrated_sha256": "bd14924514a1fe8d541d9a5afbfe2963e7adae2a3be81601487943cd673df1fa"
+      "integrated_sha256": "440051fb42c99b165fcc2bfb6757f8c8dc124ac5cfc13f2ee3a6467a114f49b7"
     }
   ],
   "purpose": [

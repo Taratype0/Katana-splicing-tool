@@ -30,6 +30,16 @@ def artifact(kind, path, relative_path, extra = [:]) {
     [extra + [kind: kind, relative_path: relative_path], path]
 }
 
+def exportArtifactInputs(artifacts) {
+    // Arrival order depends on scheduling. Sort paired metadata/files together
+    // so an unchanged study preserves staged paths and its downstream cache.
+    def ordered = artifacts.sort(false) { row -> row[0].relative_path.toString() }
+    if (ordered.collect { it[0].relative_path }.unique(false).size() != ordered.size()) {
+        error('Exporter inputs contain duplicate destination paths')
+    }
+    tuple(ordered.collect { it[0] }, ordered.collect { it[1] })
+}
+
 def qcArtifacts(meta, reports, kind, phase) {
     [reports].flatten().collect { p -> artifact('qc', p, "qc/${phase}/${meta.id}/${p.name}",
         [sample_id: meta.id, qc_type: kind, qc_phase: phase]) }
@@ -322,7 +332,7 @@ workflow KATANA_PIPELINE {
             direction: 'treatment_minus_control', source_input1: cmp.control, source_input2: cmp.treatment]) }
     }
     ch_export_inputs = ch_artifacts.mix(ch_dtu_artifacts, ch_rmats_artifacts, ch_suppa_artifacts, ch_suppa_isoform_artifacts).collect(flat: false)
-        .map { artifacts -> tuple(artifacts.collect { it[0] }, artifacts.collect { it[1] }) }
+        .map { artifacts -> exportArtifactInputs(artifacts) }
     ch_study_metadata = ch_rows_container.combine(ch_contrasts_container).map { row_container, contrast_container ->
         def rows = row_container.records
         def contrasts = contrast_container.records

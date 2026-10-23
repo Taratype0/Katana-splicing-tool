@@ -68,6 +68,10 @@ def main() -> None:
         assert args.project.is_file()
         if spec.get("fail"):
             raise SystemExit("intentional transport-fixture failure")
+        custom = spec.get('parameters', {}).get('custom_motif_path')
+        if custom:
+            staged = list(Path('runtime-data').glob('*/*'))
+            assert len(staged) == 1 and staged[0].read_bytes() == Path(custom).read_bytes()
         started = time.time()
         time.sleep(float(spec.get("delay", 1.0)))
         args.outdir.mkdir(parents=True)
