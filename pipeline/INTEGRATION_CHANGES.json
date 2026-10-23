@@ -121,7 +121,7 @@
     {
       "path": "modules/local/suppa_generateevents.nf",
       "snapshot_sha256": "efe23529542ce66518157545000f48e76a3e99b2e0337f04761c9ea432b4e629",
-      "integrated_sha256": "573e2f9e09500a49a57e886cd5de216e63b2e08ddb5eaae8cdd54dc5da736106"
+      "integrated_sha256": "6e45b6914e2378bddff2407d07fb56879a3fbf52e4661e05c089b2a6c7dc632b"
     },
     {
       "path": "modules/local/suppa_psiperevent.nf",

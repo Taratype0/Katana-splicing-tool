@@ -44,7 +44,8 @@ process GENERATE_EVENTS {
             -l $generateevents_exon_length \\
             $poolgenes
 
-        awk 'FNR==1 && NR!=1 { while (/^seqname/) getline; }  1 {print}' *.ioe > events.ioe
+        # Keep one header without getline loops on header-only event files.
+        awk 'FNR==1 && NR!=1 { next } { print }' events_*.ioe > events.ioe
 
         cat <<-END_VERSIONS > versions.yml
         "${task.process}":
