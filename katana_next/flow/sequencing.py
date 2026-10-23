@@ -27,7 +27,7 @@ def _source_type(path, metadata):
     name = Path(path).name
     if name.endswith(("_fastqc.zip", "_fastqc.html")):
         phase = metadata.get("qc_phase")
-        if phase not in {"raw", "trimmed"}:
+        if phase not in {"raw", "trimmed", "bam_records"}:
             phase = "trimmed" if re.search(r"_val_[12]_fastqc|_trimmed_fastqc", name) else "raw"
         return "fastqc", phase
     if name.endswith("_trimming_report.txt"):
@@ -76,8 +76,10 @@ def readiness(spec):
             expected_hash = asset.metadata.get("upstream_sha256")
             if expected_hash and file_sha256(asset.path) != expected_hash:
                 raise ValueError("Completed native QC source SHA256 changed: " + asset.asset_id)
+        bam_samples = sample_ids - expected_samples
         for phase, samples in covered.items():
-            missing = expected_samples - samples
+            eligible = bam_samples if phase == "bam_records" else expected_samples
+            missing = eligible - samples
             if missing:
                 raise ValueError("Native sequencing QC phase " + phase + " is missing declared eligible samples: " + ", ".join(sorted(missing)))
         return []
@@ -134,6 +136,12 @@ def execute_stage(spec, output_dir):
         rendered = build_qc_assets(native, out / "rendered" / phase)
         phase_receipts[phase] = rendered["receipt"]
         for artifact in rendered["artifacts"]:
+            if phase == "bam_records":
+                metadata = artifact.setdefault("metadata", {})
+                metadata["caption"] = (
+                    metadata.get("caption", "").replace("FASTQ file", "supplied BAM file") +
+                    " FastQC measures records retained in the supplied BAM; this is not original raw-read "
+                    "or trimming QC and cannot recover reads absent from that BAM.")
             artifact.setdefault("metadata", {}).update(qc_phase=phase, original_native_QC=True,
                 upstream_jobs=0, biological_sample_ids=sorted({row["biological_sample_id"] for row in rows}))
             artifacts.append(artifact)

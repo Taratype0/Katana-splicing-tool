@@ -158,6 +158,10 @@ already completed task families are rejected by this special recovery route.
 - Gene-body QC is calculated from BAM and matched BED12; it is not inferred
   from FastQC. BED12 is generated from the matching GTF when no explicit BED
   is supplied. Coverage summaries wait for all declared sample measurements.
+- For BAM input, an independent FastQC task measures each supplied BAM's
+  retained records. The report labels this as **Supplied BAM records**;
+  it cannot recover discarded reads or the original trimming/alignment QC.
+  FASTQ inputs retain separate raw, trimmed and alignment measurements.
 - By default each selected comparison gets its own network discovery, module
   bootstrap, associations and annotation tasks, with explicit dependencies.
   Its input includes only the comparison's biological samples. The network

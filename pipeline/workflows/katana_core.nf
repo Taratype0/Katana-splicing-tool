@@ -13,6 +13,7 @@ include { KATANA_EXPORT } from '../modules/local/katana_export'
 include { KATANA_DIFFERENTIAL } from '../modules/local/katana_differential'
 
 include { FASTQC } from '../modules/nf-core/fastqc/main'
+include { FASTQC as BAM_FASTQC } from '../modules/nf-core/fastqc/main'
 include { TRIMGALORE } from '../modules/nf-core/trimgalore/main'
 include { STAR_GENOMEGENERATE } from '../modules/nf-core/star/genomegenerate/main'
 include { STAR_ALIGN } from '../modules/nf-core/star/align/main'
@@ -127,11 +128,19 @@ workflow KATANA_PIPELINE {
     ch_fastq = STAGE_FASTQ.out.reads
     if (!params.skip_fastqc) {
         FASTQC(ch_fastq)
+        // BAM-only entry measures the records supplied by the user. These
+        // results are not raw-read, trimming or original-aligner QC.
+        BAM_FASTQC(ch_sources.bam)
         ch_versions = ch_versions.mix(FASTQC.out.versions)
+        ch_versions = ch_versions.mix(BAM_FASTQC.out.versions)
         ch_qc_files = ch_qc_files.mix(FASTQC.out.zip.map { meta, reports -> reports })
+        ch_qc_files = ch_qc_files.mix(BAM_FASTQC.out.zip.map { meta, reports -> reports })
         ch_qc_artifacts = ch_qc_artifacts.mix(
             FASTQC.out.zip.flatMap { meta, reports -> qcArtifacts(meta, reports, 'fastqc', 'raw') },
             FASTQC.out.html.flatMap { meta, reports -> qcArtifacts(meta, reports, 'fastqc', 'raw') })
+        ch_qc_artifacts = ch_qc_artifacts.mix(
+            BAM_FASTQC.out.zip.flatMap { meta, reports -> qcArtifacts(meta, reports, 'fastqc', 'bam_records') },
+            BAM_FASTQC.out.html.flatMap { meta, reports -> qcArtifacts(meta, reports, 'fastqc', 'bam_records') })
     }
     if (!params.skip_trimming) {
         TRIMGALORE(ch_fastq)

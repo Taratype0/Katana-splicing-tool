@@ -37,7 +37,8 @@ def build_qc_views(root, plan, receipts, transport):
         for artifact in index["artifacts"]:
             path = verified(artifact["path"])
             phase = artifact.get("metadata", {}).get("qc_phase", "native")
-            title = phase.replace("_", " ").capitalize() + " | " + artifact["name"]
+            phase_title = "Supplied BAM records" if phase == "bam_records" else phase.replace("_", " ").capitalize()
+            title = phase_title + " | " + artifact["name"]
             if path.suffix == ".png":
                 metadata = copy.deepcopy(artifact.get("metadata", {}))
                 links = []

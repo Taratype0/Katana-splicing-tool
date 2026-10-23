@@ -156,3 +156,27 @@ def test_each_provided_native_qc_phase_covers_eligible_declared_samples(tmp_path
     document["samples"][-1]["attributes"]["source"] = "genome_bam"
     write_json(project, document)
     assert readiness(spec) == []
+
+
+def test_bam_fastqc_keeps_measured_record_scope_and_requires_all_bam_samples(tmp_path):
+    project = study(tmp_path / "original")
+    document = json.loads(project.read_text())
+    document["samples"][0].setdefault("attributes", {})["source"] = "genome_bam"
+    document["assets"] = [a for a in document["assets"] if a["asset_id"] == "raw"]
+    assert len(document["assets"]) == 1
+    document["assets"][0]["metadata"]["qc_phase"] = "bam_records"
+    write_json(project, document)
+    spec = {"adapter": "qc.sequencing", "inputs": {"project": str(project)}}
+    assert readiness(spec) == []
+    result = execute_stage(spec, tmp_path / "bam-qc")
+    assert result["evidence"]["phases"] == ["bam_records"]
+    index = json.loads(Path(result["evidence"]["qc_view_index"]).read_text())
+    plots = [a for a in index["artifacts"] if a["path"].endswith(".png")]
+    assert plots and all("records retained in the supplied BAM" in a["metadata"]["caption"] for a in plots)
+    assert all(a["metadata"]["qc_phase"] == "bam_records" for a in index["artifacts"])
+    document["samples"].append({"sample_id":"B2", "biological_sample_id":"B2", "condition":"A", "attributes":{"source":"bam"}})
+    write_json(project, document)
+    assert "bam_records is missing declared eligible samples: B2" in ";".join(readiness(spec))
+    document["samples"][-1]["attributes"]["source"] = "genome_bam"
+    write_json(project, document)
+    assert "bam_records is missing declared eligible samples: B2" in ";".join(readiness(spec))
