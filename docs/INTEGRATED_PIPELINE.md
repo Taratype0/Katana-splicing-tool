@@ -197,8 +197,8 @@ already completed task families are rejected by this special recovery route.
   does not run MAPP's other eight
   subworkflows, create TPM from rMATS PSI, or claim calibrated MotifTrace/MAPP
   parallel evidence from an uncalibrated native fit. New-project preparation,
-  native fitting and report panels have component tests. Full production
-  FASTQ/BAM acceptance remains a separate release requirement.
+  native fitting and report panels have component tests. Generated FASTQ/BAM entries have passed all 14-window families and the
+  complete report handoff; real-study and target-site validation remain distinct.
 - Completed task receipts bind parameters, method versions, input and output
   SHA256 and dependency identities. Unknown/failed outputs cannot be adopted
   as success. `-resume` reuses the exact Nextflow task cache; prior independent
@@ -212,7 +212,9 @@ already completed task families are rejected by this special recovery route.
   `REPORT.diagnostic.zip`, and no successful `flow.acceptance.json` is issued.
 - Collection waits for every required task. A partial/test collection cannot
   become a complete report. The report acceptance gate rejects missing fixed
-  computations and missing chapter figures.
+  computations and missing required chapter figures. An explicitly declared
+  single-contrast design without interactions retains chapter 4 with a
+  not-applicable explanation instead of a fabricated overlap plot.
 
 ## Configuration
 

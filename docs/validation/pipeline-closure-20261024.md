@@ -2,8 +2,8 @@
 
 This is a development acceptance record, not a production release or an
 nf-core approval. The original application and completed study results were
-preserved. Primary culture remains paused until the outstanding entry checks
-and deployment checks pass.
+preserved. Primary culture remains paused until the target-site runtime and deployment checks pass. Generated FASTQ, BAM and
+existing-result entries have passed their complete downstream/report checks.
 
 ## Accepted downstream behavior
 
@@ -23,18 +23,18 @@ report, six-sample network precision, or an absent analysis resource.
 
 ## Current accepted images
 
-Software revision: `086338842b241ba6bdef137b05a783b18eb6ca19` on
+Software revision: `95466323853b78e26c2a391eda0871bfddf363cc` on
 `codex/package-development`. Later documentation-only commits retain these
 identities. Images have not been published to a registry.
 
 | Item | Identity |
 | --- | --- |
 | Wheel | `katana_splicing_tool-2.0.0b5.dev20261023-py3-none-any.whl` |
-| Wheel SHA256 | `e12d7c493ef5ac83b9af0263fd9394952b4f486c16fa5aa6ec5132b49fd7725e` |
-| Downstream image | `katana-downstream:dev-0863388` |
-| Downstream image ID | `sha256:32cd5a67bb67311d0c665d3df3b4db3ce7a88f7637d6216c589af8fd2ad6e57c` |
-| Downstream archive | `katana-downstream-dev-0863388-linux-amd64.tar.gz`, 1,463,502,232 bytes |
-| Downstream archive SHA256 | `089a8a940a60360a7488b8339b600503d895a9b69d2840b98dce0d44d09558ae` |
+| Wheel SHA256 | `318ab13b779824091d5965d348476c11b4d67a41406a1de52d053e5ea594aa18` |
+| Downstream image | `katana-downstream:dev-9546632` |
+| Downstream image ID | `sha256:8f3899e1ccf0d67561b9c0dd4b96351bb63d7790daf346d86a597468c4d0f862` |
+| Downstream archive | `katana-downstream-dev-9546632-linux-amd64.tar.gz`, 1,463,592,306 bytes |
+| Downstream archive SHA256 | `52e8d47414ad163b265f09dab13e77b7a9eeef340be66e909848decf39f14061` |
 | DEXSeq tools image | `kanata-dexseq-tools:dev-20261024` |
 | DEXSeq tools image ID | `sha256:9da6802a176f77a81c732cbee5a5a9f8ca4a64ee38391f35903e1fa57881c209` |
 | DEXSeq tools archive | `kanata-dexseq-tools-dev-20261024-linux-amd64.tar.gz`, 122,383,650 bytes |
@@ -48,7 +48,7 @@ was installed into a new image; this was not a new dependency solver run.
 Observed checks on the current downstream image:
 
 - 51 native runtime checks passed offline as UID 1000, without host Python/R.
-- 523 installed package/resource files matched the wheel.
+- 525 installed package/resource files matched the wheel.
 - Browser health and six HTTP routes/assets passed.
 - Three native Nextflow container probes completed, then all three were cached
   on resume with unchanged outputs.
@@ -84,12 +84,12 @@ explicit minimum motif fraction of 0.5 without changing the production default.
 This positive branch check is additional to the not-applicable branches above;
 it is not acceptance of a new study's full 14-window family.
 
-[Native Nextflow integration](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40038202713)
-and [Linux/Windows, interface and installed-wheel CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40038202761).
-Both runs passed for the image revision above. Subsequent fixes are separately
-validated before updating this image acceptance record.
+[Native Nextflow integration](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40041531254)
+and [Linux/Windows, interface and installed-wheel CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40041531241).
+These links refer to the exact image software revision. Consult their live
+status; target-site runtime acceptance is recorded separately below.
 
-## Outstanding acceptance
+## Raw-entry integration and recovery
 
 The raw-entry check exposed an input/output basename collision in reference
 preparation: an input named `annotation.gtf` could be truncated through its
@@ -106,8 +106,29 @@ Both generated raw-entry upstream runs have completed: FASTQ finished
 101 tasks (94 cached and seven newly completed in its final upstream resume);
 BAM finished 82 tasks, including six BAM-record FastQC tasks. The 256-file
 FASTQ bundle and 207-file BAM bundle passed their full SHA256 inventories.
-These are upstream results; the complete downstream/report runs remain
-under acceptance.
+Each entry then completed all 55 planned downstream calculation/adaptor tasks,
+including the 14 native MAPP window fits, independent network, bootstrap,
+association, annotation, coverage, enrichment and MotifTrace. Failed integration
+attempts were retained; recovery reused completed results instead of repeating
+fits. The final container rendered both verified collections offline without
+mounting a source checkout or submitting scientific tasks.
+
+| Installed-container report check | FASTQ | BAM |
+| --- | ---: | ---: |
+| Verified downstream tasks | 55 | 55 |
+| Main figures with exact data links | 49/49 | 47/47 |
+| Verified figure-data bindings | 284 | 278 |
+| Verified source-file copies | 422 | 382 |
+| Report sections retained | 7 | 7 |
+
+Both ZIPs passed complete readback. Each comparison displays up to 10 recorded
+motif models and retains all 12 fixture models in outputs. Native P/FDR remains
+attached to its actual test; non-estimable tests are displayed explicitly, never
+fabricated as significant. The separate two-comparison acceptance above verifies
+independent contrast identities and positive native motif-statistics branches.
+Optional calibrated MAPP/MotifTrace parallel import is not inferred from native
+MAEI fits. A single selected contrast retains chapter 4 with an explicit
+not-applicable explanation; it does not require a meaningless overlap plot.
 
 Native execution also exposed and corrected a SUPPA merge loop on
 header-only event classes. Completed source IOE files were preserved. A
@@ -121,12 +142,20 @@ test is retained separately. Actual native bundle checks verified 384 exon bins
 and 256 distinct transcript rows with no duplicate units or changed P/FDR.
 All source statistical outputs remain unchanged.
 
-- Complete the current raw FASTQ entry, then the BAM entry, through real native
-  tools and the integrated downstream/report handoff. A generated local input
-  fixture is being used; no public or study dataset is being rerun. The initial
-  Docker credential-helper failure is retained, and an isolated Docker client
-  configuration is used for recovery. A running task or image download is not
-  a completed analysis.
+Additional fixes validated against these completed collections:
+
+- Resolve resources relative to the declared input root, then stage custom motif
+  files into calculation, collection and report containers. Collection still
+  verifies their original hashes.
+- Sort paired export metadata/files and dependency results before hashing.
+  A reversed-arrival Nextflow check reuses the same task and preserves file mapping.
+- Preserve positive/negative infinity explicitly in complete result browsers;
+  original result files and missing values remain unchanged.
+- Waive only the chapter 4 figure for an explicitly declared single-contrast,
+  non-interaction design; all seven sections and other required figures remain.
+
+## Remaining target/study acceptance
+
 - Check the actual target site's container engine, storage headroom, resource
   paths and retained task/result inventory before resuming the paused study.
   Local Docker acceptance does not certify a Dardel Apptainer deployment.

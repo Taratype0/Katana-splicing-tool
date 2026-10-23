@@ -27,9 +27,9 @@ the same directory, then run:
 
 ```sh
 sha256sum --check SHA256SUMS
-docker load -i katana-downstream-dev-0863388-linux-amd64.tar.gz
-docker image inspect katana-downstream:dev-0863388 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
-docker run --rm --network none katana-downstream:dev-0863388 katana-flow --help
+docker load -i katana-downstream-dev-9546632-linux-amd64.tar.gz
+docker image inspect katana-downstream:dev-9546632 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+docker run --rm --network none katana-downstream:dev-9546632 katana-flow --help
 ```
 
 For **new FASTQ/BAM processing**, also load the supplied DEXSeq tools archive:
