@@ -1,0 +1,89 @@
+"""Read-only native MAEI views; never relabel its statistics as calibration."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import re
+
+
+def build_mapp_views(root, plan, receipts, transport):
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap
+    from .model import file_sha256, read_json, write_json
+    from .runtime import canonical_hash
+    root = Path(root).resolve()
+    project = read_json(root / "project.json")
+    translated = {item["source"]["path"]: root / item["collection_path"] for item in transport}
+    families = {}
+    for task in plan["tasks"]:
+        if task.get("adapter") != "mapp.maei":
+            continue
+        _, receipt = receipts[task["id"]]
+        if receipt.get("status") not in {"completed", "reused"} or receipt.get("execution_evidence", {}).get("native_fitting_performed") is not True:
+            raise ValueError("MAPP views require an actual completed native fit")
+        if receipt.get("receipt_sha256") != canonical_hash({k: v for k, v in receipt.items() if k != "receipt_sha256"}):
+            raise ValueError("MAPP native completion proof changed")
+        members = [r for r in receipt["outputs"] if Path(r["path"]).name == "AUTHOR_NATIVE_MIXTURE_P_BONFERRONI.tsv"]
+        if len(members) != 1 or members[0]["path"] not in translated:
+            raise ValueError("MAPP native significance table is not a verified transported member")
+        member = members[0]
+        path = translated[member["path"]]
+        if file_sha256(path) != member["sha256"]:
+            raise ValueError("MAPP native numerical output changed")
+        contrasts = task.get("scope", {}).get("contrast_ids", [])
+        if len(contrasts) != 1:
+            raise ValueError("MAPP report views require one exact comparison per fit")
+        frame = pd.read_csv(path, sep="\t", index_col=0)
+        frame.index = frame.index.astype(str)
+        if frame.empty or "combined.Zscore" not in frame or not any(str(c).startswith("activities_") for c in frame):
+            raise ValueError("Native MAEI table is missing its actual sample activity or Z statistics")
+        ranking = pd.to_numeric(frame["combined.Zscore"], errors="coerce")
+        # Preview selection only. Native full tables and correction families
+        # remain separate; no global P/FDR is calculated across windows.
+        preview = frame.loc[ranking.nlargest(20).index].copy()
+        preview.insert(0, "native_model_id", preview.index)
+        preview.insert(0, "fit_task_id", task["id"])
+        preview.insert(0, "site", task.get("scope", {}).get("site", "declared native window"))
+        families.setdefault(contrasts[0], []).append((task, path, preview))
+    panels, tables, files = [], [], []
+    cmap = LinearSegmentedColormap.from_list("katana-maei", ["#2863A5", "#FFFFFF", "#C63F4A"])
+    for cid, entries in families.items():
+        directory = root / "presentation" / "mapp" / re.sub(r"[^A-Za-z0-9_.-]", "_", cid)
+        directory.mkdir(parents=True, exist_ok=True)
+        frame = pd.concat([item[2] for item in entries], ignore_index=True)
+        preview = frame.nlargest(20, "combined.Zscore").copy()
+        preview_path = directory / "native_display_rows.tsv"
+        preview.to_csv(preview_path, sep="\t", index=False)
+        links = [{"label": "Exact plotted native rows", "path": str(preview_path)}]
+        catalog = [{"task_id": task["id"], "path": str(path.relative_to(root)),
+                    "sha256": file_sha256(path), "scope": task["scope"]} for task, path, _ in entries]
+        index_path = write_json(directory / "complete_native_fits.json", {"comparison_id": cid, "fits": catalog,
+            "correction": "Native MAEI per-window/sample Bonferroni; no pooled cross-window FDR",
+            "calibrated_motiftrace_parallel": False})
+        tables.extend({"chapter": 7, "name": f"Native MAPP MAEI | {cid} | {task['id']}", "path": str(path),
+                       "analysis_id": "prioritize.mapp_native", "contrast_id": cid} for task, path, _ in entries)
+        activity_cols = [c for c in preview if str(c).startswith("activities_")]
+        values = preview[activity_cols].apply(pd.to_numeric, errors="coerce").to_numpy()
+        labels = [str(site) + " | " + str(model) for site, model in zip(preview.site, preview.native_model_id)]
+        finite = np.abs(values[np.isfinite(values)])
+        bound = float(finite.max()) if len(finite) else 1.0
+        fig, ax = plt.subplots(figsize=(10, max(4, .28 * len(preview))))
+        image = ax.imshow(np.ma.masked_invalid(values), cmap=cmap, vmin=-bound or -1, vmax=bound or 1, aspect="auto")
+        ax.set_xticks(range(len(activity_cols)), [c.removeprefix("activities_") for c in activity_cols], rotation=45, ha="right")
+        ax.set_yticks(range(len(preview)), labels, fontsize=7)
+        ax.set_title("Native MAEI motif activity | " + cid)
+        fig.colorbar(image, ax=ax, label="Original native sample activity")
+        fig.tight_layout()
+        path = directory / "native_activity_heatmap.png"
+        fig.savefig(path, dpi=150); plt.close(fig)
+        panels.append({"id": "native-maei-" + cid, "chapter": 7, "contrast_id": cid,
+                       "title": "Native MAPP MAEI motif activities | " + cid, "path": str(path),
+                       "data_links": links,
+                       "caption": "Original native sample activities. Displayed rows use combined Z ordering within native windows; this is not a treatment-effect test or calibrated MotifTrace/MAPP parallel evidence. All native fits remain downloadable."})
+        files.extend([preview_path, index_path, path])
+    if not panels:
+        return {"extra_views": [], "files": []}
+    return {"extra_views": [{"project_id": project["project_id"], "source_project_manifest_sha256": file_sha256(root / "project.json"),
+            "status": "complete", "panels": panels, "tables": tables}], "files": files}

@@ -106,6 +106,9 @@ def _completed_network_scope(completion_path, input_paths, contrasts):
     infers that the failed source job completed its missing plotting stages.
     """
     proof = json.loads(completion_path.read_text(encoding="utf-8"))
+    if proof.get("schema") == "katana.flow.network_view_inputs/v1":
+        from katana_next.flow.presentation import validate_network_view_proof
+        return validate_network_view_proof(completion_path, input_paths, contrasts)
     def native_text(key):
         value = proof.get(key, "")
         if isinstance(value, dict):
@@ -328,9 +331,18 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
               "network_input_policy": {"events": len(members), "samples": len(scores), "max_events": None},
               "network_label_policy": {"hard_filter": False, "apply_threshold_labels": False},
               "portable_root": str(out), "new_computation": "report views only; native-completed associations and ORA imported unchanged" if precomputed else "report views; explicit frozen trait tests and module ORA only"}
-    if precomputed:
+    flow_complete = completion_scope == "flow_verified_network_complete"
+    if precomputed and not flow_complete:
         common["numerical_import_source_job"] = precomputed["provenance"]["source_job_id"]
         common["source_lifecycle"] = "FAILED/1:0 preserved; numerical outputs independently verified"
+    elif flow_complete:
+        common.pop("native_job_id", None)
+        common.pop("native_status", None)
+        common.pop("native_exit_code", None)
+        common.update(execution_backend="verified portable Nextflow task receipts",
+                      source_discovery_scope="Completed observed network and independently completed module bootstrap",
+                      flow_execution_plan_id=precomputed["provenance"]["flow_plan_id"],
+                      new_computation="Read-only report views; completed contrast and ORA families imported unchanged")
 
     def asset(path, title, caption, *, module=None, display=True, kind="file", contrast=None, extra=None):
         relative = path.relative_to(out).as_posix()
@@ -482,8 +494,8 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
                "matched_test_audit": trait_audit,
                "native_baseline_job": job if not precomputed else None,
                "native_postprocessing_job": job if precomputed else None,
-               "original_source_native_job": precomputed["provenance"]["source_job_id"] if precomputed else job,
-               "bootstrap_accepted": False, "network_discovery_runs": 0, "upstream_jobs": 0,
+               "original_source_native_job": precomputed["provenance"].get("source_job_id") if precomputed else job,
+               "bootstrap_accepted": flow_complete, "network_discovery_runs": 0, "upstream_jobs": 0,
                "sources_preserved": True, "figures": sum(a["path"].endswith(".png") for a in artifacts),
                "completion_scope": completion_scope,
                "new_trait_fits": 0 if precomputed else len(contrasts), "new_module_ora": not bool(precomputed),
@@ -491,9 +503,9 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
                "trait_method": "existing frozen safe_trait_association per exact declared sample arms"}
     (out / "network-report.receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     (out / "artifact-records.json").write_text(json.dumps(artifacts, indent=2) + "\n", encoding="utf-8")
-    unavailable = [{"chapter": 6, "title": "Bootstrap module confidence", "status": "not_computed",
+    unavailable = [] if flow_complete else [{"chapter": 6, "title": "Bootstrap module confidence", "status": "not_computed",
                     "reason": "The observed baseline receipt does not establish completion of the separate bootstrap phase."}]
-    if precomputed:
+    if precomputed and not flow_complete:
         unavailable.append({"chapter": 6, "title": "Original network dendrogram", "status": "not_available",
                             "reason": "The source plot failed after complete numerical writes; original linkage was not saved. No replacement fit or tree is inferred."})
     unavailable += [{"chapter": 6, "title": "Matched module association: " + row["contrast_id"],

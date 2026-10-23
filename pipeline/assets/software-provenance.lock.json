@@ -1,0 +1,33 @@
+{
+  "schema": "kanata.migration_software_provenance/v1",
+  "status": "local_development_not_release_validated",
+  "implementation_source": {
+    "commit": "e5c1bec6f06dc3b05bac5241a4929ee38507be38",
+    "upstream_rnasplice_version": "1.0.4",
+    "upstream_rnasplice_commit": "1d0494ae3402d1a46e0adadad24f81a0ff855c77",
+    "upstream_rnasplice_url": "https://github.com/nf-core/rnasplice",
+    "adapted": true,
+    "source_file_manifest": "assets/migration-source-manifest.json",
+    "module_revisions": "modules.json"
+  },
+  "template": {
+    "nf_core_tools_version": "4.1.0",
+    "nextflow_version": "25.10.4",
+    "nf_schema_version": "2.5.1"
+  },
+  "salmon": {
+    "version": "2.8.0",
+    "method": "genome_projection",
+    "archive": "https://github.com/COMBINE-lab/salmon/releases/download/v2.8.0/salmon-cli-x86_64-unknown-linux-gnu.tar.xz",
+    "sha256": "10a7f7994df7ef0592ac191cc79a1abd41316463000b307647a9dcab21e1efa6"
+  },
+  "dexseq_scripts_image": {
+    "proposed_image": "ghcr.io/taratype0/kanata-dexseq-tools:0.1.1",
+    "built": false,
+    "published": false,
+    "runtime_validated": false,
+    "license_separation_complete": false,
+    "gpl_sources_bundled_in_pipeline": false,
+    "source_distribution_status": "local_separate_repository_not_published"
+  }
+}

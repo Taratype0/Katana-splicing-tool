@@ -20,7 +20,11 @@ workspace/
 results/
 katana_output/
 outputs/
+output/
 logs/
+.nextflow/
+.nextflow.*
+work/
 *.log
 *.pid
 .env

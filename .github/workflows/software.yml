@@ -99,8 +99,9 @@ jobs:
           cp tests/public_baseline/test_motiftrace_distribution.py "$RUNNER_TEMP/test_motiftrace_distribution.py"
           cp tests/public_baseline/test_report_distribution.py "$RUNNER_TEMP/test_report_distribution.py"
           cp tests/public_baseline/test_target_distribution.py "$RUNNER_TEMP/test_target_distribution.py"
+          cp tests/public_baseline/test_flow_distribution.py "$RUNNER_TEMP/test_flow_distribution.py"
           cd "$RUNNER_TEMP"
-          python -I -m pytest -q test_motiftrace_distribution.py test_report_distribution.py test_target_distribution.py
+          python -I -m pytest -q test_motiftrace_distribution.py test_report_distribution.py test_target_distribution.py test_flow_distribution.py
 
   interface:
     runs-on: ubuntu-latest

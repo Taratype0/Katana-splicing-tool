@@ -1,0 +1,26 @@
+{
+  "schema": "katana.upstream_integration_changes/v1",
+  "source_manifest": "UPSTREAM_SOURCE.json",
+  "original_checkouts_modified": false,
+  "changes": [
+    {
+      "path": "conf/upstream_modules.config",
+      "snapshot_sha256": "0a32f38bce21b712643f68335fbd12cad61a9a083c84c00e00dcbedd18055284",
+      "integrated_sha256": "030e98a102ec950c8989f3b7b9d28846c85769b0b284b7034c1d0f3a6a64e47f"
+    },
+    {
+      "path": "workflows/katana_core.nf",
+      "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
+      "integrated_sha256": "c2d297d1dde03a894dcf1c2729932f18e18a5366231767b6ac29614898c65aba"
+    }
+  ],
+  "purpose": [
+    "Apply already approved pseudogene and mitochondrial exclusions before native differential inputs",
+    "Export raw reference, filter decisions and receipt alongside the filtered analysis reference",
+    "Carry existing FASTQ/trim/STAR QC artifacts into the portable upstream bundle",
+    "Omit the unused MultiQC publish selector when including only the executable upstream core",
+    "Bind native QC sources to exact sample IDs and raw/trimmed/alignment phases in the portable bundle"
+  ],
+  "scientific_test_algorithms_replaced": false,
+  "already_completed_results_refitted": false
+}

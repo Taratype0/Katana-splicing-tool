@@ -1,0 +1,46 @@
+name: Native Nextflow integration
+
+on:
+  push:
+    paths:
+      - 'pipeline/**'
+      - '.github/workflows/pipeline.yml'
+  pull_request:
+    paths:
+      - 'pipeline/**'
+      - '.github/workflows/pipeline.yml'
+  workflow_dispatch:
+
+jobs:
+  native-transport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download and verify fixed Nextflow runtime
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/nextflow-io/nextflow/releases/download/v25.10.4/nextflow-25.10.4-dist \
+            --output "$RUNNER_TEMP/nextflow-25.10.4-dist"
+          echo "60db869a7618783e3ee60183a2b0c6c50ffc67221eabec60800b904991786aaa  $RUNNER_TEMP/nextflow-25.10.4-dist" | sha256sum --check --strict
+      - name: Verify reference exclusions
+        run: python -B -m unittest discover -s pipeline/tests -p test_reference_filter.py -v
+      - name: Verify upstream source snapshot and explicit integration changes
+        run: python -B pipeline/tools/verify_sources.py
+      - name: Verify native scheduling, failure, resume and reference task
+        env:
+          NXF_OFFLINE: 'true'
+        shell: bash
+        run: |
+          runtime_command=$(python -c 'import json,os; print(json.dumps(["java", "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "-cp", os.environ["RUNNER_TEMP"] + "/nextflow-25.10.4-dist", "nextflow.cli.Launcher"]))')
+          python -B pipeline/tools/check_native_transport.py \
+            --nextflow-command-json "$runtime_command" \
+            --outdir "$RUNNER_TEMP/katana-native-transport"

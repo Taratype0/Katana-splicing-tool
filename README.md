@@ -67,6 +67,22 @@ The development package provides `katana-report` and `from katana_next.reports i
 
 Reports retain significant and non-significant results and document actual filtering and exclusions. Unrun analyses and missing matching downstream results are identified. Report generation reads completed analyses; it does not infer experimental purpose or rescue, generate a validation programme, or rerun upstream processing. Selected gene/event dossiers remain separate interactive analyses.
 
+### Integrated analysis workflow (development)
+
+The [Nextflow workflow](pipeline/main.nf) connects bulk FASTQ/BAM processing,
+Katana calculations and the fixed seven-section report. Expensive comparisons
+and network stages are separate executor tasks. It supports upstream-only,
+downstream-only and complete execution; completed work is retained with
+`-resume`. The `katana-flow` commands validate resources, prepare independent
+tasks, verify their products and enforce report completion. The existing
+`katana-report` command remains a renderer for already completed results.
+
+This integration is under execution acceptance, and is not an official nf-core
+release. A missing required calculation or resource blocks a complete report.
+Native MAPP fitting needs explicitly prepared, matching transcript quantities
+and motif-count inputs; these are not substituted with event PSI. See
+[integrated execution and current limits](docs/INTEGRATED_PIPELINE.md).
+
 ### Browser interaction
 
 The browser interface lets users open projects, inspect samples and designs, select comparisons and parameters, follow task status, filter result tables, save candidate genes or events, inspect gene cards and figures, and export results. MotifTrace, networks and reports are accessible through their analysis pages.

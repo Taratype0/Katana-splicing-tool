@@ -1,0 +1,906 @@
+{
+  "source_git_commit": "e5c1bec6f06dc3b05bac5241a4929ee38507be38",
+  "source_rnasplice_commit": "1d0494ae3402d1a46e0adadad24f81a0ff855c77",
+  "files": [
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\cat\\fastq\\main.nf",
+      "destination": "modules\\nf-core\\cat\\fastq\\main.nf",
+      "sha256": "3f14818d9d63fa812a82241ad839859c9d801c8c73c3006d66404d78d714d27f"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\cat\\fastq\\meta.yml",
+      "destination": "modules\\nf-core\\cat\\fastq\\meta.yml",
+      "sha256": "dbf8060cdcd8906fd3861d80f16ea8936b09a5db0c734ec32eba6a99469c8c82"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\custom\\dumpsoftwareversions\\environment.yml",
+      "destination": "modules\\nf-core\\custom\\dumpsoftwareversions\\environment.yml",
+      "sha256": "0616d1e01de80d85c598a6fcd5bc9ac66aedf4ece03622ce73d1722b5e25305b"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\custom\\dumpsoftwareversions\\main.nf",
+      "destination": "modules\\nf-core\\custom\\dumpsoftwareversions\\main.nf",
+      "sha256": "364d0f2f49579c4b2327e955c64ce0e0f4b76e8c590dc05204feff5521c3741b"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\custom\\dumpsoftwareversions\\meta.yml",
+      "destination": "modules\\nf-core\\custom\\dumpsoftwareversions\\meta.yml",
+      "sha256": "33d7e4774a5ce0e229113f4df8c21bd7a7081311a92ef88fad26061fe6ebe68a"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\custom\\dumpsoftwareversions\\templates\\dumpsoftwareversions.py",
+      "destination": "modules\\nf-core\\custom\\dumpsoftwareversions\\templates\\dumpsoftwareversions.py",
+      "sha256": "4ccb452edbe47cb1d270878ab39e23fb55c282655c6efb19713e6a3bc891c7d2"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\custom\\dumpsoftwareversions\\tests\\main.nf.test",
+      "destination": "modules\\nf-core\\custom\\dumpsoftwareversions\\tests\\main.nf.test",
+      "sha256": "74e76c9c82a2cc2a442222265912a4badb5f7d960b3dcefa62cb8b5ee004a356"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\custom\\dumpsoftwareversions\\tests\\main.nf.test.snap",
+      "destination": "modules\\nf-core\\custom\\dumpsoftwareversions\\tests\\main.nf.test.snap",
+      "sha256": "3683cf244d3a64945f3eb1cc6b631ed933169f953be94f72709521bba2138031"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\custom\\dumpsoftwareversions\\tests\\tags.yml",
+      "destination": "modules\\nf-core\\custom\\dumpsoftwareversions\\tests\\tags.yml",
+      "sha256": "d8a9f1818268ba0dd6244b1b028d32aa2573ab9e275b852ff1342df440a9d66d"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\custom\\getchromsizes\\main.nf",
+      "destination": "modules\\nf-core\\custom\\getchromsizes\\main.nf",
+      "sha256": "eb5e27e87ff684ef4d13dd54aefe9196e799ce31cbe74c9051109b849e7a3f52"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\custom\\getchromsizes\\meta.yml",
+      "destination": "modules\\nf-core\\custom\\getchromsizes\\meta.yml",
+      "sha256": "da88ad7cc2310cc9d411f17949621f7746dd70a22be7f4f6ff5347cfe4dd033e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\fastqc\\environment.yml",
+      "destination": "modules\\nf-core\\fastqc\\environment.yml",
+      "sha256": "a2262941ed3e07e5055e61a0dd992ce41a62e80a9f5c2798ee8af01050d539dc"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\fastqc\\main.nf",
+      "destination": "modules\\nf-core\\fastqc\\main.nf",
+      "sha256": "28a0ff690799a23ef6affa675aab1310bc952bfc4dbe5d918cb6036930c60e8e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\fastqc\\meta.yml",
+      "destination": "modules\\nf-core\\fastqc\\meta.yml",
+      "sha256": "838e10bc16057050afb3517cf538ef450f8cc32af86a6dc174f9c34c0587a39e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\fastqc\\tests\\main.nf.test",
+      "destination": "modules\\nf-core\\fastqc\\tests\\main.nf.test",
+      "sha256": "83db83e93c140dca1619c8b53f7e12bcf145914e3a226a7930ed97cfcd61ac06"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\fastqc\\tests\\main.nf.test.snap",
+      "destination": "modules\\nf-core\\fastqc\\tests\\main.nf.test.snap",
+      "sha256": "a33736c775903f50ec408d66fa094a3ce828a16aed9629a05bcf5138f9130ae4"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\fastqc\\tests\\tags.yml",
+      "destination": "modules\\nf-core\\fastqc\\tests\\tags.yml",
+      "sha256": "1fbdb16ba4e8b9eefc0019dcabf9b6df5ceb0ae4033fa8947ecf63fe8d01b154"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\gffread\\main.nf",
+      "destination": "modules\\nf-core\\gffread\\main.nf",
+      "sha256": "25539dde1917277c3e5bb0d573d0a2379e8dd4dce1f35a79f6a5a289b62b2ae8"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\gffread\\meta.yml",
+      "destination": "modules\\nf-core\\gffread\\meta.yml",
+      "sha256": "6f1309195cc37624f491dae495611dc3120b47bf8e18e0d8524bc3d446407693"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\gunzip\\main.nf",
+      "destination": "modules\\nf-core\\gunzip\\main.nf",
+      "sha256": "70ed39c6ea2743346582b85a37ab977df1889345aa420fb315b33c8c5033c20f"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\gunzip\\meta.yml",
+      "destination": "modules\\nf-core\\gunzip\\meta.yml",
+      "sha256": "c749a9ab21f7a309aa4a1150e77bd4d7e9ca330b0f19129eb7e742dc63cd8f94"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\rsem\\preparereference\\main.nf",
+      "destination": "modules\\nf-core\\rsem\\preparereference\\main.nf",
+      "sha256": "ce5d7745d114c542762f9d001b34105902ecae7bfbb527f90e3b29d8028ef9e1"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\rsem\\preparereference\\meta.yml",
+      "destination": "modules\\nf-core\\rsem\\preparereference\\meta.yml",
+      "sha256": "c3acb7dc15c8a415150ae69057f323fb1ccb642b432d783b437c575bca65bb24"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\salmon\\index\\main.nf",
+      "destination": "modules\\nf-core\\salmon\\index\\main.nf",
+      "sha256": "9033eba9889099495717001dad1f3f22cf1ea17731965ef31b26890725bed961"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\salmon\\index\\meta.yml",
+      "destination": "modules\\nf-core\\salmon\\index\\meta.yml",
+      "sha256": "f065df15e8bf5256251c256dabff9acce5ff1ac7ecca9246222cabbc3e24a27e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\salmon\\quant\\main.nf",
+      "destination": "modules\\nf-core\\salmon\\quant\\main.nf",
+      "sha256": "23b147512bf8058837543704cfb426c2a85b5bf78c2fcb7a7a339c76960d5bee"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\salmon\\quant\\meta.yml",
+      "destination": "modules\\nf-core\\salmon\\quant\\meta.yml",
+      "sha256": "179eff1fc32a3076f185009a4a853ef787c4b75c56aa7b16d37bdd585269d4cb"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\flagstat\\main.nf",
+      "destination": "modules\\nf-core\\samtools\\flagstat\\main.nf",
+      "sha256": "a4a42149efd8466ea59e3f53b4b6029641784ae8dd7fd670170b62a80606d637"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\flagstat\\meta.yml",
+      "destination": "modules\\nf-core\\samtools\\flagstat\\meta.yml",
+      "sha256": "680e0c0264c710c24d010cffabd7eaa9d2737b179301c16505ba4e19f2f48cad"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\idxstats\\main.nf",
+      "destination": "modules\\nf-core\\samtools\\idxstats\\main.nf",
+      "sha256": "a3a5a253b2a6dc5f7b38e24d46f7a6b1761caf99ce63d370af22e493d3bd78d3"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\idxstats\\meta.yml",
+      "destination": "modules\\nf-core\\samtools\\idxstats\\meta.yml",
+      "sha256": "ff941804cda2dabbb2966cb31a243b4f097f056fd1bbb1adb28e0ca8d94e8e74"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\index\\main.nf",
+      "destination": "modules\\nf-core\\samtools\\index\\main.nf",
+      "sha256": "6ec52fa0b0290ccc1df78ad34c88cb65992001060146dbb0fcf1f2b08281fed0"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\index\\meta.yml",
+      "destination": "modules\\nf-core\\samtools\\index\\meta.yml",
+      "sha256": "5bb8b66c9d53e8ef42ad55bc9fc1f3ac61af5c7b7516b96168ed844f851eea5b"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\sort\\main.nf",
+      "destination": "modules\\nf-core\\samtools\\sort\\main.nf",
+      "sha256": "581d31c266e5bd967e2c3172d7dabc083d43535e6ee78e9259b4517d84de22b3",
+      "destination_sha256": "8e01173de23c6957b04e3177431140e93bab78b9675dc017c716aac0bcb8a7b0",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived candidate refined during nf-core comparison and actual runtime recovery: input/design guards, assay provenance, reference transport, SUPPA provenance/condition handling, and SAMtools sort memory headroom as applicable. See docs/nfcore-comparison-review-20261013.md and Git history."
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\sort\\meta.yml",
+      "destination": "modules\\nf-core\\samtools\\sort\\meta.yml",
+      "sha256": "d49f91a6e7dc595c01f4eb40ebe019ba951ec3af58f0353f9724b58e30a35a13"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\stats\\main.nf",
+      "destination": "modules\\nf-core\\samtools\\stats\\main.nf",
+      "sha256": "de2e95f85f7dca06a1f503567117c2060551341fc5167b0bd34b9368365dd6d2"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\samtools\\stats\\meta.yml",
+      "destination": "modules\\nf-core\\samtools\\stats\\meta.yml",
+      "sha256": "b1e35630abaebf2065312b172ffeda291b10e3998525a3dfa6d5d25718ed9a6d"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\star\\align\\main.nf",
+      "destination": "modules\\nf-core\\star\\align\\main.nf",
+      "sha256": "9cc3ce662309c8f569b430c82189a7ecaf40ab9fcfc63f0a9ce82f3ec707b07e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\star\\align\\meta.yml",
+      "destination": "modules\\nf-core\\star\\align\\meta.yml",
+      "sha256": "beb57d0ce12ba288a51a0ddd1335c4b5473d14e33a5ce32c6569edbde0653245"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\star\\genomegenerate\\main.nf",
+      "destination": "modules\\nf-core\\star\\genomegenerate\\main.nf",
+      "sha256": "4cb7d568e9d33585a788f7107b57e7337f53e499bf58fd925be759c8e0d73b0e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\star\\genomegenerate\\meta.yml",
+      "destination": "modules\\nf-core\\star\\genomegenerate\\meta.yml",
+      "sha256": "7f22e3641521e629b366f3455a57cf1b8528266b631cdba8ceaa8627a222f3cb"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\subread\\featurecounts\\main.nf",
+      "destination": "modules\\nf-core\\subread\\featurecounts\\main.nf",
+      "sha256": "695617683d7cd040ae96b9e477452d819f3f299a6e272f074c908732d8d6546e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\subread\\featurecounts\\meta.yml",
+      "destination": "modules\\nf-core\\subread\\featurecounts\\meta.yml",
+      "sha256": "e47b10a6dcc9b8998b652173f045a483bcf573da2746240da920ec2f83a96634"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\trimgalore\\main.nf",
+      "destination": "modules\\nf-core\\trimgalore\\main.nf",
+      "sha256": "69ef7cf3756f167b46616386608a5c933ec3b6fc3e391ae25422fb91986168fc"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\trimgalore\\meta.yml",
+      "destination": "modules\\nf-core\\trimgalore\\meta.yml",
+      "sha256": "25409e432f45a309f6404b21c8fb7b1724db3faef48a407bfec7b6b5a587bb4d"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\ucsc\\bedclip\\main.nf",
+      "destination": "modules\\nf-core\\ucsc\\bedclip\\main.nf",
+      "sha256": "5c5dff882d82ed4fa9a284959845bf27ecd7f8bf92f4a68c67e4c9fe630fe9f3"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\ucsc\\bedclip\\meta.yml",
+      "destination": "modules\\nf-core\\ucsc\\bedclip\\meta.yml",
+      "sha256": "2ed312093f09c2b718b99ae8f8ed32a5c4f5bbc51da5d05b7f51c63297815d57"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\ucsc\\bedgraphtobigwig\\main.nf",
+      "destination": "modules\\nf-core\\ucsc\\bedgraphtobigwig\\main.nf",
+      "sha256": "0aceb9f7cf8aac2742f8d542c97619c7b329cc05ccdd7710d21a7b6f3d373448"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\ucsc\\bedgraphtobigwig\\meta.yml",
+      "destination": "modules\\nf-core\\ucsc\\bedgraphtobigwig\\meta.yml",
+      "sha256": "b5d2491d4b1f19cc0095b8cc110def6c4c2dd06ae496421696ceb38442283bcd"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\umitools\\extract\\main.nf",
+      "destination": "modules\\nf-core\\umitools\\extract\\main.nf",
+      "sha256": "d110968ad998376b528582e55f7495495ba72271c66039caa8944b2829885284"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\umitools\\extract\\meta.yml",
+      "destination": "modules\\nf-core\\umitools\\extract\\meta.yml",
+      "sha256": "bc943bdad3e0392e3f34d8c021971f8ac5d91f4736a38dd64e2c7400972d8b6e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\untar\\main.nf",
+      "destination": "modules\\nf-core\\untar\\main.nf",
+      "sha256": "fa874b883b66bdef5763239ceab0a712a9a91bc6229dbe01b9da3a26eb045d49"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\nf-core\\untar\\meta.yml",
+      "destination": "modules\\nf-core\\untar\\meta.yml",
+      "sha256": "c1707b9a8258b2635b1d21f9c72daa6b463504dfd4a0befe5361bac74b92a565"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\bedtools_genomecov.nf",
+      "destination": "modules\\local\\bedtools_genomecov.nf",
+      "sha256": "afa6d272be94269fa30724917d8f0a59717e467b421f37914bfc0cf588b64692"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\contrastsheet_check.nf",
+      "destination": "modules\\local\\contrastsheet_check.nf",
+      "sha256": "8d21d6e335e3ee422de409913887a481c5ef8d4703dc65bfa78faee176e0e43f"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\create_bamlist.nf",
+      "destination": "modules\\local\\create_bamlist.nf",
+      "sha256": "5598ed56a5c4a4ad249c940b227915964f47a1a97c8c45aa0d10e3318d9a5c03"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\create_bamlist_single.nf",
+      "destination": "modules\\local\\create_bamlist_single.nf",
+      "sha256": "29f525cf9bb47f0af719f02e84c15160280f58ab6eae219f352c1b37d914eea1"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\dexseq_annotation.nf",
+      "destination": "modules\\local\\dexseq_annotation.nf",
+      "sha256": "40bb85901e812d33904870e82d54f48cb6240b87ce3c345bd052b5e63217e4de",
+      "destination_sha256": "6fcb415962fdabea96c8371b7fc3bd26a4d164d3d1a4b532253bd6c59126a883",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived destination hash refreshed from the current candidate; prior migration edits retained. See candidate Git history."
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\dexseq_count.nf",
+      "destination": "modules\\local\\dexseq_count.nf",
+      "sha256": "ac61c35df22c284188011f84d36ba1bd98fd23ee1123e56ec10c8c5a83c20c9f",
+      "destination_sha256": "c39fc80454f7624bfd685854037fb5a6f7dc0c3ec5148875168f8b993684cbfd",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived destination hash refreshed from the current candidate; prior migration edits retained. See candidate Git history."
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\dexseq_dtu.nf",
+      "destination": "modules\\local\\dexseq_dtu.nf",
+      "sha256": "6e2188b15276fbc487caa09c37699cedfa977c213fc3a9f0a9aea0c40c08e825"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\dexseq_exon.nf",
+      "destination": "modules\\local\\dexseq_exon.nf",
+      "sha256": "8e5bdf370cf182cdb890bee9fd28dc268cc94ffebb2e29507c4939cbcceb1efd"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\drimseq_filter.nf",
+      "destination": "modules\\local\\drimseq_filter.nf",
+      "sha256": "92951fa0dfebba6bcbae4e3d839e86bb3b749e3906b818b3b95ed60568263721"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\edger_exon.nf",
+      "destination": "modules\\local\\edger_exon.nf",
+      "sha256": "d248eb3d38a630a1948cacf74420d05c5e32a70a195ef108e035c4cb4a501b29"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\flattengtf.nf",
+      "destination": "modules\\local\\flattengtf.nf",
+      "sha256": "f6a3014672bc00dbaccc345728a0ca35139feaf632b72be3ea4aae871d641a73"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\gffread_tx2gene.nf",
+      "destination": "modules\\local\\gffread_tx2gene.nf",
+      "sha256": "8249b9f03cbff71389121b055bd28ebcae25da5b50a85da2a2ffc382f3d9ad50"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\gtf_2_gff3.nf",
+      "destination": "modules\\local\\gtf_2_gff3.nf",
+      "sha256": "6f74e6425514ee380a6551fbe277ab52b7f3462c8f61ba3e44d769e83f051277"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\gtf_gene_filter.nf",
+      "destination": "modules\\local\\gtf_gene_filter.nf",
+      "sha256": "222e582ee5cbc760c4521df445be67882413d8ce090aeb868ca7f33cc9cf6a00"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\miso_index.nf",
+      "destination": "modules\\local\\miso_index.nf",
+      "sha256": "e1c977ecd1287690e9da8968633cbe5c781c65aa86a0eb1c4ec9b13655de6987"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\miso_run.nf",
+      "destination": "modules\\local\\miso_run.nf",
+      "sha256": "35fe537bbbe0af9c2147ff0a8ff80a7ef56dfad4b37303b8ac7b706399882ee4"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\miso_sashimi.nf",
+      "destination": "modules\\local\\miso_sashimi.nf",
+      "sha256": "952558f991b920e3e8c399587f9a77a0632ace061eb55f2638b68fb15114f0d8"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\miso_settings.nf",
+      "destination": "modules\\local\\miso_settings.nf",
+      "sha256": "6c0c2b92b16521c06c26d69a9e59403122ce3a68cc765627cb117cd53e8b808e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\preprocess_transcripts_fasta_gencode.nf",
+      "destination": "modules\\local\\preprocess_transcripts_fasta_gencode.nf",
+      "sha256": "0f555b63b3042e19acf99f48c098c296a659e95d50f67469d46f7d69ea589466"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\rmats_post.nf",
+      "destination": "modules\\local\\rmats_post.nf",
+      "sha256": "25fac904356724b4e29eb05f1e64650818a6e1e66e09da05ed5168711e223ace"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\rmats_post_single.nf",
+      "destination": "modules\\local\\rmats_post_single.nf",
+      "sha256": "16cc1616a73265134ad79d3597e462ffcdcdf45002e67d074f99ae0f2a0820fc"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\rmats_prep.nf",
+      "destination": "modules\\local\\rmats_prep.nf",
+      "sha256": "a8fffd1ce2f6745afd7a3ac6f1a80db29e51a05cac8e84e8bf8466465ba16bc0"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\rmats_prep_single.nf",
+      "destination": "modules\\local\\rmats_prep_single.nf",
+      "sha256": "37c68f0c98306b056c01fbcf91225e603bbc32ddc648392e243c80112214109e"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\samplesheet_check.nf",
+      "destination": "modules\\local\\samplesheet_check.nf",
+      "sha256": "bdabffb76f5d43c92ef6c21ec8826b2efffc8269cd369e40fd8548f173aed005"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\stager.nf",
+      "destination": "modules\\local\\stager.nf",
+      "sha256": "abed3ce10ba308b9f3f4f7b86d5513b69eba22bb7d9ec8f920f541bbdb87ff4f"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\star_align_igenomes.nf",
+      "destination": "modules\\local\\star_align_igenomes.nf",
+      "sha256": "4fc0d73ab79ab9eb0ef80158b13158af84da938f4caa364c2eb7ff6148af48f0"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\star_genomegenerate_igenomes.nf",
+      "destination": "modules\\local\\star_genomegenerate_igenomes.nf",
+      "sha256": "53aa9baabad016ece41ffcae962774517ff438827d4279a95675740c2a7fcb8a"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\suppa_clusterevents.nf",
+      "destination": "modules\\local\\suppa_clusterevents.nf",
+      "sha256": "242e122ba1e582b68b58725fdbdec0a9de8d23ce95fb1d08bbfe0324388a91c8"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\suppa_clustergroups.nf",
+      "destination": "modules\\local\\suppa_clustergroups.nf",
+      "sha256": "db0392155eae1dd08540d36f704187139663c8392637c6a63ceac832e0974314"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\suppa_diffsplice.nf",
+      "destination": "modules\\local\\suppa_diffsplice.nf",
+      "sha256": "449ed8b6a5c97cdd0ebfa5a2456809c2c7424653fe23c930d3ab955d28aa8650"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\suppa_generateevents.nf",
+      "destination": "modules\\local\\suppa_generateevents.nf",
+      "sha256": "efe23529542ce66518157545000f48e76a3e99b2e0337f04761c9ea432b4e629"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\suppa_psiperevent.nf",
+      "destination": "modules\\local\\suppa_psiperevent.nf",
+      "sha256": "c4fbf2b8aa648e65fabdbc2429fae8b13dd72249a617b44f2d400d5c056aa930"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\suppa_psiperisoform.nf",
+      "destination": "modules\\local\\suppa_psiperisoform.nf",
+      "sha256": "a5cf95069b15489f9f142f116a31f30207c24bd66c975cecddd3cb040678a212"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\suppa_split_files.nf",
+      "destination": "modules\\local\\suppa_split_files.nf",
+      "sha256": "9c1ac55a1d5ed50ef746c9421f924c83a798bab40bd14102935fb5a1d0829ce9"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\modules\\local\\tximport.nf",
+      "destination": "modules\\local\\tximport.nf",
+      "sha256": "6375b4a31b6e949f50949973830781f248648b8a7f28dcca891e5135b156e76e"
+    },
+    {
+      "source": "modules\\local\\katana_differential.nf",
+      "destination": "modules\\local\\katana_differential.nf",
+      "sha256": "b3501a9b58e4bb36a95135b8517eb8d3534b0defa62cba93d0805ffab6afbf9b"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\align_star.nf",
+      "destination": "subworkflows\\local\\align_star.nf",
+      "sha256": "8fcc534e09b7215739687ad562a964cc9c41f4c2979d60afb5ff7fe6c790ae31"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\contrasts_check.nf",
+      "destination": "subworkflows\\local\\contrasts_check.nf",
+      "sha256": "6387649e688fd9492baabe8d4b4b3711dbd86295fa77cc2f0ea9c87722faeb8f"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\dexseq_deu.nf",
+      "destination": "subworkflows\\local\\dexseq_deu.nf",
+      "sha256": "9cb28f4eb5a22649a5f7757dfe322afdfd0d5c9d1b8d4594e576612d6a571518"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\drimseq_dexseq_dtu.nf",
+      "destination": "subworkflows\\local\\drimseq_dexseq_dtu.nf",
+      "sha256": "63f46d5a5322c1b0e70df581a6bbd8b1616e98451a69560dee6e7026cf3ccf35"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\edger_deu.nf",
+      "destination": "subworkflows\\local\\edger_deu.nf",
+      "sha256": "fbcd4ddb8a25b3bca5d5530b20d7e55d064c69607f3fbb06599fcf5e5d0800a5"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\input_check.nf",
+      "destination": "subworkflows\\local\\input_check.nf",
+      "sha256": "8fdf6aefbecc45307cca44ea18dada5b3f85f7b237cbffb965bb63b888964f5c"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\prepare_genome.nf",
+      "destination": "subworkflows\\local\\prepare_genome.nf",
+      "sha256": "55fc67e25a8f5692dad0b43c54df2aad7ddab9ef0fc85d0bf6783056a78ffbae"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\rmats.nf",
+      "destination": "subworkflows\\local\\rmats.nf",
+      "sha256": "df6df4f92c81bdd2009b36b1aa6f43ee2784ebec0979bd0a616a65d5eb03bf65"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\suppa.nf",
+      "destination": "subworkflows\\local\\suppa.nf",
+      "sha256": "2675d183777241e68d20efcd2ba3fcb7e8a07bbca94f3b1f1da46c390cafa54d",
+      "destination_sha256": "961ec431bab04a25f98406f156ec20bfc1edc1e5f0eeae2f0423cc584634799b",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived candidate refined during nf-core comparison: input/design guards, assay provenance, reference transport and SUPPA provenance/condition handling as applicable. See docs/nfcore-comparison-review-20261013.md and Git history."
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\tx2gene_tximport.nf",
+      "destination": "subworkflows\\local\\tx2gene_tximport.nf",
+      "sha256": "e87411f8038afad5a9feb560abba2fc7868fdccb437f3f1e88876d2833a4474d"
+    },
+    {
+      "source": "vendor\\nf-core-rnasplice\\subworkflows\\local\\visualise_miso.nf",
+      "destination": "subworkflows\\local\\visualise_miso.nf",
+      "sha256": "a5d927f440b6637c4adcae93eb552db42e5fff9c1437f58c37d922d2d2bb720b"
+    },
+    {
+      "source": "subworkflows\\local\\export.nf",
+      "destination": "modules\\local\\katana_export.nf",
+      "sha256": "043edc643971d40977758f046145865222927330572e9d7b0022270bb709af0b",
+      "previous_destination": "subworkflows\\local\\export.nf",
+      "destination_sha256": "043edc643971d40977758f046145865222927330572e9d7b0022270bb709af0b",
+      "source_file_unchanged": true,
+      "transformation": "Relocated process-only file to modules/local; file bytes and JsonOutput import preserved."
+    },
+    {
+      "source": "subworkflows\\local\\ingress.nf",
+      "destination": "modules\\local\\validate_inputs.nf",
+      "sha256": "622da3c98a33cb93b21f18058aa1c21120cfd7575f05799b9ac229b46cda4e08",
+      "previous_destination": "subworkflows\\local\\ingress.nf",
+      "destination_sha256": "d1f3b784ff86c1486158257cda2eb3ebaaa48ddc6fbe1632341558698d03ff2f",
+      "source_file_unchanged": false,
+      "source_fragment_process": "VALIDATE_INPUTS",
+      "source_fragment_unchanged": true,
+      "transformation": "Split one original top-level process into a local module; all process bytes and input/output/script interfaces preserved.",
+      "migration_changes": "Study preflight: original CSV base, global nominal length, duplicate contrasts, URL policy and corresponding tests; owned module interface changed where needed."
+    },
+    {
+      "source": "subworkflows\\local\\ingress.nf",
+      "destination": "modules\\local\\prepare_references.nf",
+      "sha256": "622da3c98a33cb93b21f18058aa1c21120cfd7575f05799b9ac229b46cda4e08",
+      "previous_destination": "subworkflows\\local\\ingress.nf",
+      "destination_sha256": "a8c3a510818e69921cf634d167a55332bae199eaef499d32956bae93d0d33d14",
+      "source_file_unchanged": false,
+      "source_fragment_process": "PREPARE_REFERENCES",
+      "source_fragment_unchanged": true,
+      "transformation": "Split one original top-level process into a local module; all process bytes and input/output/script interfaces preserved.",
+      "migration_changes": "Derived candidate refined during nf-core comparison: input/design guards, assay provenance, reference transport and SUPPA provenance/condition handling as applicable. See docs/nfcore-comparison-review-20261013.md and Git history."
+    },
+    {
+      "source": "subworkflows\\local\\ingress.nf",
+      "destination": "modules\\local\\adapt_suppa_contrasts.nf",
+      "sha256": "622da3c98a33cb93b21f18058aa1c21120cfd7575f05799b9ac229b46cda4e08",
+      "previous_destination": "subworkflows\\local\\ingress.nf",
+      "destination_sha256": "45d6c7223870ca985ce96ca78b340aa8f8f58ff72d6abb9133d1e6781d425773",
+      "source_file_unchanged": false,
+      "source_fragment_process": "ADAPT_SUPPA_CONTRASTS",
+      "source_fragment_unchanged": true,
+      "transformation": "Split one original top-level process into a local module; all process bytes and input/output/script interfaces preserved."
+    },
+    {
+      "source": "subworkflows\\local\\ingress.nf",
+      "destination": "modules\\local\\reference_faidx.nf",
+      "sha256": "622da3c98a33cb93b21f18058aa1c21120cfd7575f05799b9ac229b46cda4e08",
+      "previous_destination": "subworkflows\\local\\ingress.nf",
+      "destination_sha256": "e61e90ee4d87a69db990459d2842b1933fa8dad258838396f2a3cf42b197a056",
+      "source_file_unchanged": false,
+      "source_fragment_process": "REFERENCE_FAIDX",
+      "source_fragment_unchanged": true,
+      "transformation": "Split one original top-level process into a local module; all process bytes and input/output/script interfaces preserved."
+    },
+    {
+      "source": "subworkflows\\local\\ingress.nf",
+      "destination": "modules\\local\\capture_bam_audit.nf",
+      "sha256": "622da3c98a33cb93b21f18058aa1c21120cfd7575f05799b9ac229b46cda4e08",
+      "previous_destination": "subworkflows\\local\\ingress.nf",
+      "destination_sha256": "8e5d5cd9bc756fde7f77ba80a21b7339b006784f51280e10e1c2d9b8d5149eba",
+      "source_file_unchanged": false,
+      "source_fragment_process": "CAPTURE_BAM_AUDIT",
+      "source_fragment_unchanged": true,
+      "transformation": "Split one original top-level process into a local module; all process bytes and input/output/script interfaces preserved."
+    },
+    {
+      "source": "subworkflows\\local\\ingress.nf",
+      "destination": "modules\\local\\audit_genome_bam.nf",
+      "sha256": "622da3c98a33cb93b21f18058aa1c21120cfd7575f05799b9ac229b46cda4e08",
+      "previous_destination": "subworkflows\\local\\ingress.nf",
+      "destination_sha256": "d7a049b908b4b8b884d54465c8e9cf4458835dcfc283f6773f4020d7dcd57f69",
+      "source_file_unchanged": false,
+      "source_fragment_process": "AUDIT_GENOME_BAM",
+      "source_fragment_unchanged": true,
+      "transformation": "Split one original top-level process into a local module; all process bytes and input/output/script interfaces preserved."
+    },
+    {
+      "source": "subworkflows\\local\\ingress.nf",
+      "destination": "modules\\local\\collate_genome_bam.nf",
+      "sha256": "622da3c98a33cb93b21f18058aa1c21120cfd7575f05799b9ac229b46cda4e08",
+      "previous_destination": "subworkflows\\local\\ingress.nf",
+      "destination_sha256": "9a3b5c20c8aa4ed1d84c8f38880b17985b2ed118b36eb14e6107d108b7f848d6",
+      "source_file_unchanged": false,
+      "source_fragment_process": "COLLATE_GENOME_BAM",
+      "source_fragment_unchanged": true,
+      "transformation": "Split one original top-level process into a local module; all process bytes and input/output/script interfaces preserved."
+    },
+    {
+      "source": "subworkflows\\local\\ingress.nf",
+      "destination": "modules\\local\\salmon_genome_projection.nf",
+      "sha256": "622da3c98a33cb93b21f18058aa1c21120cfd7575f05799b9ac229b46cda4e08",
+      "previous_destination": "subworkflows\\local\\ingress.nf",
+      "destination_sha256": "262f1696dcc022fa4fde42430d0b291b8866bfd3c9c5e72bd843154600a3258e",
+      "source_file_unchanged": false,
+      "source_fragment_process": "SALMON_GENOME_PROJECTION",
+      "source_fragment_unchanged": true,
+      "transformation": "Split one original top-level process into a local module; all process bytes and input/output/script interfaces preserved."
+    },
+    {
+      "source": "bin\\check_contrastsheet.py",
+      "destination": "bin\\check_contrastsheet.py",
+      "sha256": "8f95fd4b318b8e5be0230c2c488552f39b3e6173c962cc82c488240379351e91"
+    },
+    {
+      "source": "bin\\check_samplesheet_fastq.py",
+      "destination": "bin\\check_samplesheet_fastq.py",
+      "sha256": "1fda1fa3d5cbb442e93bf18540f6c076db06f15407c1044ff0a28bd8a80e890e"
+    },
+    {
+      "source": "bin\\check_samplesheet_genome_bam.py",
+      "destination": "bin\\check_samplesheet_genome_bam.py",
+      "sha256": "efd101187816b4983d4ea009fc8b6385a7c282864d23391cf947da1bb11b6d6e"
+    },
+    {
+      "source": "bin\\check_samplesheet_salmon_results.py",
+      "destination": "bin\\check_samplesheet_salmon_results.py",
+      "sha256": "86f8f36aaf1bfb46c20145d247e0e94147116308bd5f25cc3242affb1a6e6b08"
+    },
+    {
+      "source": "bin\\check_samplesheet_transcriptome_bam.py",
+      "destination": "bin\\check_samplesheet_transcriptome_bam.py",
+      "sha256": "be5687dce8b7cb072e234351cd1632ab7436053dca3e301493a281adf0662337"
+    },
+    {
+      "source": "bin\\create_miso_settings.py",
+      "destination": "bin\\create_miso_settings.py",
+      "sha256": "bcda617e6cdd5815feff99d81672c841e1abe573ff29f7a4231d34d7242f4d14"
+    },
+    {
+      "source": "bin\\filter_gtf_for_genes_in_genome.py",
+      "destination": "bin\\filter_gtf_for_genes_in_genome.py",
+      "sha256": "90170b73aae2b3c7d347e2afc6af181e66dd79e48991904c306a7267e87b37d0"
+    },
+    {
+      "source": "bin\\katana_audit_bam.py",
+      "destination": "bin\\katana_audit_bam.py",
+      "sha256": "d6d325f1e87312cef670d9a4c7ac724fbf669ad1b686bea0ccc2af3eb8e923bd"
+    },
+    {
+      "source": "bin\\katana_bam_primary_metrics.awk",
+      "destination": "bin\\katana_bam_primary_metrics.awk",
+      "sha256": "8ef10b10ba0a30c904ee919502dfb801d64a046bc604bc07bfb3fdf788a1a86f"
+    },
+    {
+      "source": "bin\\katana_bundle.py",
+      "destination": "bin\\katana_bundle.py",
+      "sha256": "c63b8681f0253cc3c0ca24ea8c75e8083fec8951254f8384c07ba450be8e1f15"
+    },
+    {
+      "source": "bin\\katana_differential.R",
+      "destination": "bin\\katana_differential.R",
+      "sha256": "8bf075f03e043c19c04bbbc9c10250df7cdab6952e72b7d72e7e2fb6401788c4"
+    },
+    {
+      "source": "bin\\katana_fetch_public_test.py",
+      "destination": "bin\\katana_fetch_public_test.py",
+      "sha256": "520f68cc449287e68ae3e89f477aab4dd373bb72b7a266d8f53e01a19832e8ab"
+    },
+    {
+      "source": "bin\\katana_prepare_import.py",
+      "destination": "bin\\katana_prepare_import.py",
+      "sha256": "d06800794046fb9437360b648a5c5c52f7e6cd7f4b701ba286e66f0a64b4e9d2"
+    },
+    {
+      "source": "bin\\katana_validate_inputs.py",
+      "destination": "bin\\katana_validate_inputs.py",
+      "sha256": "b11d0953cd1b34e1f330bf962d1f63a5f1032be865cb065b5d8fb3dd71081571",
+      "destination_sha256": "0d679b57d85dc61863ca509ed57932469e07137bd815b02e1330260f6f493195",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived candidate refined during nf-core comparison: input/design guards, assay provenance, reference transport and SUPPA provenance/condition handling as applicable. See docs/nfcore-comparison-review-20261013.md and Git history."
+    },
+    {
+      "source": "bin\\parse_miso_index.py",
+      "destination": "bin\\parse_miso_index.py",
+      "sha256": "ca82c10935ecd48d922230d8340c224fcd0128afba812a6ef7a1b90c209c926e"
+    },
+    {
+      "source": "bin\\run_dexseq_dtu.R",
+      "destination": "bin\\run_dexseq_dtu.R",
+      "sha256": "9e6ee3d88eaa02646e526153c90c18d92050e07dce1ecbc0d3527d1d09b10c71"
+    },
+    {
+      "source": "bin\\run_dexseq_exon.R",
+      "destination": "bin\\run_dexseq_exon.R",
+      "sha256": "3bad7ee75546a03e292f7a7970e873710e0a1477ddc48dde0d4ae41cad0d25c1"
+    },
+    {
+      "source": "bin\\run_drimseq_filter.R",
+      "destination": "bin\\run_drimseq_filter.R",
+      "sha256": "8c8de738b61f60cc45e5d3b28368ebac40190ff1d2a216ad18f618d5f3101130"
+    },
+    {
+      "source": "bin\\run_edger_exon.R",
+      "destination": "bin\\run_edger_exon.R",
+      "sha256": "333418a2d0ddcd1680c8ce237aca43e6082479cb139dc4e3e9300f2332d658ae"
+    },
+    {
+      "source": "bin\\run_stager.R",
+      "destination": "bin\\run_stager.R",
+      "sha256": "757441bef930b88353aec614a0b5bac4567d16fe4b24910e1c027cc391d1e54d"
+    },
+    {
+      "source": "bin\\suppa_groups.py",
+      "destination": "bin\\suppa_groups.py",
+      "sha256": "f8e9adc7301797db9713bec4f1736a97bd6f7f5e33ec09afd0eea3fee42ccfba"
+    },
+    {
+      "source": "bin\\suppa_split_file.R",
+      "destination": "bin\\suppa_split_file.R",
+      "sha256": "07f38a25a59cfdb8e9e1a84e84056e60a00b498d8b7930a50db1dce71937698d"
+    },
+    {
+      "source": "bin\\tximport.R",
+      "destination": "bin\\tximport.R",
+      "sha256": "fab55a901b254605c93b8a1c3f19d2ee7bae8f08877cddbd7eda01e6ec79306f"
+    },
+    {
+      "source": "tests\\test_bam_audit.py",
+      "destination": "tests\\python\\test_bam_audit.py",
+      "sha256": "71b6f35f1c708f6032db9164dad2b52179a2d911205531438a6c370067bb94fc",
+      "destination_sha256": "b32d0729c5710a4d9260e2a26b65d6e72f3c06dafa3fdc8957afb1f8f2988d8e",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived destination hash refreshed from the current candidate; prior migration edits retained. See candidate Git history."
+    },
+    {
+      "source": "tests\\test_bundle.py",
+      "destination": "tests\\python\\test_bundle.py",
+      "sha256": "6c9dc3ec4990a495789d7be7a347832e18cfbc2e8ba307f439dcaacf678f1b90",
+      "destination_sha256": "743dd3db9094bcddbfd46118bfdc415e3bd8e5e2605f69163e8ad4c1cd63c6ec",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived destination hash refreshed from the current candidate; prior migration edits retained. See candidate Git history."
+    },
+    {
+      "source": "tests\\test_export_rendering.py",
+      "destination": "tests\\python\\test_export_rendering.py",
+      "sha256": "bbce825d69e2993adb1ba6d44d81113c841f935852257b061ef600e5539229ba",
+      "destination_sha256": "c16a1c3188698fc3450b07c73ef779dab78660f9658e9ec6706fef6a13240c3d",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived destination hash refreshed from the current candidate; prior migration edits retained. See candidate Git history."
+    },
+    {
+      "source": "tests\\test_input_validation.py",
+      "destination": "tests\\python\\test_input_validation.py",
+      "sha256": "a3ef87d5c379e37c1a8ecc770cbd93e22d7ab4f208e533340c125618190694d1",
+      "destination_sha256": "8eac7d05e0204f4155fbb65b5d5d28a4fec98ac89deb8a8e5331fbf1b55574ef",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived candidate refined during nf-core comparison: input/design guards, assay provenance, reference transport and SUPPA provenance/condition handling as applicable. See docs/nfcore-comparison-review-20261013.md and Git history."
+    },
+    {
+      "source": "docs\\bam-audit.md",
+      "destination": "docs\\implementation\\bam-audit.md",
+      "sha256": "66c03e36e29c08796bf1e563a146e1e38a62a2f2c99ac1a29a583af12888ed62"
+    },
+    {
+      "source": "docs\\dardel.md",
+      "destination": "docs\\implementation\\dardel.md",
+      "sha256": "0ca1cf259969e39466d47442625d3d9dc6fa73eec72747fdf233b3ddbd2b9a29"
+    },
+    {
+      "source": "docs\\katana-input-contract.md",
+      "destination": "docs\\implementation\\katana-input-contract.md",
+      "sha256": "dd244e916aabe0c6097c8b53b95794808c5062d0b01eb66f869d3d1760acfd00"
+    },
+    {
+      "source": "docs\\statistics.md",
+      "destination": "docs\\implementation\\statistics.md",
+      "sha256": "c87dced601de8018ab1ed48bf15591c198f95b8b3432ffc9b4d4eae3ae5ede82"
+    },
+    {
+      "source": "docs\\validation-status.md",
+      "destination": "docs\\implementation\\validation-status.md",
+      "sha256": "430d4bfc11a5c61be214c5e750c6170b0c16502e02c7551dd20df2e9dd210f72"
+    },
+    {
+      "source": "assets\\public_test.lock.json",
+      "destination": "assets\\public_test.lock.json",
+      "sha256": "935ffb1ff7bddb6a1ce0dc06af87b76d73299398aa95ff4d132c0a72e7db00f1"
+    },
+    {
+      "source": "conf\\slurm.config",
+      "destination": "conf\\slurm.config",
+      "sha256": "89383fed7c641c85b5a21d14233be196c142d0580f99bb6c52a00fb82090385a"
+    },
+    {
+      "source": "conf\\dardel.config",
+      "destination": "conf\\dardel.config",
+      "sha256": "1adb65d934d72d63e903308647af8ee10fe1fa76f2ffb3f7647ef1151c9db028"
+    },
+    {
+      "source": "subworkflows\\local\\public_fixture.nf",
+      "source_kind": "generated_during_nf_core_migration",
+      "source_git_commit": null,
+      "destination": "modules\\local\\prepare_public_fixture.nf",
+      "sha256": "41ffdbaa8ed3accd804a18757a17319d3904521121b2288b5d0f5f50302827dc",
+      "destination_sha256": "41ffdbaa8ed3accd804a18757a17319d3904521121b2288b5d0f5f50302827dc",
+      "source_file_unchanged": true,
+      "previous_destination": "subworkflows\\local\\public_fixture.nf",
+      "transformation": "Relocated migration-generated process-only file to modules/local; all file bytes and process interfaces preserved. This source was not part of the pinned prototype commit."
+    },
+    {
+      "source": "bin/kanata_stage_fastq.py",
+      "source_kind": "generated_during_nf_core_migration",
+      "source_git_commit": null,
+      "destination": "bin/kanata_stage_fastq.py",
+      "sha256": "2c1febc473ac4801b52f658e3e978aa8ca2f96f9a9f7c283e33eaa51ba84c90f",
+      "destination_sha256": "2c1febc473ac4801b52f658e3e978aa8ca2f96f9a9f7c283e33eaa51ba84c90f",
+      "source_file_unchanged": true
+    },
+    {
+      "source": "bin/kanata_validate_reference.py",
+      "source_kind": "generated_during_nf_core_migration",
+      "source_git_commit": null,
+      "destination": "bin/kanata_validate_reference.py",
+      "sha256": "53d2ff549ff8d98d2cbff59d7fffc33f3ec1856f8b8a5043b04e2ecd5d38bcda",
+      "destination_sha256": "53d2ff549ff8d98d2cbff59d7fffc33f3ec1856f8b8a5043b04e2ecd5d38bcda",
+      "source_file_unchanged": true
+    },
+    {
+      "source": "modules/local/stage_fastq.nf",
+      "source_kind": "generated_during_nf_core_migration",
+      "source_git_commit": null,
+      "destination": "modules/local/stage_fastq.nf",
+      "sha256": "4452cc7f98fca12d053a13af481d928197e8342ff4b945e1b092d789ad03930b",
+      "destination_sha256": "4452cc7f98fca12d053a13af481d928197e8342ff4b945e1b092d789ad03930b",
+      "source_file_unchanged": true
+    },
+    {
+      "source": "modules/local/validate_reference.nf",
+      "source_kind": "generated_during_nf_core_migration",
+      "source_git_commit": null,
+      "destination": "modules/local/validate_reference.nf",
+      "sha256": "d5d276631a32d64813287d36fe912f7b16a2a82295760085a7d20c8aae1f74b7",
+      "destination_sha256": "d5d276631a32d64813287d36fe912f7b16a2a82295760085a7d20c8aae1f74b7",
+      "source_file_unchanged": true
+    },
+    {
+      "source": "tests/python/test_fastq_staging.py",
+      "source_kind": "generated_during_nf_core_migration",
+      "source_git_commit": null,
+      "destination": "tests/python/test_fastq_staging.py",
+      "sha256": "16a226058b7397a2dabaa12b2281d51cbf240bf9a65e9c54d7442482ea17216b",
+      "destination_sha256": "16a226058b7397a2dabaa12b2281d51cbf240bf9a65e9c54d7442482ea17216b",
+      "source_file_unchanged": true
+    },
+    {
+      "source": "tests/python/test_reference_validation.py",
+      "source_kind": "generated_during_nf_core_migration",
+      "source_git_commit": null,
+      "destination": "tests/python/test_reference_validation.py",
+      "sha256": "169771cb4e363b51c636b0c4162a8a03d55109f2a62a4a3657b1a2017586432b",
+      "destination_sha256": "169771cb4e363b51c636b0c4162a8a03d55109f2a62a4a3657b1a2017586432b",
+      "source_file_unchanged": true
+    },
+    {
+      "source": "workflows/katana_core.nf",
+      "source_kind": "generated_during_nf_core_migration",
+      "source_git_commit": null,
+      "destination": "workflows/katana_core.nf",
+      "sha256": "84f0f023cce3952dff1945364365797d6e9280bdc6ce1954eb4361be6168ba44",
+      "destination_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
+      "source_file_unchanged": false,
+      "migration_changes": "Derived candidate refined during nf-core comparison: input/design guards, assay provenance, reference transport and SUPPA provenance/condition handling as applicable. See docs/nfcore-comparison-review-20261013.md and Git history."
+    }
+  ],
+  "external_software_sources": [
+    {
+      "source": "bin\\dexseq_count.py",
+      "destination": "gpl-scripts/dexseq_count.py",
+      "sha256": "d0cb14bfddc2bc7cba95e0adcca56df363f073a82c19cff7937ecb854543e36e",
+      "software_package": "kanata-dexseq-tools",
+      "bundled_in_pipeline": false
+    },
+    {
+      "source": "bin\\dexseq_prepare_annotation.py",
+      "destination": "gpl-scripts/dexseq_prepare_annotation.py",
+      "sha256": "8faec3a78d15e8abd8465adb6ee4bd45d5577aa9e650bc2b09c8ea8107d952e6",
+      "software_package": "kanata-dexseq-tools",
+      "bundled_in_pipeline": false
+    },
+    {
+      "source": "bin\\load_SubreadOutput.R",
+      "destination": "gpl-scripts/load_SubreadOutput.R",
+      "sha256": "8490cec0a4dfae9cbd6c862f3abf0be5f793483ebe547d171a567c9b46d5b4f7",
+      "software_package": "kanata-dexseq-tools",
+      "bundled_in_pipeline": false
+    }
+  ],
+  "external_software_distribution_status": "local_separate_repository_not_published"
+}

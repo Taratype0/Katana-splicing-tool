@@ -95,8 +95,11 @@ def verify_completed_motif_family(source, completion_proof, *, comparison_id, pr
         if (proof.get('passed') is not True or proof.get('source_unchanged') is not True
                 or proof.get('upstream_refits') != 0 or proof.get('summary', {}).get('comparison_id') != comparison_id):
             raise ValueError('Verified local scientific completion proof is incomplete or belongs to another comparison.')
+    elif proof_kind == 'flow':
+        from katana_next.flow.presentation import validate_motif_view_proof
+        validate_motif_view_proof(proof_path, source, comparison_id)
     else:
-        raise ValueError('Choose an explicit native or verified_local completion-proof route.')
+        raise ValueError('Choose an explicit native, verified_local or flow completion-proof route.')
     members = complete.get('members', {})
     missing = set((*SEQUENCE_FILES, *STAT_FILES)) - members.keys()
     if missing:
@@ -132,7 +135,7 @@ def _read(path, **kwargs):
 def _matrix(model):
     value = model.get('matrix')
     if value is None:
-        literal = str(model.get('sequence', model.get('motif', ''))).upper().replace('T', 'U')
+        literal = str(model.get('sequence', model.get('motif', model.get('pattern', '')))).upper().replace('T', 'U')
         if not literal or any(c not in 'ACGU' for c in literal):
             return None
         return np.array([[float(base == c) for base in 'ACGU'] for c in literal])
@@ -208,6 +211,8 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
     if (proof_kind == 'native'
             and proof.get('study_lineage', {}).get('source_project_manifest_SHA256') != source_project_manifest_sha256):
         raise ValueError('Native MotifTrace completion belongs to another source-project manifest lineage.')
+    if proof_kind == 'flow' and proof.get('render_project_manifest_sha256') != source_project_manifest_sha256:
+        raise ValueError('Flow MotifTrace completion belongs to another collected project manifest.')
     source, out = Path(source).resolve(), Path(destination).resolve()
     if out == source or out.is_relative_to(source) or source.is_relative_to(out):
         raise ValueError('Motif report output must be independent of the immutable scientific source.')

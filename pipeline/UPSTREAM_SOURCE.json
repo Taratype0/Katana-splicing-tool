@@ -1,0 +1,456 @@
+{
+  "schema": "katana.upstream_source_snapshot/v1",
+  "base_commit": "52a901ea8d2ce69e2c9be4d63b2894a79a199d10",
+  "working_tree_modifications_included": true,
+  "working_tree_status_sha256": "55c08eb37c2701ded4f69fdb859ca3700643a932c0419e2ef2921c7ec1a7e48f",
+  "source_kind": "existing_bulk_upstream_with_per_contrast_differential_tasks",
+  "official_nfcore_release": false,
+  "data_or_work_directories_copied": false,
+  "files": [
+    {
+      "source": "assets/migration-source-manifest.json",
+      "destination": "assets/migration-source-manifest.json",
+      "sha256": "99bfe528e6e14461b1b2c14853d23366c9ca07ae8ca9cbffc6673392b4eb4726"
+    },
+    {
+      "source": "assets/software-provenance.lock.json",
+      "destination": "assets/software-provenance.lock.json",
+      "sha256": "1c14344b0a3461ee65c99816f1b32637a8b2916ace35b790df503850b2cfc30e"
+    },
+    {
+      "source": "bin/check_contrastsheet.py",
+      "destination": "bin/check_contrastsheet.py",
+      "sha256": "8f95fd4b318b8e5be0230c2c488552f39b3e6173c962cc82c488240379351e91"
+    },
+    {
+      "source": "bin/check_samplesheet_fastq.py",
+      "destination": "bin/check_samplesheet_fastq.py",
+      "sha256": "1fda1fa3d5cbb442e93bf18540f6c076db06f15407c1044ff0a28bd8a80e890e"
+    },
+    {
+      "source": "bin/check_samplesheet_genome_bam.py",
+      "destination": "bin/check_samplesheet_genome_bam.py",
+      "sha256": "efd101187816b4983d4ea009fc8b6385a7c282864d23391cf947da1bb11b6d6e"
+    },
+    {
+      "source": "bin/check_samplesheet_salmon_results.py",
+      "destination": "bin/check_samplesheet_salmon_results.py",
+      "sha256": "86f8f36aaf1bfb46c20145d247e0e94147116308bd5f25cc3242affb1a6e6b08"
+    },
+    {
+      "source": "bin/check_samplesheet_transcriptome_bam.py",
+      "destination": "bin/check_samplesheet_transcriptome_bam.py",
+      "sha256": "be5687dce8b7cb072e234351cd1632ab7436053dca3e301493a281adf0662337"
+    },
+    {
+      "source": "bin/create_miso_settings.py",
+      "destination": "bin/create_miso_settings.py",
+      "sha256": "bcda617e6cdd5815feff99d81672c841e1abe573ff29f7a4231d34d7242f4d14"
+    },
+    {
+      "source": "bin/filter_gtf_for_genes_in_genome.py",
+      "destination": "bin/filter_gtf_for_genes_in_genome.py",
+      "sha256": "90170b73aae2b3c7d347e2afc6af181e66dd79e48991904c306a7267e87b37d0"
+    },
+    {
+      "source": "bin/kanata_merge_deseq_metadata.py",
+      "destination": "bin/kanata_merge_deseq_metadata.py",
+      "sha256": "797d7810a926acbe7a3c6e5ac14b61669bf8541eb39552b29f5fbdb545e494e3"
+    },
+    {
+      "source": "bin/kanata_split_contrasts.py",
+      "destination": "bin/kanata_split_contrasts.py",
+      "sha256": "6ce4de10847a9ffb3e2885aef1760ed4e1cfeab6ef5ad60ee610e440f9421d33"
+    },
+    {
+      "source": "bin/kanata_stage_fastq.py",
+      "destination": "bin/kanata_stage_fastq.py",
+      "sha256": "2c1febc473ac4801b52f658e3e978aa8ca2f96f9a9f7c283e33eaa51ba84c90f"
+    },
+    {
+      "source": "bin/kanata_validate_reference.py",
+      "destination": "bin/kanata_validate_reference.py",
+      "sha256": "53d2ff549ff8d98d2cbff59d7fffc33f3ec1856f8b8a5043b04e2ecd5d38bcda"
+    },
+    {
+      "source": "bin/katana_audit_bam.py",
+      "destination": "bin/katana_audit_bam.py",
+      "sha256": "d6d325f1e87312cef670d9a4c7ac724fbf669ad1b686bea0ccc2af3eb8e923bd"
+    },
+    {
+      "source": "bin/katana_bam_primary_metrics.awk",
+      "destination": "bin/katana_bam_primary_metrics.awk",
+      "sha256": "8ef10b10ba0a30c904ee919502dfb801d64a046bc604bc07bfb3fdf788a1a86f"
+    },
+    {
+      "source": "bin/katana_bundle.py",
+      "destination": "bin/katana_bundle.py",
+      "sha256": "c63b8681f0253cc3c0ca24ea8c75e8083fec8951254f8384c07ba450be8e1f15"
+    },
+    {
+      "source": "bin/katana_differential.R",
+      "destination": "bin/katana_differential.R",
+      "sha256": "15b4e365e02cdbc7d346b8eea5d7095e019bc424609aa046a530f68d8e1b7b3c"
+    },
+    {
+      "source": "bin/katana_fetch_public_test.py",
+      "destination": "bin/katana_fetch_public_test.py",
+      "sha256": "520f68cc449287e68ae3e89f477aab4dd373bb72b7a266d8f53e01a19832e8ab"
+    },
+    {
+      "source": "bin/katana_prepare_import.py",
+      "destination": "bin/katana_prepare_import.py",
+      "sha256": "d06800794046fb9437360b648a5c5c52f7e6cd7f4b701ba286e66f0a64b4e9d2"
+    },
+    {
+      "source": "bin/katana_validate_inputs.py",
+      "destination": "bin/katana_validate_inputs.py",
+      "sha256": "0d679b57d85dc61863ca509ed57932469e07137bd815b02e1330260f6f493195"
+    },
+    {
+      "source": "bin/parse_miso_index.py",
+      "destination": "bin/parse_miso_index.py",
+      "sha256": "ca82c10935ecd48d922230d8340c224fcd0128afba812a6ef7a1b90c209c926e"
+    },
+    {
+      "source": "bin/run_dexseq_dtu.R",
+      "destination": "bin/run_dexseq_dtu.R",
+      "sha256": "3e47b62506218201558bd0c50354ae5103bebc8a75031ff05763f17f04ead5fc"
+    },
+    {
+      "source": "bin/run_dexseq_exon.R",
+      "destination": "bin/run_dexseq_exon.R",
+      "sha256": "8cac8e8c316837c9daf36ddd2add6e7792592e5192e0bf62a734c74088219053"
+    },
+    {
+      "source": "bin/run_drimseq_filter.R",
+      "destination": "bin/run_drimseq_filter.R",
+      "sha256": "8c8de738b61f60cc45e5d3b28368ebac40190ff1d2a216ad18f618d5f3101130"
+    },
+    {
+      "source": "bin/run_edger_exon.R",
+      "destination": "bin/run_edger_exon.R",
+      "sha256": "333418a2d0ddcd1680c8ce237aca43e6082479cb139dc4e3e9300f2332d658ae"
+    },
+    {
+      "source": "bin/run_stager.R",
+      "destination": "bin/run_stager.R",
+      "sha256": "757441bef930b88353aec614a0b5bac4567d16fe4b24910e1c027cc391d1e54d"
+    },
+    {
+      "source": "bin/suppa_groups.py",
+      "destination": "bin/suppa_groups.py",
+      "sha256": "f8e9adc7301797db9713bec4f1736a97bd6f7f5e33ec09afd0eea3fee42ccfba"
+    },
+    {
+      "source": "bin/suppa_split_file.R",
+      "destination": "bin/suppa_split_file.R",
+      "sha256": "07f38a25a59cfdb8e9e1a84e84056e60a00b498d8b7930a50db1dce71937698d"
+    },
+    {
+      "source": "bin/tximport.R",
+      "destination": "bin/tximport.R",
+      "sha256": "fab55a901b254605c93b8a1c3f19d2ee7bae8f08877cddbd7eda01e6ec79306f"
+    },
+    {
+      "source": "CITATIONS.md",
+      "destination": "UPSTREAM_CITATIONS.md",
+      "sha256": "7cd583b10470948f4f4f70912c944c6d2e8ed7d7d34b11bc1eaa9d7eff563921"
+    },
+    {
+      "source": "conf/base.config",
+      "destination": "conf/upstream_base.config",
+      "sha256": "1acfabd8bf0b5eaa535cf71d547d0b7cd5980e6c6f37687ea7fd42a137fc133d"
+    },
+    {
+      "source": "conf/modules.config",
+      "destination": "conf/upstream_modules.config",
+      "sha256": "0a32f38bce21b712643f68335fbd12cad61a9a083c84c00e00dcbedd18055284"
+    },
+    {
+      "source": "LICENSE",
+      "destination": "UPSTREAM_LICENSE",
+      "sha256": "49a0c439f97a0b61b0a507ef71c968af2546ce93590beb7d9c75cf96f286d484"
+    },
+    {
+      "source": "modules/local/adapt_suppa_contrasts.nf",
+      "destination": "modules/local/adapt_suppa_contrasts.nf",
+      "sha256": "45d6c7223870ca985ce96ca78b340aa8f8f58ff72d6abb9133d1e6781d425773"
+    },
+    {
+      "source": "modules/local/audit_genome_bam.nf",
+      "destination": "modules/local/audit_genome_bam.nf",
+      "sha256": "d7a049b908b4b8b884d54465c8e9cf4458835dcfc283f6773f4020d7dcd57f69"
+    },
+    {
+      "source": "modules/local/capture_bam_audit.nf",
+      "destination": "modules/local/capture_bam_audit.nf",
+      "sha256": "8e5d5cd9bc756fde7f77ba80a21b7339b006784f51280e10e1c2d9b8d5149eba"
+    },
+    {
+      "source": "modules/local/collate_genome_bam.nf",
+      "destination": "modules/local/collate_genome_bam.nf",
+      "sha256": "9a3b5c20c8aa4ed1d84c8f38880b17985b2ed118b36eb14e6107d108b7f848d6"
+    },
+    {
+      "source": "modules/local/create_bamlist.nf",
+      "destination": "modules/local/create_bamlist.nf",
+      "sha256": "5598ed56a5c4a4ad249c940b227915964f47a1a97c8c45aa0d10e3318d9a5c03"
+    },
+    {
+      "source": "modules/local/create_bamlist_single.nf",
+      "destination": "modules/local/create_bamlist_single.nf",
+      "sha256": "29f525cf9bb47f0af719f02e84c15160280f58ab6eae219f352c1b37d914eea1"
+    },
+    {
+      "source": "modules/local/dexseq_annotation.nf",
+      "destination": "modules/local/dexseq_annotation.nf",
+      "sha256": "6fcb415962fdabea96c8371b7fc3bd26a4d164d3d1a4b532253bd6c59126a883"
+    },
+    {
+      "source": "modules/local/dexseq_count.nf",
+      "destination": "modules/local/dexseq_count.nf",
+      "sha256": "c39fc80454f7624bfd685854037fb5a6f7dc0c3ec5148875168f8b993684cbfd"
+    },
+    {
+      "source": "modules/local/dexseq_dtu.nf",
+      "destination": "modules/local/dexseq_dtu.nf",
+      "sha256": "44f23b9b616317b89790cfa9442a481348f335f766cc610ef06deaa778dc6cf1"
+    },
+    {
+      "source": "modules/local/dexseq_exon.nf",
+      "destination": "modules/local/dexseq_exon.nf",
+      "sha256": "8c5fc6e3ed019a6b0b2566b4b2e1b11416a0895448f4d1faefca2671dbbd62df"
+    },
+    {
+      "source": "modules/local/drimseq_filter.nf",
+      "destination": "modules/local/drimseq_filter.nf",
+      "sha256": "92951fa0dfebba6bcbae4e3d839e86bb3b749e3906b818b3b95ed60568263721"
+    },
+    {
+      "source": "modules/local/gffread_tx2gene.nf",
+      "destination": "modules/local/gffread_tx2gene.nf",
+      "sha256": "8249b9f03cbff71389121b055bd28ebcae25da5b50a85da2a2ffc382f3d9ad50"
+    },
+    {
+      "source": "modules/local/katana_differential.nf",
+      "destination": "modules/local/katana_differential.nf",
+      "sha256": "807a7fe95dc6cfaf879649bd9ab9c1f283052e46fe0a0939057bd243390b3272"
+    },
+    {
+      "source": "modules/local/katana_export.nf",
+      "destination": "modules/local/katana_export.nf",
+      "sha256": "043edc643971d40977758f046145865222927330572e9d7b0022270bb709af0b"
+    },
+    {
+      "source": "modules/local/prepare_references.nf",
+      "destination": "modules/local/prepare_references.nf",
+      "sha256": "a8c3a510818e69921cf634d167a55332bae199eaef499d32956bae93d0d33d14"
+    },
+    {
+      "source": "modules/local/reference_faidx.nf",
+      "destination": "modules/local/reference_faidx.nf",
+      "sha256": "e61e90ee4d87a69db990459d2842b1933fa8dad258838396f2a3cf42b197a056"
+    },
+    {
+      "source": "modules/local/rmats_post.nf",
+      "destination": "modules/local/rmats_post.nf",
+      "sha256": "25fac904356724b4e29eb05f1e64650818a6e1e66e09da05ed5168711e223ace"
+    },
+    {
+      "source": "modules/local/rmats_post_single.nf",
+      "destination": "modules/local/rmats_post_single.nf",
+      "sha256": "16cc1616a73265134ad79d3597e462ffcdcdf45002e67d074f99ae0f2a0820fc"
+    },
+    {
+      "source": "modules/local/rmats_prep.nf",
+      "destination": "modules/local/rmats_prep.nf",
+      "sha256": "a8fffd1ce2f6745afd7a3ac6f1a80db29e51a05cac8e84e8bf8466465ba16bc0"
+    },
+    {
+      "source": "modules/local/rmats_prep_single.nf",
+      "destination": "modules/local/rmats_prep_single.nf",
+      "sha256": "37c68f0c98306b056c01fbcf91225e603bbc32ddc648392e243c80112214109e"
+    },
+    {
+      "source": "modules/local/salmon_genome_projection.nf",
+      "destination": "modules/local/salmon_genome_projection.nf",
+      "sha256": "262f1696dcc022fa4fde42430d0b291b8866bfd3c9c5e72bd843154600a3258e"
+    },
+    {
+      "source": "modules/local/split_contrasts.nf",
+      "destination": "modules/local/split_contrasts.nf",
+      "sha256": "698821fcfa115553e93cb95e0d5591fdb3267cd94ea1579568b8d7e367a2de3e"
+    },
+    {
+      "source": "modules/local/stage_fastq.nf",
+      "destination": "modules/local/stage_fastq.nf",
+      "sha256": "4452cc7f98fca12d053a13af481d928197e8342ff4b945e1b092d789ad03930b"
+    },
+    {
+      "source": "modules/local/stager.nf",
+      "destination": "modules/local/stager.nf",
+      "sha256": "abed3ce10ba308b9f3f4f7b86d5513b69eba22bb7d9ec8f920f541bbdb87ff4f"
+    },
+    {
+      "source": "modules/local/suppa_clusterevents.nf",
+      "destination": "modules/local/suppa_clusterevents.nf",
+      "sha256": "242e122ba1e582b68b58725fdbdec0a9de8d23ce95fb1d08bbfe0324388a91c8"
+    },
+    {
+      "source": "modules/local/suppa_clustergroups.nf",
+      "destination": "modules/local/suppa_clustergroups.nf",
+      "sha256": "db0392155eae1dd08540d36f704187139663c8392637c6a63ceac832e0974314"
+    },
+    {
+      "source": "modules/local/suppa_diffsplice.nf",
+      "destination": "modules/local/suppa_diffsplice.nf",
+      "sha256": "449ed8b6a5c97cdd0ebfa5a2456809c2c7424653fe23c930d3ab955d28aa8650"
+    },
+    {
+      "source": "modules/local/suppa_generateevents.nf",
+      "destination": "modules/local/suppa_generateevents.nf",
+      "sha256": "efe23529542ce66518157545000f48e76a3e99b2e0337f04761c9ea432b4e629"
+    },
+    {
+      "source": "modules/local/suppa_psiperevent.nf",
+      "destination": "modules/local/suppa_psiperevent.nf",
+      "sha256": "c4fbf2b8aa648e65fabdbc2429fae8b13dd72249a617b44f2d400d5c056aa930"
+    },
+    {
+      "source": "modules/local/suppa_psiperisoform.nf",
+      "destination": "modules/local/suppa_psiperisoform.nf",
+      "sha256": "a5cf95069b15489f9f142f116a31f30207c24bd66c975cecddd3cb040678a212"
+    },
+    {
+      "source": "modules/local/suppa_split_files.nf",
+      "destination": "modules/local/suppa_split_files.nf",
+      "sha256": "9c1ac55a1d5ed50ef746c9421f924c83a798bab40bd14102935fb5a1d0829ce9"
+    },
+    {
+      "source": "modules/local/tximport.nf",
+      "destination": "modules/local/tximport.nf",
+      "sha256": "6375b4a31b6e949f50949973830781f248648b8a7f28dcca891e5135b156e76e"
+    },
+    {
+      "source": "modules/local/validate_inputs.nf",
+      "destination": "modules/local/validate_inputs.nf",
+      "sha256": "d1f3b784ff86c1486158257cda2eb3ebaaa48ddc6fbe1632341558698d03ff2f"
+    },
+    {
+      "source": "modules/local/validate_reference.nf",
+      "destination": "modules/local/validate_reference.nf",
+      "sha256": "d5d276631a32d64813287d36fe912f7b16a2a82295760085a7d20c8aae1f74b7"
+    },
+    {
+      "source": "modules/nf-core/fastqc/environment.yml",
+      "destination": "modules/nf-core/fastqc/environment.yml",
+      "sha256": "a2262941ed3e07e5055e61a0dd992ce41a62e80a9f5c2798ee8af01050d539dc"
+    },
+    {
+      "source": "modules/nf-core/fastqc/main.nf",
+      "destination": "modules/nf-core/fastqc/main.nf",
+      "sha256": "28a0ff690799a23ef6affa675aab1310bc952bfc4dbe5d918cb6036930c60e8e"
+    },
+    {
+      "source": "modules/nf-core/fastqc/meta.yml",
+      "destination": "modules/nf-core/fastqc/meta.yml",
+      "sha256": "838e10bc16057050afb3517cf538ef450f8cc32af86a6dc174f9c34c0587a39e"
+    },
+    {
+      "source": "modules/nf-core/samtools/index/main.nf",
+      "destination": "modules/nf-core/samtools/index/main.nf",
+      "sha256": "6ec52fa0b0290ccc1df78ad34c88cb65992001060146dbb0fcf1f2b08281fed0"
+    },
+    {
+      "source": "modules/nf-core/samtools/index/meta.yml",
+      "destination": "modules/nf-core/samtools/index/meta.yml",
+      "sha256": "5bb8b66c9d53e8ef42ad55bc9fc1f3ac61af5c7b7516b96168ed844f851eea5b"
+    },
+    {
+      "source": "modules/nf-core/samtools/sort/main.nf",
+      "destination": "modules/nf-core/samtools/sort/main.nf",
+      "sha256": "8e01173de23c6957b04e3177431140e93bab78b9675dc017c716aac0bcb8a7b0"
+    },
+    {
+      "source": "modules/nf-core/samtools/sort/meta.yml",
+      "destination": "modules/nf-core/samtools/sort/meta.yml",
+      "sha256": "d49f91a6e7dc595c01f4eb40ebe019ba951ec3af58f0353f9724b58e30a35a13"
+    },
+    {
+      "source": "modules/nf-core/star/align/main.nf",
+      "destination": "modules/nf-core/star/align/main.nf",
+      "sha256": "9cc3ce662309c8f569b430c82189a7ecaf40ab9fcfc63f0a9ce82f3ec707b07e"
+    },
+    {
+      "source": "modules/nf-core/star/align/meta.yml",
+      "destination": "modules/nf-core/star/align/meta.yml",
+      "sha256": "beb57d0ce12ba288a51a0ddd1335c4b5473d14e33a5ce32c6569edbde0653245"
+    },
+    {
+      "source": "modules/nf-core/star/genomegenerate/main.nf",
+      "destination": "modules/nf-core/star/genomegenerate/main.nf",
+      "sha256": "4cb7d568e9d33585a788f7107b57e7337f53e499bf58fd925be759c8e0d73b0e"
+    },
+    {
+      "source": "modules/nf-core/star/genomegenerate/meta.yml",
+      "destination": "modules/nf-core/star/genomegenerate/meta.yml",
+      "sha256": "7f22e3641521e629b366f3455a57cf1b8528266b631cdba8ceaa8627a222f3cb"
+    },
+    {
+      "source": "modules/nf-core/trimgalore/main.nf",
+      "destination": "modules/nf-core/trimgalore/main.nf",
+      "sha256": "69ef7cf3756f167b46616386608a5c933ec3b6fc3e391ae25422fb91986168fc"
+    },
+    {
+      "source": "modules/nf-core/trimgalore/meta.yml",
+      "destination": "modules/nf-core/trimgalore/meta.yml",
+      "sha256": "25409e432f45a309f6404b21c8fb7b1724db3faef48a407bfec7b6b5a587bb4d"
+    },
+    {
+      "source": "modules/nf-core/untar/main.nf",
+      "destination": "modules/nf-core/untar/main.nf",
+      "sha256": "fa874b883b66bdef5763239ceab0a712a9a91bc6229dbe01b9da3a26eb045d49"
+    },
+    {
+      "source": "modules/nf-core/untar/meta.yml",
+      "destination": "modules/nf-core/untar/meta.yml",
+      "sha256": "c1707b9a8258b2635b1d21f9c72daa6b463504dfd4a0befe5361bac74b92a565"
+    },
+    {
+      "source": "modules.json",
+      "destination": "modules.json",
+      "sha256": "793ea92bb52f4112eef3af12107c2afbe82ee7f725c3ec11bf31956977e9963d"
+    },
+    {
+      "source": "subworkflows/local/dexseq_deu.nf",
+      "destination": "subworkflows/local/dexseq_deu.nf",
+      "sha256": "990fa7c14cf60ab85e37b4b0b5bf0f635337e9f2e0abc4b15487bc96c2b59323"
+    },
+    {
+      "source": "subworkflows/local/drimseq_dexseq_dtu.nf",
+      "destination": "subworkflows/local/drimseq_dexseq_dtu.nf",
+      "sha256": "431dec723ed387beee93212174c30c33db21f7af957c7ff3d63cb1adcb8b37ce"
+    },
+    {
+      "source": "subworkflows/local/rmats.nf",
+      "destination": "subworkflows/local/rmats.nf",
+      "sha256": "df6df4f92c81bdd2009b36b1aa6f43ee2784ebec0979bd0a616a65d5eb03bf65"
+    },
+    {
+      "source": "subworkflows/local/suppa.nf",
+      "destination": "subworkflows/local/suppa.nf",
+      "sha256": "961ec431bab04a25f98406f156ec20bfc1edc1e5f0eeae2f0423cc584634799b"
+    },
+    {
+      "source": "subworkflows/local/tx2gene_tximport.nf",
+      "destination": "subworkflows/local/tx2gene_tximport.nf",
+      "sha256": "e87411f8038afad5a9feb560abba2fc7868fdccb437f3f1e88876d2833a4474d"
+    },
+    {
+      "source": "workflows/katana_core.nf",
+      "destination": "workflows/katana_core.nf",
+      "sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731"
+    }
+  ]
+}

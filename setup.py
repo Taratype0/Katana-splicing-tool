@@ -10,6 +10,10 @@ from setuptools.command.build_py import build_py
 class BuildWithBrowser(build_py):
     def run(self):
         super().run()
+        pipeline = Path(__file__).parent / "pipeline"
+        if (pipeline / "main.nf").is_file():
+            shutil.copytree(pipeline, Path(self.build_lib) / "katana_next" / "flow" / "_pipeline",
+                            dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".nextflow*", "work"))
         source = Path(__file__).parent / "apps" / "web" / "dist"
         if not (source / "index.html").is_file():
             if os.environ.get("KATANA_REQUIRE_WEB") == "1":

@@ -1,1 +1,2 @@
 recursive-include apps/web/dist *
+recursive-include pipeline *.nf *.config *.json *.py *.R *.awk *.md *.yml *.yaml

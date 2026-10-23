@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "katana-splicing-tool"
-version = "2.0.0b4.dev20261023"
+version = "2.0.0b5.dev20261023"
 description = "Artifact-driven bulk and single-cell RNA splicing evidence workspace."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -33,6 +33,7 @@ katana-next = "katana_next.cli:main"
 katana-motiftrace = "katana_motiftrace.cli:main"
 katana-report = "katana_next.reports.cli:main"
 katana-targets = "katana_next.targets.cli:main"
+katana-flow = "katana_next.flow.cli:main"
 katana-contracts = "katana_next.contracts.cli:main"
 katana-cosplice = "katana_cosplice.cli:main"
 katana-splice = "katana_cosplice.cli:main"
@@ -51,6 +52,15 @@ katana-next-migrate = "katana_next.migration:main"
 katana-next-acceptance = "scripts.run_v2_acceptance:main"
 
 [project.optional-dependencies]
+flow = [
+  "pydantic>=2.9,<3",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "pysam>=0.22,<1; sys_platform != 'win32'",
+  "vl-convert-python>=1.8,<2",
+  "beautifulsoup4>=4.12,<5",
+  "requests>=2.32,<3",
+]
 targets = [
   "pydantic>=2.9,<3",
   "pyarrow>=17",
