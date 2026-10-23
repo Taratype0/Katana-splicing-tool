@@ -93,8 +93,9 @@ def startup_lock(root: Path):
 
 def ensure_service(port: int, runtime_root: Path) -> str:
     repo = Path(__file__).resolve().parents[1]
-    if not (repo / "apps/web/dist/index.html").is_file():
-        raise FileNotFoundError("Katana interface is not built. Run scripts/bootstrap_katana_next.ps1.")
+    from katana_next.web_assets import frontend_directory
+    if frontend_directory() is None:
+        raise FileNotFoundError("Katana interface is not built. Install a browser wheel or build apps/web (pnpm build).")
     runtime_root.mkdir(parents=True, exist_ok=True)
     with startup_lock(runtime_root):
         requested_port = port

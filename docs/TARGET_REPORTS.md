@@ -1,8 +1,9 @@
 # Browser exploration and selected-target reports
 
-Product decisions recorded on 23 October 2026. The selected-target workflow
-below is an implementation specification, not a claim that its portable batch
-command or complete browser workspace has already shipped.
+Product decisions recorded on 23 October 2026. The development package now
+implements the portable selected-target workflow below. See
+[commands and outputs](TARGET_COMMANDS.md) for the browser, Python and CLI
+entry points. It remains a development build rather than a formal release.
 
 ## Browser first
 
@@ -87,7 +88,7 @@ must not fabricate a Sashimi result.
 
 ## Execution and output
 
-The browser service and a future target CLI consume the same request and
+The browser service and target CLI consume the same request and
 planner. An offline report can export a request; actual Python/BAM computation
 is performed by the local or server service/CLI.
 
@@ -111,11 +112,12 @@ selected-gene PSI/expression views, exact-event native Sashimi, network and
 MotifTrace browsers, and parameter/source-aware caching. The original richer
 gene-card logic can be migrated without editing the original application.
 
-Remaining work includes complete browsing-state capture, the cross-page target
-basket, portable request export/import and resource rebinding, an integrated
-per-target evidence report, local/Slurm task orchestration, and return-result
-import. These require end-to-end acceptance before they are advertised as a
-completed portable target workflow.
+The development implementation adds browsing-state capture, a cross-page target
+basket, portable evidence export and resource rebinding, integrated per-target
+evidence reports, independent target execution and verified return-result
+import. Local execution and scheduler allocations use the same CLI; this does
+not install a Slurm/PBS submission service. Target IDs can be split into normal
+scheduler tasks without a built-in cluster or concurrency policy.
 
 Routine implementation continues on the development branch. Formal releases
 and additional distribution channels follow completed development and release

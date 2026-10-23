@@ -8,8 +8,9 @@ type Props = {
   projectId: string;
   artifact?: Artifact;
   selectedIds: Set<string>;
-  onToggle: (rowId: string) => void;
+  onToggle: (rowId: string, row?: Record<string, unknown>) => void;
   onFocus: (row: Record<string, unknown>) => void;
+  onBrowseSettingsChange?: (settings: Record<string, unknown>) => void;
 };
 
 const PAGE_SIZE = 50;
@@ -23,7 +24,7 @@ function cellText(value: unknown) {
   return String(value);
 }
 
-export function ArtifactTable({ projectId, artifact, selectedIds, onToggle, onFocus }: Props) {
+export function ArtifactTable({ projectId, artifact, selectedIds, onToggle, onFocus, onBrowseSettingsChange }: Props) {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [offset, setOffset] = useState(0);
@@ -31,6 +32,8 @@ export function ArtifactTable({ projectId, artifact, selectedIds, onToggle, onFo
   const [descending, setDescending] = useState(false);
 
   useEffect(() => setOffset(0), [deferredSearch, artifact?.artifact_id]);
+  useEffect(() => {onBrowseSettingsChange?.({search: deferredSearch, sort_by: sortBy || null,
+    descending, page_offset: offset, page_size: PAGE_SIZE});}, [deferredSearch, sortBy, descending, offset]);
   const pageQuery = useQuery({
     queryKey: ["artifact-rows", projectId, artifact?.artifact_id, offset, deferredSearch, sortBy, descending],
     queryFn: () => api.artifactRows(projectId, artifact!.artifact_id, {
@@ -99,7 +102,7 @@ export function ArtifactTable({ projectId, artifact, selectedIds, onToggle, onFo
                       <input
                         type="checkbox"
                         checked={selectedIds.has(rowId)}
-                        onChange={() => onToggle(rowId)}
+                        onChange={() => onToggle(rowId, row)}
                         aria-label={`Select ${rowId}`}
                       />
                     </td>

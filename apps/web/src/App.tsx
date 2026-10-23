@@ -25,6 +25,8 @@ import { WorkspaceNav } from "./components/WorkspaceNav";
 import { RunPlanPanel } from "./components/RunPlanPanel";
 import { RbpEvidenceGuide } from "./components/RbpEvidenceGuide";
 import { MotifTraceWorkbench, motifTraceModeParameters } from "./components/MotifTraceWorkbench";
+import { TargetWorkbench } from "./components/TargetWorkbench";
+import { browsingSnapshot, makeTargetEntry, useTargetBasket } from "./targetBasket";
 import type { Artifact, ProjectPayload, WorkflowDefinition } from "./types";
 
 const RECENT_MANIFEST_KEY = "katana-next:recent-manifest";
@@ -55,6 +57,9 @@ export default function App() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedRows, setSelectedRows] = useState<Record<string, Record<string, unknown>>>({});
+  const [tableBrowse, setTableBrowse] = useState<Record<string, unknown>>({});
+  const [targetError, setTargetError] = useState("");
   const completedJobs = useRef(new Set<string>());
   const workspaceScroll = useRef<HTMLElement>(null);
   const automaticOpenAttempted = useRef(false);
@@ -112,6 +117,7 @@ export default function App() {
 
   const activeWorkflow = (workflows.data ?? []).find((workflow) => workflow.workflow_id === activeWorkflowId);
   const projectId = project?.snapshot.project_id ?? "";
+  const targets = useTargetBasket(projectId, project?.snapshot.manifest_fingerprint ?? "");
   const sourceArtifacts = useQuery({ queryKey: ["source-artifacts", projectId], queryFn: () => api.artifacts(projectId), enabled: Boolean(projectId) });
   const scConditions = useQuery({ queryKey: ["single-cell-conditions", projectId], queryFn: () => api.singleCellConditions(projectId), enabled: Boolean(projectId) && activeWorkspace === "single-cell" });
   const activeParameters = parametersWithDasSelection(activeWorkflow,
@@ -145,7 +151,7 @@ export default function App() {
         JSON.parse(parameterSignature) as Record<string, unknown>,
       );
     },
-    enabled: Boolean(projectId && activeWorkflowId),
+    enabled: Boolean(projectId && activeWorkflowId && activeWorkspace !== "targets"),
   });
   const jobsQuery = useQuery({
     queryKey: ["jobs", projectId],
@@ -187,6 +193,17 @@ export default function App() {
   }, [activeWorkflowId, latestArtifacts]);
 
   const activeArtifact = latestArtifacts.find((artifact) => artifact.artifact_id === activeArtifactId) ?? latestArtifacts[0];
+  useEffect(() => {setSelectedRows({}); setTableBrowse({});}, [activeArtifact?.artifact_id]);
+  const targetRows = [...selectedIds].map(id => selectedRows[id]).filter(Boolean);
+  const snapshotFilters = () => activeArtifact ? browsingSnapshot(activeArtifact,
+    {...resolvedParameters, event_set: dasEventSet, contrast_ids: [...selectedContrasts].sort()}, tableBrowse) : {};
+  function addTargets(kind: "gene" | "event") {
+    try {
+      if (!activeArtifact || targetRows.length !== selectedIds.size) throw new Error("Select exact rows from the current result table first.");
+      targets.add(makeTargetEntry(activeArtifact, targetRows, kind, snapshotFilters()));
+      setSelectedIds(new Set()); setSelectedRows({}); setTargetError("");
+    } catch (error) {setTargetError(error instanceof Error ? error.message : String(error));}
+  }
   const savedSettingsArtifact = (sourceArtifacts.data ?? []).find((artifact) =>
     artifact.analysis_id === activeWorkflowId
     && artifact.metadata.project_snapshot_fingerprint === project?.snapshot.manifest_fingerprint,
@@ -212,7 +229,7 @@ export default function App() {
         entity_type: activeArtifact.entity_type,
         source_artifact_id: activeArtifact.artifact_id,
         entity_ids: [...selectedIds],
-        filters: {},
+        filters: snapshotFilters(),
       });
     },
     onSuccess: () => {
@@ -278,7 +295,8 @@ export default function App() {
     });
   }
 
-  function toggleSelection(id: string) {
+  function toggleSelection(id: string, row?: Record<string, unknown>) {
+    if (row) setSelectedRows(current => ({...current, [id]: row}));
     setSelectedIds((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -302,11 +320,12 @@ export default function App() {
   const conditions = activeWorkspace === "single-cell" ? (scConditions.data ?? []) : [...new Set(project.manifest.samples.map((sample) => sample.condition))];
   return (
     <div className="app-frame">
-      <WorkspaceNav workspaces={workspaces.data ?? []} activeId={activeWorkspace} onChange={setActiveWorkspace} />
+      <WorkspaceNav workspaces={[...(workspaces.data ?? []), {workspace_id: "targets", label: "Gene / Event workspace", purpose: "Export exact targets, run selected cards and read evidence, and reopen returned results.", icon: "target", enabled: true, phase: 1}]} activeId={activeWorkspace} onChange={setActiveWorkspace} />
       <section ref={workspaceScroll} className="app-main" tabIndex={0} aria-label="Analysis workspace">
         <header className="topbar">
-          <div><span className="eyebrow">RNA splicing analysis</span><h1>{workspaces.data?.find((item) => item.workspace_id === activeWorkspace)?.label ?? "Katana"}</h1></div>
+          <div><span className="eyebrow">RNA splicing analysis</span><h1>{activeWorkspace === "targets" ? "Gene / Event workspace" : workspaces.data?.find((item) => item.workspace_id === activeWorkspace)?.label ?? "Katana"}</h1></div>
           <div className="topbar-actions">
+            <button type="button" className="ghost-action" onClick={() => setActiveWorkspace("targets")}>Targets ({targets.entries.reduce((sum, entry) => sum + entry.row_ids.length, 0)})</button>
             <button type="button" className="ghost-action" aria-expanded={detailOpen} aria-controls="scientific-detail" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? "Hide methods" : "Methods & details"}</button>
             <button type="button" className="ghost-action" aria-expanded={aboutOpen} onClick={() => setAboutOpen(!aboutOpen)}><Info size={16} />About</button>
             <button type="button" className="ghost-action" onClick={() => openOutput.mutate()}><FolderOpen size={16} />Output folder</button>
@@ -327,7 +346,10 @@ export default function App() {
           </details>
         )}
 
-        <div className={`workspace-grid${detailOpen ? "" : " detail-closed"}`}>
+        {targetError && <p role="alert" className="warning-strip error-strip">{targetError}</p>}
+        {activeWorkspace === "targets" ? <TargetWorkbench key={`${projectId}:${project.snapshot.manifest_fingerprint}`} projectId={projectId}
+          projectFingerprint={project.snapshot.manifest_fingerprint} entries={targets.entries} contrasts={project.manifest.contrasts} storageError={targets.storageError}
+          onRemove={targets.remove} onClear={targets.clear}/> : <div className={`workspace-grid${detailOpen ? "" : " detail-closed"}`}>
           <main className="workbench">
             {activeWorkspace === "prioritize" && <MotifTraceWorkbench projectId={projectId}
               catalog={motifTraceCatalog.data} loading={motifTraceCatalog.isLoading} error={motifTraceCatalog.error?.message}
@@ -426,16 +448,18 @@ export default function App() {
                     {activeArtifact && <span className="result-provenance">run {activeArtifact.run_fingerprint.slice(0, 10)}</span>}
                   </div>
                   <div className="result-view">
-                    <ArtifactViewer projectId={projectId} artifact={activeArtifact} selectedIds={selectedIds} onToggle={toggleSelection} onFocus={(row) => { setFocusedRow(row); setDetailOpen(true); }} />
+                    <ArtifactViewer projectId={projectId} artifact={activeArtifact} selectedIds={selectedIds} onToggle={toggleSelection} onBrowseSettingsChange={setTableBrowse} onFocus={(row) => { setFocusedRow(row); setDetailOpen(true); }} />
                   </div>
                 </section>
               </>
             )}
           </main>
           {detailOpen && <Inspector workflow={activeWorkflow} artifact={activeArtifact} row={focusedRow} />}
-        </div>
+        </div>}
 
-        <SelectionBasket count={selectedIds.size} saving={saveSelection.isPending} onSave={() => saveSelection.mutate()} onClear={() => setSelectedIds(new Set())} />
+        {activeWorkspace !== "targets" && <SelectionBasket count={selectedIds.size} saving={saveSelection.isPending} onSave={() => saveSelection.mutate()} onClear={() => setSelectedIds(new Set())}
+          onAddGenes={targetRows.length === selectedIds.size && targetRows.every(row => row.gene_id) ? () => addTargets("gene") : undefined}
+          onAddEvents={targetRows.length === selectedIds.size && targetRows.every(row => row.event_id) ? () => addTargets("event") : undefined}/>}
         <JobDrawer jobs={jobsQuery.data ?? []} />
       </section>
     </div>

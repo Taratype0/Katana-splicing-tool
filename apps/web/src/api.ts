@@ -139,6 +139,18 @@ export const api = {
   jobs: (projectId: string) => request<Job[]>(`/jobs?project_id=${encodeURIComponent(projectId)}`),
   retryJob: (jobId: string) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/retry`, {method: "POST"}),
   cancelJob: (jobId: string) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }),
+  exportTargets: (projectId: string, payload: import("./types").TargetBatch) =>
+    request<import("./types").TargetExport>(`/projects/${encodeURIComponent(projectId)}/targets/export`, {method: "POST", body: JSON.stringify(payload)}),
+  planTargets: (projectId: string, payload: import("./types").TargetBatch) =>
+    request<import("./types").TargetPlan>(`/projects/${encodeURIComponent(projectId)}/targets/plan`, {method: "POST", body: JSON.stringify(payload)}),
+  runTargets: (projectId: string, payload: import("./types").TargetBatch) =>
+    request<import("./types").TargetRun>(`/projects/${encodeURIComponent(projectId)}/targets/run`, {method: "POST", body: JSON.stringify(payload)}),
+  targetRun: (projectId: string, runId: string) =>
+    request<import("./types").TargetRun>(`/projects/${encodeURIComponent(projectId)}/targets/runs/${encodeURIComponent(runId)}`),
+  importTargetResults: (projectId: string, manifestPath: string) =>
+    request<import("./types").TargetRun>(`/projects/${encodeURIComponent(projectId)}/targets/results/import`, {method: "POST", body: JSON.stringify({manifest_path: manifestPath})}),
+  targetFileUrl: (projectId: string, runId: string, path: string) =>
+    `${API_ROOT}/projects/${encodeURIComponent(projectId)}/targets/runs/${encodeURIComponent(runId)}/files/${path.split("/").map(encodeURIComponent).join("/")}`,
 };
 
 export type MotifTraceMode = {

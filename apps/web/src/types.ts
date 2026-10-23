@@ -158,3 +158,36 @@ export type Selection = {
   entity_ids: string[];
   created_at: string;
 };
+
+export type TargetKind = "gene" | "event";
+export type TargetSelection = {
+  source_artifact_id: string;
+  row_ids: string[];
+  target_kind: TargetKind;
+  filters: Record<string, unknown>;
+};
+export type TargetBasketEntry = TargetSelection & {
+  basket_id: string;
+  source_name: string;
+  labels: string[];
+};
+export type TargetResource = {resource_id: string; kind: string; sample_id?: string; [key: string]: unknown};
+export type TargetExport = {
+  request_id: string; request_path: string; archive_path: string; bundle_directory: string;
+  target_count: number; targets: Array<Record<string, unknown>>; resources: TargetResource[];
+  download_url: string;
+};
+export type TargetBatch = {
+  selections?: TargetSelection[]; request_id?: string; modules?: string[];
+  contrast_ids?: string[]; resources?: Record<string, string>; workers?: number;
+};
+export type TargetPlanMessage = string | {message?: string; target_id?: string; resource_id?: string; [key: string]: unknown};
+export type TargetPlan = {ready: boolean; errors: TargetPlanMessage[]; warnings: TargetPlanMessage[]; tasks: unknown[]; request_id: string; [key: string]: unknown};
+export type TargetRun = {
+  run_id: string; request_id: string; status: string; execution?: string; error?: string;
+  progress?: Record<string, unknown>; report_url?: string; archive_url?: string; manifest_url?: string;
+  target_statuses?: Record<string, {type?: string; status?: string; [key: string]: unknown}>;
+  result?: {status: string; targets: Array<{target_id: string; target_kind?: string; gene_id?: string; gene_symbol?: string; event_id?: string; status: string; report?: string; error?: string; reason?: string;
+    sashimi?: Array<{status: string; reason?: string}>; [key: string]: unknown}>; [key: string]: unknown} | null;
+  imported?: boolean;
+};

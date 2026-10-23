@@ -18,6 +18,7 @@ const workflowStages = [
   { title: "2 / Differential analysis", ids: ["differential"] },
   { title: "3 / Networks and functions", ids: ["programs", "prioritize"] },
   { title: "4 / Validation and reports", ids: ["validate", "reports"] },
+  { title: "Selected-target follow-up", ids: ["targets"] },
   { title: "Single-cell analysis", ids: ["single-cell"] },
 ];
 

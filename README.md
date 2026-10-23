@@ -75,7 +75,7 @@ The browser connects to a Katana Python service running locally or on the analys
 
 The browser is the current interface and release target. Existing desktop and mode-chooser entry points remain available for compatibility; a new standalone desktop distribution is not planned.
 
-The [target gene/event report workflow](docs/TARGET_REPORTS.md) describes how saved selections will connect browser exploration with local or server-side gene cards, Sashimi and per-target exports, and distinguishes existing components from the remaining integration work.
+The **Gene / Event workspace** keeps selected targets across result pages and exports a portable request. `katana-targets` reads the same request locally or on an analysis server to create Gene cards, exact Event cards, native Sashimi, independent HTML reports and complete interactive tables. Completed expression, splicing, transcript, network and MotifTrace evidence is reused with its original statistics. BAMs and references are bound separately on the execution machine. See [commands, portable inputs and outputs](docs/TARGET_COMMANDS.md) and [selection and evidence rules](docs/TARGET_REPORTS.md).
 
 ## Outputs
 

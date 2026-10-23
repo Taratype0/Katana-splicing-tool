@@ -209,9 +209,22 @@
     "katana_motiftrace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
     "katana_next/client.py": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
     "katana_next/services/selection_routes.py": "f84bae21e008589ed1af1afcc7409b90ec1757dcc18675d98e29659630732da1",
-    "pyproject.toml": "bfdc20d0616f53aa8d17d78eb6e2a0b1b012d9dbf09261e2ad758ee52fe566e5"
+    "pyproject.toml": "7c2386a14fc59cab173246c4d77a6866473d5e8b16f3a5e5802dce7a358a9bdf"
   },
   "interface_revisions": [
+    {
+      "integration_version": "1.0.0.post3",
+      "revision": "portable-target-entrypoint-20261023",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "bfdc20d0616f53aa8d17d78eb6e2a0b1b012d9dbf09261e2ad758ee52fe566e5",
+          "current_sha256": "7c2386a14fc59cab173246c4d77a6866473d5e8b16f3a5e5802dce7a358a9bdf",
+          "reason": "Add portable katana-targets console entry and targets storage dependencies; package version 2.0.0b4.dev20261023. Target reports subset completed MotifTrace evidence; no frozen scientific source, parameter or test family changes."
+        }
+      ]
+    },
     {
       "integration_version": "1.0.0.post2",
       "scientific_release_unchanged": true,

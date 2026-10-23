@@ -10,15 +10,16 @@ type Props = {
   projectId: string;
   artifact?: Artifact;
   selectedIds: Set<string>;
-  onToggle: (rowId: string) => void;
+  onToggle: (rowId: string, row?: Record<string, unknown>) => void;
   onFocus: (row: Record<string, unknown>) => void;
+  onBrowseSettingsChange?: (settings: Record<string, unknown>) => void;
 };
 
 function extension(path: string) {
   return path.split(".").pop()?.toLowerCase() ?? "";
 }
 
-export function ArtifactViewer({ projectId, artifact, selectedIds, onToggle, onFocus }: Props) {
+export function ArtifactViewer({ projectId, artifact, selectedIds, onToggle, onFocus, onBrowseSettingsChange }: Props) {
   if (!artifact) {
     return (
       <div className="viewer-empty">
@@ -37,6 +38,7 @@ export function ArtifactViewer({ projectId, artifact, selectedIds, onToggle, onF
         selectedIds={selectedIds}
         onToggle={onToggle}
         onFocus={onFocus}
+        onBrowseSettingsChange={onBrowseSettingsChange}
       />
     );
   }

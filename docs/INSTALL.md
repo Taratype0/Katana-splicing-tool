@@ -35,6 +35,26 @@ The launcher opens a browser by default and prints its actual URL. If the reques
 
 The browser is the current interface and release target. Explicit `--mode desktop` and `--mode choose` retain the existing compatibility modes where Qt WebEngine and a graphical session are supported; a new standalone desktop distribution is not a current release target.
 
+## Development wheels
+
+A browser-enabled development wheel includes the built interface; users do not
+need Node.js or the original source checkout. Install its service and selected
+target dependencies with:
+
+```sh
+python -m pip install 'katana_splicing_tool-<version>-py3-none-any.whl[next,targets]'
+katana-open
+katana-targets --help
+```
+
+Replace the placeholder with the actual wheel filename. Wheels are development
+artifacts until a formal release is accepted. To build a browser wheel from
+source, first run `pnpm build` in `apps/web`, then `python -m build --wheel` in
+the repository root. Set `KATANA_REQUIRE_WEB=1` in the build environment to fail
+if browser assets have not been built. A CLI-only build can omit those assets.
+The same wheel supports local and server execution; BAM/reference paths are
+configured on the machine running Python. See [target workflows](TARGET_COMMANDS.md).
+
 ## Browser interface
 
 The browser communicates with a Katana Python service on the machine that holds the project files and runs its calculations. Closing a browser tab does not turn an active job into a completed result. Offline report HTML can display saved results but does not provide this execution service.

@@ -472,8 +472,12 @@ def create_app(runtime: PlatformRuntime | None = None) -> FastAPI:
 
         return StreamingResponse(stream(), media_type="text/event-stream")
 
-    frontend = Path(__file__).resolve().parents[2] / "apps" / "web" / "dist"
-    if frontend.is_dir():
+    from katana_next.api.targets import create_targets_router
+    app.include_router(create_targets_router(active))
+
+    from katana_next.web_assets import frontend_directory
+    frontend = frontend_directory()
+    if frontend is not None:
         assets = frontend / "assets"
         if assets.is_dir():
             app.mount("/assets", StaticFiles(directory=assets), name="assets")
