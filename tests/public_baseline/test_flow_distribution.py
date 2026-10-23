@@ -1,6 +1,7 @@
 """The installed wheel exports the same self-contained workflow sources."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -18,6 +19,9 @@ def test_exported_pipeline_has_verified_sources_and_preserves_existing_exports(t
                             cwd=tmp_path, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["verified_source_files"] == 89
+    # BioContainers publishes these fixed builds at Quay, not Docker Hub.
+    for module in (pipeline / "modules").rglob("*.nf"):
+        assert not re.search(r"['\"]biocontainers/", module.read_text(encoding="utf-8")), module
     with pytest.raises(FileExistsError, match="preserved"):
         export_pipeline(pipeline)
 

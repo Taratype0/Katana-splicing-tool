@@ -1,4 +1,5 @@
 import json
+import importlib.util
 
 import pytest
 
@@ -55,3 +56,91 @@ def test_import_rejects_ambiguous_rmats_sample_vectors(tmp_path):
     write_json(root / "manifest.json", manifest)
     with pytest.raises(ValueError, match="vector order"):
         import_bundle(root, template, tmp_path / "bad")
+
+
+def recorded_metadata(root, manifest, **overrides):
+    record = {"reference_declarations": {"genome_build": "test-build", "annotation_release": "release-7",
+               "validation": "user_declared_labels_not_independently_verified"},
+              "gene_exclusions": {"exclude_pseudogenes": True, "exclude_mitochondrial": True,
+                                   "application_stage": "before_quantification_counts_and_differential_models"}}
+    record.update(overrides)
+    path = write_json(root / "provenance/source_map.json", record)
+    manifest["artifacts"].append({"kind": "provenance", "relative_path": "provenance/source_map.json",
+        "status": "available", "bytes": path.stat().st_size, "sha256": file_sha256(path)})
+    write_json(root / "manifest.json", manifest)
+    return record
+
+
+def test_legacy_verified_source_map_restores_reference_and_filter_provenance(tmp_path):
+    root, manifest, template = bundle(tmp_path)
+    manifest["reference"] = {}
+    record = recorded_metadata(root, manifest)
+    before = {str(p): (file_sha256(p), p.stat().st_mtime_ns) for p in root.rglob("*") if p.is_file()}
+    result = json.loads(import_bundle(root, template, tmp_path / "imported").read_text())
+    assert result["annotation"]["genome_build"] == "test-build"
+    assert result["metadata"]["annotation_release"] == "release-7"
+    assert result["metadata"]["upstream_metadata"]["gene_exclusions"] == record["gene_exclusions"]
+    assert result["metadata"]["upstream_metadata"]["reference_declarations"]["validation"] == record["reference_declarations"]["validation"]
+    assert result["assets"][0]["metadata"]["upstream_artifact"] == manifest["artifacts"][0]
+    assert before == {str(p): (file_sha256(p), p.stat().st_mtime_ns) for p in root.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("mismatch", ["reference", "manifest", "template", "unverified"])
+def test_conflicting_or_unverified_upstream_metadata_is_not_imported(tmp_path, mismatch):
+    root, manifest, template = bundle(tmp_path)
+    recorded_metadata(root, manifest)
+    if mismatch == "reference":
+        manifest["reference"]["genome_build"] = "other-build"
+    elif mismatch == "manifest":
+        manifest["gene_exclusions"] = {"exclude_pseudogenes": False}
+    elif mismatch == "template":
+        write_json(template, {"metadata": {"annotation_release": "other-release"}})
+    else:
+        (root / "provenance/source_map.json").write_text('{}')
+    write_json(root / "manifest.json", manifest)
+    with pytest.raises(ValueError, match="[Cc]onflict|SHA256"):
+        import_bundle(root, template, tmp_path / "rejected")
+    assert not (tmp_path / "rejected").exists()
+
+
+def test_actual_exporter_importer_preserves_declarations_without_claiming_validation(tmp_path):
+    from katana_next.flow.distribution import export_pipeline
+    pipeline = export_pipeline(tmp_path / "pipeline")
+    spec = importlib.util.spec_from_file_location("bundle_exporter", pipeline / "bin/katana_bundle.py")
+    exporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exporter)
+    artifacts = []
+    for event in exporter.EVENTS:
+        for mode in exporter.MODES:
+            name = f"{event}.MATS.{mode}.txt"
+            path = tmp_path / name
+            path.write_text("\t".join(sorted(exporter.RMATS_COLUMNS | exporter.COORDINATES[event])) + "\n")
+            artifacts.append({"source": str(path), "relative_path": f"rmats/B_vs_A/rmats_post/{name}",
+                              "kind": "rmats", "comparison_id": "B_vs_A"})
+    for kind, name in (("deg", "B_vs_A.deseq2.results.tsv"), ("normalized_counts", "all.normalised_counts.tsv")):
+        path = tmp_path / name
+        columns = sorted(exporter.TABLE_COLUMNS[kind]) + (["a", "b"] if kind == "normalized_counts" else [])
+        path.write_text("\t".join(columns) + "\n")
+        artifacts.append({"source": str(path), "relative_path": f"expression/{name}", "kind": kind,
+                          **({"comparison_id": "B_vs_A"} if kind == "deg" else {})})
+    samples = tmp_path / "samples.csv"
+    samples.write_text("sample,condition\na,A\nb,B\n")
+    contrasts = tmp_path / "contrasts.csv"
+    contrasts.write_text("contrast,treatment,control\nB_vs_A,B,A\n")
+    declarations = {"genome_build": "declared-build", "annotation_release": "declared-release",
+                    "validation": "user_declared_labels_not_independently_verified"}
+    exclusions = {"exclude_pseudogenes": True, "exclude_mitochondrial": True}
+    source = write_json(tmp_path / "source.json", {"artifacts": artifacts, "reference_declarations": declarations,
+        "gene_exclusions": exclusions, "assay": "bulk", "assay_validation": "declared",
+        "rmats_sample_order": {"A": ["a"], "B": ["b"]}})
+    exported = tmp_path / "exported"
+    manifest = exporter.export_bundle(source, exported, samples, contrasts)
+    assert manifest["reference_declarations"] == declarations
+    assert manifest["gene_exclusions"] == exclusions
+    assert manifest["assay"] == "bulk"
+    template = write_json(tmp_path / "template.json", {"metadata": {"species": "test"}})
+    project = json.loads(import_bundle(exported, template, tmp_path / "imported").read_text())
+    assert project["annotation"]["genome_build"] == "declared-build"
+    assert project["metadata"]["upstream_metadata"]["reference_declarations"] == declarations
+    assert project["metadata"]["upstream_metadata"]["gene_exclusions"] == exclusions
+    assert project["metadata"]["annotation_release"] == "declared-release"

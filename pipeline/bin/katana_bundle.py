@@ -414,7 +414,11 @@ def export_bundle(source_map_path: Path, output_dir: Path, samples_path: Path, c
     manifest = {"schema": SCHEMA, "created_at": datetime.now(timezone.utc).isoformat(), "project_name": data.get("project_name", "Katana project"),
                 "profile": profile, "allow_partial": allow_partial, "status": "partial" if any(item["status"] in {"failed", "not_computed"} for item in exported) else "complete",
                 "analysis_purpose": data.get("analysis_purpose"), "design": data.get("design"), "quantification_method": data.get("quantification_method"),
-                "reference": data.get("reference", {}), "software_versions": data.get("software_versions", {}), "samples": samples,
+                "reference": data.get("reference", {}),
+                "reference_declarations": data.get("reference_declarations", {}),
+                "gene_exclusions": data.get("gene_exclusions", {}),
+                "assay": data.get("assay"), "assay_validation": data.get("assay_validation"),
+                "software_versions": data.get("software_versions", {}), "samples": samples,
                 "comparisons": comparisons, "rmats_sample_order": order, "artifacts": exported,
                 "import_instructions": "Run katana_prepare_import.py --bundle <downloaded-directory> on the destination computer before selecting this directory in Katana."}
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

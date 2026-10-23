@@ -8,7 +8,7 @@ process KATANA_TXIMPORT {
     conda 'bioconda::bioconductor-tximeta=1.8.0'
     container "${workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/bioconductor-tximeta:1.8.0--r40_0' :
-        'biocontainers/bioconductor-tximeta:1.8.0--r40_0'}"
+        'quay.io/biocontainers/bioconductor-tximeta:1.8.0--r40_0'}"
     publishDir "${params.outdir}/DEG", mode: 'copy'
 
     input:
@@ -47,7 +47,7 @@ process KATANA_DESEQ2_CONTRAST {
     conda 'bioconda::bioconductor-deseq2=1.34.0'
     container "${workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/bioconductor-deseq2:1.34.0--r41hc247a5b_3' :
-        'biocontainers/bioconductor-deseq2:1.34.0--r41hc247a5b_3'}"
+        'quay.io/biocontainers/bioconductor-deseq2:1.34.0--r41hc247a5b_3'}"
     publishDir "${params.outdir}/DEG", mode: 'copy'
 
     input:
@@ -88,7 +88,7 @@ process KATANA_NORMALIZE {
     conda 'bioconda::bioconductor-deseq2=1.34.0'
     container "${workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/bioconductor-deseq2:1.34.0--r41hc247a5b_3' :
-        'biocontainers/bioconductor-deseq2:1.34.0--r41hc247a5b_3'}"
+        'quay.io/biocontainers/bioconductor-deseq2:1.34.0--r41hc247a5b_3'}"
     publishDir "${params.outdir}/DEG", mode: 'copy'
     input:
     tuple val(meta), path(gene_txi)

@@ -8,6 +8,32 @@ from pathlib import Path, PurePosixPath
 from .model import file_sha256, read_json, write_json
 
 
+def _upstream_metadata(source, paths):
+    """Recover declarations only from the ledger-verified source map.
+
+    Older exporters retained this file but omitted its declarations from their
+    manifest. Declared labels remain declarations, never inferred validation.
+    """
+    source_map = paths.get("provenance/source_map.json")
+    recorded = read_json(source_map) if source_map else {}
+    result = {}
+    for key in ("reference", "reference_declarations", "gene_exclusions", "assay",
+                "assay_validation", "design", "quantification_method"):
+        candidates = [item[key] for item in (source, recorded) if item.get(key) not in (None, {}, "")]
+        if candidates and any(candidate != candidates[0] for candidate in candidates[1:]):
+            raise ValueError(f"Conflicting upstream {key} declarations")
+        if candidates:
+            result[key] = copy.deepcopy(candidates[0])
+    for key in ("reference", "reference_declarations", "gene_exclusions"):
+        if key in result and not isinstance(result[key], dict):
+            raise ValueError(f"Invalid upstream {key} declarations")
+    builds = {str(value["genome_build"]) for key in ("reference", "reference_declarations")
+              if isinstance(value := result.get(key), dict) and value.get("genome_build")}
+    if len(builds) > 1:
+        raise ValueError("Conflicting upstream genome_build declarations")
+    return result, next(iter(builds), "")
+
+
 def import_bundle(bundle, project_template, outdir):
     from katana_next.domain.models import ProjectManifest
     bundle = Path(bundle).resolve()
@@ -37,6 +63,17 @@ def import_bundle(bundle, project_template, outdir):
         if str(relative) in paths:
             raise ValueError("Duplicate upstream bundle member")
         paths[str(relative)] = path
+    upstream_metadata, genome_build = _upstream_metadata(source, paths)
+    project_metadata = copy.deepcopy(template.get("metadata", {}))
+    releases = {value["annotation_release"] for key in ("reference", "reference_declarations")
+                if isinstance(value := upstream_metadata.get(key), dict) and value.get("annotation_release")}
+    if len(releases) > 1:
+        raise ValueError("Conflicting upstream annotation_release declarations")
+    if releases:
+        release = next(iter(releases))
+        if project_metadata.get("annotation_release") not in (None, "", release):
+            raise ValueError("Template annotation_release conflicts with verified upstream declaration")
+        project_metadata["annotation_release"] = release
     groups, samples, sample_ids = {}, [], set()
     for row in source["samples"]:
         sid, group = row["sample_id"], row["condition"]
@@ -63,7 +100,7 @@ def import_bundle(bundle, project_template, outdir):
                       "denominator": {"label": denominator, "sample_ids": groups[denominator]}}
         comparisons.append(comparison)
         contrast_index[cid] = row
-    annotation, assets = {"genome_build": source.get("reference", {}).get("genome_build", "")}, []
+    annotation, assets = {"genome_build": genome_build}, []
     chosen_mode = template.get("rmats_mode", "JCEC")
     if chosen_mode not in {"JC", "JCEC"}:
         raise ValueError("Explicit JC or JCEC mode is required")
@@ -81,7 +118,7 @@ def import_bundle(bundle, project_template, outdir):
         if not mapped:
             continue
         cid = item.get("comparison_id")
-        metadata = {"upstream_sha256": item["sha256"]}
+        metadata = {"upstream_sha256": item["sha256"], "upstream_artifact": copy.deepcopy(item)}
         if kind == "qc":
             metadata.update({key: item[key] for key in ("sample_id", "mate", "method", "qc_type", "qc_phase") if key in item})
         if cid:
@@ -121,8 +158,9 @@ def import_bundle(bundle, project_template, outdir):
                "name": template.get("name", source.get("project_name", "Katana study")),
                "input_root": "bundle", "output_root": "results", "annotation": annotation,
                "samples": samples, "contrasts": comparisons, "assets": assets,
-               "metadata": {**template.get("metadata", {}), "upstream_bundle_sha256": file_sha256(bundle / "manifest.json"),
-                            "native_statistics_preserved": True, "rmats_mode": chosen_mode}}
+               "metadata": {**project_metadata, "upstream_bundle_sha256": file_sha256(bundle / "manifest.json"),
+                            "native_statistics_preserved": True, "rmats_mode": chosen_mode,
+                            "upstream_metadata": upstream_metadata}}
     ProjectManifest.model_validate(payload)
     out.mkdir(parents=True)
     # A single server-side copy creates a relocatable project. BAMs never need

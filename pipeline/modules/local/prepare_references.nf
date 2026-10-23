@@ -1,6 +1,6 @@
 process PREPARE_REFERENCES {
     label 'process_low'
-    container "${workflow.containerEngine == 'singularity' ? 'https://depot.galaxyproject.org/singularity/gffread:0.12.1--h8b12597_0' : 'biocontainers/gffread:0.12.1--h8b12597_0'}"
+    container "${workflow.containerEngine == 'singularity' ? 'https://depot.galaxyproject.org/singularity/gffread:0.12.1--h8b12597_0' : 'quay.io/biocontainers/gffread:0.12.1--h8b12597_0'}"
     input:
     path fasta
     path gtf

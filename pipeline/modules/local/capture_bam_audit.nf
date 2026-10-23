@@ -1,7 +1,7 @@
 process CAPTURE_BAM_AUDIT {
     tag "${meta.id}"
     label 'process_medium'
-    container "${workflow.containerEngine == 'singularity' ? 'https://depot.galaxyproject.org/singularity/samtools:1.17--h00cdaf9_0' : 'biocontainers/samtools:1.17--h00cdaf9_0'}"
+    container "${workflow.containerEngine == 'singularity' ? 'https://depot.galaxyproject.org/singularity/samtools:1.17--h00cdaf9_0' : 'quay.io/biocontainers/samtools:1.17--h00cdaf9_0'}"
     input:
     tuple val(meta), path(bam, stageAs: 'katana_source.bam')
     path metrics_helper

@@ -4,9 +4,164 @@
   "original_checkouts_modified": false,
   "changes": [
     {
+      "path": "bin/katana_bundle.py",
+      "snapshot_sha256": "c63b8681f0253cc3c0ca24ea8c75e8083fec8951254f8384c07ba450be8e1f15",
+      "integrated_sha256": "6b753545089ad3641f12f51ddce225402b968e996e26124abac3a13971846f84"
+    },
+    {
       "path": "conf/upstream_modules.config",
       "snapshot_sha256": "0a32f38bce21b712643f68335fbd12cad61a9a083c84c00e00dcbedd18055284",
       "integrated_sha256": "030e98a102ec950c8989f3b7b9d28846c85769b0b284b7034c1d0f3a6a64e47f"
+    },
+    {
+      "path": "modules/local/capture_bam_audit.nf",
+      "snapshot_sha256": "8e5d5cd9bc756fde7f77ba80a21b7339b006784f51280e10e1c2d9b8d5149eba",
+      "integrated_sha256": "419df33c960a687eeca5e71364756646bbd366ec8f25fec729b9c92552496997"
+    },
+    {
+      "path": "modules/local/collate_genome_bam.nf",
+      "snapshot_sha256": "9a3b5c20c8aa4ed1d84c8f38880b17985b2ed118b36eb14e6107d108b7f848d6",
+      "integrated_sha256": "aece5bc1832dde0a7f4fa7033a092a2fe45ed76f4d03b64e23d413a572819223"
+    },
+    {
+      "path": "modules/local/create_bamlist.nf",
+      "snapshot_sha256": "5598ed56a5c4a4ad249c940b227915964f47a1a97c8c45aa0d10e3318d9a5c03",
+      "integrated_sha256": "089788d66cd652e0dc4e62a8ed477d7839f8e4637e4bcccffc7bdd22c7c71c04"
+    },
+    {
+      "path": "modules/local/create_bamlist_single.nf",
+      "snapshot_sha256": "29f525cf9bb47f0af719f02e84c15160280f58ab6eae219f352c1b37d914eea1",
+      "integrated_sha256": "81980869fbe208f9ad432717a5615521e0de276800bb7d425c096583be4f8646"
+    },
+    {
+      "path": "modules/local/dexseq_dtu.nf",
+      "snapshot_sha256": "44f23b9b616317b89790cfa9442a481348f335f766cc610ef06deaa778dc6cf1",
+      "integrated_sha256": "e7a5b41c3caa6075774c635acf18979627dc44f451bb718381edc13dbf327d6b"
+    },
+    {
+      "path": "modules/local/dexseq_exon.nf",
+      "snapshot_sha256": "8c5fc6e3ed019a6b0b2566b4b2e1b11416a0895448f4d1faefca2671dbbd62df",
+      "integrated_sha256": "7a03a7f5f6b8d860d99852477dfc894de58d81b9a030cb31e3fdc16aea72f942"
+    },
+    {
+      "path": "modules/local/drimseq_filter.nf",
+      "snapshot_sha256": "92951fa0dfebba6bcbae4e3d839e86bb3b749e3906b818b3b95ed60568263721",
+      "integrated_sha256": "68c5fea0aaf614aacf6767fb77c9e69249c9fc165d6bfa204c0bda6d4330b2b5"
+    },
+    {
+      "path": "modules/local/gffread_tx2gene.nf",
+      "snapshot_sha256": "8249b9f03cbff71389121b055bd28ebcae25da5b50a85da2a2ffc382f3d9ad50",
+      "integrated_sha256": "3c9e441753684489309cc91c21a1b2c2d079e798227226828808fb018ae59b09"
+    },
+    {
+      "path": "modules/local/katana_differential.nf",
+      "snapshot_sha256": "807a7fe95dc6cfaf879649bd9ab9c1f283052e46fe0a0939057bd243390b3272",
+      "integrated_sha256": "1a2c0b78abd57e1b8f1f675c5ce893e7db3d54a609201b501883254152e7c45d"
+    },
+    {
+      "path": "modules/local/prepare_references.nf",
+      "snapshot_sha256": "a8c3a510818e69921cf634d167a55332bae199eaef499d32956bae93d0d33d14",
+      "integrated_sha256": "25377837028fb9d86e085d8f52f36d1e055b2a645db0d7d121067727175f76e8"
+    },
+    {
+      "path": "modules/local/reference_faidx.nf",
+      "snapshot_sha256": "e61e90ee4d87a69db990459d2842b1933fa8dad258838396f2a3cf42b197a056",
+      "integrated_sha256": "576fd04e04722cd8b44ca345b1124952603c5bde00e3a7c65f9011fdf6c7e53e"
+    },
+    {
+      "path": "modules/local/rmats_post.nf",
+      "snapshot_sha256": "25fac904356724b4e29eb05f1e64650818a6e1e66e09da05ed5168711e223ace",
+      "integrated_sha256": "825d24ea2e017f57854e6e475bec02d9c81d11f194d20501e60506dcf3ffd871"
+    },
+    {
+      "path": "modules/local/rmats_post_single.nf",
+      "snapshot_sha256": "16cc1616a73265134ad79d3597e462ffcdcdf45002e67d074f99ae0f2a0820fc",
+      "integrated_sha256": "ba9692686d4828b639eee2983995dac40d875411c478af636f70ae37f407735f"
+    },
+    {
+      "path": "modules/local/rmats_prep.nf",
+      "snapshot_sha256": "a8fffd1ce2f6745afd7a3ac6f1a80db29e51a05cac8e84e8bf8466465ba16bc0",
+      "integrated_sha256": "71de6e0a171bc088344328118fb7a15caa5cb962e8ef3c8eb77d297cc69d1d55"
+    },
+    {
+      "path": "modules/local/rmats_prep_single.nf",
+      "snapshot_sha256": "37c68f0c98306b056c01fbcf91225e603bbc32ddc648392e243c80112214109e",
+      "integrated_sha256": "5b9330e9be76874f76be86e9ebcadea8a777ea49b84522380164ca8ea880e4b8"
+    },
+    {
+      "path": "modules/local/stager.nf",
+      "snapshot_sha256": "abed3ce10ba308b9f3f4f7b86d5513b69eba22bb7d9ec8f920f541bbdb87ff4f",
+      "integrated_sha256": "b525590a700a458f5fc9afb6ee00339dfbe37c2d574c3f2eb8deeb22e879512a"
+    },
+    {
+      "path": "modules/local/suppa_clusterevents.nf",
+      "snapshot_sha256": "242e122ba1e582b68b58725fdbdec0a9de8d23ce95fb1d08bbfe0324388a91c8",
+      "integrated_sha256": "29c253361001870d030192663e5b2a64292958c23132eeee511d92b28f6b5b6c"
+    },
+    {
+      "path": "modules/local/suppa_clustergroups.nf",
+      "snapshot_sha256": "db0392155eae1dd08540d36f704187139663c8392637c6a63ceac832e0974314",
+      "integrated_sha256": "97fd5eb640cf407fb75dc6924e019fd4cb53459ac466c9c432cbdcde1a611216"
+    },
+    {
+      "path": "modules/local/suppa_diffsplice.nf",
+      "snapshot_sha256": "449ed8b6a5c97cdd0ebfa5a2456809c2c7424653fe23c930d3ab955d28aa8650",
+      "integrated_sha256": "0a09b855a9d2168b021375315a9f88d44f96344bf30234f28add55899246f6e2"
+    },
+    {
+      "path": "modules/local/suppa_generateevents.nf",
+      "snapshot_sha256": "efe23529542ce66518157545000f48e76a3e99b2e0337f04761c9ea432b4e629",
+      "integrated_sha256": "573e2f9e09500a49a57e886cd5de216e63b2e08ddb5eaae8cdd54dc5da736106"
+    },
+    {
+      "path": "modules/local/suppa_psiperevent.nf",
+      "snapshot_sha256": "c4fbf2b8aa648e65fabdbc2429fae8b13dd72249a617b44f2d400d5c056aa930",
+      "integrated_sha256": "2bde2d05c49e138f52bf600a7858cbacc2c7fef9615004abcf9a00337e7340d5"
+    },
+    {
+      "path": "modules/local/suppa_psiperisoform.nf",
+      "snapshot_sha256": "a5cf95069b15489f9f142f116a31f30207c24bd66c975cecddd3cb040678a212",
+      "integrated_sha256": "f959d14452129c66f45320096bad99ca840ca4f6bef657ff174c2fba0d49901e"
+    },
+    {
+      "path": "modules/local/suppa_split_files.nf",
+      "snapshot_sha256": "9c1ac55a1d5ed50ef746c9421f924c83a798bab40bd14102935fb5a1d0829ce9",
+      "integrated_sha256": "7f80594335aa801b1584e3383d6bb3a142c7770b3f7b0d3c287b9dab4eab6886"
+    },
+    {
+      "path": "modules/local/tximport.nf",
+      "snapshot_sha256": "6375b4a31b6e949f50949973830781f248648b8a7f28dcca891e5135b156e76e",
+      "integrated_sha256": "5a1448157294a7271165df7dbc76147b7d89d5b03034a31e883304796b0f8ef7"
+    },
+    {
+      "path": "modules/nf-core/fastqc/main.nf",
+      "snapshot_sha256": "28a0ff690799a23ef6affa675aab1310bc952bfc4dbe5d918cb6036930c60e8e",
+      "integrated_sha256": "31e54a4b88b20050e94641eb712cb25a9ad2c343b5f3f8622a239043884d3caa"
+    },
+    {
+      "path": "modules/nf-core/samtools/index/main.nf",
+      "snapshot_sha256": "6ec52fa0b0290ccc1df78ad34c88cb65992001060146dbb0fcf1f2b08281fed0",
+      "integrated_sha256": "952ee2479221ab466ea5d22b2cd6211df486917e6cda1618c2d2cb3dadc9f8a6"
+    },
+    {
+      "path": "modules/nf-core/samtools/sort/main.nf",
+      "snapshot_sha256": "8e01173de23c6957b04e3177431140e93bab78b9675dc017c716aac0bcb8a7b0",
+      "integrated_sha256": "170fd644412a78875be9b788c135ccb00bd5bea5cb74670e72d2bd6529be4070"
+    },
+    {
+      "path": "modules/nf-core/star/align/main.nf",
+      "snapshot_sha256": "9cc3ce662309c8f569b430c82189a7ecaf40ab9fcfc63f0a9ce82f3ec707b07e",
+      "integrated_sha256": "3d30d395b39dbe7f02234c76c1e1c2d66fda15a11ff528bcfbd61b475bcf51a0"
+    },
+    {
+      "path": "modules/nf-core/star/genomegenerate/main.nf",
+      "snapshot_sha256": "4cb7d568e9d33585a788f7107b57e7337f53e499bf58fd925be759c8e0d73b0e",
+      "integrated_sha256": "9a248b9a2e0c50342a845e644c4be7f2db627783149823b0279ebe569ed829c2"
+    },
+    {
+      "path": "modules/nf-core/trimgalore/main.nf",
+      "snapshot_sha256": "69ef7cf3756f167b46616386608a5c933ec3b6fc3e391ae25422fb91986168fc",
+      "integrated_sha256": "f8af906cf5064f2b2d13419e378d099be12ccb251bf345e33df8f65e3e6fc551"
     },
     {
       "path": "workflows/katana_core.nf",
@@ -19,7 +174,9 @@
     "Export raw reference, filter decisions and receipt alongside the filtered analysis reference",
     "Carry existing FASTQ/trim/STAR QC artifacts into the portable upstream bundle",
     "Omit the unused MultiQC publish selector when including only the executable upstream core",
-    "Bind native QC sources to exact sample IDs and raw/trimmed/alignment phases in the portable bundle"
+    "Bind native QC sources to exact sample IDs and raw/trimmed/alignment phases in the portable bundle",
+    "Preserve declared reference, assay and pre-analysis exclusion provenance through bundle export and verified import",
+    "Qualify BioContainers Docker image names with quay.io while retaining all tool versions, scripts and Singularity URLs"
   ],
   "scientific_test_algorithms_replaced": false,
   "already_completed_results_refitted": false
