@@ -209,7 +209,7 @@
     "katana_motiftrace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
     "katana_next/client.py": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
     "katana_next/services/selection_routes.py": "f84bae21e008589ed1af1afcc7409b90ec1757dcc18675d98e29659630732da1",
-    "pyproject.toml": "b1f271b170c1ba76a7579d67ea979cdc653228f3aaeb84abcb21813d38d253b8"
+    "pyproject.toml": "bfdc20d0616f53aa8d17d78eb6e2a0b1b012d9dbf09261e2ad758ee52fe566e5"
   },
   "interface_revisions": [
     {
@@ -233,6 +233,19 @@
           "previous_sha256": "f7d82ce351b1e0c69cb7de70a55ccbb0252a4de8e4801125c3c8ea5ebfc0fa90",
           "current_sha256": "b1f271b170c1ba76a7579d67ea979cdc653228f3aaeb84abcb21813d38d253b8",
           "reason": "Approved public read-only seven-section report CLI and packaged HTML/CSS/JS resources; no MotifTrace numerical change."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post3",
+      "revision": "package-version-20261023",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "b1f271b170c1ba76a7579d67ea979cdc653228f3aaeb84abcb21813d38d253b8",
+          "current_sha256": "bfdc20d0616f53aa8d17d78eb6e2a0b1b012d9dbf09261e2ad758ee52fe566e5",
+          "reason": "Package version metadata only: 2.0.0b3.dev20261022 to 2.0.0b3.dev20261023. Dependencies, entry points, scientific kernels and parameter definitions are unchanged."
         }
       ]
     }
