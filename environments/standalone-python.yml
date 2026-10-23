@@ -1,6 +1,7 @@
-# Bootstrap for direct Python/CLI/browser use, not the Nextflow task runtime.
-# Python 3.13 is the repository's Windows/Linux CI target. This is a development
-# specification, not a solved lock or a complete scientific environment.
+# Python-only bootstrap for direct CLI/browser use, not the full native runtime.
+# Use standalone-linux.yml and the accepted locks for Linux scientific tools.
+# Python 3.13 follows the portable Windows/Linux CI target; the native Linux
+# environment uses Python 3.12 for its matched Bioconda/R toolchain.
 name: katana-standalone
 channels:
   - conda-forge

@@ -24,9 +24,10 @@ def test_sample_gate_default_and_explicit_override():
     qc = pd.DataFrame({"stability_score": [1.0, 1.0]}, index=matrix.index)
     with pytest.raises(ValueError, match="At least 15"):
         fit_network(matrix, qc, NetworkConfig())
-    with pytest.warns(UserWarning, match="Exploratory network with 14 samples"):
+    with pytest.warns(UserWarning, match="Network sample count: 14; configured minimum: 14") as recorded:
         with pytest.raises(ValueError, match="Too few stable events"):
             fit_network(matrix, qc, NetworkConfig(minimum_network_samples=14))
+    assert all("exploratory" not in str(item.message).lower() for item in recorded)
 
 
 @pytest.mark.parametrize("minimum", [True, 2, -1, 14.5, "14"])

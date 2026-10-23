@@ -1319,8 +1319,9 @@ def fit_network(
     if matrix.shape[1] < 15:
         import warnings
         warnings.warn(
-            f"Exploratory network with {matrix.shape[1]} samples: the default 15-sample gate was explicitly overridden. "
-            "Bootstrap stability does not replace independent validation.",
+            f"Network sample count: {matrix.shape[1]}; configured minimum: {minimum_samples}. "
+            "Interpret the observed bootstrap diagnostics and continuous confidence metrics; "
+            "meeting the sample-count minimum does not establish network stability.",
             UserWarning,
             stacklevel=2,
         )

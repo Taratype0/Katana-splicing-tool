@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,9 +7,9 @@ name = "katana-splicing-tool"
 version = "2.0.0b5.dev20261023"
 description = "Artifact-driven bulk and single-cell RNA splicing evidence workspace."
 readme = "README.md"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "pipeline/UPSTREAM_LICENSE", "THIRD_PARTY_LICENSES/*"]
 requires-python = ">=3.11"
 dependencies = [
-  "PySide6>=6.6",
   "matplotlib>=3.8",
   "bamnostic>=1.3",
   "numpy>=1.26,<3",
@@ -52,6 +52,23 @@ katana-next-migrate = "katana_next.migration:main"
 katana-next-acceptance = "scripts.run_v2_acceptance:main"
 
 [project.optional-dependencies]
+desktop = ["PySide6>=6.6"]
+standalone = [
+  "pydantic>=2.9,<3",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "pysam>=0.22,<1; sys_platform != 'win32'",
+  "vl-convert-python>=1.8,<2",
+  "beautifulsoup4>=4.12,<5",
+  "requests>=2.32,<3",
+  "jsonschema>=4.18,<5",
+  "fastapi>=0.115",
+  "reportlab>=4.2",
+  "matplotlib-venn>=1.1,<2",
+  "uvicorn[standard]>=0.30",
+  "pymemesuite==0.1.0a4; sys_platform != 'win32'",
+  "pyhmmer>=0.11,<1; sys_platform != 'win32'",
+]
 flow = [
   "pydantic>=2.9,<3",
   "pyarrow>=17",
@@ -107,7 +124,8 @@ include = ["app", "app.*", "katana_cosplice", "katana_cosplice.*", "katana_motif
 namespaces = false
 
 [tool.setuptools.package-data]
-"katana_next.science" = ["rbp_sequence_browser.html", "motiftrace_windows.html", "motiftrace_consequences.html", "motiftrace_parallel.html", "rbp_evidence_layers.json"]
+"katana_next.science" = ["rbp_sequence_browser.html", "motiftrace_windows.html", "motiftrace_consequences.html", "motiftrace_parallel.html", "rbp_evidence_layers.json", "*.R"]
+"katana_next" = ["vendor/DJExpress_SOURCE_SHA256.json", "vendor/DJExpress/*", "vendor/DJExpress/R/*.R", "vendor/MAPP/SOURCE.json", "vendor/MAPP/LICENSE", "vendor/MAPP/COPYING*", "vendor/MAPP/modules/*/scripts/*"]
 "katana_next.contracts" = ["schemas/*.json", "data/*.json"]
 "katana_next.reports" = ["assets/*", "assets/**/*"]
 

@@ -6,6 +6,22 @@ Katana's own source is covered by the repository MIT license. Third-party source
 
 The original DJExpress core is included under `katana_next/vendor/DJExpress` at the recorded upstream revision `a0396272fd0522565190d97f4ecd2e9ba8a98366`. Copyright is held by Lina Gallego-Paez. Its MIT notices are preserved in [LICENSE](katana_next/vendor/DJExpress/LICENSE) and [LICENSE.md](katana_next/vendor/DJExpress/LICENSE.md). The original DESCRIPTION, NAMESPACE and [source-hash manifest](katana_next/vendor/DJExpress_SOURCE_SHA256.json) remain with that source. Katana does not claim authorship of this method.
 
+## MAPP author MAEI source
+
+The original MAEI scripts and kmer counter are included under
+`katana_next/vendor/MAPP` from upstream commit
+`6ad6e12275e6d7aa1254d1a8933cfbce6766b16c`. Their contents are unchanged;
+`SOURCE.json` records the source URLs, sizes and SHA256 values. This supplies the
+existing standalone MAEI adapter, not the complete upstream MAPP pipeline.
+
+Licenses differ by file: the original `LICENSE` and the counter/postprocessing
+scripts specify Apache-2.0; `model.cpp` and
+`optimize-MARA-model-parameters.R` specify GPL-3.0; the original R Core Team
+`optim.c` and `zeroin.c` specify GPL-2.0-or-later. Their original copyright and
+license headers and full `COPYING-GPL-2.0` / `COPYING-GPL-3.0` texts are retained.
+Katana's MIT notice does not replace any of these licenses. The native model is
+compiled from private copies of this supplied source at execution time.
+
 ## Browser interface and fonts
 
 The source checkout includes a built browser interface. Original license texts for a conservative production dependency closure of the committed pnpm lockfile are retained below. This includes optional/transitive dependencies and can be larger than the set of modules retained by the JavaScript bundler; inclusion in this inventory is not a claim that a package executes in the browser.

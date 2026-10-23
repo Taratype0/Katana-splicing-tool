@@ -34,7 +34,7 @@ def tasks() -> list[dict]:
             task("network-summary", "network_followup", ["omega"])]
 
 
-def make_case(root: Path, *, failure: bool = False) -> Path:
+def make_case(root: Path, *, failure: bool = False, runtime_failure: bool = False) -> Path:
     root.mkdir(parents=True)
     (root / "project").mkdir()
     (root / "configuration").mkdir()
@@ -42,6 +42,8 @@ def make_case(root: Path, *, failure: bool = False) -> Path:
     planned = tasks()
     if failure:
         planned[1]["fail"] = True
+    if runtime_failure:
+        planned[1]["runtime_fail"] = True
     (root / "configuration/flow.json").write_text(json.dumps({"tasks": planned}), encoding="utf-8")
     return root
 
@@ -75,6 +77,12 @@ def main() -> None:
     receipts = {path.parent.name: json.loads(path.read_text())
                 for path in (case / "output/downstream").rglob("task.receipt.json")}
     assert len(receipts) == len(tasks()), receipts.keys()
+    probes = {json.loads(path.read_text())["task_id"]: json.loads(path.read_text())
+              for path in (case / "output/downstream").glob("runtime-*.json")}
+    assert set(probes) == set(receipts)
+    assert probes["omega"]["runtime_label"] == "fixture-network-image"
+    assert probes["network-summary"]["runtime_label"] == "fixture-followup-image"
+    assert probes["alpha"]["runtime_label"] == "configured-host"
     assert receipts["gamma"]["finished"] < receipts["beta"]["finished"], "A false whole-group barrier delayed gamma"
     assert receipts["omega"]["finished"] < receipts["beta"]["finished"], "Network was blocked by unrelated beta"
     assert receipts["delta"]["started"] >= receipts["gamma"]["finished"]
@@ -96,6 +104,15 @@ def main() -> None:
     run(command(nextflow), failed, "required-task-failure", successful=False)
     assert not (failed / "output/report/REPORT.html").exists(), "A failed required task produced a report"
 
+    failed_runtime = make_case(root / "runtime-failure", runtime_failure=True)
+    run(command(nextflow), failed_runtime, "task-runtime-failure", successful=False)
+    assert not list((failed_runtime / "work").glob("**/task-results/beta/task.receipt.json")), "A failed runtime started its calculation"
+    assert not (failed_runtime / "output/report/REPORT.html").exists()
+    absent_image = make_case(root / "missing-image")
+    rejected = run([*command(nextflow), "-profile", "docker"], absent_image, "missing-container", successful=False)
+    assert "host fallback is disabled" in rejected.stdout + rejected.stderr
+    assert not list((absent_image / "work").glob("**/task.receipt.json"))
+
     # Actual stdlib GTF filtering in its own native Nextflow process.
     reference = root / "reference"
     reference.mkdir()
@@ -111,6 +128,8 @@ def main() -> None:
     receipt = {"schema": "katana.native_nextflow_transport_check/v1", "status": "passed",
                "scientific_model_execution": False, "native_transport_tasks": len(tasks()),
                "dependency_exact_parallelism": True, "required_failure_blocks_report": True,
+               "runtime_probe_precedes_calculation": True, "stage_container_dispatch": True,
+               "container_execution_tested": False, "missing_container_blocks_host_fallback": True,
                "resume_all_cached": True, "completed_worker_bytes_and_mtimes_unchanged": True,
                "native_reference_filter": filtering[0]}
     (root / "acceptance.receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

@@ -1,0 +1,29 @@
+# Linux native tools for the standalone downstream API/CLI/browser.
+# Install the Katana wheel with its [standalone] extra after creating this env.
+# Exact builds are recorded in locks/linux-64.explicit.txt after clean acceptance.
+name: katana-standalone
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.12
+  - pip
+  - r-base=4.4
+  - r-wgcna=1.73
+  - r-rcpp
+  - r-optparse
+  - r-jsonlite
+  - r-dplyr
+  - r-magrittr
+  - r-tidyr
+  - r-netrep
+  - bioconductor-deseq2
+  - bioconductor-dexseq
+  - bioconductor-fgsea
+  - bioconductor-limma
+  - rseqc
+  - samtools
+  - c-compiler
+  - cxx-compiler
+  - make
+  - pkg-config

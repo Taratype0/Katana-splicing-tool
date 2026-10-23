@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -50,8 +51,8 @@ def exact_wgcna_labels(
                 "Production CoSplice requires R WGCNA. " + diagnostic
             )
         rscript = executable
-    executable = Path(rscript)
-    if not executable.exists():
+    executable = Path(shutil.which(str(rscript)) or rscript).expanduser().absolute()
+    if not executable.is_file():
         raise FileNotFoundError(f"Configured Rscript does not exist: {executable}")
     if not matrix.index.is_unique or matrix.empty:
         raise ValueError("WGCNA requires a nonempty matrix with unique event IDs.")

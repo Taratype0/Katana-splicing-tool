@@ -135,7 +135,7 @@ def test_generic_network_complete_views_never_repeat_completed_stats(tmp_path, m
         validate_network_view_proof(root / "presentation/network-inputs.json", [], proof["contrasts"])
 
 
-def _two_contrast_network_collection(tmp_path):
+def _two_contrast_network_collection(tmp_path, *, legacy_status=False):
     """Two independent six-sample completed fixtures, not discovery runs."""
     from katana_next.reports.network_views import matched_module_associations
     tasks, products, contrasts, sources = [], {}, [], []
@@ -149,7 +149,7 @@ def _two_contrast_network_collection(tmp_path):
         chosen = [sample for sample in sample_ids if sample in wanted]
         identity = {"network_scope": "contrast", "contrast_ids": [cid], "sample_ids": chosen,
                     "biological_sample_ids": chosen, "n_samples": 6, "minimum_network_samples": 6,
-                    "sample_size_status": "small_sample_exploratory"}
+                    "sample_size_status": "small_sample_exploratory" if legacy_status else "minimum_met"}
         fit = source / "fit-engine"
         samples = pd.read_csv(fit / "02_matrix/sample_metadata_resolved.tsv", sep="\t")
         samples = samples[samples.sample_id.isin(chosen)]
@@ -182,10 +182,11 @@ def _two_contrast_network_collection(tmp_path):
     return (*_fixture_collection(tmp_path / "collection", project, tasks, products), sources)
 
 
-def test_two_contrast_networks_reach_seven_chapter_report_without_collapsing(tmp_path, monkeypatch):
+@pytest.mark.parametrize("legacy_status", [False, True])
+def test_two_contrast_networks_reach_seven_chapter_report_without_collapsing(tmp_path, monkeypatch, legacy_status):
     from katana_next.reports.engine import Builder, ASSET_ROOT
     from katana_next.reports.sources import load_source
-    plan, receipts, transport, sources = _two_contrast_network_collection(tmp_path)
+    plan, receipts, transport, sources = _two_contrast_network_collection(tmp_path, legacy_status=legacy_status)
     before = {str(path): file_hash(path) for source in sources for path in source.rglob("*") if path.is_file()}
     def forbidden(*args, **kwargs):
         raise AssertionError("Completed independent network statistics cannot be fitted again by reporting")
@@ -232,7 +233,9 @@ def test_two_contrast_networks_reach_seven_chapter_report_without_collapsing(tmp
     html = (output / "REPORT.html").read_text(encoding="utf-8")
     assert all(f'id="chapter-{chapter}"' in html for chapter in range(1, 8))
     assert 'data-contrast="B_vs_A"' in html and 'data-contrast="C_vs_A"' in html
-    assert "Small-sample exploratory network" in html
+    assert "exploratory" not in html.lower()
+    assert "6 declared biological samples" in html
+    assert all(p["metadata"]["interpretation_status"] == "minimum_met" for p in panels)
     assert before == {str(path): file_hash(path) for source in sources for path in source.rglob("*") if path.is_file()}
     # A valid completed receipt from the other fit is still the wrong lifecycle.
     first, second = (json.loads(path.read_text()) for path in proof_paths)

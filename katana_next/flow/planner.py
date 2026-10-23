@@ -130,7 +130,7 @@ def create_plan(project, config):
         if "network_scope" in params and params["network_scope"] != network_scope:
             raise ValueError("network.scope conflicts with network.parameters.network_scope")
         params.update(network_scope=network_scope, contrast_ids=comparison_ids)
-        identity = network_scope_identity(manifest, params)
+        identity = network_scope_identity(manifest, params, preserve_recorded_status=False)
         params.update(identity)
         suffix = "-" + _token(comparison_ids[0]) if network_scope == "contrast" else ""
         fit_id = "network-fit" + suffix
@@ -158,6 +158,8 @@ def create_plan(project, config):
 
     mapp = settings.get("mapp", {})
     mapp_inputs = resource_inputs(mapp.get("inputs", {}))
+    from .bundled_runtime import mapp_input_defaults
+    mapp_inputs = mapp_input_defaults(mapp_inputs)
     if mapp_inputs.get("inclusion_table"):
         if len(contrasts) != 1:
             raise ValueError("Explicit prepared MAEI inputs require one exact selected comparison; use project-derived inputs for multiple comparisons")

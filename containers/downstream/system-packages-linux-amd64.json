@@ -1,0 +1,35 @@
+{
+  "schema": "katana.container_system_packages/v1",
+  "platform": "linux/amd64",
+  "distribution": "Debian 13 (trixie)",
+  "base_image": "mambaorg/micromamba:2.9.0@sha256:4f29a2b62a6e65ffa3dfbccb62d8a90514e95954aae52a90afaa8e7dae347bbf",
+  "metadata_source": "Debian trixie main binary-amd64 package metadata, obtained with apt-get update and apt-cache show",
+  "archive_origin": "https://deb.debian.org/debian",
+  "purpose": "Nextflow task process inspection (ps); existing base-image dependencies remain unchanged",
+  "packages": [
+    {
+      "name": "libncursesw6",
+      "version": "6.5+20250216-2",
+      "architecture": "amd64",
+      "url": "https://deb.debian.org/debian/pool/main/n/ncurses/libncursesw6_6.5+20250216-2_amd64.deb",
+      "size_bytes": 135484,
+      "sha256": "47baa2e11579583654583a066b69bd5a5d2f22423081f707ed6c0c3ba6d538b7"
+    },
+    {
+      "name": "libproc2-0",
+      "version": "2:4.0.4-9",
+      "architecture": "amd64",
+      "url": "https://deb.debian.org/debian/pool/main/p/procps/libproc2-0_4.0.4-9_amd64.deb",
+      "size_bytes": 65596,
+      "sha256": "c9d61caab1b2ddfc3f17edb95be31b9809fcb2daf27d853dff615bc4ebd08b4b"
+    },
+    {
+      "name": "procps",
+      "version": "2:4.0.4-9",
+      "architecture": "amd64",
+      "url": "https://deb.debian.org/debian/pool/main/p/procps/procps_4.0.4-9_amd64.deb",
+      "size_bytes": 882088,
+      "sha256": "4db90bb6776772fc52585d6b1fbfc52ec2a85480e1b4363b743fbb2ffa2a5375"
+    }
+  ]
+}

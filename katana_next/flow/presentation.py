@@ -288,14 +288,13 @@ def build_presentation_assets(root, plan, receipts, transport):
             if identity:
                 artifact["artifact_id"] += "-" + canonical_hash(identity)[:16]
                 artifact["metadata"]["network_identity"] = identity
-                artifact["metadata"]["interpretation_status"] = identity["sample_size_status"]
+                artifact["metadata"]["interpretation_status"] = "minimum_met"
             if display_contrast:
                 artifact["contrast_ids"] = [display_contrast]
                 artifact["name"] += " | " + display_contrast
                 artifact["metadata"]["caption"] += (f" Independent {display_contrast} network; "
                     f"{identity['n_samples']} declared biological samples. "
-                    + ("Small-sample exploratory network; bootstrap is not independent validation."
-                       if identity["sample_size_status"] == "small_sample_exploratory" else ""))
+                    "Actual bootstrap diagnostics and continuous membership measures are retained.")
                 for link in artifact["metadata"].get("data_links", []):
                     link["contrast_id"] = display_contrast
         for entry in rendered["unavailable"]:

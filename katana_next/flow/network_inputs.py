@@ -13,7 +13,7 @@ from katana_cosplice.utils import normalize_sample_id
 from katana_next.infrastructure.manifest_store import ManifestStore
 
 
-def network_scope_identity(manifest, parameters):
+def network_scope_identity(manifest, parameters, *, preserve_recorded_status=True):
     """Bind a discovery to its exact biological samples, independently of labels.
 
     Missing scope is the historical cohort contract. New flow plans explicitly
@@ -41,11 +41,18 @@ def network_scope_identity(manifest, parameters):
     minimum = 6 if scope == "contrast" else 15
     if len(samples) < minimum:
         raise ValueError(f"{scope} network requires at least {minimum} independent biological samples")
+    legacy_status = "small_sample_exploratory" if len(samples) < 15 else "standard_sample_count"
+    recorded_status = parameters.get("sample_size_status")
+    # An older sealed task must retain its exact identity for verified reuse.
+    # New plans use a neutral eligibility value, with actual n recorded beside it.
+    status = legacy_status if preserve_recorded_status and recorded_status == legacy_status else "minimum_met"
     identity = {"network_scope": scope, "contrast_ids": contrasts,
                 "sample_ids": sample_ids, "biological_sample_ids": biological_ids,
                 "n_samples": len(samples), "minimum_network_samples": minimum,
-                "sample_size_status": "small_sample_exploratory" if len(samples) < 15 else "standard_sample_count"}
+                "sample_size_status": status}
     for key, value in identity.items():
+        if key == "sample_size_status" and not preserve_recorded_status and recorded_status == legacy_status:
+            continue
         if key in parameters and parameters[key] != value:
             raise ValueError(f"Network {key} disagrees with the declared project scope")
     return identity

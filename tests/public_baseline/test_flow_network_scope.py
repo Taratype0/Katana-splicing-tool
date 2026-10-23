@@ -34,7 +34,7 @@ def test_two_comparisons_have_independent_fit_and_followups(study):
         assert fit["scope"]["contrast_ids"] == [cid]
         assert set(fit["parameters"]["sample_ids"]) == expected
         assert fit["parameters"]["n_samples"] == 10
-        assert fit["parameters"]["sample_size_status"] == "small_sample_exploratory"
+        assert fit["parameters"]["sample_size_status"] == "minimum_met"
         children = [t for t in plan["tasks"] if t.get("adapter", "").startswith("network.") and t["dependencies"] == [fit["id"]]]
         assert {t["adapter"] for t in children} == {"network.bootstrap", "network.associate", "network.annotate"}
         assert all(t["parameters"] == fit["parameters"] for t in children)
@@ -85,7 +85,7 @@ def test_native_projection_contains_only_its_contrast_and_preserves_sources(stud
     assert all(file_sha256(path) == digest for path, digest in originals.items())
 
 
-def test_six_samples_exploratory_and_five_rejected_without_changing_legacy(study):
+def test_six_samples_formal_and_five_rejected_without_changing_legacy(study):
     _, manifest = ManifestStore().load(study)
     contrast = manifest.contrasts[0]
     arms = {name: getattr(contrast, name).model_copy(update={"sample_ids": getattr(contrast, name).sample_ids[:3]})
@@ -95,13 +95,27 @@ def test_six_samples_exploratory_and_five_rejected_without_changing_legacy(study
     parameters = {"network_scope": "contrast", "contrast_ids": [six.contrast_id]}
     identity = network_scope_identity(scoped, parameters)
     assert identity["n_samples"] == 6
-    assert identity["sample_size_status"] == "small_sample_exploratory"
+    assert identity["sample_size_status"] == "minimum_met"
     five = six.model_copy(update={"numerator": six.numerator.model_copy(update={"sample_ids": six.numerator.sample_ids[:2]})})
     with pytest.raises(ValueError, match="at least 6"):
         network_scope_identity(scoped.model_copy(update={"contrasts": (five,)}), parameters)
     with pytest.raises(ValueError, match="sample_ids disagrees"):
         network_scope_identity(scoped, {**identity, "sample_ids": identity["sample_ids"][:-1]})
     assert NetworkConfig().minimum_network_samples == 15
+
+
+def test_recorded_old_identity_is_readable_but_new_plans_have_neutral_status(study):
+    _, manifest = ManifestStore().load(study)
+    cid = manifest.contrasts[0].contrast_id
+    identity = network_scope_identity(manifest, {"network_scope": "contrast", "contrast_ids": [cid]})
+    legacy = {**identity, "sample_size_status": "small_sample_exploratory"}
+    assert network_scope_identity(manifest, legacy) == legacy
+    assert legacy["sample_size_status"] == "small_sample_exploratory"  # Original record unchanged.
+    with pytest.raises(ValueError, match="sample_size_status disagrees"):
+        network_scope_identity(manifest, {**legacy, "sample_size_status": "validated_stable"})
+    plan = create_plan(study, {"contrast_ids": [cid], "network": {"parameters": legacy}})
+    assert all(t["parameters"]["sample_size_status"] == "minimum_met"
+               for t in plan["tasks"] if t.get("adapter", "").startswith("network."))
 
 
 def test_external_config_cannot_hide_foreign_samples_or_source_vectors(study, tmp_path):

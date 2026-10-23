@@ -7,8 +7,9 @@ official nf-core release. It does not run single-cell FASTQ processing.
 
 ## Run
 
-Install the Katana development package and the declared analysis dependencies
-in the execution environment. Nextflow requires Java 17 or newer and a Linux
+Choose the [tested downstream image or standalone environment](../docs/RUNTIME_ENVIRONMENTS.md).
+Container runs require Nextflow and the selected container engine on the host;
+the downstream Python and R tools are supplied by the image. Nextflow requires Java 17 or newer and a Linux
 execution environment (a Linux server, Linux workstation or an explicitly
 configured Linux environment on Windows). The Python package's native Windows
 interfaces are separate from this Nextflow execution requirement.
@@ -21,6 +22,7 @@ nextflow run ./pipeline \
   --input samples.csv --contrasts contrasts.csv \
   --fasta genome.fa --gtf annotation.gtf \
   --project_template configuration/project-template.json --flow_config configuration/flow.json \
+  --katana_container /path/to/katana-downstream.sif \
   --outdir results -profile slurm,singularity
 ```
 
@@ -50,6 +52,33 @@ QoS and cluster policies determine admission. Set `--slurm_account` and
 `docker`, `singularity`, `apptainer` and `conda` profiles are independent choices;
 a container profile requires an available Katana image via
 `--katana_container`. No unpublished image is assumed to exist.
+Container-enabled downstream/complete runs fail before submission if that full
+runtime image is unspecified; they never silently use the host Python.
+Use the [container build helper](../containers/downstream/README.md) with the
+accepted wheel and dependency locks, then pass the actual image (a Docker tag,
+registry digest or converted SIF as appropriate for the selected engine). The development
+tag is a local build name, not a claim that an image has been published.
+
+All Katana stages use the full image by default. An advanced site configuration
+can override an execution group with
+`params.katana_stage_containers = [network_fit: 'your-tested-image', mapp: 'your-tested-maei-image']`.
+Control/preflight still require the full runtime; each scientific task also runs
+`katana-flow runtime-check` inside its selected image before calculation. This
+checks Python imports, the relevant R namespaces and declared worker runtime,
+and writes `runtime-<task-id>.json`. A failed probe prevents that calculation.
+The probe does not run a model or establish scientific completion.
+Container tasks clear inherited Python/R library overrides and restrict selected
+Python, Rscript, RSeQC executables and explicit R library directories to the
+fixed image environment `/opt/conda`. The container launcher must be `katana-flow`
+or `/opt/conda/bin/katana-flow`; an interpreter cannot declare its own host prefix
+to be the image runtime. Absolute paths to mounted host Conda tools
+are rejected before calculation, including project metadata and FIMO worker
+configuration. Singularity/Apptainer Katana tasks use `--cleanenv`; the same
+checks apply when calling `katana-flow task` directly in the image. Input data
+and reference paths remain ordinary mounted resources. A standalone installation
+can still explicitly select a separate installed native runtime.
+Upstream module containers remain unchanged. Standalone downstream users can
+install the documented Conda environment without using Nextflow or Docker.
 
 Keep the configuration and its relative resource files in a dedicated
 configuration directory. The workflow stages that directory and the project

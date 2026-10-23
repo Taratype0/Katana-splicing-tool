@@ -5,7 +5,6 @@ import pandas as pd
 
 from katana_next.workflows.base import WorkflowBase, WorkflowDefinition, ParameterDefinition, ArtifactWriter
 from katana_next.science.dexseq_interaction import read_design
-from katana_cosplice.benchmark import _r_subprocess_env
 
 
 class DexseqInteractionWorkflow(WorkflowBase):
@@ -44,9 +43,9 @@ class DexseqInteractionWorkflow(WorkflowBase):
         if parameters.get("selection_id") or parameters.get("contrast_ids"):
             raise ValueError("Use the explicit four-group design, not event selection or arbitrary comparison pairs")
         _, frame = self._inputs(context, parameters)
-        rscript = Path(str(context.manifest.metadata.get("rscript_path", "")))
-        if not rscript.is_file():
-            raise ValueError("Configure an Rscript runtime with official DEXSeq")
+        from katana_next.flow.stages import _executable, _r_environment
+        rscript = _executable(context.manifest.metadata.get("rscript_path"), "Rscript")
+        r_environment = _r_environment(rscript, parameters)
         writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version,
             common_metadata={"method":self.definition.method,"limitations":self.definition.limitations,
                 "analysis_unit":"exon_bin","reference":"https://doi.org/10.1038/ncomms14060",
@@ -59,7 +58,7 @@ class DexseqInteractionWorkflow(WorkflowBase):
             str(parameters.get("r_library", "")),str(parameters["min_reads"]),str(parameters["min_replicates"])]
         job.report(.05,"DEXSeq: validating design and fitting count model")
         with (directory/"DEXSeq.stdout.log").open("w") as stdout, (directory/"DEXSeq.stderr.log").open("w") as stderr:
-            process = subprocess.Popen(command,stdout=stdout,stderr=stderr,env=_r_subprocess_env(rscript))
+            process = subprocess.Popen(command,stdout=stdout,stderr=stderr,env=r_environment)
             try:
                 while process.poll() is None:
                     job.check_cancelled()

@@ -45,19 +45,24 @@ def _sha(path: Path) -> str:
 
 
 def _executable(value: Any, default: str) -> str:
+    from .container_runtime import require_image_path
     name = str(value or default)
     executable = shutil.which(name)
     if executable:
         # Preserve a venv's lexical bin/python path: resolving its symlink
         # before invocation would select the base environment instead.
-        return str(Path(executable).absolute())
+        return require_image_path(Path(executable).absolute(), "executable")
     candidate = Path(name).expanduser()
     if candidate.is_file() and (os.name == "nt" or os.access(candidate, os.X_OK)):
-        return str(candidate.absolute())
+        return require_image_path(candidate.absolute(), "executable")
     raise ValueError(f"Executable is unavailable: {name}")
 
 
 def _r_environment(rscript, parameters):
+    from .container_runtime import sanitize_container_environment, validate_runtime_settings, require_image_path
+    sanitize_container_environment()
+    require_image_path(rscript, "Rscript")
+    validate_runtime_settings(parameters)
     from katana_cosplice.benchmark import _r_subprocess_env
     env = _r_subprocess_env(rscript)
     libraries = parameters.get("r_libraries")
@@ -97,6 +102,8 @@ def _require_r_packages(rscript, packages, parameters):
 @contextmanager
 def _network_r_libraries(parameters):
     """One isolated headless process; preserve the caller's R library setting."""
+    from .container_runtime import validate_runtime_settings
+    validate_runtime_settings(parameters)
     if not parameters.get("r_library") and not parameters.get("r_libraries"):
         yield
         return
@@ -123,6 +130,15 @@ def readiness(spec: dict) -> list[str]:
     Computed dependency paths can be declared later by the scheduler.  Scientific
     table contents are validated again immediately before native execution.
     """
+    from .bundled_runtime import resolve_bundled_stage
+    from .container_runtime import in_container, validate_task_runtime_boundaries
+    try:
+        project_path = spec.get("inputs", {}).get("project")
+        project = json.loads(Path(project_path).read_text(encoding="utf-8-sig")) if in_container() and project_path else None
+        validate_task_runtime_boundaries(spec, project=project, project_path=project_path)
+        spec = resolve_bundled_stage(spec)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return [str(exc)]
     adapter = _adapter(spec)
     issues: list[str] = []
     inputs = spec.get("inputs") or {}
@@ -344,6 +360,8 @@ def execute_stage(spec: dict, output_dir: str | Path) -> dict:
     rejected: resume is performed using a verified scheduler receipt, never by
     assuming that partially written files imply success.
     """
+    from .bundled_runtime import resolve_bundled_stage
+    spec = resolve_bundled_stage(spec)
     if spec.get("readiness_deferred_inputs") or spec.get("readiness_deferred_parameters"):
         raise ValueError("Resolve dependency inputs before executing a scientific stage")
     if _adapter(spec) == "qc.sequencing":
@@ -393,7 +411,7 @@ def execute_stage(spec: dict, output_dir: str | Path) -> dict:
     if identity:
         for record in records:
             metadata = record.setdefault("metadata", {})
-            metadata.update(network_identity=identity, interpretation_status=identity["sample_size_status"])
+            metadata.update(network_identity=identity, interpretation_status="minimum_met")
             if identity["network_scope"] == "contrast":
                 metadata["data_links"] = [{**link, "contrast_id": identity["contrast_ids"][0]}
                                           for link in metadata.get("data_links", [])]
@@ -651,7 +669,7 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
     projection = None
     manifest = None
     identity = None
-    # Only new explicitly scoped flow tasks use the six-sample exploratory
+    # Only new explicitly scoped flow tasks use the six-sample comparison
     # contract. Old sealed tasks and standalone CoSplice retain their contract.
     if "network_scope" in parameters:
         from .network_inputs import network_scope_identity, verify_network_engine_scope
@@ -712,6 +730,11 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
             resources = out / "network_resources"; resources.mkdir()
             configure_interpretation_resources(config,manifest,resources)
             config.gene_exclusion = dict(manifest.metadata.get("gene_filter") or {})
+    if adapter in {"network.fit", "network.bootstrap"}:
+        # Persist the same PATH resolution used by readiness. The native engine
+        # receives a concrete executable, not a bare command interpreted as a file.
+        config.network.wgcna_rscript = _executable(
+            parameters.get("rscript") or config.network.wgcna_rscript, "Rscript")
     config.validate()
     resolved = write_production_configuration(config, out / "resolved_network.yaml")
     pipeline = CoSplicePipeline(config)
@@ -767,7 +790,7 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
             "analysis_id": "programs.cosplice"}
     if identity:
         evidence["network_identity"] = identity
-        evidence["interpretation_status"] = identity["sample_size_status"]
+        evidence["interpretation_status"] = "minimum_met"
     if adapter in {"network.associate", "network.annotate"}:
         evidence["precomputed_views"] = precomputed
     if projection:

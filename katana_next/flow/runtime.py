@@ -419,6 +419,9 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
     from katana_next import __version__
     from katana_next.client import KatanaProject
     plan_location, plan, task, manifest_path = load_plan_task(plan_path, task_id, project_path)
+    from .container_runtime import validate_task_runtime_boundaries
+    validate_task_runtime_boundaries(task, project=json.loads(Path(manifest_path).read_text(encoding="utf-8-sig")),
+                                     project_path=manifest_path)
     manifest_sha = file_hash(manifest_path)
     expected = plan.get("project_manifest_sha256", plan.get("source_project_manifest_sha256"))
     if expected and expected != manifest_sha:
@@ -543,6 +546,8 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
                         if len(prepared) != 1:
                             raise ValueError("Native MAPP fit needs one verified prepared quantity family")
                         effective_task.setdefault("inputs", {}).update(prepared[0])
+                from .bundled_runtime import resolve_bundled_stage
+                effective_task = resolve_bundled_stage(effective_task)
                 receipt["effective_task"] = effective_task
                 paths = []
                 def declared_paths(value):

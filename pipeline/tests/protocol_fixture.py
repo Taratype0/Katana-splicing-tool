@@ -31,6 +31,12 @@ def main() -> None:
     task.add_argument("--task-id", required=True)
     task.add_argument("--outdir", type=Path, required=True)
     task.add_argument("--dependency-receipts", nargs="*", type=Path, default=[])
+    runtime = sub.add_parser("runtime-check")
+    runtime.add_argument("--plan", type=Path, required=True)
+    runtime.add_argument("--project", type=Path, required=True)
+    runtime.add_argument("--task-id", required=True)
+    runtime.add_argument("--runtime-label")
+    runtime.add_argument("--out", type=Path, required=True)
     collect = sub.add_parser("collect")
     collect.add_argument("--plan", type=Path, required=True)
     collect.add_argument("--task-results", nargs="+", type=Path, required=True)
@@ -43,9 +49,17 @@ def main() -> None:
         document = json.loads(args.config.read_text())
         assert args.project.is_file()
         write(args.out, {"schema": "test.nextflow_transport/v1", "tasks": document["tasks"]})
+    elif args.command == "runtime-check":
+        spec = next(item for item in json.loads(args.plan.read_text())["tasks"] if item["id"] == args.task_id)
+        write(args.out, {"task_id": args.task_id, "runtime_label": args.runtime_label,
+                        "status": "failed" if spec.get("runtime_fail") else "ready", "scientific_execution": False})
+        if spec.get("runtime_fail"):
+            raise SystemExit("intentional transport-fixture runtime failure")
     elif args.command == "task":
         document = json.loads(args.plan.read_text())
         spec = next(item for item in document["tasks"] if item["id"] == args.task_id)
+        probe = json.loads(Path("runtime-" + args.task_id + ".json").read_text())
+        assert probe["task_id"] == args.task_id and probe["status"] == "ready"
         seen = {json.loads(path.read_text())["task_id"]: path for path in args.dependency_receipts}
         assert set(spec["dependencies"]).issubset(seen)
         # A staged dependency needs its output payload, not only a detached receipt.

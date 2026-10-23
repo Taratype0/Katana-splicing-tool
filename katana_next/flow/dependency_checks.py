@@ -76,6 +76,9 @@ def _import_probe(executable, executable_identity, modules, environment):
 
 def require_python_imports(executable, modules):
     """Test real imports, including binary/transitive failures, without fitting."""
+    from .container_runtime import sanitize_container_environment, require_image_path
+    sanitize_container_environment()
+    require_image_path(executable, "Python dependency worker")
     modules = tuple(dict.fromkeys(modules))
     if not modules:
         return str(executable)

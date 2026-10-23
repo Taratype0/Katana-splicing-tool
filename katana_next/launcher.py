@@ -21,6 +21,20 @@ _windowed_launch = False
 _launch_runtime: Path | None = None
 
 
+def default_runtime_root() -> Path:
+    """Keep per-user launcher state outside the installed Python package."""
+    home = Path.home()
+    if sys.platform == "win32":
+        configured = Path(os.environ.get("LOCALAPPDATA", ""))
+        base = configured if configured.is_absolute() else home / "AppData" / "Local"
+        return base / "Katana" / "runtime"
+    if sys.platform == "darwin":
+        return home / "Library" / "Application Support" / "Katana" / "runtime"
+    configured = Path(os.environ.get("XDG_DATA_HOME", ""))
+    base = configured if configured.is_absolute() else home / ".local" / "share"
+    return base / "katana" / "runtime"
+
+
 def prepare_launch_logging(root: Path) -> None:
     """Keep failures observable when a shortcut uses pythonw without a console."""
     global _windowed_launch, _launch_runtime
@@ -175,13 +189,14 @@ def main() -> None:
     parser.add_argument("--mode", choices=["choose", "browser", "desktop"], default="browser",
                         help="Open in a browser by default; choose and desktop are compatibility modes.")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--runtime-root", type=Path, default=Path(__file__).resolve().parents[2] / "katana-next-runs" / "launcher-runtime")
+    parser.add_argument("--runtime-root", type=Path, default=default_runtime_root(),
+                        help="Writable user state directory; defaults to the platform's user data directory.")
     parser.add_argument("--no-open", action="store_true", help="Start or check the server and print the URL without opening a window.")
     parser.add_argument("--serve", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("port must be between 1 and 65535")
-    args.runtime_root = args.runtime_root.resolve()
+    args.runtime_root = args.runtime_root.expanduser().resolve()
     prepare_launch_logging(args.runtime_root)
     from katana_next.desktop import desktop_runtime_root
     desktop_runtime_root(args.runtime_root / "desktop")

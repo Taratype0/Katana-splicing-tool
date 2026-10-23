@@ -31,6 +31,19 @@ Existing completed analysis: use downstream-only. Use -resume for this run's Nex
 Required calculations are verified before the fixed seven-section report is accepted.'''
     } else {
         if (!(params.mode in ['complete', 'upstream-only', 'downstream-only'])) error('Invalid --mode')
+        if (!(params.katana_stage_containers instanceof Map)) error('--katana_stage_containers must be a map of execution groups to images')
+        def groups = ['control', 'report', 'audit', 'quality', 'as', 'deg', 'dtu', 'landscape', 'evidence',
+                      'enrichment', 'motiftrace', 'overlap', 'reference', 'qc', 'coverage', 'network_fit',
+                      'network_followup', 'interaction', 'mapp_prepare', 'mapp']
+        if (params.katana_stage_containers.any { key, value -> !(key in groups) || !(value instanceof String) || !value.trim() }) {
+            error('Katana stage containers require known execution-group keys and nonempty image references')
+        }
+        if (params.mode != 'upstream-only' && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !params.katana_container) {
+            error('A Katana container profile requires --katana_container pointing to your built full runtime image; host fallback is disabled')
+        }
+        if (params.mode != 'upstream-only' && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !(params.flow_executable in ['katana-flow', '/opt/conda/bin/katana-flow'])) {
+            error('Container profiles require the image launcher katana-flow or /opt/conda/bin/katana-flow; mounted host launchers are not allowed')
+        }
         if (params.mode == 'complete' && params.skip_fastqc) {
             error('Complete fixed-report mode requires native sequencing FastQC. Use upstream-only for an explicitly skipped QC stage.')
         }

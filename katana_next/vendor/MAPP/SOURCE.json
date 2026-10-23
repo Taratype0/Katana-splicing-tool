@@ -1,0 +1,74 @@
+{
+  "schema": "katana.bundled_native_source/v1",
+  "project": "MAPP",
+  "repository": "https://github.com/gruber-sciencelab/MAPP",
+  "commit": "6ad6e12275e6d7aa1254d1a8933cfbce6766b16c",
+  "license": "Per-file Apache-2.0, GPL-3.0 and GPL-2.0-or-later; original headers retained",
+  "scope": "Original MAEI author model and kmer counter only; not the full MAPP pipeline",
+  "modified": false,
+  "files": [
+    {
+      "path": "LICENSE",
+      "size_bytes": 11362,
+      "sha256": "0f18ac44c87d40e2cf512215228353272b8636be13608c00b51951a1dc82c35b",
+      "url": "https://raw.githubusercontent.com/gruber-sciencelab/MAPP/6ad6e12275e6d7aa1254d1a8933cfbce6766b16c/LICENSE",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "modules/CREATE_SITECOUNT_MATRICES/scripts/create-kmers-sitecount-matrix.py",
+      "size_bytes": 5845,
+      "sha256": "d6ffd764d7dd063fbad6d6aff5921461e31267e0d5bc5a18afe7a79bd9e613a9",
+      "url": "https://raw.githubusercontent.com/gruber-sciencelab/MAPP/6ad6e12275e6d7aa1254d1a8933cfbce6766b16c/modules/CREATE_SITECOUNT_MATRICES/scripts/create-kmers-sitecount-matrix.py",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "modules/MAEI/scripts/optimize-MARA-model-parameters.R",
+      "size_bytes": 7526,
+      "sha256": "bdd809969e735e9b37510a16f3580a76375dea431ecb81c460a03cfa054d978c",
+      "url": "https://raw.githubusercontent.com/gruber-sciencelab/MAPP/6ad6e12275e6d7aa1254d1a8933cfbce6766b16c/modules/MAEI/scripts/optimize-MARA-model-parameters.R",
+      "license": "GPL-3.0"
+    },
+    {
+      "path": "modules/MAEI/scripts/model.cpp",
+      "size_bytes": 14415,
+      "sha256": "d1130ba988e2f3fb85c140ed5b7df8715b6a8b204176feb2eecaf773b98c4f28",
+      "url": "https://raw.githubusercontent.com/gruber-sciencelab/MAPP/6ad6e12275e6d7aa1254d1a8933cfbce6766b16c/modules/MAEI/scripts/model.cpp",
+      "license": "GPL-3.0"
+    },
+    {
+      "path": "modules/MAEI/scripts/optim.c",
+      "size_bytes": 5714,
+      "sha256": "f83f96da7c58eb7142a2c61cfb633d900596fa32d562696cf48bf2b2fd57a8dc",
+      "url": "https://raw.githubusercontent.com/gruber-sciencelab/MAPP/6ad6e12275e6d7aa1254d1a8933cfbce6766b16c/modules/MAEI/scripts/optim.c",
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "path": "modules/MAEI/scripts/zeroin.c",
+      "size_bytes": 6729,
+      "sha256": "8c773407d39c04bd8906885bc4dc6511016713e1179212b315f652ad76f48170",
+      "url": "https://raw.githubusercontent.com/gruber-sciencelab/MAPP/6ad6e12275e6d7aa1254d1a8933cfbce6766b16c/modules/MAEI/scripts/zeroin.c",
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "path": "modules/MAEI/scripts/calculate-Zscores.py",
+      "size_bytes": 6128,
+      "sha256": "101171aef4cda232d75c8e75ee91018005d0ff6b991cec0c30655e1582bd29f1",
+      "url": "https://raw.githubusercontent.com/gruber-sciencelab/MAPP/6ad6e12275e6d7aa1254d1a8933cfbce6766b16c/modules/MAEI/scripts/calculate-Zscores.py",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "modules/MAEI/scripts/extend-tables.py",
+      "size_bytes": 3341,
+      "sha256": "0c8f4b5130ea6f8d23923f7f8b1e0394fc6edf20ec85d46b661f23b20b90088b",
+      "url": "https://raw.githubusercontent.com/gruber-sciencelab/MAPP/6ad6e12275e6d7aa1254d1a8933cfbce6766b16c/modules/MAEI/scripts/extend-tables.py",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "modules/MAEI/scripts/calculate_Zscores_statistical_significancy.R",
+      "size_bytes": 9540,
+      "sha256": "4bf7a65430bd096e2d60a82b96fba743577505a2bf9b81768354271df85d99f6",
+      "url": "https://raw.githubusercontent.com/gruber-sciencelab/MAPP/6ad6e12275e6d7aa1254d1a8933cfbce6766b16c/modules/MAEI/scripts/calculate_Zscores_statistical_significancy.R",
+      "license": "Apache-2.0"
+    }
+  ]
+}

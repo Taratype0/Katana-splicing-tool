@@ -24,12 +24,15 @@ sample count and scope. These fields participate in plan and task identities;
 an older cohort fit cannot be reused as an independent comparison fit.
 
 At least six independent biological samples are required for this flow mode.
-Networks with 6–14 samples are explicitly labelled `small_sample_exploratory` in
-the reproducible parameters, output scope record and execution evidence.
-This lower bound allows exploration; it is not a claim that six samples establish
-stable biological modules. Bootstrap and continuous confidence metrics remain
-available. Technical copies cannot increase the biological sample count.
+This is a supported formal execution mode. New task identities record the
+neutral eligibility value `minimum_met` together with the actual sample count;
+they do not classify the analysis as exploratory based on sample count.
+Actual bootstrap diagnostics, continuous membership metrics and native P/FDR
+remain in the outputs. Six samples meeting the execution minimum does not itself
+establish module stability. Technical copies cannot increase biological n.
 The standalone CoSplice default remains 15 samples. No frozen plan is rewritten.
+Older recorded scope identities remain readable for exact result verification;
+new plans and report labels use the current neutral contract.
 
 Every module ID is local to its discovery. For example, `M001` from two contrasts
 does not establish that these are the same module. Original condition-association

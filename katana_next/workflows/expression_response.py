@@ -5,7 +5,6 @@ import subprocess
 import time
 import pandas as pd
 from katana_next.workflows.base import WorkflowBase, WorkflowDefinition, ParameterDefinition, ArtifactWriter
-from katana_cosplice.benchmark import _r_subprocess_env
 
 
 class ExpressionResponseWorkflow(WorkflowBase):
@@ -48,10 +47,11 @@ class ExpressionResponseWorkflow(WorkflowBase):
 
     def run(self, context, job, run_fingerprint, parameters):
         c=self._config(context,parameters)
+        from katana_next.flow.stages import _executable, _r_environment
+        r = _executable(context.manifest.metadata.get('rscript_path'), 'Rscript')
+        r_environment = _r_environment(r, c)
         writer=ArtifactWriter(context,self.definition.workflow_id,run_fingerprint,parameters,self.version,
             common_metadata={'method':self.definition.method,'limitations':self.definition.limitations,'design_labels':c.get('labels',{}),'interpretation_limit':c.get('interpretation_limit','')})
-        r=Path(str(context.manifest.metadata.get('rscript_path','')))
-        if not r.is_file(): raise ValueError('Configure Rscript')
         writer.directory.mkdir(parents=True,exist_ok=True)
         cmd=[str(r),str(Path(__file__).parents[1]/'science/expression_response.R'),c['design'],c['tximport'],c['gene_names'],c['gmt'],str(writer.directory),c.get('r_library',''),str(c.get('seed',20260925))]
         if context.manifest.metadata.get('gene_filter'):
@@ -59,7 +59,7 @@ class ExpressionResponseWorkflow(WorkflowBase):
             rules, policy = expression_filter_rules(context, writer.directory/'downstream_gene_exclusion_rules.tsv')
             cmd.extend([str(rules), policy])
         with (writer.directory/'stdout.log').open('w') as stdout, (writer.directory/'stderr.log').open('w') as stderr:
-            process=subprocess.Popen(cmd,env=_r_subprocess_env(r),stdout=stdout,stderr=stderr)
+            process=subprocess.Popen(cmd,env=r_environment,stdout=stdout,stderr=stderr)
             try:
                 while process.poll() is None:
                     job.check_cancelled();time.sleep(1)

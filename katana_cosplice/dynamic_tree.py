@@ -6,6 +6,7 @@ import dynamicTreeCut.df_apply as _df_apply
 import dynamicTreeCut.dynamicTreeCut as _dynamic_tree_module
 from dynamicTreeCut import cutreeHybrid
 from scipy.spatial.distance import squareform
+from scipy.stats import rankdata as _scipy_rankdata
 
 
 # dynamicTreeCut 0.1.1 imports this helper module but references it through an
@@ -13,6 +14,28 @@ from scipy.spatial.distance import squareform
 # fix local to Katana rather than mutating the installed package on disk.
 if not hasattr(_dynamic_tree_module, "df_apply"):
     _dynamic_tree_module.df_apply = _df_apply
+
+
+def _rankdata_for_dynamic_tree_cut(values, method="average", *args, **kwargs):
+    """Restore integer ordinal indices expected by dynamicTreeCut 0.1.1.
+
+    Recent SciPy returns floating-point ordinal ranks. Their numeric ordering
+    is unchanged, but this older package uses those ranks as NumPy indices.
+    Other ranking methods must retain their original values and dtype.
+    """
+    ranks = _scipy_rankdata(values, method, *args, **kwargs)
+    if method != "ordinal":
+        return ranks
+    array = np.asarray(ranks)
+    if (not np.all(np.isfinite(array)) or not np.all(array == np.floor(array))
+            or np.any(array < 1) or np.any(array > np.size(values))):
+        raise ValueError("Dynamic Tree Cut received invalid ordinal rank indices")
+    return array.astype(np.intp)
+
+
+# Confine the compatibility binding to this dependency's namespace; do not
+# modify scipy.stats.rankdata or any installed source files.
+_dynamic_tree_module.rankdata = _rankdata_for_dynamic_tree_cut
 
 
 def dynamic_tree_cut_labels(

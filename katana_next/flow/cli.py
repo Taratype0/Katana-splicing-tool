@@ -1,6 +1,9 @@
 """One execution entrypoint for Nextflow tasks and the final report gate."""
 from __future__ import annotations
 
+from .container_runtime import sanitize_container_environment
+sanitize_container_environment()
+
 import argparse
 from contextlib import redirect_stdout
 import json
@@ -35,6 +38,9 @@ def template_preflight(template_path, config_path):
     for adapter, options in (("network.fit", config.get("network", {})),
                              (config.get("mapp", {}).get("adapter", "mapp.maei"), config.get("mapp", {}))):
         inputs = options.get("inputs", {})
+        if adapter in {"mapp.prepare", "mapp.maei"}:
+            from .bundled_runtime import mapp_input_defaults
+            inputs = mapp_input_defaults(inputs)
         if adapter == "network.fit":
             # Raw-study network inputs will be generated from the verified
             # imported manifest rather than guessed future work-directory paths.
@@ -151,6 +157,12 @@ def main(argv=None):
     command.add_argument("--project", type=Path)
     command.add_argument("--outdir", required=True, type=Path)
     command.add_argument("--dependency-receipts", nargs="*", default=[], type=Path)
+    command = sub.add_parser("runtime-check", help="Probe the selected task runtime without starting analysis")
+    command.add_argument("--plan", required=True, type=Path)
+    command.add_argument("--task-id", required=True)
+    command.add_argument("--project", required=True, type=Path)
+    command.add_argument("--runtime-label")
+    command.add_argument("--out", required=True, type=Path)
     command = sub.add_parser("collect")
     command.add_argument("--plan", required=True, type=Path)
     command.add_argument("--project", type=Path)
@@ -204,6 +216,12 @@ def main(argv=None):
                 from .task import execute_task
                 options = {"project_path": args.project} if args.project else {}
                 result = execute_task(args.plan, args.task_id, args.outdir, dependency_receipts=args.dependency_receipts, **options)
+            elif args.action == "runtime-check":
+                from .runtime_checks import check_task_runtime
+                if args.out.exists():
+                    raise ValueError("Refusing to overwrite an existing runtime probe receipt")
+                result = check_task_runtime(args.plan, args.task_id, project_path=args.project, runtime_label=args.runtime_label)
+                write_json(args.out, result)
             elif args.action == "collect":
                 from .collect import collect_results
                 options = {"project_path": args.project} if args.project else {}
@@ -213,7 +231,7 @@ def main(argv=None):
         if isinstance(result, Path):
             result = {"receipt": str(result)}
         print(json.dumps(result, ensure_ascii=True, indent=2, default=str))
-        return 2 if args.action == "preflight" and not result["ready"] else 0
+        return 2 if (args.action == "preflight" and not result["ready"]) or (args.action == "runtime-check" and result["status"] != "ready") else 0
     except (ValueError, OSError, KeyError, RuntimeError, ImportError, TypeError) as exc:
         print(json.dumps({"schema": "katana.flow.error/v1", "status": "failed", "error": str(exc)}), file=sys.stderr)
         return 1

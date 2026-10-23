@@ -1,3 +1,9 @@
+def containerRuntimePrelude(engine) {
+    return engine ? '''export KATANA_CONTAINER=1
+    unset PYTHONPATH PYTHONHOME PYTHONUSERBASE R_HOME R_LIBS R_LIBS_USER R_LIBS_SITE R_ENVIRON R_ENVIRON_USER R_PROFILE R_PROFILE_USER VIRTUAL_ENV
+    export PYTHONNOUSERSITE=1 PYTHONSAFEPATH=1''' : ''
+}
+
 process KATANA_FLOW_PREFLIGHT {
     label 'katana_control'
     input:
@@ -10,6 +16,7 @@ process KATANA_FLOW_PREFLIGHT {
     script:
     def quote = { value -> "'" + value.toString().replace("'", "'\"'\"'") + "'" }
     """
+    ${containerRuntimePrelude(workflow.containerEngine)}
     ${quote(params.flow_executable)} preflight --config ${quote(flow_config.resolve(flow_config_filename))} \\
         --project-template ${quote(project_template_root.resolve(project_template_filename))} --out preflight.json
     test -s preflight.json
@@ -30,6 +37,7 @@ process KATANA_FLOW_IMPORT {
     script:
     def quote = { value -> "'" + value.toString().replace("'", "'\"'\"'") + "'" }
     """
+    ${containerRuntimePrelude(workflow.containerEngine)}
     ${quote(params.flow_executable)} import --bundle ${quote(bundle)} \\
         --project-template ${quote(project_template_root.resolve(project_template_filename))} --outdir workspace
     test -s workspace/project.json
@@ -51,6 +59,7 @@ process KATANA_FLOW_PLAN {
     script:
     def quote = { value -> "'" + value.toString().replace("'", "'\"'\"'") + "'" }
     """
+    ${containerRuntimePrelude(workflow.containerEngine)}
     ${quote(params.flow_executable)} plan --require-ready --project ${quote(project_root.resolve(project_filename))} \\
         --config ${quote(flow_config.resolve(flow_config_filename))} --out plan.json
     test -s plan.json
@@ -73,6 +82,7 @@ process KATANA_FLOW_COLLECT {
     if (!results) error('Cannot collect an empty task plan')
     def result_args = results.collect { quote(it) }.join(' ')
     """
+    ${containerRuntimePrelude(workflow.containerEngine)}
     ${quote(params.flow_executable)} collect --plan ${quote(plan)} \\
         --task-results ${result_args} --outdir collection
     test -s collection/collection.receipt.json
@@ -91,6 +101,7 @@ process KATANA_FLOW_REPORT {
     script:
     def quote = { value -> "'" + value.toString().replace("'", "'\"'\"'") + "'" }
     """
+    ${containerRuntimePrelude(workflow.containerEngine)}
     ${quote(params.flow_executable)} report --collection ${quote(collection)} --outdir report
     test -s report/REPORT.html
     test -s report/report-manifest.json
