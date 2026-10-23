@@ -412,8 +412,17 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                                                           (source / 'NEW_CLUSTER_FWER.tsv', 'Complete cluster FWER results', 'motif_cluster')])
     ax = fig.subplots(); ax.bar(edges[:-1], counts, width=np.diff(edges), align='edge', color=BLUE)
     ax.set(xlabel='Maximum cluster mass across the complete comparison family', ylabel='Paired swaps'); save()
-    for name in (*SEQUENCE_FILES, *STAT_FILES, 'COMPLETE.json'):
-        tables.append({'name': 'Complete native MotifTrace output | ' + name, 'path': str(source / name), 'kind': 'file', 'chapter': 7})
+    # Keep the established sequence/statistical attachments first, then retain
+    # every additional member authenticated by the scientific completion
+    # manifest. Supporting RNA sequences, matching losses and replicate
+    # opportunity tables must travel with the completed results too. Never
+    # collect an unlisted sidecar merely because it exists in the directory.
+    native_paths = [source / name for name in (*SEQUENCE_FILES, *STAT_FILES)]
+    native_paths.extend(Path(row['path']) for row in evidence['members'])
+    native_paths.append(source / 'COMPLETE.json')
+    for path in dict.fromkeys(path.resolve() for path in native_paths):
+        name = path.relative_to(source).as_posix()
+        tables.append({'name': 'Complete native MotifTrace output | ' + name, 'path': str(path), 'kind': 'file', 'chapter': 7})
     tables.extend([{'name': 'Scientific completion proof', 'path': str(Path(completion_proof).resolve()), 'kind': 'file', 'chapter': 7},
                    {'name': 'MotifTrace plotting methods', 'path': str(methods), 'kind': 'file', 'chapter': 7}])
     for row in evidence['members']:

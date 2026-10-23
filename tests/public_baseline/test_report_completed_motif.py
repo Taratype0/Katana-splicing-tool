@@ -126,6 +126,70 @@ def test_complete_family_render_preserves_values_all_models_and_gaps(completed, 
     assert all(token in (out / 'ALL_MOTIF_MODELS.html').read_text() for token in ['001', 'literal', 'empty'])
 
 
+def add_scientific_member(root, proof, name='MATCHING_ALL_SELECTED_WITH_LOSSES.tsv'):
+    path = root / name
+    path.write_text('event_id\tstatus\nE1\tmatched\nE2\tno_background\n', encoding='utf-8')
+    marker = root / 'COMPLETE.json'
+    complete = json.loads(marker.read_text())
+    complete['members'][name] = {'bytes': path.stat().st_size, 'sha256': sha(path)}
+    write_json(marker, complete)
+    receipt = json.loads(proof.read_text())
+    receipt['complete_manifest']['SHA256'] = sha(marker)
+    write_json(proof, receipt)
+    return path
+
+
+def test_all_manifest_members_are_portable_attachments_without_duplicates(completed, tmp_path):
+    from katana_next.reports.engine import Builder
+
+    root, proof = completed
+    extra = add_scientific_member(root, proof)
+    unlisted = root / 'unlisted-sidecar.txt'
+    unlisted.write_text('Not authenticated by the scientific manifest.', encoding='utf-8')
+    views = render(root, proof, tmp_path / 'views')
+    native = [row for row in views['tables'] if row['name'].startswith('Complete native MotifTrace output | ')]
+    paths = [Path(row['path']) for row in native]
+    manifest_members = json.loads((root / 'COMPLETE.json').read_text())['members']
+    assert set(paths) == {root / name for name in manifest_members} | {root / 'COMPLETE.json'}
+    assert len(paths) == len(set(paths)) == len(manifest_members) + 1
+    assert paths[:len(SEQUENCE_FILES) + len(STAT_FILES)] == [root / name for name in (*SEQUENCE_FILES, *STAT_FILES)]
+    assert extra in paths and unlisted not in paths
+    assert all(row['kind'] == 'file' and row['chapter'] == 7 for row in native)
+
+    output = tmp_path / 'portable'
+    output.mkdir()
+    builder = Builder({'project': {}}, output, 'stable_significant')
+    builder.add_views({'tables': native})
+    exported = {row['name']: output / row['source'] for row in builder.tables}
+    assert len(exported) == len(native)
+    for row in native:
+        assert exported[row['name']].is_relative_to(output)
+        assert exported[row['name']].read_bytes() == Path(row['path']).read_bytes()
+
+
+@pytest.mark.parametrize('fault', ['missing', 'changed_hash', 'outside_manifest_root'])
+def test_additional_authenticated_member_must_verify_before_render(completed, tmp_path, fault):
+    root, proof = completed
+    extra = add_scientific_member(root, proof)
+    if fault == 'missing':
+        extra.unlink()
+    elif fault == 'changed_hash':
+        extra.write_text('corrupted', encoding='utf-8')
+    else:
+        outside = root.parent / 'outside.tsv'
+        outside.write_bytes(extra.read_bytes())
+        marker = root / 'COMPLETE.json'
+        complete = json.loads(marker.read_text())
+        complete['members']['../outside.tsv'] = complete['members'].pop(extra.name)
+        write_json(marker, complete)
+        receipt = json.loads(proof.read_text())
+        receipt['complete_manifest']['SHA256'] = sha(marker)
+        write_json(proof, receipt)
+    with pytest.raises(ValueError, match='MotifTrace member'):
+        render(root, proof, tmp_path / 'rejected-extra')
+    assert not (tmp_path / 'rejected-extra').exists()
+
+
 def test_no_eligible_example_is_explicit_not_fabricated(completed, tmp_path):
     root, proof = completed
     views = render(root, proof, tmp_path / 'tiny-display', example_max_nt=1)

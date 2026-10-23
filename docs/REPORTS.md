@@ -116,6 +116,11 @@ their comparison, module, method and model identities. Local dependencies are
 copied into the portable package; original files remain unchanged. Unrun CLIP,
 MAPP, external preservation or other optional analyses are identified explicitly.
 
+For a verified completed MotifTrace family, the output files include every
+member of its scientific completion manifest, including supporting RNA
+sequences, matching records and per-replicate opportunity tables. Files that
+are not listed in that manifest are not collected as scientific results.
+
 QC can be rendered from completed FastQC, Trim Galore and STAR outputs. Absent
 5-prime/3-prime or coverage measurements are recorded as unavailable; no new
 read processing is started to fill a report panel.
