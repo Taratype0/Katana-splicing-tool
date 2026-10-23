@@ -91,6 +91,28 @@ def test_native_dexseq_csv_preserves_exons_and_separate_gene_screen(tmp_path):
     assert len(json.loads((project.parent / 'import.receipt.json').read_text())['format_projections']) == 1
 
 
+def test_stager_confirmation_is_not_replaced_or_duplicated_by_native_dtu(tmp_path):
+    from types import SimpleNamespace
+    from katana_next.infrastructure.manifest_store import ManifestStore
+    from katana_next.science.bulk import load_dtu_results
+    root, manifest, template = bundle(tmp_path)
+    for kind, name, content in [
+        ('dtu', 'DEXSeqResults.tsv', 'groupID\tfeatureID\tpadj\ng1\tt1\t0.001\n'),
+        ('stager', 'getAdjustedPValues.tsv', 'geneID\ttxID\tgene\ttranscript\ng1\tt1\t0.002\t0.3\n')]:
+        path = root / name; path.write_text(content)
+        manifest['artifacts'].append({'kind':kind,'relative_path':name,'comparison_id':'B_vs_A',
+            'status':'available','bytes':path.stat().st_size,'sha256':file_sha256(path)})
+    write_json(root/'manifest.json',manifest)
+    project = import_bundle(root, template, tmp_path/'imported')
+    _, imported = ManifestStore().load(project)
+    assert len([a for a in imported.assets if a.kind == 'dtu_result']) == 1
+    assert len([a for a in imported.assets if a.kind == 'dtu_native_test_result']) == 1
+    frame = load_dtu_results(SimpleNamespace(manifest=imported), ['B_vs_A'])
+    assert len(frame) == 1 and frame.iloc[0].dtu_fdr == .3
+    assert frame.iloc[0].gene_screen_fdr == .002
+    assert frame.iloc[0].adjusted_p_scope == 'stageR transcript confirmation only'
+
+
 def recorded_metadata(root, manifest, **overrides):
     record = {"reference_declarations": {"genome_build": "test-build", "annotation_release": "release-7",
                "validation": "user_declared_labels_not_independently_verified"},

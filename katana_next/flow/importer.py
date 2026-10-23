@@ -104,6 +104,8 @@ def import_bundle(bundle, project_template, outdir):
         contrast_index[cid] = row
     annotation, assets = {"genome_build": genome_build}, []
     normalized_members = {}
+    stage_r_contrasts = {item.get("comparison_id") for item in artifacts
+                         if item.get("kind") == "stager" and item.get("relative_path") in paths}
     chosen_mode = template.get("rmats_mode", "JCEC")
     if chosen_mode not in {"JC", "JCEC"}:
         raise ValueError("Explicit JC or JCEC mode is required")
@@ -116,8 +118,13 @@ def import_bundle(bundle, project_template, outdir):
             annotation[kind] = relative
         if kind in {"bam", "bai", "quant"} and item.get("sample_id") in by_sample:
             by_sample[item["sample_id"]]["assets"][{"quant": "quant_sf"}.get(kind, kind)] = relative
-        mapped = {"rmats": "rmats_result", "deg": "deg_result", "dtu": "dtu_result", "dexseq": "dexseq_result",
+        mapped = {"rmats": "rmats_result", "deg": "deg_result", "dtu": "dtu_result", "stager": "dtu_result", "dexseq": "dexseq_result",
                   "normalized_counts": "normalized_counts", "raw_counts": "raw_counts", "qc": "sequencing_qc"}.get(kind)
+        if kind == "dtu" and item.get("comparison_id") in stage_r_contrasts:
+            # Keep the underlying DEXSeq transcript test as a separate source.
+            # The completed stageR transcript-confirmation table is the DTU
+            # inference; counting both would duplicate each transcript.
+            mapped = "dtu_native_test_result"
         native_exon = (kind == "auxiliary" and relative.startswith("dexseq_exon/")
                        and PurePosixPath(relative).name.startswith("DEXSeqResults."))
         projection = None
