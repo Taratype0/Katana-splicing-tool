@@ -2,7 +2,7 @@ process DEXSEQ_COUNT {
     tag "$meta.id"
     label 'process_medium'
 
-    container 'ghcr.io/taratype0/kanata-dexseq-tools:0.1.1'
+    container { params.dexseq_tools_container }
 
     input:
     tuple val(meta), path(bam), path (gff)

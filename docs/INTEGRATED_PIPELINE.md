@@ -43,9 +43,15 @@ An export never replaces an existing pipeline directory.
 
 For a new bulk study:
 
+First [build the separate DEXSeq tools image](../containers/dexseq-tools/README.md).
+The upstream annotation/count steps use unchanged GPL tools that are not included
+in the Katana downstream image. No public DEXSeq image is assumed to exist.
+Set `DEXSEQ_IMAGE` to the built local image or verified site-provided image/SIF.
+
 ```sh
 nextflow run pipeline/main.nf -profile docker \
   --mode complete --input /data/study/samples.csv \
+  --dexseq_tools_container "$DEXSEQ_IMAGE" \
   --contrasts /data/study/contrasts.csv \
   --fasta /references/genome.fa --gtf /references/annotation.gtf \
   --project_template /data/study/project-template.json \
@@ -54,7 +60,8 @@ nextflow run pipeline/main.nf -profile docker \
   --outdir /data/study/results -resume
 ```
 
-`--mode upstream-only` produces the verified native bundle and does not claim
+`--mode upstream-only` also requires `--dexseq_tools_container` with a container
+profile. It produces the verified native bundle and does not claim
 to have completed Katana analysis or its report. The examples use a locally
 built or loaded image; they do not refer to a public registry. For a cluster,
 use `-profile slurm,apptainer` or `slurm,singularity` and set

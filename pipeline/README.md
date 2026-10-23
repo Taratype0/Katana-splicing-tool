@@ -23,6 +23,7 @@ nextflow run ./pipeline \
   --fasta genome.fa --gtf annotation.gtf \
   --project_template configuration/project-template.json --flow_config configuration/flow.json \
   --katana_container /path/to/katana-downstream.sif \
+  --dexseq_tools_container /path/to/kanata-dexseq-tools.sif \
   --outdir results -profile slurm,singularity
 ```
 

@@ -24,6 +24,7 @@ workflow {
         log.info '''Katana bulk analysis and report
   --mode complete         --input samples.csv --contrasts contrasts.csv --fasta genome.fa --gtf annotation.gtf
                           --project_template project-template.json --flow_config flow.json
+                          --dexseq_tools_container <built-image-or-SIF>
   --mode upstream-only    --input samples.csv --contrasts contrasts.csv --fasta genome.fa --gtf annotation.gtf
   --mode downstream-only  --project project.json --flow_config flow.json
   --mode downstream-only  --project project.json --flow_plan /absolute/original/plan.json -resume
@@ -64,6 +65,9 @@ Required calculations are verified before the fixed seven-section report is acce
             }
         } else {
             requireParameters(['input', 'contrasts', 'fasta', 'gtf'])
+            if ((workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !params.dexseq_tools_container) {
+                error('Raw FASTQ/BAM execution requires --dexseq_tools_container pointing to the built DEXSeq tools image or SIF. See containers/dexseq-tools/README.md; no unpublished registry image is assumed.')
+            }
             samples = Channel.value(file(params.input, checkIfExists: true))
             contrasts = Channel.value(file(params.contrasts, checkIfExists: true))
             fasta = Channel.value(file(params.fasta, checkIfExists: true))

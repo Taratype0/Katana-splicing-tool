@@ -34,6 +34,16 @@
       "integrated_sha256": "81980869fbe208f9ad432717a5615521e0de276800bb7d425c096583be4f8646"
     },
     {
+      "path": "modules/local/dexseq_annotation.nf",
+      "snapshot_sha256": "6fcb415962fdabea96c8371b7fc3bd26a4d164d3d1a4b532253bd6c59126a883",
+      "integrated_sha256": "25df195c7411f9125fdea2e9566cd9f0ea3d89af63891f0628d5fe3b600a9038"
+    },
+    {
+      "path": "modules/local/dexseq_count.nf",
+      "snapshot_sha256": "c39fc80454f7624bfd685854037fb5a6f7dc0c3ec5148875168f8b993684cbfd",
+      "integrated_sha256": "515a7dfa209a9778d244ff58f9765778a461c328c8bfa3da14af0d3582607178"
+    },
+    {
       "path": "modules/local/dexseq_dtu.nf",
       "snapshot_sha256": "44f23b9b616317b89790cfa9442a481348f335f766cc610ef06deaa778dc6cf1",
       "integrated_sha256": "e7a5b41c3caa6075774c635acf18979627dc44f451bb718381edc13dbf327d6b"
@@ -176,7 +186,8 @@
     "Omit the unused MultiQC publish selector when including only the executable upstream core",
     "Bind native QC sources to exact sample IDs and raw/trimmed/alignment phases in the portable bundle",
     "Preserve declared reference, assay and pre-analysis exclusion provenance through bundle export and verified import",
-    "Qualify BioContainers Docker image names with quay.io while retaining all tool versions, scripts and Singularity URLs"
+    "Qualify BioContainers Docker image names with quay.io while retaining all tool versions, scripts and Singularity URLs",
+    "Require an explicitly built DEXSeq tools image instead of the unpublished placeholder; preserve native scripts and parameters"
   ],
   "scientific_test_algorithms_replaced": false,
   "already_completed_results_refitted": false

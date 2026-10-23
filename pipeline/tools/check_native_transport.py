@@ -113,6 +113,15 @@ def main() -> None:
     assert "host fallback is disabled" in rejected.stdout + rejected.stderr
     assert not list((absent_image / "work").glob("**/task.receipt.json"))
 
+    raw_without_image = root / "raw-missing-dexseq-image"
+    raw_without_image.mkdir()
+    rejected = run([*nextflow, "run", str(PIPELINE / "main.nf"), "--mode", "upstream-only",
+                    "--input", "absent.csv", "--contrasts", "absent-contrasts.csv",
+                    "--fasta", "absent.fa", "--gtf", "absent.gtf", "-profile", "docker",
+                    "-ansi-log", "false"], raw_without_image, "missing-dexseq-container", successful=False)
+    assert "requires --dexseq_tools_container" in rejected.stdout + rejected.stderr
+    assert not list((raw_without_image / "work").glob("**/.command.sh"))
+
     # Actual stdlib GTF filtering in its own native Nextflow process.
     reference = root / "reference"
     reference.mkdir()
@@ -130,6 +139,7 @@ def main() -> None:
                "dependency_exact_parallelism": True, "required_failure_blocks_report": True,
                "runtime_probe_precedes_calculation": True, "stage_container_dispatch": True,
                "container_execution_tested": False, "missing_container_blocks_host_fallback": True,
+               "missing_dexseq_image_blocks_raw_entry_before_submission": True,
                "resume_all_cached": True, "completed_worker_bytes_and_mtimes_unchanged": True,
                "native_reference_filter": filtering[0]}
     (root / "acceptance.receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
