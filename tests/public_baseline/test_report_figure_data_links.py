@@ -182,6 +182,54 @@ def test_browser_with_missing_dependency_is_not_falsely_marked_portable(tmp_path
         builder.bind_data_links(_panel(), [_link(browser, role='full_results')])
 
 
+def test_identical_browser_html_keeps_distinct_comparison_dependencies_isolated(tmp_path):
+    builder = _builder(tmp_path)
+    builder.source['project']['contrasts'].append({'contrast_id': 'C_vs_A'})
+    markup = '<html><a href="data.tsv">All rows</a><script src="view.js"></script></html>'
+    originals, bound = {}, []
+    for comparison in ('B_vs_A', 'C_vs_A'):
+        bundle = tmp_path / 'completed' / comparison
+        bundle.mkdir(parents=True)
+        browser = bundle / 'ALL_MODELS.html'
+        browser.write_text(markup, encoding='utf-8')
+        _data(bundle / 'data.tsv', comparison)
+        (bundle / 'view.js').write_text('window.comparison=' + json.dumps(comparison), encoding='utf-8')
+        originals.update({p: (p.read_bytes(), p.stat().st_mtime_ns) for p in bundle.iterdir()})
+        panel = {**_panel(), 'id': comparison + '-panel', 'contrast_id': comparison}
+        link = _link(browser, role='full_results', portable_root=str(bundle), contrast_id=comparison)
+        result = builder.bind_data_links(panel, [link])[0]
+        # Repeated references reuse this bundle without rewriting a prior copy.
+        assert builder.bind_data_links(panel, [link])[0]['path'] == result['path']
+        bound.append(result)
+    assert bound[0]['source_sha256'] == bound[1]['source_sha256']
+    assert bound[0]['path'] != bound[1]['path']
+    for comparison, result in zip(('B_vs_A', 'C_vs_A'), bound):
+        copied = builder.output / result['path']
+        assert copied.read_text() == markup
+        frame = pd.read_csv(copied.parent / 'data.tsv', sep='\t')
+        assert frame.comparison_id.tolist() == [comparison]
+        assert (copied.parent / 'view.js').read_text() == 'window.comparison=' + json.dumps(comparison)
+    assert all((p.read_bytes(), p.stat().st_mtime_ns) == before for p, before in originals.items())
+    assert len([a for a in builder.derived_audits if a['schema'] == 'katana.rich_asset_copy/v1']) == 2
+
+
+def test_browser_cache_respects_same_file_with_different_declared_portable_roots(tmp_path):
+    builder = _builder(tmp_path)
+    root = tmp_path / 'collection'
+    bundle = root / 'comparison'
+    bundle.mkdir(parents=True)
+    browser = bundle / 'view.html'
+    browser.write_text('<html><a href="data.tsv">Full table</a></html>', encoding='utf-8')
+    _data(bundle / 'data.tsv')
+    first = builder.bind_data_links(_panel(), [_link(browser, role='full_results', portable_root=str(bundle))])[0]
+    second = builder.bind_data_links(_panel(), [_link(browser, role='full_results', portable_root=str(root))])[0]
+    assert first['path'] != second['path']
+    assert (builder.output / first['path']).parent.name != 'comparison'
+    assert (builder.output / second['path']).parent.name == 'comparison'
+    assert (builder.output / first['path']).read_bytes() == (builder.output / second['path']).read_bytes()
+    assert ((builder.output / first['path']).parent / 'data.tsv').read_bytes() == ((builder.output / second['path']).parent / 'data.tsv').read_bytes()
+
+
 def test_grouped_upset_compound_plot_has_actual_patterns_and_all_set_sizes(tmp_path):
     from katana_next.reports.comparisons import _Views, _cross_patterns
     builder = _builder(tmp_path, report_require_plot_data=True)

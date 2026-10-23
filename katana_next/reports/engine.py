@@ -163,18 +163,22 @@ class Builder:
             if path.is_relative_to(self.output):
                 relative = path.relative_to(self.output).as_posix()
             elif path.suffix.lower() == '.html':
-                cache_key = 'data-browser:' + str(path)
+                root = Path(link.get('portable_root', path.parent)).resolve()
+                if not path.is_relative_to(root):
+                    raise ValueError('Figure data browser must remain inside its declared portable root.')
+                origin = str(root) + '\0' + path.relative_to(root).as_posix()
+                origin_sha = hashlib.sha256(origin.encode('utf-8')).hexdigest()[:16]
+                # Identical HTML can refer to different comparison-local files.
+                # Its content SHA alone cannot identify a portable bundle.
+                cache_key = 'data-browser:' + sha + ':' + origin
                 relative = self._copies.get(cache_key)
                 if relative is None:
                     from .rich_results import _dependencies, copy_rich_asset
-                    root = Path(link.get('portable_root', path.parent)).resolve()
-                    if not path.is_relative_to(root):
-                        raise ValueError('Figure data browser must remain inside its declared portable root.')
                     deps = _dependencies(path, root, {})
                     if deps['portability_warnings'] or deps['external_urls']:
                         raise ValueError('Figure data browser has unavailable or external dependencies; provide a complete offline bundle.')
-                    destination = self.output / 'outputs/figure-data-browsers' / (sha[:12] + '-' + safe(path.stem))
-                    receipt = copy_rich_asset({'id': 'figure-data-' + sha[:16], 'status': 'available', 'path': str(path),
+                    destination = self.output / 'outputs/figure-data-browsers' / (sha[:12] + '-' + origin_sha + '-' + safe(path.stem))
+                    receipt = copy_rich_asset({'id': 'figure-data-' + sha[:12] + '-' + origin_sha, 'status': 'available', 'path': str(path),
                                                'metadata': {'portable_root': str(root), 'relative_path': path.relative_to(root).as_posix(), **deps}}, destination)
                     relative = Path(receipt['path']).relative_to(self.output).as_posix()
                     self._copies[cache_key] = relative
