@@ -46,7 +46,55 @@ def _view_paths(raw, base):
             for key in keys:
                 if record.get(key):
                     record[key] = str(_absolute_path(record[key], base))
+            for link in record.get('data_links', []):
+                if link.get('path'):
+                    link['path'] = str(_absolute_path(link['path'], base))
     return views
+
+
+def report_contrast_selection(native, descriptor):
+    """Validate a report-only projection, retaining original contrast identity.
+
+    No group names or biological meanings are inferred. In the absence of
+    explicit groups, stable ordered groups of at most four axes are used.
+    """
+    contrasts = native.get('contrasts', [])
+    native_ids = [row.get('contrast_id') for row in contrasts]
+    if any(not isinstance(cid, str) or not cid.strip() for cid in native_ids) or len(native_ids) != len(set(native_ids)):
+        raise ValueError('Native contrast IDs must be nonempty and unique before report selection.')
+    chosen = descriptor.get('report_contrast_ids', native.get('report_contrast_ids', native_ids))
+    if not isinstance(chosen, list) or any(not isinstance(cid, str) for cid in chosen) or len(chosen) != len(set(chosen)):
+        raise ValueError('report_contrast_ids must be a unique list of native contrast IDs.')
+    if set(chosen) - set(native_ids):
+        raise ValueError('Report selection contains an unknown native contrast ID.')
+    if native_ids and not chosen:
+        raise ValueError('A nonempty source study requires at least one selected report contrast.')
+    supplied = descriptor.get('report_contrast_groups', native.get('report_contrast_groups'))
+    groups = []
+    if supplied is None:
+        for start in range(0, len(chosen), 4):
+            ids = chosen[start:start + 4]
+            groups.append({'group_id': 'comparisons-' + str(start // 4 + 1),
+                           'label': 'Comparisons ' + str(start // 4 + 1), 'contrast_ids': ids})
+    else:
+        if not isinstance(supplied, list):
+            raise ValueError('report_contrast_groups must be a list of explicit group records.')
+        for raw in supplied:
+            if not isinstance(raw, dict) or not isinstance(raw.get('group_id'), str) or not raw['group_id'].strip():
+                raise ValueError('Each report contrast group requires a nonempty group_id.')
+            ids = raw.get('contrast_ids')
+            if not isinstance(ids, list) or not 1 <= len(ids) <= 4 or any(not isinstance(cid, str) for cid in ids) or len(ids) != len(set(ids)):
+                raise ValueError('Each report contrast group needs one to four distinct contrast IDs.')
+            if not set(ids) <= set(chosen):
+                raise ValueError('Report group axes must belong to the selected native contrasts.')
+            groups.append({'group_id': raw['group_id'], 'label': str(raw.get('label', raw['group_id'])), 'contrast_ids': list(ids)})
+    group_ids = [group['group_id'] for group in groups]
+    axes = [cid for group in groups for cid in group['contrast_ids']]
+    if len(group_ids) != len(set(group_ids)) or len(axes) != len(set(axes)) or set(axes) != set(chosen):
+        raise ValueError('Report groups must have unique IDs and partition the selected comparisons exactly once.')
+    return {'contrast_ids': list(chosen), 'excluded_contrast_ids': [cid for cid in native_ids if cid not in chosen],
+            'groups': groups, 'applied': chosen != native_ids or supplied is not None,
+            'native_contrast_ids': native_ids, 'statistical_results_changed': False}
 
 
 def load_source(project, catalog=None):
@@ -150,6 +198,9 @@ def _load_source(project, catalog=None, *, inline_base):
         for key, path in meta.get('exports', {}).items():
             if key in ('png', 'svg') and path:
                 meta['exports'][key] = str(_absolute_path(path, descriptor_base))
+        for link in meta.get('data_links', []):
+            if link.get('path'):
+                link['path'] = str(_absolute_path(link['path'], descriptor_base))
     for raw in value.get('extra_views', []):
         view_base = descriptor_base
         if isinstance(raw, str):
@@ -171,15 +222,27 @@ def _load_source(project, catalog=None, *, inline_base):
         parent_id = parent.get('source_project_id')
         expected = parent.get('source_project_manifest_SHA256')
         actual = manifest_identity
-        same_samples = [(s['sample_id'], s.get('biological_sample_id'), s.get('condition')) for s in native.get('samples', [])] == [(s['sample_id'], s.get('biological_sample_id'), s.get('condition')) for s in child['project'].get('samples', [])]
-        same_contrasts = native.get('contrasts') == child['project'].get('contrasts')
+        child_native = child.get('native_project', child['project'])
+        same_samples = [(s['sample_id'], s.get('biological_sample_id'), s.get('condition')) for s in native.get('samples', [])] == [(s['sample_id'], s.get('biological_sample_id'), s.get('condition')) for s in child_native.get('samples', [])]
+        same_contrasts = native.get('contrasts') == child_native.get('contrasts')
         if not (same_samples and same_contrasts and expected and expected == actual):
             raise ValueError('Supplemental results require the exact parent manifest hash, samples and comparisons.')
         if parent_id and parent_id != native.get('project_id'):
             raise ValueError('Supplemental result parent identity does not match the source study.')
         supplemental.append(child)
     synthetic = bool(value.get('dummy', value.get('synthetic', native.get('metadata', {}).get('dummy', native.get('metadata', {}).get('synthetic', False)))))
-    return {'project': native, 'artifacts': artifacts, 'supplemental': supplemental, 'extra_assets': extras, 'extra_views': views, 'dummy': synthetic,
+    selection = report_contrast_selection(native, value)
+    display_project = copy.deepcopy(native)
+    if native.get('contrasts') or 'report_contrast_ids' in value or 'report_contrast_groups' in value:
+        indexed = {row['contrast_id']: row for row in native.get('contrasts', [])}
+        display_project['contrasts'] = [copy.deepcopy(indexed[cid]) for cid in selection['contrast_ids']]
+        display_project['report_contrast_ids'] = selection['contrast_ids']
+        display_project['report_contrast_groups'] = selection['groups']
+        display_project['report_native_contrast_ids'] = selection['native_contrast_ids']
+    return {'project': display_project, 'native_project': native, 'native_project_manifest_sha256': manifest_identity,
+            'report_selection': selection, 'artifacts': artifacts, 'supplemental': supplemental, 'extra_assets': extras, 'extra_views': views, 'dummy': synthetic,
+            'report_native_figures_in_main': bool(value.get('report_native_figures_in_main', True)),
+            'report_require_plot_data': bool(value.get('report_require_plot_data', False)),
             'search_roots': value.get('search_roots', []), 'source_files': source_files,
             'mode': value.get('mode', 'single-cell' if str(native.get('metadata', {}).get('assay', '')).startswith(('sc', 'sn', 'single')) else 'bulk')}
 

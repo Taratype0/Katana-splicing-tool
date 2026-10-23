@@ -51,6 +51,37 @@ view definitions resolve those paths relative to the report descriptor.
 Absolute paths retain their original targets. Report loading does not rewrite
 any descriptor, catalog or source result.
 
+### Select comparisons for the report
+
+Select the experimental questions to show instead of displaying every available
+pairwise comparison. A descriptor can name existing contrasts and group related
+questions for the cross-comparison figures:
+
+```json
+{
+  "project_manifest": "study/katana.project.json",
+  "report_contrast_ids": ["KO_vs_control", "WT_reexpression_vs_KO", "MUT_reexpression_vs_KO"],
+  "report_contrast_groups": [
+    {
+      "group_id": "untreated",
+      "label": "Untreated comparisons",
+      "contrast_ids": ["KO_vs_control", "WT_reexpression_vs_KO", "MUT_reexpression_vs_KO"]
+    }
+  ]
+}
+```
+
+IDs must refer to the original manifest. Each selected comparison belongs to
+exactly one group, with up to four comparisons per group. The report records
+both the selected and original contrast lists. The original manifest and all
+completed source results are retained; selecting a subset does not rerun tests
+or change their original P values or correction families.
+
+Each group's intersection chart calculates exclusive memberships within that
+group. It shows every nonempty pattern, together with set sizes and complete
+membership tables, rather than truncating patterns from a larger chart. Event
+identity, exon-bin identity and gene-level intersections remain separate.
+
 ## DAS selection and Top 10
 
 RS-DAS is the default: native caller FDR and effect criteria plus IJC + SJC of
@@ -88,6 +119,23 @@ MAPP, external preservation or other optional analyses are identified explicitly
 QC can be rendered from completed FastQC, Trim Galore and STAR outputs. Absent
 5-prime/3-prime or coverage measurements are recorded as unavailable; no new
 read processing is started to fill a report panel.
+
+Each main figure can carry explicit `data_links` supplied by its producer. A
+link records `role`, `label`, `path`, `contrast_id`, `policy` and `unit`;
+supported roles include `plot_data`, `full_results`, `foreground`, `background`
+and `methods`. Paths in an external views JSON resolve relative to that file.
+The renderer validates file contents against their declared comparison and
+measurement scope, copies the data and records source and portable hashes.
+`report_require_plot_data: true` rejects an unbound main figure. A whole-study
+master table may be linked as complete results, but cannot stand in for the
+actual plotted points.
+
+`report_native_figures_in_main: false` keeps historical registered figures in
+the output gallery while displaying the newly bound report figures in the
+body. Complete tables stay outside the main report. Fixed RS-required
+MotifTrace outputs remain visible with their original scope explicitly stated
+when the ordinary-DAS selector changes; they are never relabelled as an
+ordinary-DAS calculation.
 
 ## Provenance
 

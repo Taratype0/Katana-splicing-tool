@@ -90,6 +90,20 @@ def test_build_qc_outputs_without_reading_bam_or_rerunning_tools(tmp_path):
     raw = (out / "tables/fastqc_all_native_module_values.tsv").read_text()
     assert "39.123456789" in raw and "38.999999999" in raw
     assert all(row["analysis_id"] == "quality.reads" for row in result["artifacts"])
+    figures = {Path(a['path']).stem: a for a in result['artifacts'] if a['path'].endswith('.png')}
+    assert all({l['role'] for l in a['metadata']['data_links']} == {'plot_data', 'full_results', 'methods'} for a in figures.values())
+    assert all(Path(l['path']).is_file() for a in figures.values() for l in a['metadata']['data_links'])
+    import pandas as pd
+    def plot(stem):
+        return pd.read_csv(next(l['path'] for l in figures[stem]['metadata']['data_links'] if l['role'] == 'plot_data'), sep='\t')
+    assert plot('fastqc_read_counts').reads_millions.tolist() == [.001]
+    quality = plot('fastqc_base_quality')
+    assert quality.x_bin_midpoint.tolist() == [1., 12.]
+    assert quality.plotted_y.tolist() == pytest.approx([39.123456789, 38.999999999])
+    assert quality.native_y.tolist() == quality.plotted_y.tolist()
+    length = plot('fastqc_read_lengths')
+    assert length.native_y.tolist() == [1000.]
+    assert length.plotted_y.tolist() == [100.]
 
 
 def test_transfer_hash_mismatch_is_rejected_before_rendering(tmp_path):

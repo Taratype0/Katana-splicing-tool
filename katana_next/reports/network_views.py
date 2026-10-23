@@ -98,6 +98,94 @@ def _slug(value):
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)) + "-" + sha256(str(value).encode()).hexdigest()[:8]
 
 
+def _completed_network_scope(completion_path, input_paths, contrasts):
+    """Authenticate a native lifecycle without relabelling an imported failure.
+
+    The recovery scope accepts only byte-verified saved numerical tables plus
+    a separately completed postprocessing job. It never calls discovery or
+    infers that the failed source job completed its missing plotting stages.
+    """
+    proof = json.loads(completion_path.read_text(encoding="utf-8"))
+    def native_text(key):
+        value = proof.get(key, "")
+        if isinstance(value, dict):
+            if value.get("returncode") != 0 or not isinstance(value.get("stdout"), str):
+                raise ValueError("Native accounting command did not complete successfully")
+            return value["stdout"]
+        if not isinstance(value, str):
+            raise ValueError("Native accounting must retain its actual text or successful command receipt")
+        return value
+    scope = proof.get("completion_scope")
+    if scope == "observed_network_baseline_only":
+        required = ("network_observed", "associate_observed", "annotate_modules")
+        if proof.get("status") != "completed" or any(proof.get("stage_snapshot", {}).get(key, {}).get("status") not in {"finished", "cache_hit"} for key in required):
+            raise ValueError("All exact baseline stages must have completed")
+        job = str(proof.get("baseline_job", ""))
+        rows = [row.split("|") for row in native_text("actual_sacct").splitlines() if row.split("|")[0] == job]
+        if not job or len(rows) != 1 or rows[0][1:3] != ["COMPLETED", "0:0"]:
+            raise ValueError("Native baseline COMPLETED / 0:0 evidence is required")
+        return scope, job, None, [completion_path]
+    if scope != "observed_numerical_import_and_postprocessing_only" or proof.get("schema") != "katana.network_numeric_recovery_native_acceptance/v1" or proof.get("passed") is not True:
+        raise ValueError("A completed observed-network baseline or explicit verified numerical-import receipt is required")
+    job = str(proof.get("native_job_id", ""))
+    rows = [row.split("|") for row in native_text("actual_sacct").splitlines() if row.split("|")[0] == job]
+    if not job or len(rows) != 1 or rows[0][1:3] != ["COMPLETED", "0:0"]:
+        raise ValueError("Native postprocessing COMPLETED / 0:0 evidence is required")
+    if proof.get("source_failed_status_preserved") is not True or proof.get("fit_network_rerun") is not False or proof.get("module_bootstrap_accepted") is not False:
+        raise ValueError("Recovery must retain its failed source and separate unaccepted bootstrap scope")
+    root = completion_path.parent
+    verified = {}
+    for item in proof.get("files", []):
+        path = (root / item["path"]).resolve()
+        if not path.is_relative_to(root) or path in verified:
+            raise ValueError("Unbounded or duplicate recovered network member")
+        current = _fingerprint(path)
+        if (current["bytes"], current["sha256"]) != (item["bytes"], item["sha256"]):
+            raise ValueError("Recovered network member SHA identity mismatch")
+        verified[path] = current
+    phase_path = root / "postprocessing/completion.receipt.json"
+    import_path = root / "IMPORT_PROVENANCE.json"
+    plan_path = root / "PLAN.json"
+    if not {phase_path, import_path, plan_path, *input_paths} <= set(verified):
+        raise ValueError("Network inputs and full completion/import/plan proofs must be authenticated members")
+    phase = json.loads(phase_path.read_text(encoding="utf-8"))
+    provenance = json.loads(import_path.read_text(encoding="utf-8"))
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    if (phase.get("schema") != "katana.network_verified_numeric_postprocessing/v1"
+            or phase.get("status") != "completed" or phase.get("completion_scope") != scope
+            or str(phase.get("native_job_id")) != job or phase.get("fit_network_rerun") is not False
+            or phase.get("source_failed_status_preserved") is not True
+            or phase.get("frozen_kernels_unchanged") is not True):
+        raise ValueError("The authenticated network postprocessing phase is incomplete or from another job")
+    if (phase.get("source_import_manifest_sha256") != verified[import_path]["sha256"]
+            or phase.get("plan_sha256") != verified[plan_path]["sha256"]
+            or proof.get("plan_sha256") != verified[plan_path]["sha256"]):
+        raise ValueError("Network phase is not bound to its exact import and plan")
+    source_job = str(plan.get("source_job_id", ""))
+    source_rows = [row.split("|") for row in native_text("source_actual_sacct").splitlines() if row.split("|")[0] == source_job]
+    if not source_job or len(source_rows) != 1 or source_rows[0][1:3] != ["FAILED", "1:0"]:
+        raise ValueError("The original failed network lifecycle must remain explicit")
+    if (provenance.get("schema") != "katana.verified_failed_plot_numerical_import/v1"
+            or provenance.get("status") != "verified_import"
+            or str(provenance.get("source_job_id")) != source_job
+            or provenance.get("fit_network_rerun") is not False):
+        raise ValueError("An explicit verified failed-plot numerical import is required")
+    if plan.get("design", {}).get("contrasts") != contrasts or phase.get("declared_contrasts") != [row["contrast_id"] for row in contrasts]:
+        raise ValueError("Precomputed network tests must match every exact declared contrast and sample arm")
+    for item in phase.get("files", []):
+        path = (root / item["path"]).resolve()
+        if path not in verified or (verified[path]["bytes"], verified[path]["sha256"]) != (item["bytes"], item["sha256"]):
+            raise ValueError("Network postprocessing file is absent from the native collection")
+    names = {"full_tests": "trait_full_family.tsv", "selected_tests": "trait_selected.tsv",
+             "trait_audit": "trait_audit.json", "tested": "module_enrichment.tsv.gz",
+             "background": "module_background.tsv", "input_genes": "module_input_genes.tsv"}
+    precomputed = {key: root / "postprocessing" / name for key, name in names.items()}
+    if not set(precomputed.values()) <= set(verified):
+        raise ValueError("The complete precomputed association and enrichment family is required")
+    precomputed["provenance"] = provenance
+    return scope, job, precomputed, [completion_path, *verified]
+
+
 def _write_browser(out, members, matrix, scores, samples, enrichment, edges_path):
     """A full-member, paged module browser with no event or module truncation."""
     import pandas as pd
@@ -166,20 +254,12 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.colors import LinearSegmentedColormap
-    from katana_next.workflows.module_functions import enrich_modules
-
     completion_path = Path(completion_manifest).resolve()
-    proof = json.loads(completion_path.read_text(encoding="utf-8"))
-    if proof.get("status") != "completed" or proof.get("completion_scope") != "observed_network_baseline_only":
-        raise ValueError("A completed observed-network baseline receipt is required")
-    required = ("network_observed", "associate_observed", "annotate_modules")
-    if any(proof.get("stage_snapshot", {}).get(key, {}).get("status") not in {"finished", "cache_hit"} for key in required):
-        raise ValueError("All exact baseline stages must have completed")
-    job = str(proof.get("baseline_job", ""))
-    native = [row.split("|") for row in proof.get("actual_sacct", "").splitlines() if row.split("|")[0] == job]
-    if not job or len(native) != 1 or native[0][1:3] != ["COMPLETED", "0:0"]:
-        raise ValueError("Native baseline COMPLETED / 0:0 evidence is required")
-    paths = [Path(p).resolve() for p in (assignments_path, scores_path, psi_path, annotation_path, samples_path, completion_path)]
+    input_paths = [Path(p).resolve() for p in (assignments_path, scores_path, psi_path, annotation_path, samples_path)]
+    if edges_path:
+        input_paths.append(Path(edges_path).resolve())
+    completion_scope, job, precomputed, proof_paths = _completed_network_scope(completion_path, input_paths, contrasts)
+    paths = list(dict.fromkeys([*input_paths, *proof_paths]))
     libraries = {str(k): Path(v).resolve() for k, v in (libraries or {}).items()}
     paths += list(libraries.values()) + ([Path(edges_path).resolve()] if edges_path else [])
     out = Path(output_dir).resolve()
@@ -218,18 +298,39 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
     summary["event_fraction"] = summary.n_events / len(members)
     types = members.groupby(["module", "event_type"], sort=False).size().rename("n_events").reset_index()
     genes = members.loc[members.gene_symbol.ne(""), ["module", "gene_symbol"]].drop_duplicates().sort_values(["module", "gene_symbol"])
-    tested, background = enrich_modules(assignments, annotation, libraries) if libraries else (pd.DataFrame(columns=["module", "library", "term", "pvalue", "FDR"]), pd.DataFrame({"gene_symbol": sorted(members.loc[members.gene_symbol.ne(""), "gene_symbol"].unique())}))
-    full_tests, selected_tests, trait_audit = matched_module_associations(scores, samples, contrasts)
+    if precomputed:
+        tested = pd.read_csv(precomputed["tested"], sep="\t")
+        background = pd.read_csv(precomputed["background"], sep="\t")
+        full_tests = pd.read_csv(precomputed["full_tests"], sep="\t")
+        selected_tests = pd.read_csv(precomputed["selected_tests"], sep="\t")
+        trait_audit = json.loads(precomputed["trait_audit"].read_text(encoding="utf-8"))
+        declared = [row["contrast_id"] for row in contrasts]
+        if [row.get("contrast_id") for row in trait_audit] != declared or not set(full_tests.contrast_id) <= set(declared) or not set(selected_tests.contrast_id) <= set(declared):
+            raise ValueError("Precomputed network association populations differ from declared comparisons")
+        if set(background.gene_symbol) != set(members.loc[members.gene_symbol.ne(""), "gene_symbol"]):
+            raise ValueError("Precomputed network background differs from all measured event genes")
+        supplied_genes = pd.read_csv(precomputed["input_genes"], sep="\t").fillna("")
+        if set(map(tuple, supplied_genes[["module", "gene_symbol"]].to_numpy())) != set(map(tuple, genes.to_numpy())):
+            raise ValueError("Precomputed network module input genes differ from frozen memberships")
+        if len(tested) and not set(tested.module.astype(str)) <= set(modules) - {"grey"}:
+            raise ValueError("Precomputed enrichment refers to an unobserved module")
+    else:
+        from katana_next.workflows.module_functions import enrich_modules
+        tested, background = enrich_modules(assignments, annotation, libraries) if libraries else (pd.DataFrame(columns=["module", "library", "term", "pvalue", "FDR"]), pd.DataFrame({"gene_symbol": sorted(members.loc[members.gene_symbol.ne(""), "gene_symbol"].unique())}))
+        full_tests, selected_tests, trait_audit = matched_module_associations(scores, samples, contrasts)
     for name in ("tables", "figures", "browser"):
         (out / name).mkdir(parents=True, exist_ok=True)
     artifacts = []
     common = {"workflow_version": VERSION, "completion_verified": True,
-              "completion_scope": "observed_network_baseline_only", "completion_manifest": str(completion_path),
+              "completion_scope": completion_scope, "completion_manifest": str(completion_path),
               "native_job_id": job, "native_status": "COMPLETED", "native_exit_code": "0:0",
               "source_discovery_scope": "observed modules; bootstrap confidence is a separate phase",
               "network_input_policy": {"events": len(members), "samples": len(scores), "max_events": None},
               "network_label_policy": {"hard_filter": False, "apply_threshold_labels": False},
-              "portable_root": str(out), "new_computation": "report views; explicit frozen trait tests and module ORA only"}
+              "portable_root": str(out), "new_computation": "report views only; native-completed associations and ORA imported unchanged" if precomputed else "report views; explicit frozen trait tests and module ORA only"}
+    if precomputed:
+        common["numerical_import_source_job"] = precomputed["provenance"]["source_job_id"]
+        common["source_lifecycle"] = "FAILED/1:0 preserved; numerical outputs independently verified"
 
     def asset(path, title, caption, *, module=None, display=True, kind="file", contrast=None, extra=None):
         relative = path.relative_to(out).as_posix()
@@ -245,9 +346,13 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
             row["project_id"] = project_id
         artifacts.append(row)
 
-    def table(frame, stem, title, caption, *, compress=False):
+    def table(frame, stem, title, caption, *, compress=False, source=None):
         path = out / "tables" / (stem + (".tsv.gz" if compress else ".tsv"))
-        frame.to_csv(path, sep="\t", index=False, compression="gzip" if compress else None)
+        if source:
+            import shutil
+            shutil.copyfile(source, path)
+        else:
+            frame.to_csv(path, sep="\t", index=False, compression="gzip" if compress else None)
         asset(path, title, caption, display=False, kind="table")
 
     table(members, "all_module_members", "All module members and continuous metrics", "Every observed event, including unassigned grey. network_connectivity is the global adjacency sum, not kWithin. Original continuous metrics are preserved.")
@@ -256,10 +361,10 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
     table(summary, "module_summary", "All module sizes and gene composition", "All modules and grey; unique genes counted once within a module.")
     table(types, "module_event_type_counts", "Complete module event-type composition", "Every event contributes once to its assigned module and event type.")
     table(genes, "module_input_genes", "Module enrichment input genes", "Unique measured event genes for every module; grey retained for audit and background.")
-    table(tested, "module_enrichment", "All module GO / KEGG tests", "Frozen hypergeometric ORA; all measured network genes including grey form background. BH across all modules and terms within each explicit library. No gene-set or term truncation.", compress=True)
-    table(background, "enrichment_background", "Measured network-gene background", "Unique genes mapped from the complete measured network-event population, including unassigned grey; not all reference genes.")
-    table(full_tests, "matched_module_tests_full_family", "Full declared-contrast module test families", "All original frozen binary-adapter rows and their untouched P/FDR; separate correction family for each declared comparison.")
-    table(selected_tests, "matched_module_numerator_minus_denominator", "Matched module effects", "Exact declared sample arms. Display numerator-minus-denominator Welch rows; their FDR is retained from the complete original three-row-per-module family.")
+    table(tested, "module_enrichment", "All module GO / KEGG tests", "Frozen hypergeometric ORA; all measured network genes including grey form background. BH across all modules and terms within each explicit library. No gene-set or term truncation.", compress=True, source=precomputed["tested"] if precomputed else None)
+    table(background, "enrichment_background", "Measured network-gene background", "Unique genes mapped from the complete measured network-event population, including unassigned grey; not all reference genes.", source=precomputed["background"] if precomputed else None)
+    table(full_tests, "matched_module_tests_full_family", "Full declared-contrast module test families", "All original frozen binary-adapter rows and their untouched P/FDR; separate correction family for each declared comparison.", source=precomputed["full_tests"] if precomputed else None)
+    table(selected_tests, "matched_module_numerator_minus_denominator", "Matched module effects", "Exact declared sample arms. Display numerator-minus-denominator Welch rows; their FDR is retained from the complete original three-row-per-module family.", source=precomputed["selected_tests"] if precomputed else None)
     if edges_path:
         import shutil
         dst = out / "tables" / "native_network_edges.tsv"
@@ -268,26 +373,41 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
     (out / "tables" / "matched_trait_audit.json").write_text(json.dumps(trait_audit, indent=2) + "\n", encoding="utf-8")
     cmap = LinearSegmentedColormap.from_list("katana_blue_red", [BLUE, "#F4F5F7", RED])
 
-    def save(fig, stem, title, caption, **options):
+    def save(fig, stem, title, caption, *, data, unit, full_table=None, **options):
+        plot_table = out / "tables" / (stem + "-plot-data.tsv")
+        data.to_csv(plot_table, sep="\t", index=False)
+        contrast = options.get("contrast") or "all"
+        links = [{"role": "plot_data", "label": "Plot data", "path": str(plot_table),
+                  "contrast_id": contrast, "policy": None, "unit": unit}]
+        if full_table:
+            links.append({"role": "full_results", "label": "Complete corresponding results",
+                          "path": str(out / "tables" / full_table),
+                          "contrast_id": "all", "policy": None, "scope": "full_collection", "unit": unit})
+        if stem == "module_enrichment_overview":
+            links += [{"role": role, "label": label, "path": str(out / "tables" / name),
+                       "contrast_id": "all", "policy": None, "unit": "gene"}
+                      for role, label, name in (("foreground", "Module input genes", "module_input_genes.tsv"),
+                                                ("background", "Measured network-gene background", "enrichment_background.tsv"))]
         path = out / "figures" / (stem + ".png")
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
         svg = path.with_suffix(".svg")
         fig.savefig(svg, bbox_inches="tight", facecolor="white")
         plt.close(fig)
-        asset(path, title, caption, extra={"exports": {"png": str(path), "svg": str(svg)}}, **options)
+        asset(path, title, caption, extra={"exports": {"png": str(path), "svg": str(svg)},
+                                          "data_links": links}, **options)
 
     fig, axes = plt.subplots(1, 2, figsize=(max(12, len(modules) * .38), 5), layout="constrained")
     for ax, column, label in ((axes[0], "n_events", "Events"), (axes[1], "n_genes", "Unique measured genes")):
         ax.bar(summary.module, summary[column], color=["#A5ADB7" if m == "grey" else BLUE for m in summary.module])
         ax.set(ylabel=label, xlabel="Observed module (grey = unassigned)")
         ax.tick_params(axis="x", rotation=70, labelsize=8)
-    save(fig, "all_module_sizes", "All module sizes and gene composition", "Every observed module and unassigned set; no module is excluded from the overview.")
+    save(fig, "all_module_sizes", "All module sizes and gene composition", "Every observed module and unassigned set; no module is excluded from the overview.", data=summary, unit="module", full_table="module_summary.tsv")
     pivot = types.pivot(index="module", columns="event_type", values="n_events").fillna(0).reindex(modules)
     fig, ax = plt.subplots(figsize=(max(11, len(modules) * .35), 5), layout="constrained")
     pivot.plot.bar(stacked=True, ax=ax, color=[BLUE, RED, "#218D87", "#9A64B0", "#D49A25"], width=.8)
     ax.set(xlabel="All observed modules", ylabel="Events")
     ax.legend(title="Event type", frameon=False, bbox_to_anchor=(1, 1))
-    save(fig, "all_module_event_types", "Event types in every module", "Counts from complete native event identities; grey is the unassigned set.")
+    save(fig, "all_module_event_types", "Event types in every module", "Counts from complete native event identities; grey is the unassigned set.", data=pivot.reset_index(), unit="module_event_type", full_table="module_event_type_counts.tsv")
     ordered_samples = samples.set_index("sample_id").reindex(scores.index)
     if "condition" in ordered_samples:
         order = np.argsort(ordered_samples.condition.to_numpy(), kind="stable")
@@ -301,7 +421,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
         ax.set(xticks=range(len(plot.columns)), xticklabels=plot.columns, yticks=range(len(plot)), yticklabels=plot.index)
         ax.tick_params(axis="x", rotation=70, labelsize=7)
         fig.colorbar(image, ax=ax, label="Frozen module-PC score")
-        save(fig, "all_module_activity", "Module activity in all biological samples", "All modules and samples, ordered by declared condition for display. PC signs are arbitrary; positive activity is not increased exon inclusion.")
+        save(fig, "all_module_activity", "Module activity in all biological samples", "All modules and samples, ordered by declared condition for display. PC signs are arbitrary; positive activity is not increased exon inclusion.", data=plot.rename_axis("module").reset_index(), unit="module_sample_score", full_table="module_activity.tsv")
     metrics = [key for key in ("network_connectivity", "module_membership", "module_membership_margin", "stability_score") if key in members]
     if metrics:
         fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), max(4, len(modules) * .22)), layout="constrained", squeeze=False)
@@ -310,7 +430,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
             ax.boxplot(values, vert=False, showfliers=False)
             ax.set_yticks(range(1, len(modules) + 1), modules)
             ax.set(xlabel=key)
-        save(fig, "all_module_continuous_metrics", "Continuous membership and connectivity distributions", "All members retained. Boxplot whiskers summarize the complete distribution; all event values and ranks are in the member table. Global network_connectivity is not intramodule kWithin; optional threshold labels do not hard-filter members.")
+        save(fig, "all_module_continuous_metrics", "Continuous membership and connectivity distributions", "All members retained. Boxplot whiskers summarize the complete distribution; all event values and ranks are in the member table. Global network_connectivity is not intramodule kWithin; optional threshold labels do not hard-filter members.", data=members[["event_key", "module", *metrics]], unit="event", full_table="all_module_members.tsv")
     if len(selected_tests):
         effects = selected_tests.pivot(index="module", columns="contrast_id", values="effect").reindex(scores.columns)
         limit = max(float(np.abs(effects.to_numpy()).max()), .001)
@@ -319,7 +439,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
         ax.set(xticks=range(len(effects.columns)), xticklabels=effects.columns, yticks=range(len(effects)), yticklabels=effects.index)
         ax.tick_params(axis="x", rotation=65, labelsize=7)
         fig.colorbar(image, ax=ax, label="Numerator − denominator module-PC mean")
-        save(fig, "matched_module_effects", "Module activity: declared experimental comparisons", "Only exact contrastsheet arms are compared. Colour shows a frozen-PC mean difference; full original Welch P/FDR and the complete three-row-per-module correction families are exported. No biological rescue label is inferred.")
+        save(fig, "matched_module_effects", "Module activity: declared experimental comparisons", "Only exact contrastsheet arms are compared. Colour shows a frozen-PC mean difference; full original Welch P/FDR and the complete three-row-per-module correction families are exported. No biological rescue label is inferred.", data=effects.rename_axis("module").reset_index(), unit="module_contrast", full_table="matched_module_tests_full_family.tsv")
     if len(tested):
         # Main report display only. Full tested terms are written above.
         shown = tested.sort_values(["FDR", "pvalue", "term"], kind="stable").groupby(["module", "library"], sort=False).head(2).copy()
@@ -329,7 +449,8 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
         ax.scatter(x, range(len(shown)), s=20 + 12 * shown.overlap_count, c=[BLUE if q < .05 else "#A5ADB7" for q in shown.FDR], alpha=.8)
         ax.set(yticks=range(len(shown)), yticklabels=[f"{r.module} | {r.library} | {r.term}"[:125] for r in shown.itertuples()], xlabel="−log10(native BH FDR)")
         ax.tick_params(axis="y", labelsize=6)
-        save(fig, "module_enrichment_overview", "GO / KEGG coverage across all modules", "Display: two lowest-FDR terms per module and library, including nonsignificant terms in grey. Point area follows overlap count. Complete tests, all input and contributing genes, actual measured background and unchanged P/FDR are exported; this figure does not filter modules.")
+        plotted_terms = shown.assign(plot_neglog10_fdr=x.to_numpy(), plot_point_area=20 + 12 * shown.overlap_count.to_numpy())
+        save(fig, "module_enrichment_overview", "GO / KEGG coverage across all modules", "Display: two lowest-FDR terms per module and library, including nonsignificant terms in grey. Point area follows overlap count. Complete tests, all input and contributing genes, actual measured background and unchanged P/FDR are exported; this figure does not filter modules.", data=plotted_terms, unit="module_term_test", full_table="module_enrichment.tsv.gz")
     for module in modules:
         subset = members.loc[members.module.eq(module)]
         if module in scores.columns:
@@ -338,7 +459,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
             ax.bar(range(len(values)), values, color=[BLUE if v < 0 else RED for v in values])
             ax.set(xticks=range(len(values)), xticklabels=values.index, ylabel="Frozen module-PC activity")
             ax.tick_params(axis="x", rotation=65, labelsize=7)
-            save(fig, "module_activity_" + _slug(module), f"{module}: complete sample activity", "All biological samples; module-PC orientation remains unchanged from discovery.", module=module, display=False)
+            save(fig, "module_activity_" + _slug(module), f"{module}: complete sample activity", "All biological samples; module-PC orientation remains unchanged from discovery.", data=values.rename_axis("sample_id").rename("activity").reset_index(), unit="module_sample_score", full_table="module_activity.tsv", module=module, display=False)
         if "network_connectivity" in subset:
             rank = subset.sort_values(["network_connectivity", "event_key"], ascending=[False, True], kind="stable").head(20)
             fig, ax = plt.subplots(figsize=(10, 7), layout="constrained")
@@ -346,7 +467,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
             ax.barh(range(len(rank)), rank.network_connectivity, color=BLUE)
             ax.set(yticks=range(len(rank)), yticklabels=labels, xlabel="Global adjacency connectivity (not intramodule kWithin)")
             ax.invert_yaxis()
-            save(fig, "module_connectivity_" + _slug(module), f"{module}: connectivity-ranked members", "Display: first 20 by unchanged global connectivity, ties resolved by event key for display. Every member, original metric and rank remains in the complete table and paged browser; this is not a threshold-defined Hub claim.", module=module, display=False)
+            save(fig, "module_connectivity_" + _slug(module), f"{module}: connectivity-ranked members", "Display: first 20 by unchanged global connectivity, ties resolved by event key for display. Every member, original metric and rank remains in the complete table and paged browser; this is not a threshold-defined Hub claim.", data=rank, unit="event", full_table="all_module_members.tsv", module=module, display=False)
     _write_browser(out, members, psi, scores, samples, tested, edges_path)
     asset(out / "browser" / "ALL_MODULES.html", "All network modules: members, PSI and activity", "All modules and grey, all members, searchable and paginated full PSI, continuous metrics and complete table links. No event is removed for display.", extra={"report_asset_kind": "html"})
     for row in audit:
@@ -358,15 +479,23 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
                "events": len(members), "samples": len(scores), "assigned_modules": len(scores.columns),
                "unassigned_events": int(members.module.eq("grey").sum()), "module_ora_rows": len(tested),
                "enrichment_background_genes": len(background), "declared_contrasts": len(contrasts),
-               "matched_test_audit": trait_audit, "native_baseline_job": job,
+               "matched_test_audit": trait_audit,
+               "native_baseline_job": job if not precomputed else None,
+               "native_postprocessing_job": job if precomputed else None,
+               "original_source_native_job": precomputed["provenance"]["source_job_id"] if precomputed else job,
                "bootstrap_accepted": False, "network_discovery_runs": 0, "upstream_jobs": 0,
                "sources_preserved": True, "figures": sum(a["path"].endswith(".png") for a in artifacts),
+               "completion_scope": completion_scope,
+               "new_trait_fits": 0 if precomputed else len(contrasts), "new_module_ora": not bool(precomputed),
                "enrichment_method": "existing frozen enrich_modules: hypergeometric; BH all modules × terms within library",
                "trait_method": "existing frozen safe_trait_association per exact declared sample arms"}
     (out / "network-report.receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     (out / "artifact-records.json").write_text(json.dumps(artifacts, indent=2) + "\n", encoding="utf-8")
     unavailable = [{"chapter": 6, "title": "Bootstrap module confidence", "status": "not_computed",
                     "reason": "The observed baseline receipt does not establish completion of the separate bootstrap phase."}]
+    if precomputed:
+        unavailable.append({"chapter": 6, "title": "Original network dendrogram", "status": "not_available",
+                            "reason": "The source plot failed after complete numerical writes; original linkage was not saved. No replacement fit or tree is inferred."})
     unavailable += [{"chapter": 6, "title": "Matched module association: " + row["contrast_id"],
                      "status": "not_computed", "reason": row["reason"]} for row in trait_audit if row["status"] != "completed"]
     return {"artifacts": artifacts, "unavailable": unavailable, "receipt": receipt}

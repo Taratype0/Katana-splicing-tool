@@ -14,20 +14,37 @@ def build_landscape_views(project, artifacts, destination):
     import matplotlib.pyplot as plt
     from matplotlib.colors import LinearSegmentedColormap
     from scipy.cluster.hierarchy import linkage, leaves_list
-    destination = Path(destination)
+    destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=True)
     panels, tables, unavailable = [], [], []
     cmap = LinearSegmentedColormap.from_list('katana_b', [BLUE, 'white', RED])
     plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 10, 'axes.spines.top': False,
                          'axes.spines.right': False, 'svg.fonttype': 'none'})
 
-    def save(fig, key, title, chapter, caption, **extra):
+    def export(frame, stem, title, chapter, unit):
+        target = destination / (stem + '.tsv')
+        frame.to_csv(target, sep='\t', index=False)
+        tables.append(dict(name=title, path=str(target), chapter=chapter, unit=unit))
+        return target
+
+    def data_link(role, path, label, unit):
+        return dict(role=role, path=str(path), label=label, contrast_id='all', policy=None, unit=unit)
+
+    def save(fig, key, title, chapter, caption, *, plot_data, unit, full_results=(), parameters=None, **extra):
         target = destination / (key + '.png')
         fig.savefig(target, dpi=150, bbox_inches='tight', facecolor='white')
         fig.savefig(target.with_suffix('.svg'), bbox_inches='tight', facecolor='white')
         plt.close(fig)
+        method = destination / (key + '.methods.json')
+        method.write_text(json.dumps({'schema': 'katana.report_plot_methods/v1', 'figure_id': key,
+                                     'method': caption, 'parameters': parameters or {},
+                                     'contrast_id': 'all', 'policy': None, 'unit': unit,
+                                     'new_inferential_fit': False}, indent=2), encoding='utf-8')
+        links = [data_link('plot_data', plot_data, 'Plot data', unit),
+                 *[data_link('full_results', path, label, source_unit) for path, label, source_unit in full_results],
+                 data_link('methods', method, 'Methods', 'method_record')]
         panels.append(dict(id=key, path=str(target), chapter=chapter, title=title,
-                           caption=caption, contrast_id='all', **extra))
+                           caption=caption, contrast_id='all', data_links=links, **extra))
 
     def find(name):
         return next((r for r in artifacts if r.get('name') == name and Path(r['path']).is_file() and Path(r['path']).suffix in ('.parquet', '.tsv', '.csv')), None)
@@ -43,10 +60,12 @@ def build_landscape_views(project, artifacts, destination):
         ax.set(ylabel='Independent biological samples', title='Declared biological sample design')
         ax.tick_params(axis='x', rotation=30)
         for x, y in enumerate(counts.values): ax.text(x, y, str(y), ha='center', va='bottom')
+        sample_path = export(samples, 'biological-samples', 'Biological samples', 1, 'biological_sample')
+        design_path = export(counts.rename('independent_biological_samples').rename_axis('condition').reset_index(),
+                             'biological-design-plot-data', 'Exact design plot counts', 1, 'condition_count')
         save(fig, 'biological-design', 'Biological samples and experimental conditions', 1,
-             'Sample identities and independence come from the project manifest. Replicate numbers do not establish pairing.')
-        p = destination / 'biological-samples.tsv'; samples.to_csv(p, sep='\t', index=False)
-        tables.append(dict(name='Biological samples', path=str(p), chapter=1))
+             'Sample identities and independence come from the project manifest. Replicate numbers do not establish pairing.',
+             plot_data=design_path, unit='condition_count', full_results=[(sample_path, 'Full sample metadata', 'biological_sample')])
 
     matrix_record = find('Sample-level PSI matrix')
     if not matrix_record:
@@ -77,9 +96,17 @@ def build_landscape_views(project, artifacts, destination):
     ax.set_xticks(range(len(columns)), columns, rotation=90, fontsize=7)
     ax.set(ylabel='Variable measured events (overview)', title='Saved sample-level PSI patterns')
     ax.set_yticks([]); fig.colorbar(image, ax=ax, label='PSI')
+    plotted = frame.iloc[selected][[c for c in ('event_id', 'gene_id', 'gene_symbol') if c in frame] + columns].copy()
+    plotted.insert(0, 'plot_row', range(len(plotted)))
+    plotted_path = export(plotted, 'psi-heatmap-plot-data', 'Exact PSI heatmap rows in plotted order', 2, 'event_by_sample_PSI_fraction')
     save(fig, 'psi-heatmap', 'PSI heatmap and splicing pattern clustering', 2,
          'Overview: up to 200 highest-variance measured events, average-linkage ordering of mean-centered PSI; colors show native PSI. '
          'Every saved event is available in the full matrix browser. This measurement view is independent of differential-significance selection.',
+         plot_data=plotted_path, unit='event_by_sample_PSI_fraction',
+         full_results=[(matrix_record['path'], 'Full native PSI matrix', 'event_by_sample_PSI_fraction'),
+                       (destination / 'PSI_MATRIX.html', 'Interactive full PSI matrix', 'event_by_sample_PSI_fraction')],
+         parameters={'maximum_displayed_events': 200, 'displayed_events': len(selected), 'samples_in_order': columns,
+                     'ordering': 'average-linkage Euclidean on mean-centered PSI; missing centered values filled only for ordering'},
          full_matrix=True, selection_scope='fixed_measured_matrix')
 
     # A portable all-row matrix browser, outside the report body. Values remain
@@ -109,9 +136,12 @@ def build_landscape_views(project, artifacts, destination):
         exp2 = float(pca.get('explained_PC2', pd.Series([np.nan])).iloc[0])
         ax.set(xlabel=f'PC1 ({exp1:.1%})', ylabel=f'PC2 ({exp2:.1%})', title='Saved PSI principal components')
         ax.legend(loc='upper left', bbox_to_anchor=(1.01, 1), fontsize=8, frameon=False)
+        pca_path = export(pca, 'psi-pca-plot-data', 'Exact saved PCA coordinates and identities', 2, 'sample_PCA_coordinates')
         save(fig, 'psi-pca', 'PSI PCA: saved measurements', 2,
              'Completed source PCA coordinates, explained variance and sample identities are retained. No differential model or PCA is refitted. '
-             'Its original measured-event population is recorded separately from ordinary DAS/RS-DAS selection.', selection_scope='fixed_completed_pca')
+             'Its original measured-event population is recorded separately from ordinary DAS/RS-DAS selection.',
+             plot_data=pca_path, unit='sample_PCA_coordinates', full_results=[(pca_record['path'], 'Full saved PCA results', 'sample_PCA_coordinates')],
+             selection_scope='fixed_completed_pca')
 
     similarity_record = find('Sample PSI similarity')
     if similarity_record and Path(similarity_record['path']).suffix == '.parquet':
@@ -125,8 +155,10 @@ def build_landscape_views(project, artifacts, destination):
         ax.set_xticks([1, 2], ['Within condition', 'Between conditions'])
         for patch, color in zip(parts['boxes'], [BLUE, GRAY]): patch.set_facecolor(color)
         ax.set(ylabel='Saved pairwise Spearman correlation', title='Replicate consistency (descriptive)')
+        pairs_path = export(rows, 'replicate-consistency-plot-data', 'Every plotted within/between sample pair', 2, 'sample_pair_spearman')
         save(fig, 'replicate-consistency', 'Within-condition consistency', 2,
-             'All saved off-diagonal sample pairs; both orientations are retained consistently. Pairwise values are descriptive and dependent; no independent-pair significance test is claimed.')
+             'All saved off-diagonal sample pairs; both orientations are retained consistently. Pairwise values are descriptive and dependent; no independent-pair significance test is claimed.',
+             plot_data=pairs_path, unit='sample_pair_spearman', full_results=[(similarity_record['path'], 'Full saved pairwise results', 'sample_pair_spearman')])
         diag = []
         for sample in columns:
             s = rows.loc[rows.sample_a == sample]
@@ -141,12 +173,16 @@ def build_landscape_views(project, artifacts, destination):
         ax.set_xticks(range(len(diag)), diagnostics.sample_id, rotation=90, fontsize=7)
         ax.set(ylabel='Median within-condition similarity', title='Sample-level consistency diagnostics')
         save(fig, 'sample-consistency-diagnostic', 'Sample consistency and potential outliers', 2,
-             'Continuous within-condition similarity is shown for every sample. No arbitrary outlier cutoff or automatic sample removal is applied.')
+             'Continuous within-condition similarity is shown for every sample. No arbitrary outlier cutoff or automatic sample removal is applied.',
+             plot_data=p, unit='sample_median_spearman', full_results=[(similarity_record['path'], 'Full saved pairwise results', 'sample_pair_spearman')])
         # The complete similarity image belongs in output files, not the report.
         pivot = sim.pivot(index='sample_a', columns='sample_b', values='spearman_r').reindex(index=columns, columns=columns)
         fig, ax = plt.subplots(figsize=(9, 8)); image = ax.imshow(pivot, cmap=cmap, vmin=0, vmax=1)
         ax.set_xticks(range(len(columns)), columns, rotation=90, fontsize=6); ax.set_yticks(range(len(columns)), columns, fontsize=6)
         fig.colorbar(image, ax=ax, label='Spearman correlation')
+        matrix_path = export(pivot.rename_axis('sample_a').reset_index(), 'sample-similarity-matrix-plot-data',
+                             'Complete similarity matrix in plotted sample order', 2, 'sample_by_sample_spearman')
         save(fig, 'sample-similarity-complete', 'Sample similarity: complete matrix', 2,
-             'Full completed pairwise similarity; output-only as requested.', output_only=True)
+             'Full completed pairwise similarity; output-only as requested.', plot_data=matrix_path, unit='sample_by_sample_spearman',
+             full_results=[(similarity_record['path'], 'Full saved pairwise results', 'sample_pair_spearman')], output_only=True)
     return dict(panels=panels, tables=tables, unavailable=unavailable)

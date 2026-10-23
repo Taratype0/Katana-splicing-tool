@@ -6,6 +6,7 @@ workflow is implicitly executed. Report-only counts/rankings retain native P/FDR
 from pathlib import Path
 import hashlib
 from datetime import datetime, timezone
+import copy
 import html, json, re, shutil, zipfile
 from .sources import load_source, digest, read_table, table_schema
 
@@ -55,6 +56,150 @@ class Builder:
         self.panels, self.tables, self.audit, self._copies = [], [], [], {}
         self.top10, self.policy_data, self.derived_audits = [], {}, []
         self.exclusions = []
+        self.data_link_audit = []
+        self._extra_asset_ids = {str(a.get('artifact_id')) for a in source.get('extra_assets', []) if a.get('artifact_id')}
+
+    def _comparison_scope(self, panel):
+        selected = {str(c['contrast_id']) for c in self.source['project'].get('contrasts', [])}
+        contrast = str(panel.get('contrast_id') or 'all')
+        if selected and contrast != 'all' and contrast not in selected:
+            panel['output_only'] = True
+        return panel
+
+    def bind_data_links(self, panel, links):
+        """Validate explicit producer bindings, then collect immutable files.
+
+        Associations are declared by the producer, never guessed from a name.
+        Exact plotted tables additionally check recorded comparison/policy
+        columns when present. Full masters may be explicitly labelled as a
+        full_collection, but they cannot stand in for a plot_data binding.
+        """
+        result = []
+        roles = {'plot_data', 'full_results', 'foreground', 'background', 'methods'}
+        contrast = str(panel.get('contrast_id') or 'all')
+        display_policy = panel.get('policy') or None
+        recorded_scope = panel.get('metadata', {}).get('das_scope', {})
+        policy = display_policy
+        if recorded_scope.get('mode') in {'rs_required', 'fixed_completed_result'} and recorded_scope.get('recorded_event_set') in {'significant', 'stable_significant'}:
+            policy = recorded_scope['recorded_event_set']
+        def group_ids(values):
+            if not isinstance(values, (list, tuple)) or any(not isinstance(v, str) or not v for v in values) or len(values) != len(set(values)):
+                raise ValueError('Figure comparison group requires unique declared comparison IDs.')
+            return list(values)
+        declared_ids = group_ids(panel.get('comparison_ids') or [])
+        project = self.source.get('native_project', self.source['project']) if panel.get('output_only') else self.source['project']
+        known_ids = {str(c['contrast_id']) for c in project.get('contrasts', [])}
+        if known_ids and not set(declared_ids) <= known_ids:
+            raise ValueError('Figure comparison group contains an unknown or unselected comparison.')
+        comparisons = set(declared_ids)
+        if not comparisons and contrast == 'all':
+            comparisons = known_ids
+        for original in links or []:
+            link = copy.deepcopy(original)
+            missing = {'role', 'path', 'label', 'contrast_id', 'policy', 'unit'} - link.keys()
+            if missing or link.get('role') not in roles or not str(link.get('label', '')).strip() or not str(link.get('unit', '')).strip():
+                raise ValueError('Figure data link requires a declared role, path, label, comparison, policy and unit: ' + str(sorted(missing)))
+            role = link['role']
+            link_contrast = str(link['contrast_id'] or 'all')
+            link_policy = None if link['policy'] in (None, '', 'common') else link['policy']
+            full_collection = role == 'full_results' and link.get('scope') == 'full_collection'
+            shared_method = role == 'methods' and link_contrast == 'all' and link_policy is None
+            if not shared_method and not full_collection:
+                valid_contrast = link_contrast == contrast or (contrast == 'all' and role in {'foreground', 'background', 'full_results'} and link_contrast in comparisons)
+                if not valid_contrast:
+                    raise ValueError('Figure data link belongs to a different comparison: ' + link_contrast)
+                if link_policy != policy:
+                    raise ValueError('Figure data link belongs to a different DAS policy.')
+            if link.get('comparison_ids') is not None:
+                linked_ids = group_ids(link['comparison_ids'])
+                if known_ids and not set(linked_ids) <= known_ids:
+                    raise ValueError('Figure data link contains an unknown or unselected comparison.')
+                if declared_ids and (set(linked_ids) != set(declared_ids) or (role == 'plot_data' and linked_ids != declared_ids)):
+                    raise ValueError('Figure data link belongs to a different comparison group or plot axis order.')
+            if link.get('project_id') and link['project_id'] != self.source['project'].get('project_id'):
+                raise ValueError('Figure data link belongs to a different project.')
+            if '://' in str(link['path']):
+                raise ValueError('Figure data links require locally available files; remote URIs are not fetched.')
+            path = Path(link['path']).expanduser()
+            if not path.is_absolute():
+                path = self.output / path
+                if not path.resolve().is_relative_to(self.output):
+                    raise ValueError('Relative figure data path escapes the report; declare external source paths explicitly.')
+            path = path.resolve()
+            if not path.is_file():
+                raise FileNotFoundError('Declared figure data is unavailable: ' + str(path))
+            before = path.stat()
+            if not before.st_size:
+                raise ValueError('Declared figure data file is empty: ' + str(path))
+            checks = {}
+            if role == 'plot_data' and path.suffix.lower() in ('.parquet', '.tsv', '.csv', '.txt'):
+                if path.suffix.lower() == '.parquet':
+                    import pyarrow.parquet as pq
+                    columns = pq.ParquetFile(path).schema_arrow.names
+                else:
+                    import pandas as pd
+                    columns = list(pd.read_csv(path, sep='\t' if path.suffix.lower() in ('.tsv', '.txt') else ',', nrows=0))
+                comparison_column = next((c for c in ('comparison_id', 'contrast_id') if c in columns), None)
+                policy_column = next((c for c in ('report_policy', 'report_event_set') if c in columns), None)
+                requested = [c for c in (comparison_column, policy_column) if c]
+                scope = read_table(path, columns=requested) if requested else None
+                if comparison_column:
+                    observed = set(scope[comparison_column].dropna().astype(str))
+                    if contrast != 'all' and ('all' in observed or (len(scope) and not observed)):
+                        raise ValueError('Plot data does not establish the exact single comparison.')
+                    found = observed - {'all'}
+                    expected = {contrast} if contrast != 'all' else comparisons
+                    if expected and not found <= expected:
+                        raise ValueError('Plot data contains a foreign comparison despite its declared binding.')
+                    checks['comparison_values'] = sorted(found)
+                if policy_column:
+                    found = {None if p in ('common', '') else p for p in scope[policy_column].dropna().astype(str)}
+                    if (found and found != {policy}) or (len(scope) and policy is not None and not found):
+                        raise ValueError('Plot data contains a different DAS policy despite its declared binding.')
+                    checks['policy_values'] = sorted(found, key=str)
+            sha = digest(path)
+            if link.get('source_sha256') and link['source_sha256'] != sha:
+                raise ValueError('Figure data source SHA does not match its producer binding.')
+            if path.is_relative_to(self.output):
+                relative = path.relative_to(self.output).as_posix()
+            elif path.suffix.lower() == '.html':
+                cache_key = 'data-browser:' + str(path)
+                relative = self._copies.get(cache_key)
+                if relative is None:
+                    from .rich_results import _dependencies, copy_rich_asset
+                    root = Path(link.get('portable_root', path.parent)).resolve()
+                    if not path.is_relative_to(root):
+                        raise ValueError('Figure data browser must remain inside its declared portable root.')
+                    deps = _dependencies(path, root, {})
+                    if deps['portability_warnings'] or deps['external_urls']:
+                        raise ValueError('Figure data browser has unavailable or external dependencies; provide a complete offline bundle.')
+                    destination = self.output / 'outputs/figure-data-browsers' / (sha[:12] + '-' + safe(path.stem))
+                    receipt = copy_rich_asset({'id': 'figure-data-' + sha[:16], 'status': 'available', 'path': str(path),
+                                               'metadata': {'portable_root': str(root), 'relative_path': path.relative_to(root).as_posix(), **deps}}, destination)
+                    relative = Path(receipt['path']).relative_to(self.output).as_posix()
+                    self._copies[cache_key] = relative
+                    self.derived_audits.append(receipt)
+            else:
+                relative = self.copy(path, prefix='figure-data')
+            if (path.stat().st_size, path.stat().st_mtime_ns) != (before.st_size, before.st_mtime_ns) or digest(path) != sha:
+                raise RuntimeError('Figure data changed during collection: ' + str(path))
+            portable_sha = digest(self.output / relative)
+            link.update(path=relative, contrast_id=link_contrast, policy=link_policy, source_sha256=sha, portable_sha256=portable_sha, bytes=before.st_size)
+            result.append(link)
+            self.data_link_audit.append({'panel_id': panel.get('id'), 'role': role, 'path': relative,
+                                        'source_sha256': sha, 'portable_sha256': portable_sha, 'bytes': before.st_size, 'contrast_id': link_contrast,
+                                        'policy': link_policy, 'display_policy': display_policy, 'measurement_policy': policy,
+                                        'unit': link['unit'], 'scope_checks': checks,
+                                        'original_preserved': True})
+        return result
+
+    def figure_data_coverage(self):
+        main = [p for p in self.panels if not p.get('output_only')]
+        missing = [{'id': p['id'], 'title': p['title']} for p in main if not any(d['role'] == 'plot_data' for d in p.get('data_links', []))]
+        return {'schema': 'katana.figure_data_links/v1', 'main_figures': len(main),
+                'main_figures_with_plot_data': len(main) - len(missing), 'unbound_main_figures': missing,
+                'strict_plot_data_required': bool(self.source.get('report_require_plot_data', False)),
+                'bindings': self.data_link_audit}
 
     def copy(self, source, *, prefix='results'):
         source = Path(source)
@@ -136,13 +281,21 @@ class Builder:
                   'caption': artifact.get('metadata', {}).get('method', 'Saved completed result; source statistics retained.'),
                   'output_only': output_only or artifact.get('output_only', False) or artifact.get('metadata', {}).get('display_in_main') is False, 'metadata': artifact.get('metadata', {}),
                   'policy': artifact.get('policy') or artifact.get('metadata', {}).get('event_set')}
+        record['report_origin'] = artifact.get('report_origin', 'native')
+        if record['metadata'].get('das_scope', {}).get('mode') in {'rs_required', 'fixed_completed_result'}:
+            record['policy'] = None
+        if record['report_origin'] == 'native' and not self.source.get('report_native_figures_in_main', True):
+            record['output_only'] = True
+        self._comparison_scope(record)
+        record['data_links'] = self.bind_data_links(record, artifact.get('data_links', artifact.get('metadata', {}).get('data_links', [])))
         if svg.is_file():
             record['svg'] = self.copy(svg, prefix='figures')
         self.panels.append(record)
         return record
 
     def collect(self):
-        for artifact in [*self.source['artifacts'], *self.source.get('extra_assets', [])]:
+        collections = [('native', self.source['artifacts']), ('extra', self.source.get('extra_assets', []))]
+        for origin, artifact in [(origin, {**raw, 'report_origin': origin}) for origin, records in collections for raw in records]:
             path = Path(artifact['path'])
             if not path.is_file():
                 self.exclusions.append({'name': artifact.get('name'), 'reason': 'Source file missing; not computed/imported into this report.'})
@@ -184,6 +337,10 @@ class Builder:
             path = Path(asset['path'])
             if asset['kind'] in ('image', 'vega'):
                 raw = {**asset, 'artifact_id': asset['id'], 'name': asset['title'], 'analysis_id': asset.get('metadata', {}).get('analysis_id', ''), 'kind': 'plot_spec', 'contrast_ids': [] if asset.get('contrast_id', 'all') == 'all' else [asset['contrast_id']]}
+                raw['report_origin'] = 'extra' if str(asset.get('metadata', {}).get('source_artifact_id')) in self._extra_asset_ids else 'native'
+                intended_scope = asset.get('metadata', {}).get('das_scope', {})
+                if intended_scope.get('mode') == 'switchable_recorded_result' and intended_scope.get('recorded_event_set') in ('significant', 'stable_significant'):
+                    raw['policy'] = intended_scope['recorded_event_set']
                 panel = self.figure(raw, asset['chapter'])
                 if panel:
                     panel['caption'] = asset['caption']
@@ -217,6 +374,8 @@ class Builder:
             panel.setdefault('id', safe(path.stem))
             if not panel.get('contrast_id'): panel['contrast_id'] = 'all'
             panel.setdefault('cell_type', 'all'); panel.setdefault('caption', 'Completed results; native effects and P/FDR retained.')
+            self._comparison_scope(panel)
+            panel['data_links'] = self.bind_data_links(panel, panel.get('data_links', []))
             svg = path.with_suffix('.svg')
             if svg.is_file(): panel['svg'] = svg.relative_to(self.output).as_posix() if svg.is_relative_to(self.output) else self.copy(svg, prefix='figures')
             self.panels.append(panel)
@@ -248,6 +407,9 @@ class Builder:
 
     def write(self):
         from .layout import render
+        coverage = self.figure_data_coverage()
+        if coverage['strict_plot_data_required'] and coverage['unbound_main_figures']:
+            raise ValueError('Every main figure requires exact plot_data; missing bindings: ' + ', '.join(p['id'] for p in coverage['unbound_main_figures']))
         return render(self)
 
 

@@ -1,5 +1,14 @@
 # Usable source baseline
 
+Report development version **`2.0.0b3.dev20261023`** adds explicit comparison
+selection and grouped complete intersections, per-figure plotting-data links,
+and views of verified completed MotifTrace families and network numerical
+imports. These report adapters preserve the original statistical families,
+effects and saved source tables. Native completion and source hashes remain
+separate from report rendering; the source network's failed plotting lifecycle
+is retained when its numerical outputs are independently recovered. Scientific
+method versions and the earlier threshold records below remain unchanged.
+
 The preserved application baseline is **`2.0.0b2+baseline.20261022`**. It contains the complete application source, MotifTrace, Katana-Splice-Network and both existing one-click report routes. Its original method versions and parameter inventory remain recorded in `tests/public_baseline/workflow_inventory.json`.
 
 The development version **`2.0.0b3.dev20261022`** implements the approved [every-sample ten-count AS and count-bearing network input policies](../THRESHOLDS.md). Quality, bulk Landscape, DAS, exact cross-comparison and count-bearing CoSplice receive new method versions. The approved module controls preserve the standard 20-event/0.25 defaults and custom YAML settings while adding nullable runtime overrides. Both report routes record actual module parameters when their provenance is available; the interpreted report writes a new run directory. These wrapper/report changes have their own versions. The network module-discovery kernel and all other scientific methods remain unchanged. The original installation, earlier policy documentation and completed research outputs are preserved. New tests compare these specific approved changes against the immutable original inventory.

@@ -19,6 +19,23 @@ def _link(path, label):
     return '<a href="'+esc(path)+'">'+esc(label)+'</a>'
 
 
+def _data_links(record, prefix=''):
+    links = record.get('data_links', [])
+    if not links:
+        return '<span class="selection-note">Exact plot data not linked for this imported figure.</span>'
+    return ''.join('<a data-data-role="'+esc(link['role'])+'" href="'+esc(prefix+link['path'])+'" title="'+esc('Unit: '+str(link['unit'])+'; comparison: '+str(link['contrast_id'])+'; policy: '+str(link['policy'] or 'fixed/common'))+'">'+esc(link['label'])+'</a>' for link in links)
+
+
+def _measurement_note(record):
+    scope = record.get('metadata', {}).get('das_scope', {})
+    if scope.get('mode') == 'rs_required':
+        return '<span class="selection-note">RS-DAS required; fixed recorded measurement scope.</span>'
+    if scope.get('mode') == 'fixed_completed_result':
+        name = {'stable_significant': 'RS-DAS', 'significant': 'ordinary DAS'}.get(scope.get('recorded_event_set'), 'original collection')
+        return '<span class="selection-note">Fixed completed '+esc(name)+' scope; unchanged by the DAS selector.</span>'
+    return ''
+
+
 def _cell(value):
     if value is None: return 'NA'
     if isinstance(value, float): return f'{value:.5g}'
@@ -89,6 +106,8 @@ def render(builder):
         for index, item in enumerate(chapter_items, 1):
             links = _link(item['image'], 'Figure')
             if item.get('svg'): links += _link(item['svg'], 'SVG')
+            links += _data_links(item)
+            links += _measurement_note(item)
             if item.get('selection_scope'): links += '<span class="selection-note">Recorded result scope; see provenance</span>'
             blocks.append('<figure class="exhibit wide" id="'+esc(item['id'])+'"'+_scope(item)+'><div class="exhibit-head"><span class="exhibit-no">'+str(number)+'.'+str(index)+'</span><h3>'+esc(item['title'])+'</h3></div><button class="plot-button"><img loading="lazy" src="'+esc(item['image'])+'" alt="'+esc(item['title'])+'"></button><figcaption><p class="fig-notes">'+esc(item.get('caption', ''))+'</p><div class="fig-links">'+links+'</div></figcaption></figure>')
             if number == 3:
@@ -136,6 +155,8 @@ def render(builder):
                'top10': builder.top10, 'policy_data': builder.policy_data, 'complete_results': builder.tables,
                'source_files': builder.audit, 'unavailable': builder.exclusions, 'no_upstream_rerun': True,
                'no_source_statistics_refit': True, 'dummy': bool(source.get('dummy', False))}
+    payload['figure_data_links'] = builder.figure_data_coverage()
+    payload['report_selection'] = source.get('report_selection', {'applied': False})
     (output/'report-manifest.json').write_text(json.dumps(payload, indent=2, default=str)+'\n', encoding='utf-8')
     sources = []
     for group in [source, *source.get('supplemental', [])]:
@@ -144,6 +165,8 @@ def render(builder):
     provenance = {'schema': 'katana.report_provenance/v1', 'source_files': builder.audit, 'source_projects': sources,
                   'report_parameters': {'event_set': builder.event_set}, 'derived_views': builder.derived_audits,
                   'no_upstream_rerun': True, 'no_source_statistics_refit': True}
+    provenance['figure_data_links'] = builder.figure_data_coverage()
+    provenance['report_selection'] = source.get('report_selection', {'applied': False})
     (output/'provenance.json').write_text(json.dumps(provenance, indent=2, default=str)+'\n', encoding='utf-8')
     with zipfile.ZipFile(output/'REPORT.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
         for path in sorted(output.rglob('*')):
@@ -157,7 +180,7 @@ def _outputs(builder):
     for number, (title, _) in CHAPTERS.items():
         tables = [t for t in builder.tables if t.get('chapter') == number or (not t.get('chapter') and chapter_for(t.get('analysis_id', '')) == number)]
         rows = ''.join('<tr><td>'+esc(t['name'])+'</td><td>'+esc(t.get('rows', ''))+'</td><td>'+_link('../'+t.get('view', t['source']), 'Full table / browser')+' '+_link('../'+t['source'], 'Complete source')+'</td></tr>' for t in tables)
-        figures = ''.join('<details><summary>'+esc(p['title'])+'</summary><p>'+esc(p.get('caption', ''))+'</p>'+_link('../'+p['image'], 'Figure')+'<img loading="lazy" style="max-width:100%" src="../'+esc(p['image'])+'" alt="'+esc(p['title'])+'"></details>' for p in builder.panels if p['chapter'] == number)
+        figures = ''.join('<details><summary>'+esc(p['title'])+'</summary><p>'+esc(p.get('caption', ''))+'</p>'+_link('../'+p['image'], 'Figure')+_data_links(p, '../')+'<img loading="lazy" style="max-width:100%" src="../'+esc(p['image'])+'" alt="'+esc(p['title'])+'"></details>' for p in builder.panels if p['chapter'] == number)
         groups.append('<section id="chapter-'+str(number)+'"><h2>'+str(number)+'. '+esc(title)+'</h2><table class="metadata"><tr><th>Complete result</th><th>Rows</th><th>Access</th></tr>'+rows+'</table><h3>Complete figure gallery</h3>'+figures+'</section>')
     (output/'outputs').mkdir(exist_ok=True)
     (output/'outputs/index.html').write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>Complete outputs · Katana</title><link rel="stylesheet" href="../assets/report.css"><main>'+_link('../REPORT.html', 'Report')+'<h1>Complete outputs</h1><p>Source tables retain every row, native P/FDR and effects. Top 10 and overview panels are summaries. Complete long tables, matrix browsers and figure galleries live here outside the report body.</p>'+''.join(groups)+'</main></html>', encoding='utf-8')

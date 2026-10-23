@@ -38,6 +38,11 @@ def test_rendering_retains_all_tests_and_never_calls_statistical_kernel(tmp_path
     pd.testing.assert_frame_equal(copied, original)
     assert copied.iloc[0].pvalue == 5e-310
     assert hashlib.sha256(source.read_bytes()).hexdigest() == digest
+    links = {row["role"]: row for row in result["panels"][0]["data_links"]}
+    plotted = pd.read_csv(links["plot_data"]["path"], sep="\t")
+    assert set(plotted.term) == {"GO / t1", "GO / t2"}
+    assert plotted.plot_gene_ratio.tolist() == [.4, .6]
+    assert len(pd.read_parquet(links["full_results"]["path"])) == 3
 
 
 def test_uncontracted_historical_results_are_not_relabelled(tmp_path):
@@ -76,3 +81,28 @@ def test_complete_foreground_background_and_provenance_files_are_explicit_attach
     receipt.unlink()
     with pytest.raises(FileNotFoundError):
         enrichment_attachment_tables({"report_enrichment_attachments": declarations})
+
+
+def test_scope_links_bind_actual_declared_gene_sets_and_reject_another_family(tmp_path):
+    source = tmp_path / "ora.parquet"
+    rows = _rows().assign(library="fixed_mouse")
+    rows.to_parquet(source)
+    for name in ("input.tsv", "detected.tsv", "mapped-input.tsv", "mapped-background.tsv"):
+        (tmp_path / name).write_text("gene_id\ng1\n", encoding="utf-8")
+    declaration = {"comparison_id": "B_vs_A", "evidence": "DAS", "report_policy": "stable_significant",
+                   "library": "fixed_mouse", "fdr_family": rows.fdr_family.iloc[0],
+                   "foreground_path": "input.tsv", "background_path": "detected.tsv",
+                   "actual_foreground_path": "mapped-input.tsv", "actual_background_path": "mapped-background.tsv"}
+    audit = tmp_path / "scopes.tsv"
+    pd.DataFrame([declaration]).to_csv(audit, sep="\t", index=False)
+    metadata = {"report_enrichment_contract": CONTRACT, "report_enrichment_root": str(tmp_path),
+                "report_enrichment_scope_audit": str(audit)}
+    result = build_enrichment_views({}, [{"path": str(source), "metadata": metadata}], tmp_path / "good")
+    links = result["panels"][0]["data_links"]
+    backgrounds = [r for r in links if r["role"] == "background"]
+    assert {Path(r["path"]).name for r in backgrounds} == {"detected.tsv", "mapped-background.tsv"}
+    assert all(r["contrast_id"] == "B_vs_A" and r["policy"] == "stable_significant" for r in backgrounds)
+    declaration["fdr_family"] = "a different statistical family"
+    pd.DataFrame([declaration]).to_csv(audit, sep="\t", index=False)
+    with pytest.raises(ValueError, match="FDR family"):
+        build_enrichment_views({}, [{"path": str(source), "metadata": metadata}], tmp_path / "bad")

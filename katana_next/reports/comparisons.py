@@ -8,6 +8,7 @@ counts; historical flags remain in the complete exported table.
 from __future__ import annotations
 
 from collections import Counter
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -16,7 +17,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from .sources import read_table, table_schema
+from .sources import read_table, table_schema, report_contrast_selection
 
 BLUE, RED, GRAY = "#2863A5", "#C63F4A", "#CDD1D6"
 EVENT_COLORS = [BLUE, RED, "#218D87", "#9A64B0", "#D49A25"]
@@ -137,8 +138,9 @@ class _Views:
                 return read_table(artifact["path"], filters=[("comparison_id", "=", comparison)])
             frame = read_table(artifact["path"])
             return frame.loc[frame.comparison_id.eq(comparison)].copy()
-        if artifact.get("contrast_ids") == [comparison] or len(self.project.get("contrasts", [])) == 1:
-            return read_table(artifact["path"])
+        native_ids = self.project.get('report_native_contrast_ids', [row['contrast_id'] for row in self.project.get('contrasts', [])])
+        if artifact.get("contrast_ids") == [comparison] or len(native_ids) == 1:
+            return read_table(artifact["path"]).assign(comparison_id=comparison)
         self.audit.append({"source": artifact.get("name"), "comparison_id": comparison,
                            "status": "unavailable", "reason": "No authenticated comparison column/scope."})
         return pd.DataFrame()
@@ -169,6 +171,26 @@ class _Views:
                             "path": path.relative_to(self.root).as_posix(),
                             "caption": caption, "contrast_id": comparison or "all", "scope": "comparison" if comparison else "global",
                             "policy": policy, "event_set": policy})
+
+    def bind_data(self, plotted, unit, *, full_results=None, comparison_ids=None):
+        """Attach each panel's exact display values, independently of caption."""
+        panel = self.panels[-1]
+        comparison, policy = panel.get('contrast_id') or 'all', panel.get('policy')
+        name = panel['id'] + '-plot-data'
+        path = self.table(plotted, name, comparison, unit, policy=policy,
+                          suffix='tsv', chapter=panel['chapter'])
+        links = [{'role': 'plot_data', 'label': 'Exact plotted data', 'path': path,
+                  'contrast_id': comparison, 'policy': policy, 'unit': unit}]
+        for label, source, source_unit in full_results or []:
+            links.append({'role': 'full_results', 'label': label, 'path': source,
+                          'contrast_id': comparison, 'policy': policy, 'unit': source_unit})
+        if comparison_ids is not None:
+            panel['comparison_ids'] = list(comparison_ids)
+            for link in links:
+                link['comparison_ids'] = list(comparison_ids)
+        panel['data_links'] = links
+        panel['unit'] = unit
+        return path
 
     def top(self, frame, analysis, comparison, fdr, effect, unit, *, policy=None, full_table=None):
         selected = frame.loc[frame["report_significant"]].copy() if "report_significant" in frame else frame
@@ -213,7 +235,7 @@ def _axes(title, xlabel="", ylabel=""):
     return fig, ax
 
 
-def _volcano(view, frame, comparison, analysis, effect, fdr, selected, *, policy=None, xlabel=None, fdr_cutoff=.05):
+def _volcano(view, frame, comparison, analysis, effect, fdr, selected, *, policy=None, xlabel=None, fdr_cutoff=.05, full_results=None):
     title = f"{LABELS.get(policy, analysis) if analysis == 'DAS' else analysis} | {comparison}"
     fig, ax = _axes(title, xlabel or effect, "−log10(native FDR)")
     x, q = _num(frame, effect), _num(frame, fdr)
@@ -232,9 +254,18 @@ def _volcano(view, frame, comparison, analysis, effect, fdr, selected, *, policy
                     fontsize=7, xytext=(3, 4), textcoords="offset points")
     view.figure(fig, comparison + "-" + analysis + "-volcano-" + str(policy or "common"), 3, title,
                 comparison, "Original caller effect and FDR; red positive, blue negative. All finite tested rows are plotted; only foreground coloring changes. Plotting floor for native zero FDR does not change saved values.", policy)
+    view.panels[-1]['plot_parameters'] = {'effect_column': effect, 'fdr_column': fdr,
+        'fdr_reference_line': fdr_cutoff, 'zero_fdr_display_floor': float(np.nextafter(0., 1.))}
+    plotted = frame.loc[valid].copy()
+    plotted['plot_x'] = x.loc[valid]
+    plotted['plot_y_minus_log10_fdr'] = y.loc[valid]
+    plotted['plot_foreground'] = selected.loc[valid].astype(bool)
+    plotted['plot_color'] = colors[valid.to_numpy()]
+    view.bind_data(plotted, 'gene' if analysis == 'DEG' else ('exact_splicing_event' if analysis == 'DAS' else 'exon_bin'),
+                   full_results=[('Complete native results', full_results, 'native_result_row')] if full_results else [])
 
 
-def _heat(view, data, rowlabels, collabels, comparison, name, caption, *, chapter=3, policy=None, bounded=False):
+def _heat(view, data, rowlabels, collabels, comparison, name, caption, *, chapter=3, policy=None, bounded=False, full_results=None, row_ids=None):
     from matplotlib.colors import LinearSegmentedColormap
     if data.size == 0:
         view.audit.append({"comparison_id": comparison, "figure": name, "status": "not_computed", "reason": "No eligible matrix rows."})
@@ -251,6 +282,14 @@ def _heat(view, data, rowlabels, collabels, comparison, name, caption, *, chapte
     fig.colorbar(image, ax=ax, shrink=.7)
     view.figure(fig, comparison + "-" + name + "-" + str(policy or "common"), chapter,
                 name + " | " + comparison, comparison, caption, policy)
+    view.panels[-1]['plot_parameters'] = {'color_limits': [0 if bounded else -limit, limit], 'missing_values': 'unchanged'}
+    plotted = pd.DataFrame(values, columns=list(collabels))
+    plotted.insert(0, 'display_row', list(rowlabels))
+    plotted.insert(0, 'display_row_index', range(len(rowlabels)))
+    if row_ids is not None:
+        plotted.insert(0, 'object_id', list(row_ids))
+    view.bind_data(plotted, 'PSI' if bounded else 'display_matrix_value',
+                   full_results=[('Complete matrix source', full_results, 'native_matrix_row')] if full_results else [])
 
 
 def _asset(project, kind, comparison=None):
@@ -278,10 +317,16 @@ def _usage_effect(view, frame, comparison):
     return merged, effects[0]
 
 
-def _cross_patterns(view, members, identity, comparisons, title, policy=None):
+def _cross_patterns(view, members, identity, comparisons, title, policy=None, *, group=None):
     """Exact observed UpSet patterns, with a complete searchable member view."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
+    if not comparisons or len(comparisons) > 4 or len(comparisons) != len(set(comparisons)):
+        raise ValueError('Grouped exact intersections require one to four distinct comparison axes.')
+    members = members.loc[members.comparison_id.isin(comparisons)].copy()
+    scope = str((group or {}).get('group_id', 'all'))
+    label = str((group or {}).get('label', 'Selected comparisons'))
+    scoped_title = title + '-' + scope if scope != 'all' else title
     masks = {}
     for number, comparison in enumerate(comparisons):
         for key in set(members.loc[members.comparison_id.eq(comparison), identity].astype(str)):
@@ -291,37 +336,48 @@ def _cross_patterns(view, members, identity, comparisons, title, policy=None):
     pattern_ids = {mask: "P" + str(i + 1).zfill(4) for i, mask in enumerate(ranked)}
     labels = {mask: "; ".join(c for i, c in enumerate(comparisons) if mask & (1 << i)) for mask in ranked}
     complete = pd.DataFrame([{"pattern_id": pattern_ids[mask], "included_comparisons": labels[mask],
-                              "comparison_count": mask.bit_count(), "object_count": counts[mask]}
-                             for mask in ranked], columns=["pattern_id", "included_comparisons", "comparison_count", "object_count"])
-    count_path = view.table(complete, title + "-all-exact-intersection-counts-" + str(policy or "common"),
+                              "comparison_count": mask.bit_count(), "object_count": counts[mask],
+                              'membership_mask': mask,
+                              **{comparison: bool(mask & (1 << i)) for i, comparison in enumerate(comparisons)}}
+                             for mask in ranked], columns=["pattern_id", "included_comparisons", "comparison_count", "object_count", 'membership_mask', *comparisons])
+    count_path = view.table(complete, scoped_title + "-all-exact-intersection-counts-" + str(policy or "common"),
                             "all", "exact_membership_pattern", policy=policy, suffix="tsv", chapter=4)
     members = members.copy()
     members["pattern_id"] = members[identity].astype(str).map(lambda key: pattern_ids[masks[key]])
     members["included_comparisons"] = members[identity].astype(str).map(lambda key: labels[masks[key]])
-    member_path = view.table(members, title + "-all-intersection-members-" + str(policy or "common"),
+    member_path = view.table(members, scoped_title + "-all-intersection-members-" + str(policy or "common"),
                              "all", "object_by_comparison", policy=policy, chapter=4)
+    member_tsv = view.table(members, scoped_title + '-all-members-native-values-' + str(policy or 'common'),
+                           'all', 'object_by_comparison', policy=policy, suffix='tsv', chapter=4)
+    set_sizes = pd.DataFrame([{'comparison_id': comparison,
+        'object_count': len(set(members.loc[members.comparison_id.eq(comparison), identity].astype(str)))} for comparison in comparisons])
+    set_path = view.table(set_sizes, scoped_title + '-set-sizes-' + str(policy or 'common'),
+                          'all', 'unique_exact_object', policy=policy, suffix='tsv', chapter=4)
     # The complete identity browser is output-only. The native per-comparison
     # effect/P/FDR rows remain available in the full linked Parquet table.
-    union = members.drop_duplicates(identity)[[c for c in (identity, "gene_id", "gene_symbol", "pattern_id", "included_comparisons") if c in members]]
-    data = {"columns": list(union), "rows": union.astype(object).where(union.notna(), None).values.tolist()}
+    data = {"columns": list(members), "rows": members.astype(object).where(members.notna(), None).values.tolist()}
     template = Path(__file__).with_name("assets").joinpath("table-template.html").read_text(encoding="utf-8")
-    browser = view.root / "outputs/comparisons/all" / (_safe(title + "-complete-members-" + str(policy or "common")) + ".html")
+    browser = view.root / "outputs/comparisons/all" / (_safe(scoped_title + "-complete-members-" + str(policy or "common")) + ".html")
     browser.parent.mkdir(parents=True, exist_ok=True)
-    page = template.replace("__TITLE__", title + " complete exact memberships")
+    page = template.replace("__TITLE__", title + ' | ' + label + " complete exact memberships")
     page = page.replace("../../REPORT.html", "../../../REPORT.html").replace("../index.html", "../../index.html")
-    page = page.replace("__RAW__", Path(member_path).name).replace("__DATA__", json.dumps(data, allow_nan=False).replace("<", "\\u003c"))
+    page = page.replace("__RAW__", Path(member_tsv).name).replace("__DATA__", json.dumps(data, allow_nan=False).replace("<", "\\u003c"))
     browser.write_text(page, encoding="utf-8")
-    view.tables.append({"name": title + " complete searchable memberships | " + str(policy or "common"),
-                        "path": browser.relative_to(view.root).as_posix(), "chapter": 4, "kind": "html", "rows": len(union), "policy": policy})
-    visible = ranked[:20]
-    fig = Figure(figsize=(13, max(7.5, 3.5 + .3 * len(comparisons))))
+    view.tables.append({"name": scoped_title + " complete searchable memberships | " + str(policy or "common"),
+                        "path": browser.relative_to(view.root).as_posix(), "chapter": 4, "kind": "html", "rows": len(members), "policy": policy})
+    visible = ranked
+    fig = Figure(figsize=(14, 7.5))
     FigureCanvasAgg(fig)
-    grid = fig.add_gridspec(2, 1, height_ratios=(3, max(2, .2 * len(comparisons))), hspace=.05)
-    bar, matrix = fig.add_subplot(grid[0]), fig.add_subplot(grid[1])
+    grid = fig.add_gridspec(2, 2, width_ratios=(3, 8), height_ratios=(3, 2), hspace=.05, wspace=.08)
+    bar, matrix, sizes = fig.add_subplot(grid[0, 1]), fig.add_subplot(grid[1, 1]), fig.add_subplot(grid[1, 0])
+    note = fig.add_subplot(grid[0, 0]); note.axis('off')
+    note.text(.05, .9, label + '\n' + str(len(masks)) + ' unique objects\n' + str(len(ranked)) + ' observed exact patterns\nAll patterns shown', va='top', fontsize=10)
     bar.bar(range(len(visible)), [counts[mask] for mask in visible], color=BLUE)
-    bar.set(ylabel="Exact intersection objects", title=title + " | " + (LABELS.get(policy) or "native feature significance"))
+    bar.set(ylabel="Exact intersection objects", title=title + ' | ' + label + " | " + (LABELS.get(policy) or "native feature significance"))
     bar.spines[["top", "right"]].set_visible(False)
     bar.tick_params(axis="x", bottom=False, labelbottom=False)
+    for x, mask in enumerate(visible):
+        bar.text(x, counts[mask], str(counts[mask]), ha='center', va='bottom', fontsize=8)
     for x, mask in enumerate(visible):
         rows = [i for i in range(len(comparisons)) if mask & (1 << i)]
         matrix.scatter([x] * len(comparisons), range(len(comparisons)), color="#E2E5E9", s=17)
@@ -329,11 +385,31 @@ def _cross_patterns(view, members, identity, comparisons, title, policy=None):
         if rows:
             matrix.plot([x, x], [min(rows), max(rows)], color=BLUE, lw=1)
     matrix.set_xticks(range(len(visible)), [pattern_ids[mask] for mask in visible], rotation=60, fontsize=7)
-    matrix.set_yticks(range(len(comparisons)), comparisons, fontsize=7)
+    matrix.set_yticks(range(len(comparisons)), [''] * len(comparisons))
+    sizes.barh(range(len(comparisons)), set_sizes.object_count, color=RED)
+    sizes.set_yticks(range(len(comparisons)), comparisons, fontsize=7)
+    sizes.invert_xaxis(); sizes.invert_yaxis(); sizes.set_xlabel('Set size (unique objects)')
+    largest = max(set_sizes.object_count.max(), 1)
+    for i, n in enumerate(set_sizes.object_count):
+        if n >= largest * .15:
+            sizes.text(n - largest * .015, i, str(n), ha='left', va='center', fontsize=8, color='white')
+        else:
+            sizes.text(n + largest * .015, i, str(n), ha='right', va='center', fontsize=8)
+    sizes.spines[['top', 'right', 'left']].set_visible(False)
     matrix.invert_yaxis(); matrix.spines[["top", "right", "bottom", "left"]].set_visible(False)
-    view.figure(fig, "all-" + title + "-upset-" + str(policy or "common"), 4, title + " exact intersection overview",
-                None, "Overview shows at most the 20 largest observed exact membership patterns. All pattern counts and every object membership are available in the complete paginated/searchable output browser and native-value table. No overlap P/FDR or interaction model is fitted.", policy)
+    view.figure(fig, "all-" + scoped_title + "-upset-" + str(policy or "common"), 4, title + ' | ' + label + " exact intersections",
+                None, 'Memberships are recomputed using only these selected axes. Every observed nonempty pattern is shown (at most 15 for four axes), with intersection counts and set-size bars. All pattern counts, every member and unchanged native effects/P/FDR are linked; no interaction model or overlap P/FDR is fitted.', policy)
+    view.panels[-1]['contrast_group_id'] = scope
+    view.bind_data(complete, 'exact_membership_pattern', comparison_ids=comparisons,
+        full_results=[('Set-size counts', set_path, 'unique_exact_object'),
+                      ('Complete native member values', member_tsv, 'object_by_comparison'),
+                      ('Search every member', browser.relative_to(view.root).as_posix(), 'object_by_comparison')])
+    for link in view.panels[-1]['data_links']:
+        if link['label'] == 'Set-size counts':
+            link['role'] = 'plot_data'
     return {"intersection_counts": count_path, "intersection_members": member_path,
+            'intersection_members_tsv': member_tsv, 'set_sizes': set_path,
+            'comparison_ids': list(comparisons), 'group_id': scope,
             "complete_browser": browser.relative_to(view.root).as_posix(), "patterns": len(ranked), "objects": len(masks)}
 
 
@@ -354,6 +430,69 @@ def _direction_summary(members, comparisons):
     return pd.DataFrame(records)
 
 
+def _grouped_cross_views(view, members, identity, available, title, policy=None, *, directions=False):
+    """Recalculate descriptive sets from raw selected-object rows per group."""
+    result = {}
+    for group in view.project['report_contrast_groups']:
+        axes = group['contrast_ids']
+        missing = [cid for cid in axes if cid not in available]
+        if missing:
+            view.audit.append({'analysis': title, 'group_id': group['group_id'], 'status': 'not_computed',
+                               'missing_comparisons': missing, 'reason': 'No zero sets are inferred for missing comparison results.'})
+            result[group['group_id']] = {'status': 'not_computed', 'missing_comparisons': missing}
+            continue
+        selected = members.loc[members.comparison_id.isin(axes)].copy()
+        sets = {cid: set(selected.loc[selected.comparison_id.eq(cid), identity].astype(str)) for cid in axes}
+        overlap = np.asarray([[len(sets[a] & sets[b]) for b in axes] for a in axes])
+        summary = pd.DataFrame([{'comparison_a': a, 'comparison_b': b,
+            'shared_exact_objects': int(overlap[i, j]), 'set_size_a': len(sets[a]), 'set_size_b': len(sets[b])}
+            for i, a in enumerate(axes) for j, b in enumerate(axes)])
+        stem = title + '-' + group['group_id'] + '-' + str(policy or 'common')
+        count_path = view.table(summary, stem + '-exact-overlap-counts', 'all',
+                                 'exact_object_set_pair', policy=policy, suffix='tsv', chapter=4)
+        unit = 'exact_splicing_event' if identity == 'event_id' else 'canonical_gene_and_exon_bin'
+        membership_path = view.table(selected, stem + '-all-native-memberships', 'all', unit, policy=policy, chapter=4)
+        if len(axes) > 1:
+            fig, ax = _axes(title + ' | ' + group['label'])
+            fig.set_size_inches(10, 7)
+            image = ax.imshow(overlap, cmap='Blues', aspect='auto')
+            ax.set_xticks(range(len(axes)), axes, rotation=45, ha='right', fontsize=8)
+            ax.set_yticks(range(len(axes)), axes, fontsize=8)
+            for i in range(len(axes)):
+                for j in range(len(axes)):
+                    ax.text(j, i, str(overlap[i, j]), ha='center', va='center', fontsize=9)
+            ax.grid(False); fig.colorbar(image, ax=ax, label='Shared exact significant objects')
+            view.figure(fig, stem + '-overlap', 4, title + ' overlaps | ' + group['label'], None,
+                'Descriptive exact-object counts within this selected comparison group. Original IDs and significance are retained; no interaction test or biological rescue interpretation is inferred.', policy)
+            view.panels[-1]['contrast_group_id'] = group['group_id']
+            view.bind_data(summary, 'exact_object_set_pair', comparison_ids=axes,
+                            full_results=[('Complete exact native members', membership_path, unit)])
+        entry = {'status': 'available', 'memberships': membership_path, 'counts': count_path,
+                 'inference': 'not_computed; descriptive exact memberships only'}
+        entry.update(_cross_patterns(view, selected, identity, axes, title, policy, group=group))
+        if directions:
+            summary = _direction_summary(selected, axes)
+            entry['direction_counts'] = view.table(summary, stem + '-exact-direction-counts', 'all',
+                'exact_event_comparison_pair', policy=policy, suffix='tsv', chapter=4)
+            if len(axes) > 1:
+                from matplotlib.colors import LinearSegmentedColormap
+                fig, ax = _axes('Exact event directions | ' + group['label'])
+                fig.set_size_inches(10, 7)
+                values = summary.pivot(index='comparison_a', columns='comparison_b', values='same_direction_fraction').reindex(index=axes, columns=axes)
+                cmap = LinearSegmentedColormap.from_list('direction_blue_red', [BLUE, 'white', RED]); cmap.set_bad('#D9DDE2')
+                image = ax.imshow(np.ma.masked_invalid(values.to_numpy()), cmap=cmap, vmin=0, vmax=1, aspect='auto')
+                ax.set_xticks(range(len(axes)), axes, rotation=45, ha='right', fontsize=8)
+                ax.set_yticks(range(len(axes)), axes, fontsize=8); ax.grid(False)
+                fig.colorbar(image, ax=ax, label='Same-sign fraction among comparable shared events')
+                view.figure(fig, stem + '-direction', 4, 'Exact event direction concordance | ' + group['label'], None,
+                    'Original numerator-minus-denominator ΔPSI signs for the same selected events. Gray/NA means no shared finite nonzero effects. No new P/FDR, interaction fit or rescue classification.', policy)
+                view.panels[-1]['contrast_group_id'] = group['group_id']
+                view.bind_data(summary, 'exact_event_comparison_pair', comparison_ids=axes,
+                                full_results=[('Complete exact native members', membership_path, unit)])
+        result[group['group_id']] = entry
+    return {'groups': result, 'inference': 'descriptive exact selected-group membership only; no new fits'}
+
+
 def build_comparison_views(project, artifacts, destination, event_set="stable_significant"):
     """Build all requested comparison views in both DAS policies, read-only.
 
@@ -365,6 +504,12 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
     event_set = normalize_event_set(event_set)
     project = _dict(project)
     project = _dict(project.get("project", project))
+    selection = report_contrast_selection(project, project)
+    project = copy.deepcopy(project)
+    indexed = {row['contrast_id']: row for row in project.get('contrasts', [])}
+    project['contrasts'] = [indexed[cid] for cid in selection['contrast_ids']]
+    project['report_contrast_groups'] = selection['groups']
+    project['report_native_contrast_ids'] = project.get('report_native_contrast_ids', selection['native_contrast_ids'])
     view = _Views(project, [_dict(a) for a in artifacts], destination)
     sources = {key: view.source(analysis, name) for key, analysis, name in (
         ("DAS", "differential.as", "Differential AS events"),
@@ -393,7 +538,7 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
             full = view.table(deg, "DEG-full", comparison, "gene")
             ranked = view.top(deg, "DEG", comparison, "deg_fdr", "log2fc", "gene", full_table=full)
             _volcano(view, deg, comparison, "DEG", "log2fc", "deg_fdr", deg.report_significant,
-                     xlabel="log2 fold change (numerator − denominator)", fdr_cutoff=float((sources["DEG"].get("parameters") or {}).get("fdr", .05)))
+                     xlabel="log2 fold change (numerator − denominator)", fdr_cutoff=float((sources["DEG"].get("parameters") or {}).get("fdr", .05)), full_results=full)
             sets["DEG"] = _genes(deg.loc[deg.report_significant])
             if counts is not None:
                 sample_ids = contrast["numerator"]["sample_ids"] + contrast["denominator"]["sample_ids"]
@@ -406,7 +551,7 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
                     matrix = (matrix - np.nanmean(matrix, axis=1, keepdims=True)) / np.maximum(np.nanstd(matrix, axis=1, keepdims=True), 1e-9)
                 mapping = deg.drop_duplicates("gene_id").set_index("gene_id").gene_symbol.to_dict() if "gene_symbol" in deg else {}
                 _heat(view, matrix, [str(mapping.get(g, g)) for g in available_genes], available, comparison, "DEG expression heatmap",
-                      "Top 30 significant genes by native FDR/absolute effect. log2(normalized count + 1), row Z score; sample order follows the declared contrast. Full normalized counts remain in outputs.")
+                      "Top 30 significant genes by native FDR/absolute effect. log2(normalized count + 1), row Z score; sample order follows the declared contrast. Full normalized counts remain in outputs.", full_results=str(counts_asset['path']), row_ids=available_genes)
             else:
                 backgrounds["DEG"] = _genes(deg.loc[_num(deg, "deg_fdr").notna()])
             view.gene_set(deg, sets["DEG"], backgrounds["DEG"], "DEG", comparison)
@@ -435,7 +580,7 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
             view.gene_set(features, sets[analysis], backgrounds[analysis], analysis, comparison)
             if effect:
                 _volcano(view, features, comparison, "DEXSeq", effect, "dtu_fdr", features.report_significant,
-                         xlabel="Native " + effect + " (control/treatment)")
+                         xlabel="Native " + effect + " (control/treatment)", full_results=full)
             fig, ax = _axes(analysis + " top feature evidence | " + comparison, "−log10(native adjusted P)", unit)
             shown = ranked.iloc[::-1]
             ax.barh(range(len(shown)), -np.log10(_num(shown, "dtu_fdr").clip(lower=np.nextafter(0., 1.))), color=BLUE)
@@ -445,6 +590,10 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
                         analysis + " feature evidence | " + comparison, comparison,
                         ("Transcript-level stageR confirmation FDR; gene screening FDR remains a separate column. No inferential transcript-usage effect was provided by this completed source." if analysis == "DTU" else
                          "Exon-bin native adjusted P, not per-gene q. Exact native fold-change field and control/treatment direction are retained when declared; source transcripts and exon bins are never conflated."))
+            plotted = shown.copy()
+            plotted['plot_minus_log10_fdr'] = -np.log10(_num(shown, 'dtu_fdr').clip(lower=np.nextafter(0., 1.)))
+            plotted['display_label'] = labels
+            view.bind_data(plotted, unit, full_results=[('Complete native feature results', full, unit)])
         if not as_frame.empty:
             original = as_frame.copy(deep=False)
             ordinary = _native_significance(as_frame, "fdr", "dpsi", effect_cutoff=.1)
@@ -466,6 +615,9 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
             ax.set_xticks(x, EVENTS); ax.legend(frameon=False, fontsize=8)
             view.figure(fig, comparison + "-AS-raw-versus-RS", 2, "Raw and read-supported AS | " + comparison,
                         comparison, "Read support only does not apply a significance cutoff. Raw and supported counts are from this comparison's complete exact-event table.")
+            view.bind_data(pd.DataFrame({'event_type': EVENTS, 'raw_events': raw_counts.to_numpy(),
+                'read_supported_events': rs_counts.to_numpy()}), 'exact_splicing_event_count',
+                full_results=[('Complete events and read-support evidence', full, 'exact_splicing_event')])
             for label, values in (("Raw", raw_counts), ("Read-supported", rs_counts)):
                 fig, ax = _axes(label + " event types | " + comparison)
                 ax.grid(False)
@@ -475,6 +627,10 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
                     ax.text(.5, .5, "No eligible events", transform=ax.transAxes, ha="center")
                 view.figure(fig, comparison + "-AS-composition-" + label, 2, label + " event composition | " + comparison,
                             comparison, "Composition of all raw or read-supported events, independently of significance.")
+                view.bind_data(pd.DataFrame({'event_type': EVENTS, 'events': values.to_numpy(),
+                    'percent': values.to_numpy() / values.sum() * 100 if values.sum() else np.zeros(len(EVENTS)),
+                    'display_color': EVENT_COLORS}), 'exact_splicing_event_count',
+                    full_results=[('Complete event population', full, 'exact_splicing_event')])
             for policy in POLICIES:
                 if policy == "stable_significant" and rs_rule.startswith("missing_"):
                     view.policy_data[policy][comparison] = {"available": False, "events": None, "genes": None,
@@ -486,7 +642,7 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
                 member_columns = [c for c in ("comparison_id", "event_id", "gene_id", "gene_symbol", "event_type", "dpsi", "fdr", "PValue") if c in as_frame]
                 exact_memberships[policy].append(as_frame.loc[selected, member_columns].copy())
                 view.top(display, "DAS", comparison, "fdr", "dpsi", "exact_splicing_event", policy=policy, full_table=full)
-                _volcano(view, as_frame, comparison, "DAS", "dpsi", "fdr", selected, policy=policy, xlabel="ΔPSI (numerator − denominator)")
+                _volcano(view, as_frame, comparison, "DAS", "dpsi", "fdr", selected, policy=policy, xlabel="ΔPSI (numerator − denominator)", full_results=full)
                 fg, bg = _genes(as_frame.loc[selected]), _genes(as_frame.loc[eligible if policy == "stable_significant" else _num(as_frame, "fdr").notna()])
                 view.gene_set(as_frame, fg, bg, "DAS", comparison, policy)
                 current_sets = {**sets, "DAS": fg}
@@ -506,12 +662,19 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
                         for key in ("DEG", "DAS", "DTU", "DEXSeq")], layer_counts, color=[RED, BLUE, "#218D87", "#9A64B0"])
                 view.figure(fig, comparison + "-four-layer-coverage-" + policy, 3, "Four-layer coverage | " + comparison,
                             comparison, "Unique-gene sets from completed native significance; a gene may contribute multiple events/features but is counted once per layer. Missing layers are recorded separately, not interpreted as biological zero.", policy)
+                view.bind_data(pd.DataFrame({'analysis': ['DEG', 'DAS', 'DTU', 'DEXSeq'],
+                    'significant_unique_genes': layer_counts,
+                    'available': [key in current_sets for key in ('DEG', 'DAS', 'DTU', 'DEXSeq')]}),
+                    'unique_gene_count', full_results=[('Complete gene memberships', membership_file, 'unique_gene')])
                 patterns = matrix.pattern.value_counts() if not matrix.empty else pd.Series(dtype=int)
                 fig, ax = _axes("Exact four-layer gene overlaps | " + comparison, "Unique genes", "Exact evidence membership")
                 ax.barh(range(len(patterns)), patterns.iloc[::-1], color=BLUE)
                 ax.set_yticks(range(len(patterns)), patterns.index[::-1], fontsize=7)
                 view.figure(fig, comparison + "-four-layer-overlaps-" + policy, 3, "Exact layer overlap | " + comparison,
                             comparison, "All nonempty exact membership patterns; no automatic biological interpretation or rescue inference. Complete gene membership table is linked in outputs.", policy)
+                view.bind_data(pd.DataFrame({'pattern': patterns.iloc[::-1].index,
+                    'unique_genes': patterns.iloc[::-1].to_numpy()}), 'unique_gene_count',
+                    full_results=[('Every gene and its evidence layers', membership_file, 'unique_gene')])
                 view.policy_data[policy][comparison] = {"available": True, "events": int(selected.sum()), "genes": len(fg),
                     "raw_events": len(as_frame), "read_supported_events": int(eligible.sum()),
                     "counts_by_type": {str(k): int(v) for k, v in as_frame.loc[selected].event_type.value_counts().items()},
@@ -529,60 +692,14 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
         if not parts:
             continue
         members = pd.concat(parts, ignore_index=True)
-        full = view.table(members, "exact-event-memberships-" + policy, "all", "exact_splicing_event", policy=policy, chapter=4)
         available = [c["contrast_id"] for c in project.get("contrasts", [])
                      if view.policy_data[policy].get(c["contrast_id"], {}).get("available")]
-        collections = {c: set(members.loc[members.comparison_id.eq(c), "event_id"]) for c in available}
-        overlap = np.asarray([[len(collections[a] & collections[b]) for b in available] for a in available])
-        rows = [{"comparison_a": a, "comparison_b": b, "shared_exact_events": int(overlap[i, j]),
-                 "significant_a": len(collections[a]), "significant_b": len(collections[b])}
-                for i, a in enumerate(available) for j, b in enumerate(available)]
-        summary = view.table(pd.DataFrame(rows), "exact-overlap-counts-" + policy, "all", "exact_event_set_pair", policy=policy, suffix="tsv", chapter=4)
-        if len(available) > 1:
-            fig, ax = _axes("Cross-comparison exact events | " + LABELS[policy])
-            fig.set_size_inches(12, 11)
-            image = ax.imshow(overlap, cmap="Blues", aspect="auto")
-            ax.set_xticks(range(len(available)), available, rotation=90, fontsize=7)
-            ax.set_yticks(range(len(available)), available, fontsize=7)
-            ax.grid(False); fig.colorbar(image, ax=ax, label="Shared exact significant events", shrink=.7)
-            view.figure(fig, "all-exact-event-overlap-" + policy, 4, "Exact event overlaps | " + LABELS[policy],
-                        None, "Exact coordinate-based event identities in the active report foreground. Descriptive counts only; no old overlap P/FDR is reused and no rescue interpretation is inferred.", policy)
-        cross[policy] = {"memberships": full, "counts": summary, "inference": "not_computed; descriptive exact membership counts only"}
-        cross[policy].update(_cross_patterns(view, members, "event_id", available, "DAS-events", policy))
-        directions = _direction_summary(members, available)
-        cross[policy]["direction_counts"] = view.table(directions, "exact-event-direction-counts-" + policy,
-                                                      "all", "exact_event_comparison_pair", policy=policy, suffix="tsv", chapter=4)
-        if len(available) > 1:
-            from matplotlib.colors import LinearSegmentedColormap
-            fig, ax = _axes("Shared exact-event directions | " + LABELS[policy])
-            fig.set_size_inches(12, 11)
-            values = directions.pivot(index="comparison_a", columns="comparison_b", values="same_direction_fraction").reindex(index=available, columns=available)
-            cmap = LinearSegmentedColormap.from_list("direction_blue_red", [BLUE, "white", RED])
-            cmap.set_bad("#D9DDE2")
-            image = ax.imshow(np.ma.masked_invalid(values.to_numpy()), cmap=cmap, vmin=0, vmax=1, aspect="auto")
-            ax.set_xticks(range(len(available)), available, rotation=90, fontsize=7)
-            ax.set_yticks(range(len(available)), available, fontsize=7)
-            ax.grid(False); fig.colorbar(image, ax=ax, label="Same-sign fraction among comparable shared events", shrink=.7)
-            view.figure(fig, "all-exact-event-direction-" + policy, 4, "Exact event direction concordance | " + LABELS[policy],
-                        None, "Descriptive signs of the original numerator-minus-denominator ΔPSI for identical significant events. Gray/NA means no shared finite nonzero effects, not a zero same-direction fraction. Complete same/opposite/comparable counts are in outputs. No new P/FDR, interaction fit or rescue interpretation.", policy)
+        cross[policy] = _grouped_cross_views(view, members, "event_id", available,
+                                           "DAS-events", policy, directions=True)
     if dexseq_memberships:
         members = pd.concat(dexseq_memberships, ignore_index=True)
-        available = [c["contrast_id"] for c in project.get("contrasts", [])
-                     if c["contrast_id"] in dexseq_available]
-        collections = {c: set(members.loc[members.comparison_id.eq(c), "exact_feature_id"]) for c in available}
-        overlap = np.asarray([[len(collections[a] & collections[b]) for b in available] for a in available])
-        rows = [{"comparison_a": a, "comparison_b": b, "shared_exact_features": int(overlap[i, j])}
-                for i, a in enumerate(available) for j, b in enumerate(available)]
-        summary = view.table(pd.DataFrame(rows), "DEXSeq-exact-feature-overlap-counts", "all", "gene_and_exon_bin_pair", suffix="tsv", chapter=4)
-        fig, ax = _axes("DEXSeq exact exon-bin overlaps")
-        fig.set_size_inches(12, 11)
-        image = ax.imshow(overlap, cmap="Blues", aspect="auto")
-        ax.set_xticks(range(len(available)), available, rotation=90, fontsize=7)
-        ax.set_yticks(range(len(available)), available, fontsize=7)
-        ax.grid(False); fig.colorbar(image, ax=ax, label="Shared significant gene + exon-bin identities", shrink=.7)
-        view.figure(fig, "all-DEXSeq-exact-feature-overlap", 4, "DEXSeq exact feature overlaps", None,
-                    "Exact feature identity is canonical gene ID plus exon-bin ID from the same reference. A shared gene with different exon bins is not a shared feature. Descriptive counts only; native exon P/FDR is preserved.")
-        cross["DEXSeq"] = {"counts": summary, **_cross_patterns(view, members, "exact_feature_id", available, "DEXSeq-features")}
+        cross["DEXSeq"] = _grouped_cross_views(view, members, "exact_feature_id",
+                                               dexseq_available, "DEXSeq-features")
     for path, initial in view.snapshots.items():
         now = path.stat()
         if initial != (now.st_size, now.st_mtime_ns):

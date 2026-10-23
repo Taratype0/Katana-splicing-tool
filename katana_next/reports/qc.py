@@ -157,6 +157,7 @@ def build_qc_assets(qc_root: str | Path, output_dir: str | Path) -> dict:
         path = tables / (stem + ".tsv")
         frame.to_csv(path, sep="\t", index=False)
         record(path, title, "table")
+        return path
 
     for path in paths:
         info = by_path.get(path, {})
@@ -181,21 +182,33 @@ def build_qc_assets(qc_root: str | Path, output_dir: str | Path) -> dict:
             star_rows.append({"sample_id": sample, **parse_star_log(path)})
 
     basic, status, trim, star = map(pd.DataFrame, (basic_rows, status_rows, trim_rows, star_rows))
+    native_tables = {}
     for frame, stem, title in [(basic, "fastqc_basic_statistics", "Complete FastQC basic statistics"),
                                (status, "fastqc_module_status", "Complete native FastQC module statuses"),
                                (pd.DataFrame(module_rows), "fastqc_all_native_module_values", "Complete original FastQC module table cells"),
                                (trim, "trim_galore_metrics", "Complete Trim Galore / cutadapt metrics"),
                                (star, "star_mapping_metrics", "Complete native STAR alignment metrics")]:
         if len(frame):
-            table(frame, stem, title)
+            native_tables[stem] = table(frame, stem, title)
 
-    def save(fig, stem, title, caption):
+    def save(fig, stem, title, caption, *, plot_data, unit, full_results):
         fig.suptitle(title, fontsize=14, color="#1E2630")
         for ext in ("png", "svg"):
             fig.savefig(figures / f"{stem}.{ext}", dpi=170, bbox_inches="tight", facecolor="white")
         plt.close(fig)
+        plotted = table(plot_data, stem + '_plot_data', 'Exact plot data | ' + title)
+        methods = tables / (stem + '_methods.json')
+        methods.write_text(json.dumps({'schema': 'katana.report_plot_methods/v1', 'figure_id': stem,
+                                      'method': method, 'display_transform': caption, 'unit': unit,
+                                      'contrast_id': 'all', 'policy': None, 'native_QC_values_preserved': True,
+                                      'upstream_jobs': 0}, indent=2), encoding='utf-8')
+        def link(role, path, label, declared_unit):
+            return dict(role=role, path=str(path), label=label, contrast_id='all', policy=None, unit=declared_unit)
+        links = [link('plot_data', plotted, 'Plot data', unit),
+                 link('full_results', full_results, 'Full native QC results', 'native_QC_measurement'),
+                 link('methods', methods, 'Methods', 'method_record')]
         record(figures / (stem + ".png"), title, caption=caption,
-               exports={"png": str(figures / (stem + ".png")), "svg": str(figures / (stem + ".svg"))})
+               data_links=links, exports={"png": str(figures / (stem + ".png")), "svg": str(figures / (stem + ".svg"))})
 
     plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9,
                          "axes.spines.top": False, "axes.spines.right": False})
@@ -205,7 +218,9 @@ def build_qc_assets(qc_root: str | Path, output_dir: str | Path) -> dict:
         counts.plot.bar(ax=ax, color=[BLUE, RED][:len(counts.columns)], width=.8)
         ax.set(xlabel="Sample", ylabel="Original FASTQ reads (millions)")
         ax.tick_params(axis="x", labelrotation=65)
-        save(fig, "fastqc_read_counts", "Sequencing read counts", "Native FastQC total sequences per FASTQ file. R1/R2 are paired read files, not additional biological replicates.")
+        plotted = counts.rename_axis('sample_id').reset_index().melt(id_vars='sample_id', var_name='mate', value_name='reads_millions')
+        save(fig, "fastqc_read_counts", "Sequencing read counts", "Native FastQC total sequences per FASTQ file. R1/R2 are paired read files, not additional biological replicates.",
+             plot_data=plotted, unit='million_reads_per_FASTQ', full_results=native_tables['fastqc_basic_statistics'])
     if len(status):
         order = status.assign(library=status.sample_id + " | " + status.mate).pivot(index="library", columns="module", values="native_status")
         coded = order.apply(lambda column: column.map({"pass": 0, "warn": 1, "fail": 2})).to_numpy(dtype=float)
@@ -214,7 +229,12 @@ def build_qc_assets(qc_root: str | Path, output_dir: str | Path) -> dict:
         ax.set_xticks(range(len(order.columns)), order.columns, rotation=65, ha="right")
         ax.set_yticks(range(len(order)), order.index, fontsize=7)
         ax.legend(handles=[Patch(color=c, label=s) for c, s in [(BLUE, "Pass"), ("#D49A25", "Warn"), (RED, "Fail")]], loc="upper left", bbox_to_anchor=(1, 1))
-        save(fig, "fastqc_checks", "Native FastQC module checks", "Original FastQC pass / warn / fail flags. All modules and libraries are shown; these technical flags do not automatically exclude a sample.")
+        plotted = status.assign(library=status.sample_id + ' | ' + status.mate).copy()
+        plotted['plot_row'] = plotted.library.map({value: i for i, value in enumerate(order.index)})
+        plotted['plot_column'] = plotted.module.map({value: i for i, value in enumerate(order.columns)})
+        plotted['plot_status_code'] = plotted.native_status.map({'pass': 0, 'warn': 1, 'fail': 2})
+        save(fig, "fastqc_checks", "Native FastQC module checks", "Original FastQC pass / warn / fail flags. All modules and libraries are shown; these technical flags do not automatically exclude a sample.",
+             plot_data=plotted, unit='FastQC_native_module_status', full_results=native_tables['fastqc_module_status'])
 
     specifications = [
         ("Per base sequence quality", "Mean", "Base position (native bin midpoint)", "Mean Phred quality", "fastqc_base_quality", "Sequencing quality along reads", False),
@@ -238,16 +258,23 @@ def build_qc_assets(qc_root: str | Path, output_dir: str | Path) -> dict:
         if not grouped:
             continue
         fig, ax = plt.subplots(figsize=(12, 5), layout="constrained")
+        plotted = []
         for (sample, mate), values in grouped.items():
             values = sorted(values)
             xs, ys = np.asarray(values, dtype=float).T
+            native_y = ys.copy()
             if normalize and ys.sum() > 0:
                 ys = ys / ys.sum() * 100
+            plotted.extend(dict(sample_id=sample, mate=mate, module=name, native_value_column=value_column,
+                                x_bin_midpoint=float(x), native_y=float(ny), plotted_y=float(y),
+                                display_normalized_within_FASTQ=normalize)
+                           for x, ny, y in zip(xs, native_y, ys))
             ax.plot(xs, ys, color=BLUE if mate == "R1" else RED, alpha=.4,
                     marker="o" if len(xs) < 3 else None, markersize=3, lw=1)
         ax.set(xlabel=xlabel, ylabel=ylabel)
         ax.legend(handles=[Patch(color=BLUE, label="Read 1"), Patch(color=RED, label="Read 2")], frameon=False)
-        save(fig, stem, title, "One curve per FASTQ file. Native FastQC bins are plotted at their midpoint; complete raw values remain in outputs. " + ("Counts are divided only by the file's total in this native distribution for display." if normalize else "Original QC values are preserved."))
+        save(fig, stem, title, "One curve per FASTQ file. Native FastQC bins are plotted at their midpoint; complete raw values remain in outputs. " + ("Counts are divided only by the file's total in this native distribution for display." if normalize else "Original QC values are preserved."),
+             plot_data=pd.DataFrame(plotted), unit=ylabel, full_results=native_tables['fastqc_all_native_module_values'])
     if len(trim) and "reads_processed" in trim:
         good = trim.dropna(subset=["reads_processed", "reads_with_adapters", "cutadapt_reads_written"])
         if len(good):
@@ -258,7 +285,12 @@ def build_qc_assets(qc_root: str | Path, output_dir: str | Path) -> dict:
             axes[0].set(ylabel="Reads with adapter (%)")
             axes[1].set(ylabel="Cutadapt reads written (%)", xticks=range(len(good)), xticklabels=labels)
             axes[1].tick_params(axis="x", labelrotation=90, labelsize=7)
-            save(fig, "trimming", "Adapter trimming and cutadapt output", "Per-mate native cutadapt summaries. Adapter-containing reads can be retained after trimming; reads-written here is not final Trim Galore paired-read retention.")
+            plotted = good.copy()
+            plotted['plot_index'] = range(len(good))
+            plotted['adapter_reads_percent'] = good.reads_with_adapters / good.reads_processed * 100
+            plotted['cutadapt_reads_written_percent'] = good.cutadapt_reads_written / good.reads_processed * 100
+            save(fig, "trimming", "Adapter trimming and cutadapt output", "Per-mate native cutadapt summaries. Adapter-containing reads can be retained after trimming; reads-written here is not final Trim Galore paired-read retention.",
+                 plot_data=plotted, unit='per_mate_read_percentage', full_results=native_tables['trim_galore_metrics'])
     mapping = [("Uniquely mapped reads %", "Unique", BLUE), ("% of reads mapped to multiple loci", "Multiple loci", RED),
                ("% of reads mapped to too many loci", "Too many loci", "#9A64B0"),
                ("% of reads unmapped: too many mismatches", "Too many mismatches", "#D49A25"),
@@ -268,14 +300,19 @@ def build_qc_assets(qc_root: str | Path, output_dir: str | Path) -> dict:
         values = star.sort_values("sample_id")
         fig, ax = plt.subplots(figsize=(13, 6), layout="constrained")
         bottom = np.zeros(len(values))
+        plotted = []
         for field, label, color in mapping:
             y = values[field].map(_number).to_numpy(dtype=float)
             ax.bar(range(len(values)), y, bottom=bottom, color=color, label=label)
+            plotted.extend(dict(sample_id=sample, category=label, native_field=field,
+                                native_text=text, plotted_percentage=float(height), stack_bottom_percentage=float(base))
+                           for sample, text, height, base in zip(values.sample_id, values[field], y, bottom))
             bottom += y
         ax.set(ylabel="Native STAR input-read percentage", xticks=range(len(values)), xticklabels=values.sample_id)
         ax.tick_params(axis="x", labelrotation=65)
         ax.legend(frameon=False, ncol=3)
-        save(fig, "mapping", "Genome alignment outcomes", "Original rounded STAR percentages; categories can sum slightly away from 100% because of native rounding. STAR input-read units follow the original paired-end alignment log.")
+        save(fig, "mapping", "Genome alignment outcomes", "Original rounded STAR percentages; categories can sum slightly away from 100% because of native rounding. STAR input-read units follow the original paired-end alignment log.",
+             plot_data=pd.DataFrame(plotted), unit='native_STAR_input_read_percentage', full_results=native_tables['star_mapping_metrics'])
     unavailable = [{"chapter": 1, "title": "Transcript 5′ / 3′ coverage bias", "status": "not_computed",
                     "reason": "No completed RSeQC gene-body coverage / transcript 5′–3′ bias result was supplied. Read-position FastQC quality is a different measurement; no substitute plot or upstream rerun is created."}]
     for row in source_audit:

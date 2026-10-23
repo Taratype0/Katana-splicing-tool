@@ -19,6 +19,47 @@ from .sources import read_table, table_schema
 CONTRACT = "katana.report_scoped_ora/v1"
 
 
+def _scope_inputs(metadata, scope, frame):
+    """Resolve the producer's exact set declarations, never infer from names."""
+    declared = metadata.get("report_enrichment_scope_audit")
+    if not declared:
+        return []
+    root = Path(metadata["report_enrichment_root"]).resolve()
+    audit = pd.read_csv(declared, sep="\t", dtype=str)
+    libraries = frame.library.dropna().astype(str).unique() if "library" in frame else []
+    if len(libraries) != 1:
+        raise ValueError("A scoped ORA panel requires one explicit library identity")
+    chosen = audit
+    for key in ("comparison_id", "evidence", "report_policy"):
+        chosen = chosen.loc[chosen[key].eq(str(scope[key]))]
+    chosen = chosen.loc[chosen.library.eq(libraries[0])]
+    if len(chosen) != 1 or chosen.iloc[0].fdr_family != frame.fdr_family.iloc[0]:
+        raise ValueError("ORA foreground/background declaration does not match its comparison and FDR family")
+    row = chosen.iloc[0]
+    links = []
+    for key, role, label in (("foreground_path", "foreground", "Input genes"),
+                             ("background_path", "background", "Detected / testable genes"),
+                             ("actual_foreground_path", "foreground", "Input genes mapped to this library"),
+                             ("actual_background_path", "background", "Actual enrichment background")):
+        path = (root / row[key]).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise ValueError("Missing or unbounded declared enrichment set: " + str(path))
+        links.append({"role": role, "label": label, "path": str(path),
+                      "contrast_id": str(scope["comparison_id"]),
+                      "policy": None if scope["report_policy"] == "common" else scope["report_policy"],
+                      "unit": "gene", "fdr_family": row.fdr_family,
+                      "library": libraries[0]})
+    for key, label in (("report_enrichment_mapping", "Gene mapping and library identifiers"),
+                       ("report_enrichment_methods", "Methods and resource versions")):
+        if metadata.get(key):
+            path = Path(metadata[key]).resolve()
+            if not path.is_file():
+                raise FileNotFoundError(path)
+            links.append({"role": "methods", "label": label, "path": str(path),
+                          "contrast_id": "all", "policy": None, "scope": "shared", "unit": "resource"})
+    return links
+
+
 def enrichment_attachment_tables(metadata):
     """Expose the producer's explicit complete attachment manifest.
 
@@ -76,6 +117,8 @@ def build_enrichment_views(project, artifacts, destination):
         keys = ["comparison_id", "evidence", "report_policy", "library_kind", "ontology_category"]
         scopes = read_table(source, columns=keys).drop_duplicates()
         for scope in scopes.to_dict("records"):
+            if str(scope["comparison_id"]) not in {c["contrast_id"] for c in project.get("contrasts", [])} and project.get("contrasts"):
+                continue
             filters = [(key, "=", value) for key, value in scope.items()]
             frame = read_table(source, filters=filters) if source.suffix == ".parquet" else read_table(source)
             if source.suffix != ".parquet":
@@ -113,6 +156,21 @@ def build_enrichment_views(project, artifacts, destination):
                 ax.set_yticks(np.arange(len(visible)), terms, fontsize=7)
                 fig.colorbar(scatter, ax=ax, shrink=.7, label="−log10(ORA FDR)")
             identity = _safe("ORA-" + "-".join(str(scope[key]) for key in keys))
+            data_directory = output / "outputs/enrichment/plot-data"
+            data_directory.mkdir(parents=True, exist_ok=True)
+            plotted = visible.copy()
+            plotted["plot_order"] = np.arange(len(plotted))
+            plotted["plot_gene_ratio"] = pd.to_numeric(plotted.overlap_genes).div(pd.to_numeric(plotted.selected_genes).replace(0, np.nan))
+            plotted["plot_neglog10_fdr"] = -np.log10(pd.to_numeric(plotted.fdr).clip(lower=np.nextafter(0., 1.)))
+            plot_path = data_directory / (identity + "-plotted.tsv")
+            plotted.to_csv(plot_path, sep="\t", index=False)
+            full_path = data_directory / (identity + "-complete-tests.parquet")
+            frame.to_parquet(full_path, index=False)
+            links = [{"role": "plot_data", "label": "Plotted terms and contributing genes", "path": str(plot_path),
+                      "contrast_id": comparison, "policy": policy, "unit": "library_term_test", "fdr_family": families[0]},
+                     {"role": "full_results", "label": "All tested terms in this panel", "path": str(full_path),
+                      "contrast_id": comparison, "policy": policy, "unit": "library_term_test", "fdr_family": families[0]},
+                     *_scope_inputs(meta, scope, frame)]
             image = output / "figures/enrichment" / (identity + ".png")
             image.parent.mkdir(parents=True, exist_ok=True)
             fig.savefig(image, dpi=145, bbox_inches="tight", facecolor="white")
@@ -123,6 +181,7 @@ def build_enrichment_views(project, artifacts, destination):
             panels.append({"id": identity, "chapter": chapter, "title": title,
                            "path": image.relative_to(output).as_posix(), "contrast_id": comparison,
                            "scope": "comparison", "policy": policy,
+                           "data_links": links,
                            "caption": "Completed downstream hypergeometric ORA; foreground and native detected/testable background files are in outputs. "
                                       + "BH family: " + families[0] + ". Top 12 displayed by FDR then P; overlap ≥2 is display only. "
                                       + "All eligible zero-overlap and nonsignificant tests remain in the complete table." + rbp_note})

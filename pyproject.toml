@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "katana-splicing-tool"
-version = "2.0.0b3.dev20261022"
+version = "2.0.0b3.dev20261023"
 description = "Artifact-driven bulk and single-cell RNA splicing evidence workspace."
 readme = "README.md"
 requires-python = ">=3.11"

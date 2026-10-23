@@ -99,3 +99,91 @@ def test_native_running_receipt_cannot_create_views(tmp_path):
             psi_path=src / "psi.tsv", annotation_path=src / "annotation.tsv", samples_path=src / "samples.tsv",
             completion_manifest=src / "completion.json", contrasts=contrasts, output_dir=out)
     assert not out.exists()
+
+
+def _recovered_data(tmp_path):
+    """Independent-native collection fixture with an explicitly FAILED source."""
+    from katana_next.workflows.module_functions import enrich_modules
+    src, samples, scores, contrasts = _data(tmp_path)
+    phase = src / "postprocessing"
+    phase.mkdir()
+    full, selected, audits = matched_module_associations(scores, samples, contrasts)
+    assignments = pd.read_csv(src / "assignments.tsv", sep="\t")
+    annotation = pd.read_csv(src / "annotation.tsv", sep="\t")
+    tested, background = enrich_modules(assignments, annotation, {"fixed_mouse": src / "sets.gmt"})
+    full.to_csv(phase / "trait_full_family.tsv", sep="\t", index=False)
+    selected.to_csv(phase / "trait_selected.tsv", sep="\t", index=False)
+    (phase / "trait_audit.json").write_text(json.dumps(audits))
+    tested.to_csv(phase / "module_enrichment.tsv.gz", sep="\t", index=False)
+    background.to_csv(phase / "module_background.tsv", sep="\t", index=False)
+    assignments.merge(annotation, on="event_key")[["module", "gene_symbol"]].drop_duplicates().to_csv(phase / "module_input_genes.tsv", sep="\t", index=False)
+
+    def identity(path):
+        return {"path": path.relative_to(src).as_posix(), "bytes": path.stat().st_size, "sha256": sha256(path.read_bytes()).hexdigest()}
+
+    (src / "PLAN.json").write_text(json.dumps({"source_job_id": "123", "design": {"contrasts": contrasts}}))
+    (src / "IMPORT_PROVENANCE.json").write_text(json.dumps({"schema": "katana.verified_failed_plot_numerical_import/v1",
+        "status": "verified_import", "source_job_id": "123", "fit_network_rerun": False}))
+    (phase / "completion.receipt.json").write_text(json.dumps({
+        "schema": "katana.network_verified_numeric_postprocessing/v1", "status": "completed",
+        "completion_scope": "observed_numerical_import_and_postprocessing_only", "native_job_id": "456",
+        "source_import_manifest_sha256": identity(src / "IMPORT_PROVENANCE.json")["sha256"],
+        "plan_sha256": identity(src / "PLAN.json")["sha256"], "declared_contrasts": [c["contrast_id"] for c in contrasts],
+        "source_failed_status_preserved": True, "frozen_kernels_unchanged": True, "fit_network_rerun": False,
+        "files": [identity(path) for path in sorted(phase.iterdir())]}))
+    (src / "native_completion.receipt.json").write_text(json.dumps({
+        "schema": "katana.network_numeric_recovery_native_acceptance/v1", "passed": True,
+        "completion_scope": "observed_numerical_import_and_postprocessing_only", "native_job_id": "456",
+        "actual_sacct": {"returncode": 0, "stdout": "456|COMPLETED|0:0|\n"},
+        "source_actual_sacct": {"returncode": 0, "stdout": "123|FAILED|1:0|\n"},
+        "plan_sha256": identity(src / "PLAN.json")["sha256"], "source_failed_status_preserved": True,
+        "fit_network_rerun": False, "module_bootstrap_accepted": False,
+        "files": [identity(path) for path in sorted(src.rglob("*")) if path.is_file()]}))
+    return src, contrasts, full, selected, tested
+
+
+def test_verified_failed_plot_import_uses_completed_statistics_without_refitting(tmp_path, monkeypatch):
+    import katana_next.reports.network_views as views
+    import katana_next.workflows.module_functions as functions
+    src, contrasts, full, selected, tested = _recovered_data(tmp_path)
+    before = {str(path): sha256(path.read_bytes()).hexdigest() for path in src.rglob("*") if path.is_file()}
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("A completed family must not be fitted a second time")
+
+    monkeypatch.setattr(views, "matched_module_associations", forbidden)
+    monkeypatch.setattr(functions, "enrich_modules", forbidden)
+    out = tmp_path / "views"
+    result = views.build_network_assets(assignments_path=src / "assignments.tsv", scores_path=src / "scores.tsv",
+        psi_path=src / "psi.tsv", annotation_path=src / "annotation.tsv", samples_path=src / "samples.tsv",
+        completion_manifest=src / "native_completion.receipt.json", contrasts=contrasts, output_dir=out)
+    assert (out / "tables/matched_module_tests_full_family.tsv").read_bytes() == (src / "postprocessing/trait_full_family.tsv").read_bytes()
+    assert (out / "tables/module_enrichment.tsv.gz").read_bytes() == (src / "postprocessing/module_enrichment.tsv.gz").read_bytes()
+    assert result["receipt"]["new_trait_fits"] == 0 and result["receipt"]["new_module_ora"] is False
+    assert result["receipt"]["native_baseline_job"] is None
+    assert result["receipt"]["native_postprocessing_job"] == "456"
+    assert result["receipt"]["original_source_native_job"] == "123"
+    assert result["receipt"]["bootstrap_accepted"] is False
+    assert any(row["title"] == "Original network dendrogram" for row in result["unavailable"])
+    assert all(row["metadata"]["completion_scope"] == "observed_numerical_import_and_postprocessing_only" for row in result["artifacts"])
+    assert before == {str(path): sha256(path.read_bytes()).hexdigest() for path in src.rglob("*") if path.is_file()}
+
+
+@pytest.mark.parametrize("error", ["running", "modified_table", "different_arms", "source_relabelled"])
+def test_recovered_network_rejects_incomplete_native_or_wrong_source_scope(tmp_path, error):
+    from katana_next.reports.network_views import _completed_network_scope
+    src, contrasts, *_ = _recovered_data(tmp_path)
+    proof_path = src / "native_completion.receipt.json"
+    proof = json.loads(proof_path.read_text())
+    if error == "running":
+        proof["actual_sacct"] = "456|RUNNING|0:0|\n"
+    elif error == "source_relabelled":
+        proof["source_actual_sacct"] = "123|COMPLETED|0:0|\n"
+    elif error == "modified_table":
+        with (src / "postprocessing/trait_selected.tsv").open("a") as stream:
+            stream.write("changed")
+    else:
+        contrasts[0]["numerator"]["sample_ids"] = ["C1", "C2", "C3"]
+    proof_path.write_text(json.dumps(proof))
+    with pytest.raises(ValueError):
+        _completed_network_scope(proof_path, [src / "assignments.tsv"], contrasts)
