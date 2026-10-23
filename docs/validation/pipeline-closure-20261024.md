@@ -23,18 +23,18 @@ report, six-sample network precision, or an absent analysis resource.
 
 ## Current accepted images
 
-Software revision: `d05c76c1e3ffb71d221b94021cbb3c5fcb4de014` on
+Software revision: `086338842b241ba6bdef137b05a783b18eb6ca19` on
 `codex/package-development`. Later documentation-only commits retain these
 identities. Images have not been published to a registry.
 
 | Item | Identity |
 | --- | --- |
 | Wheel | `katana_splicing_tool-2.0.0b5.dev20261023-py3-none-any.whl` |
-| Wheel SHA256 | `65fa274d66c2657c38080ba725c679a2ae943ee7f99a9b05416884bcb1092e72` |
-| Downstream image | `katana-downstream:dev-d05c76c` |
-| Downstream image ID | `sha256:0a0ffb5f5d664c777960a3c7baba6350eea1e607cff96cfe933d19f954c90e8c` |
-| Downstream archive | `katana-downstream-dev-d05c76c-linux-amd64.tar.gz`, 1,459,672,641 bytes |
-| Downstream archive SHA256 | `9075147670ec2fa8b0d132ccd912a83d8d8396eb2ef8c2b2265401fe5d5f1333` |
+| Wheel SHA256 | `e12d7c493ef5ac83b9af0263fd9394952b4f486c16fa5aa6ec5132b49fd7725e` |
+| Downstream image | `katana-downstream:dev-0863388` |
+| Downstream image ID | `sha256:32cd5a67bb67311d0c665d3df3b4db3ce7a88f7637d6216c589af8fd2ad6e57c` |
+| Downstream archive | `katana-downstream-dev-0863388-linux-amd64.tar.gz`, 1,463,502,232 bytes |
+| Downstream archive SHA256 | `089a8a940a60360a7488b8339b600503d895a9b69d2840b98dce0d44d09558ae` |
 | DEXSeq tools image | `kanata-dexseq-tools:dev-20261024` |
 | DEXSeq tools image ID | `sha256:9da6802a176f77a81c732cbee5a5a9f8ca4a64ee38391f35903e1fa57881c209` |
 | DEXSeq tools archive | `kanata-dexseq-tools-dev-20261024-linux-amd64.tar.gz`, 122,383,650 bytes |
@@ -48,7 +48,7 @@ was installed into a new image; this was not a new dependency solver run.
 Observed checks on the current downstream image:
 
 - 51 native runtime checks passed offline as UID 1000, without host Python/R.
-- 522 installed package/resource files matched the wheel.
+- 523 installed package/resource files matched the wheel.
 - Browser health and six HTTP routes/assets passed.
 - Three native Nextflow container probes completed, then all three were cached
   on resume with unchanged outputs.
@@ -84,9 +84,10 @@ explicit minimum motif fraction of 0.5 without changing the production default.
 This positive branch check is additional to the not-applicable branches above;
 it is not acceptance of a new study's full 14-window family.
 
-[Native Nextflow integration](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40031963748)
-and [Linux/Windows, interface and installed-wheel CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40031963577)
-passed for this software revision.
+[Native Nextflow integration](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40038202713)
+and [Linux/Windows, interface and installed-wheel CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40038202761).
+Both runs passed for the image revision above. Subsequent fixes are separately
+validated before updating this image acceptance record.
 
 ## Outstanding acceptance
 
@@ -99,9 +100,26 @@ for same-named plain inputs, compressed inputs and rejected empty transcript
 output, with source bytes and modification times preserved in all three cases.
 The failed generated fixture and logs were retained. Its annotation was
 reconstructed in a new directory and matched the original pre-failure SHA256.
-No study inputs were involved. The image identities above predate this source
-fix; they certify downstream runtime installation, not the corrected raw-entry
-workflow exported from a newer wheel.
+No study inputs were involved. The current image includes this correction.
+
+Both generated raw-entry upstream runs have completed: FASTQ finished
+101 tasks (94 cached and seven newly completed in its final upstream resume);
+BAM finished 82 tasks, including six BAM-record FastQC tasks. The 256-file
+FASTQ bundle and 207-file BAM bundle passed their full SHA256 inventories.
+These are upstream results; the complete downstream/report runs remain
+under acceptance.
+
+Native execution also exposed and corrected a SUPPA merge loop on
+header-only event classes. Completed source IOE files were preserved. A
+single selected comparison now explicitly marks cross-comparison intersections
+not applicable while retaining chapter 4; it does not fabricate a self-comparison.
+
+Native DEXSeq exon CSV files now enter the exon layer through a string-preserving
+TSV projection. Per-gene screen tables remain a separate asset. Completed
+stageR confirmation tables take priority for DTU; the underlying transcript
+test is retained separately. Actual native bundle checks verified 384 exon bins
+and 256 distinct transcript rows with no duplicate units or changed P/FDR.
+All source statistical outputs remain unchanged.
 
 - Complete the current raw FASTQ entry, then the BAM entry, through real native
   tools and the integrated downstream/report handoff. A generated local input

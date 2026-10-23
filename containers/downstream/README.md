@@ -12,7 +12,7 @@ execution host. Nextflow and Java run on that host; Katana's native dependencies
 run inside the image.
 
 There is no published registry image yet. The current local development image
-is `katana-downstream:dev-d05c76c`; its matching wheel, image ID, archive checksum
+is `katana-downstream:dev-0863388`; its matching wheel, image ID, archive checksum
 and observed checks are in the [current acceptance record](../../docs/validation/pipeline-closure-20261024.md).
 The [earlier runtime record](../../docs/validation/downstream-runtime-20261023.md)
 refers to an older image. For later source revisions, build a matching wheel and
