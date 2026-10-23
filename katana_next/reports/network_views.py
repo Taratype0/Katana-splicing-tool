@@ -415,6 +415,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
         fig.savefig(svg, bbox_inches="tight", facecolor="white")
         plt.close(fig)
         asset(path, title, caption, extra={"exports": {"png": str(path), "svg": str(svg)},
+                                          "network_view_role": stem,
                                           "data_links": links}, **options)
 
     fig, axes = plt.subplots(1, 2, figsize=(max(12, len(modules) * .38), 5), layout="constrained")
@@ -494,7 +495,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
             ax.invert_yaxis()
             save(fig, "module_connectivity_" + _slug(module), f"{module}: connectivity-ranked members", "Display: first 20 by unchanged global connectivity, ties resolved by event key for display. Every member, original metric and rank remains in the complete table and paged browser; this is not a threshold-defined Hub claim.", data=rank, unit="event", full_table="all_module_members.tsv", module=module, display=False)
     _write_browser(out, members, psi, scores, samples, tested, edges_path)
-    asset(out / "browser" / "ALL_MODULES.html", "All network modules: members, PSI and activity", "All modules and grey, all members, searchable and paginated full PSI, continuous metrics and complete table links. No event is removed for display.", extra={"report_asset_kind": "html"})
+    asset(out / "browser" / "ALL_MODULES.html", "All network modules: members, PSI and activity", "All modules and grey, all members, searchable and paginated full PSI, continuous metrics and complete table links. No event is removed for display.", extra={"report_asset_kind": "html", "network_view_role": "module_browser"})
     for row in audit:
         current = _fingerprint(row["path"])
         if current != row:

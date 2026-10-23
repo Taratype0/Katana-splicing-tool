@@ -13,6 +13,39 @@ from katana_cosplice.utils import normalize_sample_id
 from katana_next.infrastructure.manifest_store import ManifestStore
 
 
+def resolve_network_rmats_mode(manifest, parameters):
+    """Bind JC/JCEC from an explicit request or one declared scoped source mode.
+
+    Never infer a count universe from a filename or default a JC-only project
+    to JCEC. Ambiguous dual-mode input requires an explicit user/project choice.
+    """
+    scope = parameters.get("network_scope", "cohort")
+    selected = set(parameters.get("contrast_ids") or [])
+    assets = [a for a in manifest.assets if a.kind == "rmats_result"
+              and (scope != "contrast" or a.metadata.get("contrast_id") in selected)]
+    if not assets:
+        raise ValueError("No declared rMATS measurement assets exist for this network scope")
+    modes = set()
+    for asset in assets:
+        mode = str(asset.metadata.get("mode") or "").upper()
+        if mode not in {"JC", "JCEC"}:
+            raise ValueError(f"rMATS asset {asset.asset_id} must declare an explicit JC/JCEC mode")
+        modes.add(mode)
+    request = parameters.get("rmats_mode")
+    if request is None:
+        request = manifest.metadata.get("rmats_mode")
+    if request is None:
+        if len(modes) != 1:
+            raise ValueError("Network input contains both JC and JCEC; explicitly choose network.parameters.rmats_mode or project rmats_mode")
+        return next(iter(modes))
+    mode = str(request).upper()
+    if mode not in {"JC", "JCEC"}:
+        raise ValueError("Network rmats_mode must explicitly be JC or JCEC")
+    if mode not in modes:
+        raise ValueError(f"Requested network mode {mode} has no declared scoped rMATS assets; available: {sorted(modes)}")
+    return mode
+
+
 def network_scope_identity(manifest, parameters, *, preserve_recorded_status=True):
     """Bind a discovery to its exact biological samples, independently of labels.
 
@@ -66,6 +99,9 @@ def validate_external_network_config(config, manifest, identity, sha):
     """
     from katana_cosplice.audit import load_sample_metadata, resolve_rmats_root
     from katana_cosplice.matrix import _candidate_sources, _group_samples
+    expected_mode = resolve_network_rmats_mode(manifest, {**identity, "rmats_mode": config.rmats_mode})
+    if config.rmats_mode != expected_mode:
+        raise ValueError("External network configuration mode differs from the declared input mode")
     samples = load_sample_metadata(config.sample_metadata)
     if set(samples.sample_id) != set(identity["sample_ids"]):
         raise ValueError("External network configuration samples do not exactly match the task scope")
@@ -132,6 +168,7 @@ def prepare_project_network(project_path, out, parameters, sha):
     """Project existing complete rMATS files; no alignment or AS refitting."""
     _, manifest = ManifestStore().load(project_path)
     identity = network_scope_identity(manifest, parameters)
+    mode = resolve_network_rmats_mode(manifest, parameters)
     selected_samples = [s for s in manifest.samples if s.sample_id in set(identity["sample_ids"])]
     if not manifest.samples:
         raise ValueError("Network discovery requires the declared biological-sample cohort")
@@ -154,9 +191,6 @@ def prepare_project_network(project_path, out, parameters, sha):
     (root / "bamlist").mkdir(parents=True)
     for group,ids in groups.items():
         (root / "bamlist" / (aliases[group]+"_bamlist.txt")).write_text(",".join(ids)+"\n",encoding="utf-8")
-    mode = str(parameters.get("rmats_mode") or manifest.metadata.get("rmats_mode") or "JCEC").upper()
-    if mode not in {"JC","JCEC"}:
-        raise ValueError("Choose explicit JC or JCEC counts for the complete network cohort")
     contrasts = {c.contrast_id:c for c in manifest.contrasts}
     mapping,slots = [],{}
     for asset in manifest.assets:

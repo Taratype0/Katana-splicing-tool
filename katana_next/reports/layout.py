@@ -95,12 +95,25 @@ def _top10(record, output):
     return '<article class="exhibit top10 wide" id="'+esc(record['id'])+'"'+_scope(record)+'><div class="exhibit-head"><span class="exhibit-no">TOP 10</span><h3>'+esc(record.get('kind', record.get('analysis', 'Result')))+' | '+esc(record.get('contrast_id', record.get('comparison_id', '')) )+'</h3></div><p class="fig-notes">'+esc(record.get('caption', record.get('ranking', 'Native FDR ascending; absolute native effect descending when available; stable object identity.')))+' Unit: '+esc(record.get('unit', 'native result'))+'.</p>'+(_policy_control(safe(record['id'])+'-selection') if record.get('policy') else '')+'<div class="table-scroll"><table class="metadata"><tr><th>Rank</th>'+''.join('<th>'+esc(k)+'</th>' for k in visible)+'<th>All fields</th></tr>'+body+'</table></div>'+(_link(full, 'Complete result table') if full else '')+'</article>'
 
 
+def _rbp_summary(record):
+    rows = ''
+    for row in record['rows']:
+        genes = ', '.join(row['hit_genes'])
+        rows += '<tr><td>'+esc(row['term'])+'</td><td>'+str(row['hits'])+'</td><td>'+_cell(row['fold_enrichment'])+'</td><td>'+_cell(row['pvalue'])+'</td><td>'+_cell(row['fdr'])+'</td><td><details><summary>All '+str(row['hits'])+' hit genes</summary><p>'+esc(genes)+'</p></details></td></tr>'
+    if not rows:
+        rows = '<tr><td colspan="6">No recorded RBP set passes FDR ≤ 0.05. All tested sets remain in the complete results.</td></tr>'
+    families = '; '.join(dict.fromkeys(row['fdr_family'] for row in record['rows']))
+    return '<article class="exhibit wide rbp-enrichment" id="'+esc(record['id'])+'"'+_scope(record)+'><div class="exhibit-head"><h3>'+esc(record.get('title', 'RBP identity / declared-set enrichment'))+' | '+esc(record['contrast_id'])+'</h3></div><p class="fig-notes">'+esc(str(len(record['rows']))+' significant / '+str(record['tested_sets'])+' tested sets. Foreground: '+record['foreground_source']+'. Background: '+record['background_source']+'. '+record['resource_semantics'])+'</p><div class="table-scroll"><table class="metadata"><tr><th>RBP set</th><th>Hit genes</th><th>'+esc(record.get('effect_label', 'Fold enrichment'))+'</th><th>P</th><th>FDR</th><th>Recorded contributors</th></tr>'+rows+'</table></div><p class="fig-notes">'+esc(families)+'</p>'+_link(record['full_path'], 'Complete native enrichment statistics')+_link(record.get('all_hits_path', record['full_path']), 'All tested sets and full hit genes')+'</article>'
+
+
 def render(builder):
     source, output = builder.source, builder.output
     project = source['project']
     sections = []
     for number, (title, note) in CHAPTERS.items():
         blocks = []
+        if number == 7:
+            blocks.extend(_rbp_summary(r) for r in builder.enrichment_summaries)
         chapter_items = _ordered_panels(builder, number)
         inserted = set()
         for index, item in enumerate(chapter_items, 1):
@@ -153,6 +166,7 @@ def render(builder):
                'project_name': project.get('name'), 'generated_utc': datetime.now(timezone.utc).isoformat(), 'event_set': builder.event_set,
                'samples': len(project.get('samples', [])), 'contrasts': [c['contrast_id'] for c in contrasts], 'panels': builder.panels,
                'top10': builder.top10, 'policy_data': builder.policy_data, 'complete_results': builder.tables,
+               'rbp_enrichment_summaries': builder.enrichment_summaries,
                'source_files': builder.audit, 'unavailable': builder.exclusions, 'no_upstream_rerun': True,
                'no_source_statistics_refit': True, 'dummy': bool(source.get('dummy', False))}
     payload['figure_data_links'] = builder.figure_data_coverage()

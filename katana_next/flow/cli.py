@@ -82,6 +82,8 @@ def build_complete_report(collection, outdir):
     from .collect import validate_collection, materialize_report_descriptor
     from .acceptance import required_report_gaps
     collection, outdir = Path(collection).resolve(), Path(outdir).resolve()
+    if outdir.exists() and (not outdir.is_dir() or any(outdir.iterdir())):
+        raise FileExistsError("Choose a new report output directory; existing report and acceptance evidence are preserved")
     receipt = validate_collection(collection)
     from katana_next.reports import build_report
     descriptor = collection / "report-source.json"
@@ -94,26 +96,48 @@ def build_complete_report(collection, outdir):
     plan = load_plan(collection / "plan.json")
     if plan.get("report_profile") != "complete":
         raise ValueError("A test subgraph or partial collection cannot be published as a complete fixed report")
-    manifest = build_report(materialize_report_descriptor(collection), outdir, event_set=plan.get("event_set", "stable_significant"))
     # Rendering success and calculation success are distinct. Preserve a failed
     # render for diagnosis, and withhold its complete-report receipt/archive.
-    required_gaps = required_report_gaps(collection, plan, manifest, outdir, collection_receipt=receipt)
-    if required_gaps:
-        write_json(outdir / "flow.acceptance.failed.json", {"status": "failed", "required_gaps": required_gaps,
-                   "message": "The renderer produced a diagnostic artifact; fixed-report calculation acceptance failed"})
-        raise ValueError("Required fixed-report analyses are still absent from the rendered result; see flow.acceptance.failed.json")
-    chapters = {int(panel["chapter"]) for panel in manifest.get("panels", []) if panel.get("image")}
-    if not set(range(1, 8)).issubset(chapters):
-        raise ValueError("Fixed seven-chapter report is missing rendered figures; collection remains diagnostic")
-    for name in ("REPORT.html", "REPORT.zip", "report-manifest.json"):
-        if not (outdir / name).is_file() or not (outdir / name).stat().st_size:
-            raise ValueError("Incomplete final report artifact: " + name)
-    from .model import file_sha256
-    result = {"schema": "katana.flow.report_acceptance/v1", "status": "completed", "plan_id": plan["plan_id"],
-              "verified_calculation_tasks": len(plan["tasks"]), "seven_chapter_specification": plan["report_specification"],
-              "report": str(outdir / "REPORT.html"), "archive": str(outdir / "REPORT.zip"),
-              "archive_sha256": file_sha256(outdir / "REPORT.zip")}
-    write_json(outdir / "flow.acceptance.json", result)
+    outdir.mkdir(parents=True, exist_ok=True)
+    required_gaps = []
+    try:
+        manifest = build_report(materialize_report_descriptor(collection), outdir, event_set=plan.get("event_set", "stable_significant"))
+        required_gaps = required_report_gaps(collection, plan, manifest, outdir, collection_receipt=receipt)
+        if required_gaps:
+            raise ValueError("Required fixed-report analyses are still absent from the rendered result; see flow.acceptance.failed.json")
+        chapters = {int(panel["chapter"]) for panel in manifest.get("panels", []) if panel.get("image")}
+        if not set(range(1, 8)).issubset(chapters):
+            raise ValueError("Fixed seven-chapter report is missing rendered figures; collection remains diagnostic")
+        for name in ("REPORT.html", "REPORT.zip", "report-manifest.json"):
+            if not (outdir / name).is_file() or not (outdir / name).stat().st_size:
+                raise ValueError("Incomplete final report artifact: " + name)
+        from .model import file_sha256
+        import os
+        result = {"schema": "katana.flow.report_acceptance/v1", "status": "completed", "plan_id": plan["plan_id"],
+                  "verified_calculation_tasks": len(plan["tasks"]), "seven_chapter_specification": plan["report_specification"],
+                  "report": str(outdir / "REPORT.html"), "archive": str(outdir / "REPORT.zip"),
+                  "archive_sha256": file_sha256(outdir / "REPORT.zip")}
+        pending = outdir / ".flow.acceptance.pending.json"
+        with pending.open("x", encoding="utf-8") as handle:
+            handle.write(json.dumps(result, indent=2, ensure_ascii=True, allow_nan=False) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        pending.rename(outdir / "flow.acceptance.json")
+    except Exception as error:
+        archive = outdir / "REPORT.zip"
+        diagnostic = outdir / "REPORT.diagnostic.zip"
+        if archive.exists():
+            if diagnostic.exists():
+                raise FileExistsError("Refusing to overwrite existing diagnostic archive") from error
+            archive.rename(diagnostic)
+        failure = {"schema": "katana.flow.report_acceptance/v1", "status": "failed",
+                   "plan_id": plan["plan_id"], "required_gaps": required_gaps,
+                   "error": str(error),
+                   "message": "The renderer produced a diagnostic artifact; fixed-report calculation acceptance failed",
+                   "diagnostic_archive": str(diagnostic) if diagnostic.is_file() else None}
+        with (outdir / "flow.acceptance.failed.json").open("x", encoding="utf-8") as handle:
+            handle.write(json.dumps(failure, indent=2, ensure_ascii=True, allow_nan=False) + "\n")
+        raise
     return result
 
 
@@ -151,12 +175,18 @@ def main(argv=None):
     command.add_argument("--bundle", required=True, type=Path)
     command.add_argument("--project-template", required=True, type=Path)
     command.add_argument("--outdir", required=True, type=Path)
+    command = sub.add_parser("validate-plan", help="Validate an existing sealed plan without replanning or changing its path")
+    command.add_argument("--plan", required=True, type=Path)
+    command.add_argument("--project", required=True, type=Path)
+    command.add_argument("--out", required=True, type=Path)
     command = sub.add_parser("task")
     command.add_argument("--plan", required=True, type=Path)
     command.add_argument("--task-id", required=True)
     command.add_argument("--project", type=Path)
     command.add_argument("--outdir", required=True, type=Path)
     command.add_argument("--dependency-receipts", nargs="*", default=[], type=Path)
+    command.add_argument("--presentation-recovery", type=Path,
+                         help="Explicit unchanged MotifTrace 64 MiB render failure receipt; reuse its full statistics in a new task directory")
     command = sub.add_parser("runtime-check", help="Probe the selected task runtime without starting analysis")
     command.add_argument("--plan", required=True, type=Path)
     command.add_argument("--task-id", required=True)
@@ -212,9 +242,17 @@ def main(argv=None):
             elif args.action == "import":
                 from .importer import import_bundle
                 result = {"project": str(import_bundle(args.bundle, args.project_template, args.outdir))}
+            elif args.action == "validate-plan":
+                from .plan_reuse import validate_existing_plan
+                if args.out.exists():
+                    raise ValueError("Refusing to overwrite an existing plan validation receipt")
+                result = validate_existing_plan(args.plan, args.project)
+                write_json(args.out, result)
             elif args.action == "task":
                 from .task import execute_task
                 options = {"project_path": args.project} if args.project else {}
+                if args.presentation_recovery:
+                    options["presentation_recovery"] = args.presentation_recovery
                 result = execute_task(args.plan, args.task_id, args.outdir, dependency_receipts=args.dependency_receipts, **options)
             elif args.action == "runtime-check":
                 from .runtime_checks import check_task_runtime
@@ -231,7 +269,7 @@ def main(argv=None):
         if isinstance(result, Path):
             result = {"receipt": str(result)}
         print(json.dumps(result, ensure_ascii=True, indent=2, default=str))
-        return 2 if (args.action == "preflight" and not result["ready"]) or (args.action == "runtime-check" and result["status"] != "ready") else 0
+        return 2 if (args.action in {"preflight", "validate-plan"} and not result["ready"]) or (args.action == "runtime-check" and result["status"] != "ready") else 0
     except (ValueError, OSError, KeyError, RuntimeError, ImportError, TypeError) as exc:
         print(json.dumps({"schema": "katana.flow.error/v1", "status": "failed", "error": str(exc)}), file=sys.stderr)
         return 1

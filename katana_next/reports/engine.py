@@ -55,6 +55,7 @@ class Builder:
         self.event_set = normalize_event_set(event_set)
         self.panels, self.tables, self.audit, self._copies = [], [], [], {}
         self.top10, self.policy_data, self.derived_audits = [], {}, []
+        self.enrichment_summaries = []
         self.exclusions = []
         self.data_link_audit = []
         self._extra_asset_ids = {str(a.get('artifact_id')) for a in source.get('extra_assets', []) if a.get('artifact_id')}
@@ -276,7 +277,7 @@ class Builder:
         # New report RS flags must never relabel their earlier input population.
         if not artifact.get('metadata', {}).get('report_matched_selection') and artifact.get('analysis_id', '') in ('landscape.bulk', 'project.audit', 'quality.stable_as', 'differential.as', 'differential.deg', 'differential.dtu', 'prioritize.evidence', 'differential.cross_comparison', 'prioritize.enrichment'):
             output_only = True
-        source_run = artifact.get('run_fingerprint', '')
+        source_run = artifact.get('run_fingerprint') or artifact.get('metadata', {}).get('run_fingerprint', '')
         if path.is_file() and path.suffix.lower() == '.json': self.copy(path, prefix='figure-specifications')
         record = {'id': safe(artifact.get('artifact_id', image.stem)), 'chapter': chapter, 'title': title,
                   'image': relative, 'source_artifact_id': artifact.get('artifact_id'),
@@ -291,7 +292,13 @@ class Builder:
         if record['report_origin'] == 'native' and not self.source.get('report_native_figures_in_main', True):
             record['output_only'] = True
         self._comparison_scope(record)
-        record['data_links'] = self.bind_data_links(record, artifact.get('data_links', artifact.get('metadata', {}).get('data_links', [])))
+        links = list(artifact.get('data_links', artifact.get('metadata', {}).get('data_links', [])) or [])
+        from .bootstrap_plot_data import bootstrap_plot_links
+        links = bootstrap_plot_links(artifact, record, self.output, links)
+        if not any(link.get('role') == 'plot_data' for link in links):
+            from .saved_plot_data import recorded_plot_data_links
+            links.extend(recorded_plot_data_links(artifact, record, self.output))
+        record['data_links'] = self.bind_data_links(record, links)
         if svg.is_file():
             record['svg'] = self.copy(svg, prefix='figures')
         self.panels.append(record)
@@ -330,6 +337,20 @@ class Builder:
             if isinstance(views, str):
                 views = json.loads(Path(views).read_text('utf-8-sig'))
             self.add_views(views)
+        from .rbp_enrichment import build_rbp_summaries, build_motif_hit_summaries
+        all_artifacts = [*self.source['artifacts'], *self.source.get('extra_assets', [])]
+        for supplemental in self.source.get('supplemental', []):
+            all_artifacts.extend(supplemental['artifacts'])
+        self.enrichment_summaries = build_rbp_summaries(all_artifacts) + build_motif_hit_summaries(all_artifacts, self.output)
+        replaced = {(r['source_run'], r['contrast_id']) for r in self.enrichment_summaries}
+        for record in self.enrichment_summaries:
+            record['full_path'] = self.copy(Path(record['full_path']))
+            if record.get('all_hits_path'):
+                record['all_hits_path'] = Path(record['all_hits_path']).relative_to(self.output).as_posix()
+        for panel in self.panels:
+            if panel.get('metadata', {}).get('analysis_id') in {'prioritize.rbp_support', 'prioritize.event_motifs', 'prioritize.rbp_mechanism'} and (panel.get('source_run', ''), panel.get('contrast_id')) in replaced:
+                panel['output_only'] = True
+                panel['metadata']['main_summary'] = 'Significant RBP enrichment with complete recorded hit genes'
 
     def collect_rich(self, source):
         from .rich_results import collect_rich_results
@@ -366,7 +387,12 @@ class Builder:
                 from .rich_results import copy_rich_asset
                 receipt = copy_rich_asset(asset, self.output / 'outputs/rich' / safe(asset['id']))
                 target = Path(receipt['path'])
-                self.tables.append({'name': asset['title'], 'source': target.relative_to(self.output).as_posix(), 'rows': None, 'analysis_id': 'rich_browser', 'chapter': asset['chapter']})
+                self.tables.append({'name': asset['title'], 'source': target.relative_to(self.output).as_posix(),
+                    'rows': None, 'analysis_id': 'rich_browser', 'chapter': asset['chapter'],
+                    'contrast_id': asset.get('contrast_id', 'all'),
+                    'source_artifact_id': asset.get('metadata', {}).get('source_artifact_id'),
+                    'metadata': {**asset.get('metadata', {}), 'source_sha256': digest(path),
+                                 'portable_sha256': digest(target)}})
                 self.derived_audits.append(receipt)
 
     def add_views(self, results):

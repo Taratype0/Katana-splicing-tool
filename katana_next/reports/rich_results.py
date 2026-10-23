@@ -436,6 +436,17 @@ def collect_rich_results(
                            "display_group_id": str(artifact.get("artifact_id") or path.parent.name) + ":" + stem,
                            "display_in_main": bool(metadata.get("display_in_main", True)) and not (path.suffix.lower() == ".svg" and path.with_suffix(".png").is_file()),
                            **deps}
+            if main and main.is_file() and main.name.endswith('.vl.json') and kind in {'vega', 'image'}:
+                # This exact export-to-spec relationship comes from one producer
+                # artifact, never from scanning similar neighbouring filenames.
+                result_meta['saved_plot_specification'] = {
+                    'path': str(main), 'source_sha256': sha256(main.read_bytes()).hexdigest(),
+                    'export_sha256': sha256(path.read_bytes()).hexdigest(),
+                }
+                # The specification and its PNG encode the same figure. Keep
+                # both in outputs, but show only the PNG in the main report.
+                if kind == 'vega' and any(p.suffix.lower() == '.png' and p.is_file() for p in paths):
+                    result_meta['display_in_main'] = False
             if metadata.get("completion_scope") == "sequence_consequences_only":
                 result_meta["partial_status"] = "sequence_consequences_available_inference_not_completed"
             identifier = sha256(json.dumps(key, ensure_ascii=True).encode()).hexdigest()[:20]

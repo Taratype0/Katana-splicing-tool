@@ -1,14 +1,25 @@
 # Runtime environments
 
-The integrated Nextflow pipeline supplies its downstream runtime through a
-versioned container or module environment. Its users do not need to activate or
-repair a shared host Conda environment. Standalone users can install the same
+The integrated Nextflow pipeline uses a versioned Katana image for its downstream
+tasks. Existing upstream nf-core tool modules keep their own environments and
+images. Its users do not need to activate or repair a shared host Conda environment.
+Standalone users can install the same
 analysis tools with Conda and run the Python API, CLI or browser directly.
 
 Qt is an optional `desktop` extra. The `standalone` extra installs the analysis,
 report and browser dependencies without PySide6. Neither route supplies study
 references: FASTA/GTF, motif libraries, CLIP peaks and pathway databases remain
 explicit, versioned inputs.
+
+The previously accepted runtime image is a local Linux x86-64 development
+artifact identified by its exact wheel and image hashes. It does not contain
+later source changes. Build a matching wheel and new image from the intended
+revision; do not use the old runtime archive as the current pipeline release.
+No registry image or PyPI package release is claimed. See [container build/load
+instructions](../containers/downstream/README.md). A complete runtime is a
+prerequisite for scientific workflow acceptance, not a substitute for it.
+The [generic workflow record](validation/generic-pipeline-20261023.md) tracks
+existing-result execution separately from those installation checks.
 
 ## Standalone Linux environment
 
@@ -39,6 +50,7 @@ micromamba run -n katana python -m pip install --no-deps --require-hashes --no-b
 micromamba run -n katana python -m pip install --no-deps dist/katana_splicing_tool-*.whl
 micromamba run -n katana python -m pip check
 micromamba run -n katana katana-flow --help
+micromamba run -n katana katana-open --no-open
 ```
 
 Conda can consume the same explicit native lock using `conda create --file`.
@@ -53,6 +65,12 @@ GenomeInfoDbData through their dependent R packages. Source-built Python wheels
 use the locked setuptools/wheel tools; build isolation is disabled to avoid an
 unrecorded temporary build environment.
 
+The `dist/` glob must select one matching Katana wheel. A source checkout does
+not contain that built artifact. To build from the current development branch,
+use the [wheel build instructions](INSTALL.md#development-wheels), or use a
+supplied wheel with its recorded checksum. Do not combine an older image or
+wheel with newer task code without rebuilding and checking that combination.
+
 For a deliberate new solve, use the YAML and then install the wheel with its
 `standalone` extra. This may select newer dependencies and requires another
 clean acceptance before release:
@@ -65,7 +83,7 @@ micromamba run -n katana-new python -m pip install 'dist/katana_splicing_tool-<v
 
 ## What is checked
 
-`python scripts/check_downstream_environment.py --out <new-directory>` performs
+`python -m scripts.check_downstream_environment --out <new-directory>` performs
 real imports, CLI invocations, wheel-resource checks and headless figure exports.
 On Linux it also exercises native WGCNA/Rcpp, a tiny DESeq2 fit, DEXSeq
 construction/normalization, fgsea, the installed six-sample network bridge,

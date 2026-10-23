@@ -66,6 +66,27 @@ process KATANA_FLOW_PLAN {
     """
 }
 
+process KATANA_FLOW_VALIDATE_PLAN {
+    label 'katana_control'
+
+    input:
+    path existing_plan, stageAs: 'existing-plan.json'
+    path project_root, stageAs: 'project'
+    val project_filename
+
+    output:
+    path 'plan-reuse.preflight.json', emit: receipt
+
+    script:
+    def quote = { value -> "'" + value.toString().replace("'", "'\"'\"'") + "'" }
+    """
+    ${containerRuntimePrelude(workflow.containerEngine)}
+    ${quote(params.flow_executable)} validate-plan --plan ${quote(existing_plan)} \\
+        --project ${quote(project_root.resolve(project_filename))} --out plan-reuse.preflight.json
+    test -s plan-reuse.preflight.json
+    """
+}
+
 process KATANA_FLOW_COLLECT {
     label 'katana_control'
 
@@ -100,10 +121,14 @@ process KATANA_FLOW_REPORT {
 
     script:
     def quote = { value -> "'" + value.toString().replace("'", "'\"'\"'") + "'" }
+    def revision = params.flow_report_revision.toString()
+    if (!(revision ==~ /[A-Za-z0-9_.-]+/)) error('flow_report_revision requires a simple version label')
     """
+    # Explicit report-only execution revision: ${revision}
     ${containerRuntimePrelude(workflow.containerEngine)}
     ${quote(params.flow_executable)} report --collection ${quote(collection)} --outdir report
     test -s report/REPORT.html
     test -s report/report-manifest.json
+    test -s report/flow.acceptance.json
     """
 }

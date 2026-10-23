@@ -26,11 +26,13 @@ workflow {
                           --project_template project-template.json --flow_config flow.json
   --mode upstream-only    --input samples.csv --contrasts contrasts.csv --fasta genome.fa --gtf annotation.gtf
   --mode downstream-only  --project project.json --flow_config flow.json
+  --mode downstream-only  --project project.json --flow_plan /absolute/original/plan.json -resume
   --outdir results        -profile local|slurm,docker|singularity|apptainer
 Existing completed analysis: use downstream-only. Use -resume for this run's Nextflow cache.
 Required calculations are verified before the fixed seven-section report is accepted.'''
     } else {
         if (!(params.mode in ['complete', 'upstream-only', 'downstream-only'])) error('Invalid --mode')
+        if (params.flow_plan && params.mode != 'downstream-only') error('--flow_plan reuses completed downstream work and requires --mode downstream-only')
         if (!(params.katana_stage_containers instanceof Map)) error('--katana_stage_containers must be a map of execution groups to images')
         def groups = ['control', 'report', 'audit', 'quality', 'as', 'deg', 'dtu', 'landscape', 'evidence',
                       'enrichment', 'motiftrace', 'overlap', 'reference', 'qc', 'coverage', 'network_fit',
@@ -48,11 +50,18 @@ Required calculations are verified before the fixed seven-section report is acce
             error('Complete fixed-report mode requires native sequencing FastQC. Use upstream-only for an explicitly skipped QC stage.')
         }
         if (params.mode == 'downstream-only') {
-            requireParameters(['project', 'flow_config'])
+            requireParameters(['project'])
             project = file(params.project, checkIfExists: true)
-            config_file = file(params.flow_config, checkIfExists: true)
-            KATANA_DOWNSTREAM(Channel.value(inputDirectory(project.parent)), project.name,
-                Channel.value(inputDirectory(config_file.parent)), config_file.name)
+            if (params.flow_plan) {
+                if (params.flow_config) log.info 'Using the original sealed --flow_plan; --flow_config is not replanned or reapplied.'
+                KATANA_DOWNSTREAM(Channel.value(inputDirectory(project.parent)), project.name,
+                    Channel.empty(), '')
+            } else {
+                requireParameters(['flow_config'])
+                config_file = file(params.flow_config, checkIfExists: true)
+                KATANA_DOWNSTREAM(Channel.value(inputDirectory(project.parent)), project.name,
+                    Channel.value(inputDirectory(config_file.parent)), config_file.name)
+            }
         } else {
             requireParameters(['input', 'contrasts', 'fasta', 'gtf'])
             samples = Channel.value(file(params.input, checkIfExists: true))

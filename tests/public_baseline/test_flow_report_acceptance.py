@@ -131,7 +131,11 @@ def test_optional_caption_words_cannot_disable_required_typed_clip_gap(tmp_path)
     report["unavailable"] = [{"chapter": 7, "metadata": {"component": "clip"}, "reason": "Missing matched binding results"},
                               {"chapter": 7, "title": "Unrelated attachment", "reason": "mapp bootstrap interaction in a file name"}]
     gaps = required_report_gaps(root, plan, report, out, collection_receipt=collection)
-    assert [gap["component"] for gap in gaps] == ["clip"]
+    components = [gap["component"] for gap in gaps]
+    assert components.count("clip") == 1
+    # This fixture supplies only native MAPP. Positive network/MotifTrace gates
+    # may also report their real omissions; caption words must not invent gaps.
+    assert not set(components) & {"mapp_native", "mapp_parallel", "network_bootstrap", "interaction"}
 
 
 def test_only_complete_exact_zero_eligibility_proof_is_not_applicable(tmp_path):

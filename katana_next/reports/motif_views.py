@@ -34,6 +34,10 @@ def _best_recorded_tests(chunk, existing):
     This is a descriptive ranking across already corrected tests, not a new
     model-level hypothesis or a new correction family.
     """
+    for column in ('q_new_window_family', 'raw_P_new_paired_swaps'):
+        values = chunk.loc[chunk[column].notna(), column]
+        if not np.isfinite(values).all() or not values.between(0., 1.).all():
+            raise ValueError('Recorded native motif P/FDR must be finite in [0, 1] or explicitly missing: ' + column)
     valid = chunk.loc[chunk.q_new_window_family.notna() & chunk.raw_P_new_paired_swaps.notna()]
     for token, part in valid.groupby('model_id', sort=False):
         candidate = part.sort_values(RANK_COLUMNS, kind='stable').iloc[0]
@@ -54,9 +58,9 @@ def _motif_ranking(summary, best, models):
         record['RBP'] = str(models[token].get('RBPs', token))
         matrix = _matrix(models[token])
         record['motif_sequence'] = (''.join('ACGU'[i] for i in matrix.argmax(axis=1))
-                                    if matrix is not None else 'not_available')
-        record['sequence_representation'] = ('literal' if models[token].get('matrix') is None
-                                              else 'maximum-probability PWM consensus')
+                                    if matrix is not None else _recorded_pattern(models[token]) or 'not_available')
+        record['sequence_representation'] = ('maximum-probability PWM consensus' if models[token].get('matrix') is not None
+                                              else 'literal' if matrix is not None else 'recorded IUPAC/fixed-pattern consensus')
         record['test_scope'] = ('not_estimable' if token not in best else
                                 'full_sequence_test' if record['window_nt'] == 0 else 'window_test')
         q = record['q_new_window_family']
@@ -160,7 +164,7 @@ def verify_completed_motif_family(source, completion_proof, *, comparison_id, pr
     plan = json.loads((source / 'ANALYSIS_PLAN_BEFORE_SCORING.json').read_text('utf-8-sig'))
     # The frozen native writer stores this declaration in the hashed plan;
     # older verified completion markers also repeat it at their top level.
-    declared_split = complete.get('statistical_family_split', plan.get('provenance', {}).get('statistical_family_split'))
+    declared_split = complete.get('statistical_family_split', plan.get('statistical_family_split', plan.get('provenance', {}).get('statistical_family_split')))
     if declared_split is not False:
         raise ValueError('The hashed completed scientific plan must explicitly establish an unsplit family.')
     if plan.get('comparison_id') != comparison_id or not isinstance(plan.get('models'), dict) or not plan['models']:
@@ -176,10 +180,49 @@ def _read(path, **kwargs):
     return pd.read_csv(path, sep='\t', float_precision='round_trip', dtype={'model_id': str, 'event_id': str}, **kwargs)
 
 
+def verify_empty_completed_statistics(source, members):
+    """A complete zero-pair family has sequences but no estimable tests.
+
+    The native writer retains a minimal header for an empty test table. Accept
+    it only with its authenticated full matching audit and native result
+    summary; absence of a file or a positive matched-pair count is not N/A.
+    """
+    source = Path(source)
+    needed = {'RESULTS.json', 'MATCHING_ALL_SELECTED_WITH_LOSSES.tsv'}
+    if not needed <= set(members):
+        raise ValueError('Empty native MotifTrace tests require their authenticated summary and complete matching audit')
+    summary = json.loads((source / 'RESULTS.json').read_text('utf-8-sig'))
+    matching = _read(source / 'MATCHING_ALL_SELECTED_WITH_LOSSES.tsv')
+    if (summary.get('matched_independent_gene_pairs') != 0 or summary.get('eligible_new_window_tests') != 0 or
+            summary.get('inference_status') != 'not_estimable_insufficient_independent_matched_pairs' or
+            'status' not in matching or matching.status.eq('matched').any() or
+            len(matching) != summary.get('selected_events')):
+        raise ValueError('Empty native MotifTrace tests contradict their complete gene-pair matching evidence')
+
+
+def _test_chunks(source, members):
+    path = Path(source) / 'NEW_WINDOW_AND_FULL_SEQUENCE_TESTS.tsv.gz'
+    header = _read(path, nrows=0)
+    if not set(TEST_COLUMNS) <= set(header):
+        frame = _read(path)
+        if not frame.empty:
+            raise ValueError('Nonempty native MotifTrace tests lack required statistical identity columns')
+        verify_empty_completed_statistics(source, members)
+        return iter([pd.DataFrame({name: pd.Series(dtype='float64' if name in {
+            'window_nt', 'window_start0', 'n_matched_gene_pairs', 'paired_rank_Z',
+            'mean_paired_score_difference', 'raw_P_new_paired_swaps', 'q_new_window_family'} else 'object')
+                                  for name in TEST_COLUMNS})])
+    return _read(path, chunksize=50000, usecols=TEST_COLUMNS, low_memory=False)
+
+
+def _recorded_pattern(model):
+    return str(model.get('sequence', model.get('motif', model.get('pattern', '')))).upper().replace('T', 'U')
+
+
 def _matrix(model):
     value = model.get('matrix')
     if value is None:
-        literal = str(model.get('sequence', model.get('motif', model.get('pattern', '')))).upper().replace('T', 'U')
+        literal = _recorded_pattern(model)
         if not literal or any(c not in 'ACGU' for c in literal):
             return None
         return np.array([[float(base == c) for base in 'ACGU'] for c in literal])
@@ -195,7 +238,10 @@ def _logo(ax, model):
     from matplotlib.patches import PathPatch
     matrix = _matrix(model)
     if matrix is None:
-        ax.text(.5, .5, 'No numeric PWM/literal logo representation supplied', ha='center', transform=ax.transAxes)
+        pattern = _recorded_pattern(model)
+        label = (pattern + '\nRecorded IUPAC/fixed-pattern consensus; no base probabilities supplied'
+                 if pattern else 'No numeric PWM/literal logo representation supplied')
+        ax.text(.5, .5, label, ha='center', va='center', transform=ax.transAxes)
         ax.axis('off')
         return
     information = 2 + (matrix * np.log2(np.maximum(matrix, 1e-300))).sum(axis=1)
@@ -264,6 +310,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
         raise FileExistsError('Existing MotifTrace report outputs are preserved; use a new destination.')
     out.mkdir(parents=True)
     plan, models = evidence['plan'], evidence['plan']['models']
+    native_members = json.loads(Path(evidence['manifest']).read_text('utf-8-sig'))['members']
     panels, tables, unavailable = [], [], []
     stem = _safe(comparison_id)
     scope = {'mode': 'fixed_completed_result', 'recorded_event_set': 'stable_significant',
@@ -294,7 +341,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                 frame.insert(0 if key == 'comparison_id' else 1, key, value)
         path = out / (name + '.tsv')
         frame.to_csv(path, sep='\t', index=False, float_format='%.17g')
-        tables.append({'name': name, 'path': str(path), 'chapter': 7, 'unit': unit, 'contrast_id': comparison_id})
+        tables.append({'name': name + ' | ' + comparison_id, 'path': str(path), 'chapter': 7, 'unit': unit, 'contrast_id': comparison_id})
         return path
 
     def figure(name, title, caption, frame, unit, full=(), *, size=(10, 5), links=(), output_only=False):
@@ -307,7 +354,11 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
             panels.append({'id': _safe(stem + '-' + name), 'title': title + ' | ' + comparison_id,
                            'path': str(path), 'chapter': 7, 'contrast_id': comparison_id, 'policy': None,
                            'caption': caption, 'output_only': output_only,
-                           'metadata': {'das_scope': scope, 'statistical_family_split': False},
+                           'metadata': {'das_scope': scope, 'statistical_family_split': False,
+                                        'component': 'motiftrace_sequence',
+                                        'complete_manifest_sha256': evidence['manifest_sha256'],
+                                        'completion_proof_sha256': evidence['proof_sha256'],
+                                        'motif_image_sha256': digest(path)},
                            'data_links': [link('plot_data', data, 'Plot data', unit),
                                           *[link('full_results', path, label, source_unit) for path, label, source_unit in full],
                                           *links, link('methods', methods, 'Methods', 'method_record')]})
@@ -320,7 +371,11 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
     hits = _read(source / 'ACTUAL_LOCUS_HITS.tsv.gz', low_memory=False)
     required = {'event_id', 'event_type', 'model_id', 'instance_state', 'consequence_direction'}
     if not required <= set(changes):
-        raise ValueError('Completed sequence-instance table lacks its declared identity/state columns.')
+        if not changes.empty:
+            raise ValueError('Completed sequence-instance table lacks its declared identity/state columns.')
+        # Native zero-hit results use a minimal empty header. Preserve that
+        # source; add only empty display columns, never synthetic hit rows.
+        changes = changes.reindex(columns=sorted(set(changes) | required))
     if not set(changes.model_id.astype(str)) <= set(models):
         raise ValueError('Sequence results contain a model absent from the completed catalogue.')
     types = [t for t in ['SE', 'A3SS', 'A5SS', 'MXE', 'RI'] if t in set(selected.event_type)]
@@ -341,7 +396,8 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
     counts = changes.groupby(['model_id', 'instance_state']).size().unstack(fill_value=0).reindex(list(models), fill_value=0)
     catalogue_path = out / 'ALL_MOTIF_MODELS.html'
     catalogue_path.write_text(_catalogue_browser(models), encoding='utf-8')
-    tables.append({'name': 'Complete model catalogue and native identities', 'path': str(catalogue_path), 'chapter': 7, 'kind': 'html'})
+    tables.append({'name': 'Complete model catalogue and native identities | ' + comparison_id, 'path': str(catalogue_path),
+                   'chapter': 7, 'kind': 'html', 'contrast_id': comparison_id})
     fig, save = figure('all-models', 'All declared motif models: sequence instances',
                        'All models are retained in catalogue order, without model-level significance claims. For large catalogues, axis labels are sampled for readability; every model remains in the full browser and count table.',
                        counts.rename_axis('model_id').reset_index(), 'model_instance_count', full_instances,
@@ -360,7 +416,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                         'eligible_recorded_windows': 0,
                         'minimum_full_family_window_q': np.nan, 'minimum_raw_window_P': np.nan} for token, model in models.items()}
     selected_tests = {}
-    for chunk in _read(test_source, chunksize=50000, usecols=TEST_COLUMNS, low_memory=False):
+    for chunk in _test_chunks(source, native_members):
         _best_recorded_tests(chunk, selected_tests)
         if not set(chunk.model_id.astype(str)) <= set(models):
             raise ValueError('Window test family contains undeclared models.')
@@ -461,6 +517,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
         axes[1].text(0, 1, '\n'.join(display_lines), va='top', transform=axes[1].transAxes,
                      fontfamily='DejaVu Sans Mono', fontsize=7)
         fig.tight_layout(); save()
+        panels[-1]['metadata'].update(motif_view_kind='top_motif', model_id=token, display_rank=int(rank))
     fig, save = figure('window-statistics-all-models', 'All-model completed window statistics',
                        'Minimum native window-family q/P defines descriptive catalogue order, not model-level FDR. All declared models and complete original test families are retained; no P/q is recalculated.',
                        summary, 'motif_model_summary', [(test_source, 'Complete native test family', 'motif_window_test')],
@@ -473,7 +530,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
     ranked = summary.loc[summary.minimum_full_family_window_q.notna() & summary.eligible_recorded_windows.gt(0)].head(2).model_id.tolist()
     best = {}
     keys = ['q_new_window_family', 'raw_P_new_paired_swaps', 'event_type', 'direction', 'region', 'window_nt', 'window_start0']
-    for chunk in _read(test_source, chunksize=50000, usecols=TEST_COLUMNS, low_memory=False):
+    for chunk in _test_chunks(source, native_members):
         valid = chunk.loc[chunk.model_id.isin(ranked) & chunk.window_nt.gt(0) & chunk.q_new_window_family.notna()]
         for token, part in valid.groupby('model_id', sort=False):
             candidate = part.sort_values(keys, kind='stable').iloc[0]
@@ -481,7 +538,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
             if token not in best or key < best[token][0]:
                 best[token] = key, candidate.to_dict()
     parts = {token: [] for token in best}
-    for chunk in _read(test_source, chunksize=50000, usecols=TEST_COLUMNS, low_memory=False):
+    for chunk in _test_chunks(source, native_members):
         for token, (_, chosen) in best.items():
             keep = chunk.model_id.eq(token)
             for key in ('event_type', 'direction', 'region', 'method', 'window_nt'):
@@ -523,9 +580,12 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
     native_paths.append(source / 'COMPLETE.json')
     for path in dict.fromkeys(path.resolve() for path in native_paths):
         name = path.relative_to(source).as_posix()
-        tables.append({'name': 'Complete native MotifTrace output | ' + name, 'path': str(path), 'kind': 'file', 'chapter': 7})
-    tables.extend([{'name': 'Scientific completion proof', 'path': str(Path(completion_proof).resolve()), 'kind': 'file', 'chapter': 7},
-                   {'name': 'MotifTrace plotting methods', 'path': str(methods), 'kind': 'file', 'chapter': 7}])
+        tables.append({'name': 'Complete native MotifTrace output | ' + name + ' | ' + comparison_id,
+                       'path': str(path), 'kind': 'file', 'chapter': 7, 'contrast_id': comparison_id})
+    tables.extend([{'name': 'Scientific completion proof | ' + comparison_id, 'path': str(Path(completion_proof).resolve()),
+                    'kind': 'file', 'chapter': 7, 'contrast_id': comparison_id},
+                   {'name': 'MotifTrace plotting methods | ' + comparison_id, 'path': str(methods),
+                    'kind': 'file', 'chapter': 7, 'contrast_id': comparison_id}])
     for row in evidence['members']:
         path = Path(row['path'])
         if (path.stat().st_size, path.stat().st_mtime_ns, digest(path)) != (row['bytes'], row['mtime_ns'], row['sha256']):

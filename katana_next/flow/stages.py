@@ -200,10 +200,13 @@ def readiness(spec: dict) -> list[str]:
                 rscript = rscript or cfg.network.wgcna_rscript
             if inputs.get("project") and "project" not in deferred and "network_scope" in parameters:
                 from katana_next.infrastructure.manifest_store import ManifestStore
-                from .network_inputs import network_scope_identity, validate_external_network_config
+                from .network_inputs import network_scope_identity, resolve_network_rmats_mode, validate_external_network_config
                 manifest = ManifestStore().load(inputs["project"])[1]
                 identity = network_scope_identity(manifest, parameters)
+                mode = resolve_network_rmats_mode(manifest, parameters)
                 if cfg is not None:
+                    if cfg.rmats_mode != mode:
+                        raise ValueError("External network configuration mode differs from the resolved task mode")
                     validate_external_network_config(cfg, manifest, identity, _sha)
             if not rscript and inputs.get("project"):
                 if "project" in deferred:
@@ -312,6 +315,10 @@ def _output_metadata(path: Path, adapter: str) -> dict:
                 data = prefix / "event_linkage.npy"
             elif "program_score_heatmap" in path.name:
                 data = prefix / "module_program_scores.tsv"
+            elif path.name == "bootstrap_coassignment_heatmap.png":
+                data = prefix / "bootstrap_coassignment_matrix.npz"
+            elif path.name == "consensus_module_sizes.png":
+                data = prefix / "consensus_module_summary.tsv"
             elif "consensus" in str(prefix):
                 data = prefix / "consensus_event_module_assignments.tsv"
             elif "association" in str(prefix):

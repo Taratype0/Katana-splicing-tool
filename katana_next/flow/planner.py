@@ -116,7 +116,7 @@ def create_plan(project, config):
         add("coverage-summary", "quality.read_coverage_bias", coverage_tasks)
 
     network = settings.get("network", {})
-    from .network_inputs import network_scope_identity
+    from .network_inputs import network_scope_identity, resolve_network_rmats_mode
     network_scope = network.get("scope", "contrast")
     if network_scope not in {"contrast", "cohort"}:
         raise ValueError("network.scope must be contrast or cohort")
@@ -132,6 +132,7 @@ def create_plan(project, config):
         params.update(network_scope=network_scope, contrast_ids=comparison_ids)
         identity = network_scope_identity(manifest, params, preserve_recorded_status=False)
         params.update(identity)
+        params["rmats_mode"] = resolve_network_rmats_mode(manifest, params)
         suffix = "-" + _token(comparison_ids[0]) if network_scope == "contrast" else ""
         fit_id = "network-fit" + suffix
         inputs = {"project": str(project_path)}

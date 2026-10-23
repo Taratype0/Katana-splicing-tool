@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from katana_cosplice.motif_scanner import load_motif_database
-from katana_next.science.motiftrace_consequences import analyze_consequences
+from katana_next.science.motiftrace_execution import analyze_consequences, EXECUTION_ADAPTER_VERSION
 from katana_next.science.motiftrace_custom import load_custom_library
 from katana_next.science.rbp_sequence_results import digest
 from katana_next.science.versioned_evidence import verified_resource
@@ -27,8 +27,10 @@ class MotifTraceConsequencesWorkflow(WorkflowBase):
         parameters=(
             ParameterDefinition("selection_id", "Existing supported DAS events", "selection", "", "One comparison from its full measured catalog; all five rMATS event types supported. Successful quantification is never rerun."),
             ParameterDefinition("custom_motif_path", "User motif library (optional)", "text", "", "Species-matched consensus TSV or Minimal MEME plus metadata. Otherwise use registered verified public motif databases."),
-            ParameterDefinition("model_ids", "Explicit model IDs (optional)", "text", "", "Comma-separated native IDs or exact model hashes. Empty means all supplied models, subject to a 256-model/100000-test budget; never silently truncate or select by significance."),
+            ParameterDefinition("model_ids", "Explicit model IDs (optional)", "text", "", "Comma-separated native IDs or exact model hashes. Empty means all supplied models, up to 256, subject to explicit execution budgets; never silently truncate or select by significance."),
             ParameterDefinition("cluster_permutations", "Whole-pair permutations", "number", 999, "Fixed before scanning; shared swaps across all models, methods and regions. Cluster P is FWER, not FDR.", minimum=99, maximum=9999),
+            ParameterDefinition("max_tests", "Maximum complete-family tests", "number", 1000000, "Execution budget, not a scientific filter. Exact scalar/window count is checked before motif scoring. All models and windows remain in one family; exceeding this value fails without truncation.", minimum=1),
+            ParameterDefinition("max_matrix_cells", "Maximum paired-matrix cells", "number", 8000000, "Execution memory budget, checked before scoring. Float64 cells use 8 bytes each; tables and permutation arrays require additional memory. Never remove matched pairs to fit this budget.", minimum=1),
         ),
         presentation_role="advanced",
         limitations="Local reference forms are not phased complete transcripts. Motif availability/PSI weighting is not measured occupancy or causality. PWM candidate positions have no calibrated site P. Matching exchangeability is an assumption; fewer than 20 independent pairs yields NA. No HPC, CLIP, read quantification or source-result mutation.",
@@ -98,9 +100,10 @@ class MotifTraceConsequencesWorkflow(WorkflowBase):
         library = self._library(context, parameters)
         science = Path(__file__).resolve().parents[1]/"science"
         return [source.path, Path(fasta), Path(str(fasta)+".fai"), Path(__file__),
+            Path(__file__).resolve().parents[1]/"reports/motif_native_index.py",
             *(Path(row["path"]) for row in library["inputs"]),
             *(science/name for name in ("motiftrace_events.py", "motiftrace_clusters.py", "motiftrace_consequences.py",
-                "motiftrace_consequences.html", "motiftrace_custom.py", "se_rbp.py", "statistics.py")),
+                "motiftrace_consequences.html", "motiftrace_budget.py", "motiftrace_execution.py", "motiftrace_custom.py", "se_rbp.py", "statistics.py")),
             Path(__file__).resolve().parents[2]/"katana_cosplice/motif_scanner.py"]
 
     def run(self, context, job, run_fingerprint, parameters):
@@ -113,18 +116,20 @@ class MotifTraceConsequencesWorkflow(WorkflowBase):
         library = self._library(context, parameters)
         writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version,
             common_metadata={"tool_name": "Katana MotifTrace", "quantification_rerun": False,
+                "execution_adapter_version": EXECUTION_ADAPTER_VERSION,
                 "historical_P_FDR_unchanged": True, "new_inference": False, "cluster_correction": "maximum cluster mass FWER",
                 "genome_build": context.manifest.annotation.genome_build, "limitations": self.definition.limitations})
         job.report(.1, "Freezing five-type RNA consequences and a separate new paired-swap statistical family")
         summary = analyze_consequences(complete, set(selected.event_id), library["models"],
             context.manifest.annotation.genome_fasta, writer.directory/"event_consequences",
             permutations=parameters["cluster_permutations"], check_cancelled=job.check_cancelled,
+            max_tests=parameters["max_tests"], max_matrix_cells=parameters["max_matrix_cells"],
             provenance={"source_artifact_id": source.artifact_id, "source_table_SHA256": digest(source.path),
                 "genome_build": context.manifest.annotation.genome_build, "species": context.manifest.metadata["species"],
                 "genome_FASTA": str(context.manifest.annotation.genome_fasta), "motif_inputs": library["inputs"],
                 "implementation_SHA256": {p.name: digest(p) for p in (
-                    Path(__file__), *(Path(__file__).resolve().parents[1]/"science"/n for n in
-                        ("motiftrace_events.py", "motiftrace_clusters.py", "motiftrace_consequences.py", "motiftrace_consequences.html")))}})
+                    Path(__file__), Path(__file__).resolve().parents[1]/"reports/motif_native_index.py", *(Path(__file__).resolve().parents[1]/"science"/n for n in
+                        ("motiftrace_events.py", "motiftrace_clusters.py", "motiftrace_consequences.py", "motiftrace_consequences.html", "motiftrace_budget.py", "motiftrace_execution.py")))}})
         writer.common_metadata.update(new_inference=summary["eligible_new_window_tests"] > 0,
             inference_status=summary["inference_status"])
         directory = writer.directory/"event_consequences"

@@ -8,7 +8,7 @@ import pytest
 from katana_cosplice.config import NetworkConfig
 from katana_next.flow.model import file_sha256, validate_plan
 from katana_next.flow.network_inputs import (
-    network_scope_identity, prepare_project_network, validate_external_network_config,
+    network_scope_identity, prepare_project_network, resolve_network_rmats_mode, validate_external_network_config,
     verify_network_engine_scope,
 )
 from katana_next.flow.planner import create_plan
@@ -83,6 +83,61 @@ def test_native_projection_contains_only_its_contrast_and_preserves_sources(stud
         assert len(native) > 0
     assert set(matrices[0].psi.columns) != set(matrices[1].psi.columns)
     assert all(file_sha256(path) == digest for path, digest in originals.items())
+
+
+@pytest.mark.parametrize("mode", ["JC", "JCEC"])
+def test_single_declared_mode_is_resolved_and_recorded_for_every_network_task(study, tmp_path, mode):
+    _, manifest = ManifestStore().load(study)
+    assets = tuple(a.model_copy(update={"metadata": {**a.metadata, "mode": mode}})
+                   if a.kind == "rmats_result" else a for a in manifest.assets)
+    manifest = manifest.model_copy(update={"assets": assets})
+    path = ManifestStore().save(manifest, tmp_path / f"{mode}.project.json")
+    cid = manifest.contrasts[0].contrast_id
+    plan = create_plan(path, {"contrast_ids": [cid]})
+    tasks = [t for t in plan["tasks"] if t.get("adapter", "").startswith("network.")]
+    assert len(tasks) == 4
+    assert all(t["parameters"]["rmats_mode"] == mode for t in tasks)
+    config, _, _ = prepare_project_network(path, tmp_path / f"{mode}-projection",
+        {"network_scope": "contrast", "contrast_ids": [cid]}, file_sha256)
+    assert config.rmats_mode == mode
+    assert len(list(config.rmats_root.glob(f"*/rmats_post/*.MATS.{mode}.txt"))) == 5
+
+
+def test_ambiguous_mode_requires_explicit_choice_with_parameter_precedence(study, tmp_path):
+    _, manifest = ManifestStore().load(study)
+    duplicate = tuple(a.model_copy(update={"asset_id": a.asset_id + "::JCEC",
+                                         "metadata": {**a.metadata, "mode": "JCEC"}})
+                      for a in manifest.assets if a.kind == "rmats_result")
+    manifest = manifest.model_copy(update={"assets": manifest.assets + duplicate})
+    cid = manifest.contrasts[0].contrast_id
+    scope = {"network_scope": "contrast", "contrast_ids": [cid]}
+    with pytest.raises(ValueError, match="both JC and JCEC"):
+        resolve_network_rmats_mode(manifest, scope)
+    path = ManifestStore().save(manifest, tmp_path / "both.project.json")
+    with pytest.raises(ValueError, match="both JC and JCEC"):
+        create_plan(path, {"contrast_ids": [cid]})
+    chosen = manifest.model_copy(update={"metadata": {**manifest.metadata, "rmats_mode": "JCEC"}})
+    assert resolve_network_rmats_mode(chosen, scope) == "JCEC"
+    assert resolve_network_rmats_mode(chosen, {**scope, "rmats_mode": "JC"}) == "JC"
+
+
+def test_unavailable_or_missing_mode_fails_during_planning_and_readiness(study, tmp_path, monkeypatch):
+    from katana_next.flow import stages
+    _, manifest = ManifestStore().load(study)
+    cid = manifest.contrasts[0].contrast_id
+    scope = {"network_scope": "contrast", "contrast_ids": [cid], "rmats_mode": "JCEC"}
+    with pytest.raises(ValueError, match="has no declared scoped"):
+        create_plan(study, {"contrast_ids": [cid], "network": {"parameters": {"rmats_mode": "JCEC"}}})
+    def forbidden(*args, **kwargs):
+        raise AssertionError("A missing count mode must fail before native runtime probing")
+    monkeypatch.setattr(stages, "_require_r_packages", forbidden)
+    errors = stages.readiness({"adapter": "network.fit", "inputs": {"project": str(study)}, "parameters": scope})
+    assert any("has no declared scoped" in error for error in errors)
+    no_mode = manifest.model_copy(update={"assets": tuple(a.model_copy(update={"metadata": {
+        key: value for key, value in a.metadata.items() if key != "mode"}})
+        if a.kind == "rmats_result" else a for a in manifest.assets)})
+    with pytest.raises(ValueError, match="must declare an explicit JC/JCEC"):
+        resolve_network_rmats_mode(no_mode, {**scope, "rmats_mode": "JC"})
 
 
 def test_six_samples_formal_and_five_rejected_without_changing_legacy(study):
@@ -197,6 +252,49 @@ def test_technical_copies_and_changed_biological_units_are_not_independent_sampl
     metadata.to_csv(config.sample_metadata, sep="\t", index=False)
     with pytest.raises(ValueError, match="biological units differ"):
         validate_external_network_config(config, manifest, identity, file_sha256)
+
+
+def test_reversed_native_arms_and_sample_order_preserve_the_exact_scoped_matrix(study, tmp_path):
+    """Native arm reversal and vector permutations are transport, not new fits."""
+    from katana_cosplice.matrix import build_sample_matrices
+    _, manifest = ManifestStore().load(study)
+    cid = manifest.contrasts[0].contrast_id
+    identity = network_scope_identity(manifest, {"network_scope": "contrast", "contrast_ids": [cid]})
+    expected_config, _, _ = prepare_project_network(study, tmp_path / "expected",
+        {**identity, "rmats_mode": "JC"}, file_sha256)
+    expected = build_sample_matrices(expected_config)
+    assets = []
+    untouched = {}
+    for asset in manifest.assets:
+        if asset.kind != "rmats_result" or asset.metadata.get("contrast_id") != cid:
+            assets.append(asset)
+            continue
+        untouched[asset.path] = file_sha256(asset.path)
+        frame = pd.read_csv(asset.path, sep="\t")
+        for prefix in ("IncLevel", "IJC_SAMPLE_", "SJC_SAMPLE_"):
+            first, second = frame[prefix + "1"].copy(), frame[prefix + "2"].copy()
+            frame[prefix + "1"] = second.map(lambda value: ",".join(str(value).split(",")[::-1]))
+            frame[prefix + "2"] = first.map(lambda value: ",".join(str(value).split(",")[::-1]))
+        frame["IncLevelDifference"] = -frame["IncLevelDifference"]
+        path = tmp_path / (asset.metadata["event_type"] + ".reversed.JC.tsv")
+        frame.to_csv(path, sep="\t", index=False)
+        metadata = {**asset.metadata, "reverse_direction": True}
+        for arm in ("numerator", "denominator"):
+            metadata[arm + "_sample_ids"] = list(metadata[arm + "_sample_ids"])[::-1]
+        assets.append(asset.model_copy(update={"path": path, "metadata": metadata}))
+    reversed_project = ManifestStore().save(manifest.model_copy(update={"assets": tuple(assets)}),
+                                          tmp_path / "reversed.project.json")
+    config, proof, _ = prepare_project_network(reversed_project, tmp_path / "observed",
+        {**identity, "rmats_mode": "JC"}, file_sha256)
+    observed = build_sample_matrices(config)
+    for field in ("psi", "ijc", "sjc"):
+        pd.testing.assert_frame_equal(getattr(observed, field).sort_index(),
+                                      getattr(expected, field).sort_index())
+    mapping = json.loads(Path(proof["projection_mapping"]).read_text())
+    assert len(mapping["projection"]) == 5
+    assert all(row["vector_order_transport_changed"] and not row["statistics_refitted"]
+               for row in mapping["projection"])
+    assert untouched == {path: file_sha256(path) for path in untouched}
 
 
 @pytest.mark.parametrize("scope", ["contrast", "cohort"])

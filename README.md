@@ -41,7 +41,7 @@ MotifTrace links splicing changes to RNA sequence and RBP evidence at three leve
 
 Browse results by gene, event or motif and export RNA FASTA, site tables, genomic coordinates, statistics and figures. Custom motif libraries are supported. Eligible existing transcript/exon-usage and expression results can also inform motif-availability analysis.
 
-MotifTrace supports new sequence analyses and imports of compatible completed sequence or parallel MAPP results. Imported method identities and P/FDR values are retained. General one-command MAPP fitting for arbitrary new projects is not currently provided. Local RNA reconstruction and motif predictions do not establish measured RBP binding.
+MotifTrace supports new sequence analyses and imports of compatible completed sequence or parallel MAPP results. Imported method identities and P/FDR values are retained. The integrated workflow can prepare and fit the original MAPP MAEI model when matching transcript quantities, reference sequences and motif-count inputs are available; it does not substitute PSI for transcript abundance or run all MAPP subworkflows. Local RNA reconstruction and motif predictions do not establish measured RBP binding.
 
 The development package provides `from katana_motiftrace import MotifTrace`,
 `katana-motiftrace` commands, and a shared MotifTrace mode selector in the
@@ -54,7 +54,7 @@ Network analysis accepts eligible rMATS events, competing junctions extracted fr
 
 The existing WGCNA/TOM route identifies co-splicing modules and produces memberships, sample activity scores, condition associations, hubs and network views. Supporting analyses include bootstrap stability and membership confidence, module function, structural and sensitivity diagnostics, projection onto existing modules, and preservation in independent cohorts. Optional routes, including the original DJExpress author core, require their own inputs.
 
-Discovery uses an eligible sample cohort. Condition associations and external validation retain their respective designs; membership, association, stability and functional evidence are presented separately.
+The integrated workflow fits a separate network for each selected comparison, using only that comparison's biological samples. Modules, activities, associations, network figures and enrichment retain the comparison identity. The configured sample minimum and the actual sample count are recorded alongside bootstrap and continuous membership metrics; meeting the sample minimum does not establish network stability. Existing cohort networks can still be imported with their original scope, without being relabeled as independent comparison networks.
 
 ### One-click reports
 
@@ -99,10 +99,20 @@ Depending on the analysis, Katana produces browsable result tables, interactive 
 
 ## Install and use
 
-The current version is installed from a source checkout. Use Python 3.11 or newer in a separate environment:
+The current implementation is on **`codex/package-development`**. Choose the installation that matches how you want to use Katana:
+
+| Use | Installation |
+| --- | --- |
+| Run the integrated Nextflow pipeline | A Linux downstream image supplies Katana's Python, R and native tools; upstream nf-core modules keep their own tool images. See [container build/load and pipeline commands](containers/downstream/README.md). |
+| Run downstream analyses directly from Python, CLI or browser | Use the [locked standalone Linux Conda environment](docs/RUNTIME_ENVIRONMENTS.md#standalone-linux-environment). |
+| Browse completed results, generate reports or develop the interface | Use the Python source installation below. Native R and analysis tools are additional requirements for new calculations. |
+
+The Linux image and standalone environment have passed [installation and native-runtime checks](docs/validation/downstream-runtime-20261023.md). Those records identify a specific earlier wheel and image; newer development changes require a newly built matching wheel and image. [Generic workflow acceptance](docs/validation/generic-pipeline-20261023.md) is recorded separately. There is no published Katana image registry or PyPI release yet; use the documented local build and verify its artifact identity.
+
+For the browser and Python/CLI interface, use Python 3.11 or newer in a separate environment:
 
 ```sh
-git clone https://github.com/Taratype0/Katana-splicing-tool.git
+git clone --branch codex/package-development https://github.com/Taratype0/Katana-splicing-tool.git
 cd Katana-splicing-tool
 python -m venv .venv
 ```
@@ -120,7 +130,7 @@ katana-open --runtime-root ../katana-runtime
 python -m katana_next.cli --project path/to/katana.project.json run reports.bundle
 ```
 
-Inputs are currently registered in a project configuration. Sample/contrast-sheet onboarding and upstream-result adapters are being unified for new users. See [installation](docs/INSTALL.md) and [usage](docs/USAGE.md) for migration, formats and resources. R, motif-scanning environments, references and databases are configured for the selected modules.
+Inputs are registered in a project configuration. Sample/contrast-sheet onboarding and upstream-result adapters are being unified for new users. See [installation](docs/INSTALL.md) and [usage](docs/USAGE.md) for migration, formats and resources. References and databases are supplied separately; installing a tool environment does not provide genome or motif resources.
 
 ## Development status
 

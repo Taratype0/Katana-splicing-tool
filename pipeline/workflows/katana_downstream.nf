@@ -1,6 +1,6 @@
 import groovy.json.JsonSlurper
 
-include { KATANA_FLOW_PLAN; KATANA_FLOW_COLLECT; KATANA_FLOW_REPORT } from '../modules/local/flow_control'
+include { KATANA_FLOW_PLAN; KATANA_FLOW_VALIDATE_PLAN; KATANA_FLOW_COLLECT; KATANA_FLOW_REPORT } from '../modules/local/flow_control'
 include { KATANA_FLOW_TASK as AUDIT } from '../modules/local/flow_task'
 include { KATANA_FLOW_TASK as QUALITY } from '../modules/local/flow_task'
 include { KATANA_FLOW_TASK as AS } from '../modules/local/flow_task'
@@ -66,8 +66,17 @@ workflow KATANA_DOWNSTREAM {
     flow_config_filename
 
     main:
-    KATANA_FLOW_PLAN(project_root, project_filename, flow_config, flow_config_filename)
-    plan = KATANA_FLOW_PLAN.out.plan
+    if (params.flow_plan) {
+        // A validation receipt is a gate, never a new copy of the task plan.
+        // Preserve the original Path so Nextflow can reuse completed tasks.
+        original_plan = Channel.value(file(params.flow_plan, checkIfExists: true))
+        KATANA_FLOW_VALIDATE_PLAN(original_plan, project_root, project_filename)
+        plan = original_plan.combine(KATANA_FLOW_VALIDATE_PLAN.out.receipt)
+            .map { original, checked -> original }
+    } else {
+        KATANA_FLOW_PLAN(project_root, project_filename, flow_config, flow_config_filename)
+        plan = KATANA_FLOW_PLAN.out.plan
+    }
 
     // Each task starts when its own named dependency directories arrive.
     // There are no whole-level barriers, maxForks or application queue limits.

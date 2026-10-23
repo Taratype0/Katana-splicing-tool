@@ -22,12 +22,12 @@ _MOTIF_DECLARATION_LOCK = RLock()
 
 
 @contextmanager
-def _declare_complete_motif_family(project, parameters):
+def _declare_complete_motif_family(project, parameters, presentation_recovery=None):
     """Record the execution boundary before the unchanged kernel scores RNA."""
     from unittest.mock import patch
     import katana_next.workflows.motiftrace_consequences as workflow_module
     from katana_next.workflows.sources import selected_source
-    original = workflow_module.analyze_consequences
+    original = presentation_recovery.run if presentation_recovery is not None else workflow_module.analyze_consequences
     source = selected_source(project.context, parameters)
     policy = source.metadata.get("read_support_policy") if source is not None else None
 
@@ -410,7 +410,7 @@ def _explicit_parallel_scope(project, parameters):
 
 
 def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
-                 dependency_receipts=(), *, project_path=None) -> Path:
+                 dependency_receipts=(), *, project_path=None, presentation_recovery=None) -> Path:
     """Run one declared task to completion; a submitted/running job never passes.
 
     Existing valid products are returned untouched. Failed/unknown attempts are
@@ -434,12 +434,20 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
             "package_version": __version__,
             "dependencies": {key: value[1]["receipt_sha256"] for key, value in sorted(parents.items())}}
     base_sha = canonical_hash(base)
+    recovery = None
+    if presentation_recovery is not None:
+        from .motif_recovery import prepare_presentation_recovery
+        recovery = prepare_presentation_recovery(
+            presentation_recovery, plan=plan, task=task, base_sha=base_sha, manifest_sha=manifest_sha,
+        )
     directory = Path(output_dir).expanduser().resolve()
     receipt_path = directory / "task.receipt.json"
     if receipt_path.exists():
         value = validate_receipt(receipt_path, plan=plan, task=task)
         if value.get("base_request_sha256") != base_sha:
             raise ValueError("Existing task products belong to changed inputs or execution parameters")
+        if recovery is not None and value.get("execution_evidence", {}).get("presentation_recovery") != recovery.evidence:
+            raise ValueError("Existing task products do not bind this requested presentation recovery")
         return receipt_path
     for protected in (Path(__file__).resolve().parents[2], source.input_root, source.output_root):
         if directory == protected.resolve() or directory.is_relative_to(protected.resolve()):
@@ -590,7 +598,8 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
                 else:
                     paths = list(dict.fromkeys(Path(path).resolve() for path in workflow.input_paths(project.context, normalized)))
                 receipt["inputs"] = list({record["path"]: record for record in
-                                          [*original_import_inputs, *[file_record(path) for path in paths]]}.values())
+                                          [*original_import_inputs, *[file_record(path) for path in paths],
+                                           *(recovery.inputs if recovery is not None else [])]}.values())
                 receipt["workflow_version"] = workflow.version
                 if selection_evidence is not None and selection_evidence["selected_rows"] == 0:
                     from katana_next.workflows.base import ArtifactWriter
@@ -610,11 +619,13 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
                         from .stages import persist_network_trees
                         manager = persist_network_trees()
                     elif task["workflow_id"] == "prioritize.motiftrace_consequences":
-                        manager = _declare_complete_motif_family(project, parameters)
+                        manager = _declare_complete_motif_family(project, parameters, recovery)
                     elif task["workflow_id"] == "prioritize.motiftrace_parallel":
                         manager = _explicit_parallel_scope(project, parameters)
                     with manager:
                         job = project.run(task["workflow_id"], parameters, timeout=None)
+                    if recovery is not None:
+                        receipt["execution_evidence"] = recovery.execution_evidence()
                     generated = [project.context.catalog.get_artifact(identifier) for identifier in job.artifact_ids]
                     if not generated or any(item is None for item in generated):
                         raise ValueError("The completed workflow has no registered products")

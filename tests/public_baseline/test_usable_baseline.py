@@ -62,6 +62,10 @@ for entry in INVENTORY["workflows"]:
         entry["parameter_defaults"].update({
             "foreground_source": "candidate_union", "background_source": "match_foreground",
         })
+    elif entry["workflow_id"] in {"prioritize.motiftrace_consequences", "prioritize.rbp_mechanism"}:
+        # Explicit execution-only allocation limits; the preserved numerical
+        # sources, statistical parameters and historical inventories do not change.
+        entry["parameter_defaults"].update({"max_tests": 1000000, "max_matrix_cells": 8000000})
 
 
 def test_workflows_match_approved_all_sample_policy_and_retained_other_methods():
@@ -88,6 +92,7 @@ def test_only_approved_input_module_and_label_workflows_changed_from_preserved_b
         "reports.bundle", "reports.interpreted_bundle",
         "programs.psi_network", "programs.hub_events",
         "prioritize.evidence", "prioritize.enrichment", "prioritize.rbp_support",
+        "prioritize.motiftrace_consequences", "prioritize.rbp_mechanism",
     }
     assert current["quality.stable_as"]["parameter_defaults"] == {"fdr": 0.05, "min_abs_dpsi": 0.1}
     assert current["differential.cross_comparison"]["parameter_defaults"] == {
@@ -111,6 +116,11 @@ def test_only_approved_input_module_and_label_workflows_changed_from_preserved_b
         assert current[key]["parameter_defaults"] == {
             **old[key]["parameter_defaults"],
             "foreground_source": "candidate_union", "background_source": "match_foreground",
+        }
+    for key in ("prioritize.motiftrace_consequences", "prioritize.rbp_mechanism"):
+        assert current[key]["version"] == old[key]["version"]
+        assert current[key]["parameter_defaults"] == {
+            **old[key]["parameter_defaults"], "max_tests": 1000000, "max_matrix_cells": 8000000,
         }
 
 

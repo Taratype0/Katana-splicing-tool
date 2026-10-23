@@ -237,4 +237,11 @@ def required_report_gaps(collection, plan, report_manifest, report_dir, *, colle
             continue
         if component in required or gap.get("required") is True:
             gaps.append({**gap, "component": component})
+    from .network_acceptance import network_report_gaps
+    gaps.extend(network_report_gaps(root, plan, report_manifest, report_dir))
+    from .motif_acceptance import required_motif_report_gaps
+    gaps.extend(required_motif_report_gaps(
+        root, plan, report_manifest, report_dir,
+        project=project, receipts=receipts, transported=transported,
+    ))
     return gaps
