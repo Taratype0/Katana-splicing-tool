@@ -77,6 +77,20 @@ def template_preflight(template_path, config_path):
             "scope": "Resource/runtime readiness before upstream. Native project and calculation acceptance follow upstream export."}
 
 
+def required_figure_chapters(plan):
+    """Keep all seven sections; a declared single contrast has no overlap plot."""
+    required = set(range(1, 8))
+    contrasts = plan.get("contrast_ids", [])
+    applicability = plan.get("applicability", {}).get("cross_comparison", {})
+    configuration = plan.get("configuration", {})
+    if (len(contrasts) == 1 and applicability.get("status") == "not_applicable"
+            and applicability.get("contrast_ids") == contrasts
+            and not configuration.get("interactions")
+            and len(configuration.get("design_factors", [])) < 2):
+        required.remove(4)
+    return required
+
+
 def build_complete_report(collection, outdir):
     """No complete report unless every planned calculation has actual evidence."""
     from .collect import validate_collection, materialize_report_descriptor
@@ -106,7 +120,7 @@ def build_complete_report(collection, outdir):
         if required_gaps:
             raise ValueError("Required fixed-report analyses are still absent from the rendered result; see flow.acceptance.failed.json")
         chapters = {int(panel["chapter"]) for panel in manifest.get("panels", []) if panel.get("image")}
-        if not set(range(1, 8)).issubset(chapters):
+        if not required_figure_chapters(plan).issubset(chapters):
             raise ValueError("Fixed seven-chapter report is missing rendered figures; collection remains diagnostic")
         for name in ("REPORT.html", "REPORT.zip", "report-manifest.json"):
             if not (outdir / name).is_file() or not (outdir / name).stat().st_size:

@@ -117,8 +117,14 @@ workflow KATANA_DOWNSTREAM {
         MOTIFTRACE.out.result, MOTIFTRACE_RESOURCE.out.result, OVERLAP.out.result, REFERENCE.out.result, QC.out.result, COVERAGE.out.result,
         NETWORK_FIT.out.result, NETWORK_FOLLOWUP.out.result, INTERACTION.out.result,
         MAPP_PREPARE.out.result, MAPP.out.result).toSortedList { a, b -> a.name <=> b.name }
-    KATANA_FLOW_COLLECT(plan, all_results)
-    KATANA_FLOW_REPORT(KATANA_FLOW_COLLECT.out.collection)
+    // Collection/report verify producer input hashes too; the same external
+    // model files must remain visible there without copying scientific outputs.
+    runtime_data = plan.map { planFile ->
+        new JsonSlurper().parse(planFile.toFile()).tasks.collectMany { motifRuntimeInputs(it) }
+            .unique().sort { it.toString() }
+    }
+    KATANA_FLOW_COLLECT(plan, all_results, runtime_data)
+    KATANA_FLOW_REPORT(KATANA_FLOW_COLLECT.out.collection, runtime_data)
 
     emit:
     report = KATANA_FLOW_REPORT.out.report

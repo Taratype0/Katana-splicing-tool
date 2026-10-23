@@ -7,6 +7,7 @@ from pathlib import Path
 import hashlib
 from datetime import datetime, timezone
 import copy
+import math
 import html, json, re, shutil, zipfile
 from .sources import load_source, digest, read_table, table_schema
 
@@ -241,6 +242,11 @@ class Builder:
     def table_browser(self, frame, record):
         # All rows of this table, with original scalar values; no new statistics.
         values = frame.astype(object).where(frame.notna(), None).values.tolist()
+        # JSON has no signed infinity. Preserve it explicitly in the browser;
+        # missing values stay null and the copied raw result remains unchanged.
+        values = [[('Infinity' if value > 0 else '-Infinity')
+                   if isinstance(value, (int, float)) and math.isinf(value) else value
+                   for value in row] for row in values]
         data = json.dumps({'columns': list(frame.columns), 'rows': values}, default=str, ensure_ascii=False, allow_nan=False).replace('<', '\\u003c')
         identity = str(record.get('artifact_id') or record['name'])
         context = str(record.get('contrast_id', '')) + '|' + str(record.get('policy', '')) + '|' + record['source']

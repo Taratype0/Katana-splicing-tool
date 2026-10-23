@@ -93,6 +93,7 @@ process KATANA_FLOW_COLLECT {
     input:
     path plan
     path task_results, stageAs: 'task-results/*'
+    path runtime_data_files, stageAs: 'runtime-data/??????/*'
 
     output:
     path 'collection', emit: collection
@@ -115,6 +116,7 @@ process KATANA_FLOW_REPORT {
 
     input:
     path collection
+    path runtime_data_files, stageAs: 'runtime-data/??????/*'
 
     output:
     path 'report', emit: report
