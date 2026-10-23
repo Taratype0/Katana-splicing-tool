@@ -2,8 +2,10 @@ process PREPARE_REFERENCES {
     label 'process_low'
     container "${workflow.containerEngine == 'singularity' ? 'https://depot.galaxyproject.org/singularity/gffread:0.12.1--h8b12597_0' : 'quay.io/biocontainers/gffread:0.12.1--h8b12597_0'}"
     input:
-    path fasta
-    path gtf
+    // Input basenames may equal the normalized output names. Stage them in
+    // separate directories so output redirection cannot truncate source links.
+    path fasta, stageAs: 'source_fasta/*'
+    path gtf, stageAs: 'source_gtf/*'
     output:
     path 'genome.fasta', emit: fasta
     path 'annotation.gtf', emit: gtf
@@ -18,7 +20,9 @@ process PREPARE_REFERENCES {
     $fasta_cmd > genome.fasta
     $gtf_cmd > annotation.gtf
     gffread annotation.gtf -g genome.fasta -w transcripts.fasta
-    test -s genome.fasta && test -s annotation.gtf && test -s transcripts.fasta
+    test -s genome.fasta
+    test -s annotation.gtf
+    test -s transcripts.fasta
     sha256sum genome.fasta annotation.gtf transcripts.fasta > reference.sha256
     printf 'gffread: %s\\n' "\$(gffread --version 2>&1)" > versions.yml
     """

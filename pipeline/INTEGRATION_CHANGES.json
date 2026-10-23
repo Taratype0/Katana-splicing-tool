@@ -71,7 +71,7 @@
     {
       "path": "modules/local/prepare_references.nf",
       "snapshot_sha256": "a8c3a510818e69921cf634d167a55332bae199eaef499d32956bae93d0d33d14",
-      "integrated_sha256": "25377837028fb9d86e085d8f52f36d1e055b2a645db0d7d121067727175f76e8"
+      "integrated_sha256": "0b3a4d41978f5cbdeb75161faf334e341e9c57587e787b8426f48ee8bfcb013c"
     },
     {
       "path": "modules/local/reference_faidx.nf",

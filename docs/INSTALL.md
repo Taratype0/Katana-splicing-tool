@@ -11,7 +11,7 @@ Use the **`codex/package-development`** branch for the packaged workflow describ
 | [Python source installation](#source-checkout) | Browser, CLI, reports and Python analyses | Python 3.11 or newer; selected native computations need their additional runtime |
 
 For the current development image and its matching wheel, use the
-[current container acceptance record](validation/current-container-20261023.md).
+[current container acceptance record](validation/pipeline-closure-20261024.md).
 The [earlier runtime record](validation/downstream-runtime-20261023.md) documents
 the standalone Linux and Windows Python/browser installations; its older image
 does not include subsequent workflow/report fixes. Match the wheel, image and
@@ -27,10 +27,25 @@ the same directory, then run:
 
 ```sh
 sha256sum --check SHA256SUMS
-docker load -i katana-downstream-dev-b0fbd72-linux-amd64.tar.gz
-docker image inspect katana-downstream:dev-b0fbd72 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
-docker run --rm --network none katana-downstream:dev-b0fbd72 katana-flow --help
+docker load -i katana-downstream-dev-d05c76c-linux-amd64.tar.gz
+docker image inspect katana-downstream:dev-d05c76c --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+docker run --rm --network none katana-downstream:dev-d05c76c katana-flow --help
 ```
+
+For **new FASTQ/BAM processing**, also load the supplied DEXSeq tools archive:
+
+```sh
+docker load -i kanata-dexseq-tools-dev-20261024-linux-amd64.tar.gz
+docker image inspect kanata-dexseq-tools:dev-20261024 --format '{{.Id}}'
+```
+
+Set `--dexseq_tools_container kanata-dexseq-tools:dev-20261024` when starting
+`complete` or `upstream-only` mode with Docker. Existing-result downstream-only
+analysis does not need this upstream image. If no archive was supplied,
+[build it locally](../containers/dexseq-tools/README.md); do not try to pull the
+previously assumed, unpublished registry tag. The runtime record lists both
+archive hashes and image IDs. Upstream modules also use their pinned public
+tool images, which the execution host must be able to obtain.
 
 Compare the image ID with the current acceptance record. The archive is a local
 development deliverable, not a registry download; users without it can follow

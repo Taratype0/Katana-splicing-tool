@@ -12,8 +12,8 @@ execution host. Nextflow and Java run on that host; Katana's native dependencies
 run inside the image.
 
 There is no published registry image yet. The current local development image
-is `katana-downstream:dev-b0fbd72`; its matching wheel, image ID, archive checksum
-and observed checks are in the [current acceptance record](../../docs/validation/current-container-20261023.md).
+is `katana-downstream:dev-d05c76c`; its matching wheel, image ID, archive checksum
+and observed checks are in the [current acceptance record](../../docs/validation/pipeline-closure-20261024.md).
 The [earlier runtime record](../../docs/validation/downstream-runtime-20261023.md)
 refers to an older image. For later source revisions, build a matching wheel and
 image and retain their receipt. [Generic workflow evidence](../../docs/validation/generic-pipeline-20261023.md)
@@ -126,6 +126,10 @@ sheet, contrast sheet, references and downstream resource configuration from
 the [integrated workflow guide](../../docs/INTEGRATED_PIPELINE.md). The host does
 not need a standalone Katana Conda environment for containerized tasks.
 Upstream tool images are separate and must also be available to the executor.
+The DEXSeq annotation/count steps require the separately
+[built or loaded DEXSeq tools image](../dexseq-tools/README.md), selected with
+`--dexseq_tools_container`. This is required for containerized `complete` and
+`upstream-only` modes; no published DEXSeq registry image is assumed.
 
 Container tasks use `/opt/conda`, clear inherited Python/R overrides, reject
 host interpreter/library paths and probe required dependencies before analysis.
