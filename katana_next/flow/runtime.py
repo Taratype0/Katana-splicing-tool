@@ -347,6 +347,68 @@ def _stage_artifacts(project, task, directory, fingerprint):
     return artifacts, result
 
 
+def _owned_parallel_inputs(manifest, task, directory):
+    """Privately snapshot an explicitly requested completed import, unchanged.
+
+    The frozen reader registers its completed source members as artifacts. Its
+    manifest and relative member layout therefore need task-owned copies, while
+    reuse must remain bound to the original declared resource fingerprints.
+    """
+    from types import SimpleNamespace
+    from katana_next.workflows.motiftrace_parallel import MotifTraceParallelWorkflow
+    workflow = MotifTraceParallelWorkflow()
+    parameters = workflow.normalize_parameters(task.get("parameters") or {})
+    context = SimpleNamespace(manifest=manifest)
+    original_inputs = [file_record(path) for path in workflow.input_paths(context, parameters)]
+    bundle, _ = workflow._load(context, parameters)
+    asset = bundle.asset
+    root = directory / "completed-parallel"
+    root.mkdir()
+    members = [bundle.manifest_path, *bundle.files.values()]
+    owned = []
+    for original in dict.fromkeys(members):
+        target = root / original.relative_to(bundle.root)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(original, target)
+        source = next(item for item in original_inputs if item["path"] == str(original))
+        if (file_hash(target), target.stat().st_size) != (source["sha256"], source["size_bytes"]):
+            raise ValueError("Completed parallel source changed during its private snapshot")
+        owned.append({"source": source, "path": str(target)})
+    verify_files(original_inputs)
+    copied_manifest = root / bundle.manifest_path.relative_to(bundle.root)
+    copied_asset = asset.model_copy(update={"path": copied_manifest})
+    assets = tuple(copied_asset if candidate.asset_id == asset.asset_id else candidate for candidate in manifest.assets)
+    evidence = {"asset_id": asset.asset_id, "source_manifest": str(bundle.manifest_path),
+                "source_manifest_sha256": file_hash(bundle.manifest_path),
+                "private_manifest": str(copied_manifest), "members": owned,
+                "statistics_recomputed": False, "source_modified": False}
+    return manifest.model_copy(update={"assets": assets}), original_inputs, evidence
+
+
+@contextmanager
+def _explicit_parallel_scope(project, parameters):
+    """Keep the validated single original contrast on this private importer.
+
+    The generic service normally elides an all-project contrast selection. A
+    completed parallel family requires its explicit identity even in a project
+    containing only that one comparison. No other service instance is changed.
+    """
+    from unittest.mock import patch
+    original = project.workflows._normalize_contrast_scope
+
+    def retain(context, workflow, values):
+        normalized = original(context, workflow, values)
+        if workflow.definition.workflow_id == "prioritize.motiftrace_parallel" and "contrast_ids" not in normalized:
+            requested = list(parameters.get("contrast_ids", []))
+            if len(requested) != 1 or requested != [c.contrast_id for c in context.manifest.contrasts]:
+                raise ValueError("Completed parallel import requires one validated original comparison")
+            normalized["contrast_ids"] = requested
+        return normalized
+
+    with patch.object(project.workflows, "_normalize_contrast_scope", retain):
+        yield
+
+
 def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
                  dependency_receipts=(), *, project_path=None) -> Path:
     """Run one declared task to completion; a submitted/running job never passes.
@@ -405,6 +467,11 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
                 derived_assets.append(InputAsset.model_validate(candidate))
         manifest = source.model_copy(update={"output_root": directory / "results",
                                              "assets": tuple(source.assets) + tuple(derived_assets)})
+        original_import_inputs = []
+        if task.get("workflow_id") == "prioritize.motiftrace_parallel":
+            manifest, original_import_inputs, snapshot = _owned_parallel_inputs(manifest, task, directory)
+            receipt["execution_evidence"] = {"owned_completed_parallel_snapshot": snapshot,
+                                              "native_fitting_performed": False, "new_inference": False}
         private_manifest = write_json(directory / "project.json", manifest.model_dump(mode="json"))
         with KatanaProject(private_manifest) as project:
             _import_parents(project, parents, manifest_sha)
@@ -496,7 +563,8 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
                     paths = [project.context.catalog.get_artifact(selection_evidence["source_artifact_id"]).path]
                 else:
                     paths = list(dict.fromkeys(Path(path).resolve() for path in workflow.input_paths(project.context, normalized)))
-                receipt["inputs"] = [file_record(path) for path in paths]
+                receipt["inputs"] = list({record["path"]: record for record in
+                                          [*original_import_inputs, *[file_record(path) for path in paths]]}.values())
                 receipt["workflow_version"] = workflow.version
                 if selection_evidence is not None and selection_evidence["selected_rows"] == 0:
                     from katana_next.workflows.base import ArtifactWriter
@@ -517,6 +585,8 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
                         manager = persist_network_trees()
                     elif task["workflow_id"] == "prioritize.motiftrace_consequences":
                         manager = _declare_complete_motif_family(project, parameters)
+                    elif task["workflow_id"] == "prioritize.motiftrace_parallel":
+                        manager = _explicit_parallel_scope(project, parameters)
                     with manager:
                         job = project.run(task["workflow_id"], parameters, timeout=None)
                     generated = [project.context.catalog.get_artifact(identifier) for identifier in job.artifact_ids]
@@ -531,6 +601,9 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
             receipt["generated_artifacts"] = [a.model_dump(mode="json") for a in generated]
             receipt["producer_markers"] = [file_record(path) for path in sorted((directory / "results").rglob("parameters.json"))]
             output_paths = set()
+            imported = receipt.get("execution_evidence", {}).get("owned_completed_parallel_snapshot")
+            if imported:
+                output_paths.add(Path(imported["private_manifest"]).resolve())
             for artifact in all_artifacts:
                 output_paths.add(artifact.path.resolve())
                 for value in artifact.metadata.get("exports", {}).values():

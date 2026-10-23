@@ -4,7 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 import re
 import shutil
-from importlib.metadata import PackageNotFoundError, version
 
 from .model import file_sha256, read_json, seal_plan
 
@@ -59,6 +58,7 @@ def create_plan(project, config):
                   "prioritize.evidence": "evidence", "differential.cross_comparison": "overlap",
                   "prioritize.enrichment": "enrichment", "prioritize.rbp_support": "enrichment",
                   "prioritize.motiftrace_consequences": "motiftrace", "prioritize.rbp_mechanism": "motiftrace",
+                  "prioritize.motiftrace_parallel": "motiftrace",
                   "quality.read_coverage_bias": "coverage", "differential.replicate_interaction": "interaction"}
         execution_group = groups.get(workflow, "reference" if workflow == "flow.reference.bed12" else
                                      "mapp_prepare" if workflow == "flow.mapp.prepare" else "qc" if workflow in {"flow.qc.genebody", "flow.qc.sequencing"} else
@@ -77,6 +77,9 @@ def create_plan(project, config):
         add(suffix, "differential." + suffix, ["quality"], {"contrast_ids": contrasts})
     add("evidence", "prioritize.evidence", ["as", "deg", "dtu"], {"contrast_ids": contrasts, "event_set": event_set})
     add("overlap", "differential.cross_comparison", ["as"], {"contrast_ids": contrasts, "event_set": event_set})
+    parallel_settings = settings.get("parameters", {}).get("prioritize.motiftrace_parallel", {})
+    parallel_requested = bool(parallel_settings.get("parallel_bundle_asset_id")) or any(
+        asset.kind == "motiftrace_parallel_results" for asset in manifest.assets)
     for cid in contrasts:
         token, scope = _token(cid), {"contrast_ids": [cid]}
         selection = {"analysis_id": "differential.as", "name": "Differential AS events",
@@ -90,6 +93,9 @@ def create_plan(project, config):
             {"contrast_ids": [cid]}, scope, selection=selection)
         add("motif-boundaries-" + token, "prioritize.rbp_mechanism", ["as"],
             {"contrast_ids": [cid], "binding_mode": "required"}, scope, selection=selection)
+        if parallel_requested:
+            add("motif-parallel-" + token, "prioritize.motiftrace_parallel", ["as"],
+                {"contrast_ids": [cid]}, scope)
 
     qc = settings.get("qc", {})
     add("sequencing-qc", "flow.qc.sequencing", ["audit"], {}, {"unit": "available_native_sequencing_QC"},
@@ -130,6 +136,8 @@ def create_plan(project, config):
     mapp = settings.get("mapp", {})
     mapp_inputs = resource_inputs(mapp.get("inputs", {}))
     if mapp_inputs.get("inclusion_table"):
+        if len(contrasts) != 1:
+            raise ValueError("Explicit prepared MAEI inputs require one exact selected comparison; use project-derived inputs for multiple comparisons")
         add("mapp", "flow.mapp.maei", ["audit"], mapp.get("parameters", {}),
             {"contrast_ids": contrasts}, adapter="mapp.maei", inputs=mapp_inputs)
     else:
@@ -150,10 +158,9 @@ def create_plan(project, config):
                     dependency_inputs={"events": {"analysis_id": "differential.as", "name": "Differential AS events"}})
                 add("mapp-fit-" + token, "flow.mapp.maei", [prepare], mapp.get("parameters", {}),
                     {"contrast_ids": [contrast.contrast_id], **window}, adapter="mapp.maei", inputs=mapp_inputs)
-    try:
-        package_version = version("katana-splicing-tool")
-    except PackageNotFoundError:
-        package_version = "source-checkout"
+    # Bind the code actually imported by this interpreter, including source
+    # checkouts that use dependencies from a separately installed distribution.
+    from katana_next import __version__ as package_version
     return seal_plan({"project_manifest": str(project_path), "project_manifest_sha256": file_sha256(project_path),
                       "project_id": manifest.project_id, "package_version": package_version,
                       "report_specification": "report-approved-20261022-01", "report_profile": "complete",
@@ -212,6 +219,14 @@ def preflight_plan(plan):
             for kind in runner.definition.required_asset_kinds:
                 if kind not in kinds and not (kind == "gene_body_coverage" and any(t.get("adapter") == "qc.genebody" for t in plan["tasks"])):
                     errors.append({"task_id": task["id"], "error": f"Missing input asset kind: {kind}"})
+            if task["workflow_id"] == "prioritize.motiftrace_parallel":
+                from types import SimpleNamespace
+                try:
+                    # This existing read-only adapter verifies the manifest and every
+                    # member SHA, species/build, exact case, direction and sample arms.
+                    runner.input_paths(SimpleNamespace(manifest=manifest), task["parameters"])
+                except (ValueError, OSError, KeyError) as exc:
+                    errors.append({"task_id": task["id"], "error": str(exc)})
     return {"schema": "katana.flow.preflight/v1", "plan_id": plan["plan_id"], "ready": not errors,
             "errors": errors, "warnings": warnings, "task_count": len(plan["tasks"]),
             "scope": "Read-only input and adapter checks. Native completion and numerical acceptance occur after execution."}

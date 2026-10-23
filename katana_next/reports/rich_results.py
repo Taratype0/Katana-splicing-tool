@@ -34,7 +34,7 @@ MOTIF_WORKFLOWS = frozenset({
     "prioritize.event_motifs", "prioritize.binding_enrichment",
     "prioritize.se_rbp_impact", "prioritize.rbp_sequence_results",
     "prioritize.motiftrace_consequences", "prioritize.motiftrace_usage",
-    "prioritize.motiftrace_parallel",
+    "prioritize.motiftrace_parallel", "prioritize.mapp_native",
 })
 _RS_REQUIRED = frozenset({
     "prioritize.rbp_mechanism", "prioritize.event_motifs",
@@ -149,6 +149,12 @@ def _scope(artifact: dict[str, Any]) -> dict[str, Any]:
         mode, note = "measurement_population", (
             "Uses the recorded measured-PSI population. The DAS / RS-DAS display "
             "switch does not filter module membership, refit this network or change its P/FDR."
+        )
+    elif workflow == "prioritize.mapp_native":
+        mode, note = "measurement_population", (
+            "Official native MAEI fits use their declared measured SE/transcript TPM and motif-count population. "
+            "The DAS display switch does not refit them, and native Bonferroni P values are not empirical "
+            "MotifTrace/MAPP parallel calibration."
         )
     elif workflow in _RS_REQUIRED:
         mode, note = "rs_required", (
@@ -474,8 +480,9 @@ def collect_rich_results(
         (7, "clip", "Reference CLIP and binding evidence",
          {"prioritize.binding_enrichment", "prioritize.rbp_mechanism"},
          "No completed matched CLIP result was supplied. Motif matches do not establish binding."),
-        (7, "mapp", "Completed MAPP / MotifTrace parallel results", {"prioritize.motiftrace_parallel"},
-         "No completed matched MAPP fit collection was supplied; no new model is fitted for the report."),
+        (7, "mapp_parallel", "Optional calibrated MAPP / MotifTrace parallel collection", {"prioritize.motiftrace_parallel"},
+         "No completed calibrated parallel collection was supplied. Native MAEI fits and MotifTrace computations, "
+         "when present, are reported separately; native P values are not relabelled as empirical parallel calibration."),
     )
     for chapter, family, title, workflows, caption in families:
         supporting = [row for row in results if row["status"] == "available"
@@ -490,6 +497,8 @@ def collect_rich_results(
                             "status": "not_computed", "source_paths": [],
                             "metadata": {"adapter_version": ADAPTER_VERSION, "component": family,
                                          "new_computation": False,
+                                         **({"requirement": "conditional_import", "optional_source_supplied": False}
+                                            if family == "mapp_parallel" else {}),
                                          "reason": "no_completed_project_matched_component"}})
     baseline_only = any(row["status"] == "available" and
                         row["metadata"].get("completion_scope") == "observed_network_baseline_only"

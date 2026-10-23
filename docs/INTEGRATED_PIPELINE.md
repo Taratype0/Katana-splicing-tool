@@ -8,8 +8,9 @@ requirement. It is not an approved nf-core pipeline.
 
 ## Execution
 
-Install the development checkout on the execution machine using
-`python -m pip install -e '.[flow,next]'`. Nextflow 25.10.4, a compatible Java,
+Use the `codex/package-development` branch and install the checkout on the
+execution machine using `python -m pip install -e '.[flow,next]'`.
+Nextflow 25.10.4, a compatible Java,
 the upstream tool environments, R packages, RSeQC, FIMO and configured resources
 are required by their respective stages. Containers must actually contain those
 tools; choosing a container profile does not build or certify an image.
@@ -77,11 +78,13 @@ Do not use a local executor on a shared login node for heavy analyses.
   significance chain. It requires hash-bound source scripts and matching
   reference annotation, genomic FASTA and existing transcript quantification.
   An explicit already-prepared quantity/count input remains supported. It
+  must describe one selected comparison; use project-derived inputs to
+  prepare independent families for multiple comparisons. The workflow
   does not run MAPP's other eight
   subworkflows, create TPM from rMATS PSI, or claim calibrated MotifTrace/MAPP
-  parallel evidence from an uncalibrated native fit. New-project preparation
-  and native fitting have component tests; complete report integration and
-  parallel calibration remain separate acceptance requirements.
+  parallel evidence from an uncalibrated native fit. New-project preparation,
+  native fitting and report panels have component tests. Full production
+  FASTQ/BAM acceptance remains a separate release requirement.
 - Completed task receipts bind parameters, method versions, input and output
   SHA256 and dependency identities. Unknown/failed outputs cannot be adopted
   as success. `-resume` reuses the exact Nextflow task cache; prior independent
@@ -136,8 +139,14 @@ The fixed report stays read-only. `katana-flow report` is the strict completion
 entrypoint; `katana-report` may still render honestly labeled historical partial
 collections. Neither command changes source statistics or invents missing data.
 
-The calibrated completed MAPP/MotifTrace parallel import is a separate evidence
-route. Its new-project calibration is not yet connected to the complete-mode
-gate. Native MAEI fitting is available and tested, but does not remove that
-remaining full-report acceptance requirement. A native fit is never relabeled
-as calibrated parallel evidence.
+Every planned native MAEI task is required by the completion gate. The approved
+report also supports importing compatible, already calibrated MAPP/MotifTrace
+parallel results; this is conditional on supplying that separate evidence.
+Register a `motiftrace_parallel_results` asset, selecting its asset ID through
+`parameters.prioritize.motiftrace_parallel.parallel_bundle_asset_id` if needed.
+The planner then schedules an independent verified import for each selected
+comparison. Missing, changed, ambiguous or mismatched supplied bundles fail
+readiness or acceptance. Without such a bundle, the report states that the
+optional calibrated comparison was not supplied; this does not suppress native
+MAPP fitting or relabel native statistics as calibrated evidence. The historical
+method-comparison calibration is not automatically rerun for a new study.

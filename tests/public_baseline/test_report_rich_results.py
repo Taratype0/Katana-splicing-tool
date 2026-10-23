@@ -79,8 +79,21 @@ def test_rbp_identity_does_not_claim_motiftrace_or_clip(tmp_path):
     rows = collect_rich_results([artifact(table, workflow="prioritize.rbp_support")])
     assert len(available(rows)) == 1
     missing = {row["metadata"].get("component") for row in rows if row["status"] == "not_computed"}
-    assert {"motif_enrichment", "motiftrace_sequence", "clip", "mapp"} <= missing
+    assert {"motif_enrichment", "motiftrace_sequence", "clip", "mapp_parallel"} <= missing
     assert "rbp_identity" not in missing
+
+
+def test_native_maei_and_optional_completed_calibration_are_distinct(tmp_path):
+    table = tmp_path / "native_activities.tsv"
+    table.write_text("model\tactivities_A1\tcombined.Zscore\nAAA\t0.2\t2.0\n")
+    rows = collect_rich_results([artifact(table, workflow="prioritize.mapp_native")])
+    native = available(rows)
+    assert len(native) == 1
+    assert native[0]["metadata"]["das_scope"]["mode"] == "measurement_population"
+    optional = next(row for row in rows if row.get("metadata", {}).get("component") == "mapp_parallel")
+    assert optional["metadata"]["requirement"] == "conditional_import"
+    assert "no new model is fitted" not in optional["caption"]
+    assert "native P values are not relabelled" in optional["caption"]
 
 
 def test_only_completed_manifest_imports_and_all_exports(tmp_path):

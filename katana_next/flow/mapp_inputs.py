@@ -19,6 +19,40 @@ from katana_cosplice.motif_scanner import IndexedFasta, reverse_complement
 
 COUNTER = "modules/CREATE_SITECOUNT_MATRICES/scripts/create-kmers-sitecount-matrix.py"
 BRIDGE_POLICY = "katana.exact-se-transcript-tpm/v1"
+APPLICABILITY_SCHEMA = "katana.flow.mapp_applicability/v1"
+
+
+def validate_inapplicability(path, *, sha, scope=None):
+    """Verify a measured zero-eligible universe, never a missing-input skip."""
+    proof_path = Path(path)
+    proof = json.loads(proof_path.read_text(encoding="utf-8"))
+    if (proof.get("schema") != APPLICABILITY_SCHEMA or proof.get("status") != "not_applicable"
+            or proof.get("reason_code") != "no_exact_mapped_se"
+            or proof.get("complete_measured_universe") is not True
+            or proof.get("eligible_events") != 0 or proof.get("native_fitting_performed") is not False):
+        raise ValueError("Native MAEI applicability requires a proved complete zero-eligible measured universe")
+    audit_path = Path(proof["eligibility_table"])
+    if not audit_path.is_file() or sha(audit_path) != proof.get("eligibility_table_sha256"):
+        raise ValueError("Native MAEI complete eligibility audit changed")
+    audit = pd.read_csv(audit_path, sep="\t")
+    allowed = {"no_exact_annotated_included_or_skipped_transcript", "outside_native_exon_length_range",
+               "native_min_total_TPM_in_every_sample", "native_uninformative_exon_in_all_samples"}
+    if (not {"event_id", "gene_id", "status"} <= set(audit)
+            or len(audit) != proof.get("measured_events") or audit.event_id.duplicated().any()
+            or audit.status.isna().any() or audit.status.eq("eligible").any()
+            or not set(audit.status) <= allowed):
+        raise ValueError("Native MAEI eligibility audit does not prove an actual complete zero-eligible universe")
+    if not proof.get("source_inputs") or not proof.get("sample_ids") or not proof.get("comparison_id"):
+        raise ValueError("Native MAEI applicability needs its actual source, sample and comparison identities")
+    for item in proof["source_inputs"]:
+        source = Path(item["path"])
+        if not source.is_file() or source.stat().st_size != item["size_bytes"] or sha(source) != item["sha256"]:
+            raise ValueError("Native MAEI applicability source input changed or is missing")
+    if scope:
+        if (scope.get("contrast_ids") != [proof["comparison_id"]]
+                or any(scope.get(key) != proof.get(key) for key in ("site", "window_start", "window_end"))):
+            raise ValueError("Native MAEI applicability belongs to another comparison or native window")
+    return proof, audit_path
 
 
 def native_windows():
@@ -56,11 +90,15 @@ def prepare_inputs(spec, out, *, run, sha, executable):
         raise ValueError("Official MAPP kmer counter source changed")
     event_path = Path(inputs["events"])
     events = pd.read_parquet(event_path) if event_path.suffix == ".parquet" else pd.read_csv(event_path, sep="\t")
+    source_event_rows = len(events)
     comparison = str(parameters.get("comparison_id", ""))
     if "comparison_id" in events:
         if not comparison:
             raise ValueError("Declare the comparison_id; MAPP inputs are never pooled")
+        if not events.empty and not events.comparison_id.eq(comparison).any():
+            raise ValueError("The requested MAPP comparison has no measured source universe")
         events = events.loc[events.comparison_id.eq(comparison)].copy()
+    comparison_event_rows = len(events)
     if "event_type" in events:
         events = events.loc[events.event_type.eq("SE")].copy()
     if "GeneID" in events and "gene_id" not in events:
@@ -68,13 +106,14 @@ def prepare_inputs(spec, out, *, run, sha, executable):
     if "event_id" not in events:
         raise ValueError("Declare canonical exact SE event_id values before the MAEI bridge")
     required = {"event_id", "gene_id", "chr", "strand", "upstreamEE", "exonStart_0base", "exonEnd", "downstreamES"}
-    if not required <= set(events) or events.empty or events.event_id.duplicated().any():
+    if not required <= set(events) or events.event_id.duplicated().any():
         raise ValueError("MAPP preparation requires one complete exact SE event row per canonical event_id")
     if not events.strand.isin(["+", "-"]).all():
         raise ValueError("MAPP event strands must be + or -")
     events["gene_id"] = events.gene_id.astype(str).str.strip('"').map(normalized_id)
     genes = set(events.gene_id)
     tx_exons, tx_locus = defaultdict(set), {}
+    reference_exons = 0
     gtf = Path(inputs["gtf"])
     opener = gzip.open if gtf.suffix == ".gz" else open
     with opener(gtf, "rt", encoding="utf-8") as stream:
@@ -84,8 +123,12 @@ def prepare_inputs(spec, out, *, run, sha, executable):
             fields = line.rstrip().split("\t")
             if len(fields) != 9 or fields[2] != "exon":
                 continue
+            reference_exons += 1
             attributes = dict(re.findall(r'(\S+)\s+"([^"]*)"', fields[8]))
             gene = normalized_id(attributes.get("gene_id", ""))
+            if (not gene or not attributes.get("transcript_id") or fields[6] not in {"+", "-"}
+                    or int(fields[3]) < 1 or int(fields[4]) < int(fields[3])):
+                raise ValueError("MAPP requires a valid strand-oriented exon annotation")
             if gene not in genes:
                 continue
             raw_tx = attributes.get("transcript_id", "")
@@ -95,6 +138,8 @@ def prepare_inputs(spec, out, *, run, sha, executable):
                 raise ValueError(f"Ambiguous GTF transcript identity: {raw_tx}")
             tx_locus[tx] = locus
             tx_exons[tx].add((int(fields[3])-1, int(fields[4])))
+    if not reference_exons or (genes and not tx_exons):
+        raise ValueError("MAPP inputs do not match a measured gene universe in the declared exon annotation")
     included, skipped = defaultdict(set), defaultdict(set)
     for tx, exons in tx_exons.items():
         gene, chrom, strand, _ = tx_locus[tx]
@@ -125,6 +170,9 @@ def prepare_inputs(spec, out, *, run, sha, executable):
                     raise ValueError(f"{sample}: transcript quantification/GTF version mismatch: {raw_id} / {annotated}")
         quantities[sample] = pd.Series(values.to_numpy(), index=keys)
     fasta = IndexedFasta(Path(inputs["genome_fasta"]))
+    if not fasta.index or any(length < 1 or offset < 0 or bases < 1 or width < bases
+                              for length,offset,bases,width in fasta.index.values()):
+        raise ValueError("MAPP requires a valid, nonempty matched genome FASTA index")
     audit, mapping, expression, sequences = [], [], [], []
     minimum = float(parameters.get("min_total_tpm", 1.0))
     min_length = int(parameters.get("min_exon_length", 100))
@@ -168,9 +216,32 @@ def prepare_inputs(spec, out, *, run, sha, executable):
                             "included_transcripts": ",".join(sorted(inc)), "skipped_transcripts": ",".join(sorted(exc))})
             sequences.append((row["event_id"],sequence))
     audit_path = out / "all_event_eligibility.tsv"
-    pd.DataFrame(audit).to_csv(audit_path,sep="\t",index=False)
+    pd.DataFrame(audit, columns=["event_id", "gene_id", "status"]).to_csv(audit_path,sep="\t",index=False)
     if not expression:
-        raise ValueError("No exact, measured SE satisfies the declared native MAEI eligibility; all losses retained")
+        invalid = {row["status"] for row in audit} & {
+            "missing_quantified_transcript_no_zero_filling", "reference_window_not_fully_available"}
+        if invalid:
+            raise ValueError("Native MAEI has incomplete quantified/reference inputs, not scientific inapplicability: " + ", ".join(sorted(invalid)))
+        sources = [event_path, gtf, Path(inputs["genome_fasta"]), Path(str(inputs["genome_fasta"])+".fai"),
+                   native_counter, *[Path(inputs["quantification"][s]) for s in samples]]
+        input_records = [{"path": str(path.resolve()), "size_bytes": path.stat().st_size, "sha256": sha(path)}
+                         for path in sources]
+        proof = {"schema": APPLICABILITY_SCHEMA, "status": "not_applicable", "reason_code": "no_exact_mapped_se",
+                 "complete_measured_universe": True, "eligible_events": 0, "measured_events": len(events),
+                 "source_event_rows": source_event_rows, "comparison_event_rows": comparison_event_rows,
+                 "comparison_id": comparison, "sample_ids": samples, "site": site,
+                 "window_start": start, "window_end": end, "window_id": name,
+                 "native_fitting_performed": False, "source_inputs": input_records,
+                 "eligibility_table": str(audit_path.resolve()), "eligibility_table_sha256": sha(audit_path),
+                 "loss_counts": pd.Series([row["status"] for row in audit], dtype=str).value_counts().to_dict(),
+                 "quantity_provenance": {"policy": BRIDGE_POLICY, "not_native_SUPPA_discovery": True,
+                    "min_total_tpm_every_sample": minimum, "min_exon_length": min_length,
+                    "max_exon_length": max_length, "selection": "all supplied measurable SEs; no P/FDR or motif-based preselection"}}
+        proof_path = out / "native_maei_applicability.json"
+        proof_path.write_text(json.dumps(proof, indent=2), encoding="utf-8")
+        return {"status": "not_applicable", "native_fitting_performed": False,
+                "prepared_events": 0, "all_events": len(events), "applicability_proof": str(proof_path),
+                "maei_inputs": {"applicability_proof": str(proof_path)}}, [audit_path, proof_path]
     inclusion_path, design_path = out / "INCLUSION_TABLE.tsv", out / "DESIGN.tsv"
     pd.DataFrame(expression).set_index("coordinates").to_csv(inclusion_path,sep="\t")
     pd.DataFrame({"sample": samples}).to_csv(design_path,sep="\t",index=False)

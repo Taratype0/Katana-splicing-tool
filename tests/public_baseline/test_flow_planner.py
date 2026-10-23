@@ -16,8 +16,10 @@ def study(tmp_path):
 
 
 def test_only_requested_comparisons_get_independent_expensive_tasks(study):
+    from katana_next import __version__
     plan = create_plan(study, {"contrast_ids": ["perturbation-vs-baseline"]})
     validate_plan(plan)
+    assert plan["package_version"] == __version__
     motifs = [t for t in plan["tasks"] if t["workflow_id"] == "prioritize.motiftrace_consequences"]
     assert len(motifs) == 1
     assert motifs[0]["scope"]["contrast_ids"] == ["perturbation-vs-baseline"]
@@ -106,3 +108,69 @@ def test_changed_success_output_cannot_be_reused(study, tmp_path):
     Path(receipt["outputs"][0]["path"]).write_text("corrupt", encoding="utf-8")
     with pytest.raises(ValueError, match="changed"):
         execute_task(plan_path, "audit", root)
+
+
+def test_optional_parallel_absence_does_not_add_import_or_remove_native_fits(study):
+    plan = create_plan(study, {"contrast_ids": ["perturbation-vs-baseline"]})
+    assert not any(t["workflow_id"] == "prioritize.motiftrace_parallel" for t in plan["tasks"])
+    assert len([t for t in plan["tasks"] if t.get("adapter") == "mapp.maei"]) == 14
+
+
+def test_prepared_maei_inputs_need_one_exact_comparison(study):
+    config = {"mapp": {"inputs": {"inclusion_table": "already-prepared.tsv"}}}
+    with pytest.raises(ValueError, match="one exact selected comparison"):
+        create_plan(study, config)
+    plan = create_plan(study, {**config, "contrast_ids": ["perturbation-vs-baseline"]})
+    assert next(t for t in plan["tasks"] if t["id"] == "mapp")["scope"]["contrast_ids"] == ["perturbation-vs-baseline"]
+
+
+def test_explicit_missing_parallel_bundle_fails_readiness(study):
+    plan = create_plan(study, {"contrast_ids": ["perturbation-vs-baseline"], "parameters": {
+        "prioritize.motiftrace_parallel": {"parallel_bundle_asset_id": "missing-completed-fit"}}})
+    task = next(t for t in plan["tasks"] if t["workflow_id"] == "prioritize.motiftrace_parallel")
+    assert task["execution_group"] == "motiftrace"
+    assert task["parameters"]["parallel_bundle_asset_id"] == "missing-completed-fit"
+    assert any(e["task_id"] == task["id"] and "parallel-model bundle" in e["error"]
+               for e in preflight_plan(plan)["errors"])
+
+
+def test_registered_parallel_import_preflight_binds_hashes_and_exact_arms(study, tmp_path):
+    from katana_next.flow.model import file_sha256
+    from katana_next.infrastructure.manifest_store import ManifestStore
+    store = ManifestStore()
+    _, manifest = store.load(study)
+    contrast = manifest.contrasts[0]
+    root = tmp_path / "prior-completed-evidence"
+    root.mkdir()
+    member = root / "original.tsv"
+    member.write_text("native_P\n0.000001\n", encoding="utf-8")
+    payload = {
+        "schema": "motiftrace.completed_parallel.v1", "state": "complete",
+        "species": "test-species", "genome_build": manifest.annotation.genome_build,
+        "new_inference": False, "methods": {"MotifTrace": {}, "MAPP": {}},
+        "family": {"units_per_case": 1},
+        "cases": {contrast.contrast_id: {
+            "numerator": list(contrast.numerator.sample_ids),
+            "denominator": list(contrast.denominator.sample_ids)}},
+        "files": {"original": {"path": member.name, "bytes": member.stat().st_size,
+                                "sha256": file_sha256(member)}}}
+    bundle_path = write_json(root / "manifest.json", payload)
+    raw = json.loads(study.read_text("utf-8"))
+    raw["metadata"]["species"] = "test-species"
+    raw["assets"].append({"asset_id": "prior-parallel", "kind": "motiftrace_parallel_results",
+                          "path": str(bundle_path), "metadata": {"sha256": file_sha256(bundle_path)}})
+    write_json(study, raw)
+    plan = create_plan(study, {"contrast_ids": [contrast.contrast_id]})
+    task = next(t for t in plan["tasks"] if t["workflow_id"] == "prioritize.motiftrace_parallel")
+    assert not [e for e in preflight_plan(plan)["errors"] if e["task_id"] == task["id"]]
+    member.write_text("changed", encoding="utf-8")
+    assert any(e["task_id"] == task["id"] and "Changed completed result member" in e["error"]
+               for e in preflight_plan(plan)["errors"])
+    member.write_text("native_P\n0.000001\n", encoding="utf-8")
+    payload["cases"][contrast.contrast_id]["numerator"] = ["different-biological-unit"]
+    write_json(bundle_path, payload)
+    raw["assets"][-1]["metadata"]["sha256"] = file_sha256(bundle_path)
+    write_json(study, raw)
+    plan = create_plan(study, {"contrast_ids": [contrast.contrast_id]})
+    assert any(e["task_id"] == task["id"] and "sample/contrast identity mismatch" in e["error"]
+               for e in preflight_plan(plan)["errors"])

@@ -126,7 +126,7 @@ Inputs are currently registered in a project configuration. Sample/contrast-shee
 
 The analyses described above are implemented in the existing Katana application and include both new calculations and completed-result imports. The source installation provides interface, CLI and Python access.
 
-Current development packages these capabilities for general distribution, including independent installation, dependency separation, input adapters, local/server execution and reports for new projects. Release packaging and complete Nextflow downstream integration still require acceptance work; a published PyPI installation command is not yet provided here.
+Current development packages these capabilities for general distribution, including independent installation, dependency separation, input adapters, local/server execution and reports for new projects. The integrated Nextflow execution path is implemented on `codex/package-development`, with native scheduling, calculation components and installed-package checks. Full production FASTQ/BAM and release-environment acceptance remain in progress; a published PyPI installation command is not yet provided here.
 
 Further technical details are in [methods](docs/METHODS.md) and [development documentation](docs/development/ARCHITECTURE.md).
 

@@ -73,8 +73,8 @@ def template_preflight(template_path, config_path):
 
 def build_complete_report(collection, outdir):
     """No complete report unless every planned calculation has actual evidence."""
-    from .runtime import validate_receipt
     from .collect import validate_collection, materialize_report_descriptor
+    from .acceptance import required_report_gaps
     collection, outdir = Path(collection).resolve(), Path(outdir).resolve()
     receipt = validate_collection(collection)
     from katana_next.reports import build_report
@@ -91,13 +91,7 @@ def build_complete_report(collection, outdir):
     manifest = build_report(materialize_report_descriptor(collection), outdir, event_set=plan.get("event_set", "stable_significant"))
     # Rendering success and calculation success are distinct. Preserve a failed
     # render for diagnosis, and withhold its complete-report receipt/archive.
-    required_gaps = []
-    for gap in manifest.get("unavailable", []):
-        text = json.dumps(gap).lower()
-        if any(word in text for word in ("gene-body", "5′", "5'", "bootstrap", "dendrogram", "interaction", "mapp", "clip")):
-            if "interaction" in text and not plan.get("configuration", {}).get("interactions") and len(plan.get("configuration", {}).get("design_factors", [])) < 2:
-                continue
-            required_gaps.append(gap)
+    required_gaps = required_report_gaps(collection, plan, manifest, outdir, collection_receipt=receipt)
     if required_gaps:
         write_json(outdir / "flow.acceptance.failed.json", {"status": "failed", "required_gaps": required_gaps,
                    "message": "The renderer produced a diagnostic artifact; fixed-report calculation acceptance failed"})

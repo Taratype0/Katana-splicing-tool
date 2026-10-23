@@ -51,3 +51,23 @@ def test_native_fit_table_tampering_is_rejected(tmp_path):
     table.write_text("changed", encoding="utf-8")
     with pytest.raises(ValueError, match="changed"):
         build_mapp_views(root, plan, receipts, transport)
+
+
+def test_unicode_comparison_names_cannot_overwrite_another_native_activity_view(tmp_path):
+    import copy
+    root, plan, receipts, transport, table = inputs(tmp_path)
+    plan["tasks"] = [copy.deepcopy(plan["tasks"][0]) for _ in range(2)]
+    original = receipts["native-1"][1]
+    receipts = {}
+    for task, cid in zip(plan["tasks"], ("甲_vs_乙", "丙_vs_乙")):
+        task["id"] = cid
+        task["scope"]["contrast_ids"] = [cid]
+        receipts[cid] = None, copy.deepcopy(original)
+    views = build_mapp_views(root, plan, receipts, transport)["extra_views"][0]
+    assert len({panel["path"] for panel in views["panels"]}) == 2
+    assert len({panel["data_links"][0]["path"] for panel in views["panels"]}) == 2
+    assert {panel["contrast_id"] for panel in views["panels"]} == {"甲_vs_乙", "丙_vs_乙"}
+    for panel in views["panels"]:
+        index = next(link["path"] for link in panel["data_links"] if link["role"] == "full_results")
+        from katana_next.flow.model import read_json
+        assert all("\\" not in row["path"] for row in read_json(index)["fits"])

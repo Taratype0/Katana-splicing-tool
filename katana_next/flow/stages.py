@@ -132,6 +132,13 @@ def readiness(spec: dict) -> list[str]:
             return []
         from .sequencing import readiness as sequencing_readiness
         return sequencing_readiness(spec)
+    if adapter == "mapp.maei" and inputs.get("applicability_proof"):
+        from .mapp_inputs import validate_inapplicability
+        try:
+            validate_inapplicability(inputs["applicability_proof"], sha=_sha, scope=spec.get("scope"))
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            return [str(exc)]
+        return []
     required = {
         "reference.bed12": ("gtf",), "qc.genebody": ("bam", "reference_bed"),
         "network.fit": ("config",), "network.bootstrap": ("config",),
@@ -342,12 +349,26 @@ def execute_stage(spec: dict, output_dir: str | Path) -> dict:
         from .mapp_inputs import prepare_inputs
         evidence, paths = prepare_inputs(spec, out, run=_run, sha=_sha, executable=_executable)
     elif adapter == "mapp.maei":
-        evidence, paths = _maei(spec, out)
+        if spec.get("inputs", {}).get("applicability_proof"):
+            from .mapp_inputs import validate_inapplicability
+            proof, source_audit = validate_inapplicability(spec["inputs"]["applicability_proof"], sha=_sha, scope=spec.get("scope"))
+            audit = out / "all_event_eligibility.tsv"
+            shutil.copyfile(source_audit, audit)
+            source_proof = Path(spec["inputs"]["applicability_proof"])
+            proof = {**proof, "eligibility_table": str(audit),
+                     "source_applicability_proof": {"path": str(source_proof.resolve()), "sha256": _sha(source_proof)}}
+            proof_path = out / "native_maei_applicability.json"
+            proof_path.write_text(json.dumps(proof, indent=2), encoding="utf-8")
+            evidence, paths = {"status": "not_applicable", "native_fitting_performed": False,
+                               "applicability_proof": str(proof_path)}, [audit, proof_path]
+        else:
+            evidence, paths = _maei(spec, out)
     else:  # readiness has already rejected unsupported adapters.
         raise ValueError(adapter)
     records = _ledger(paths, adapter)
     receipt = {"schema": "katana.flow.stage/v1", "adapter": adapter,
-               "status": "complete", "outputs": records, "evidence": evidence}
+               "status": "not_applicable" if evidence.get("status") == "not_applicable" else "complete",
+               "outputs": records, "evidence": evidence}
     (out / "stage.receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
     return receipt
 
