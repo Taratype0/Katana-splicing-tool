@@ -265,22 +265,64 @@ def _compress_table(text, minimum):
     return text, dict(json_bytes=len(raw), json_sha256=sha, gzip_bytes=len(compressed), rows=len(parsed['rows']), columns=len(parsed.get('columns', [])))
 
 
-def _refresh_portable_hashes(root, manifest):
+def _refresh_portable_hashes(root, manifest, *, changed_paths=None, hash_cache=None):
     """Refresh portable bindings only; native/source SHA identities stay intact."""
     updates = []
-    hash_cache = {}
+    hash_cache = {} if hash_cache is None else hash_cache
+    def actual_sha(path):
+        if not isinstance(path, str):
+            return None
+        candidate = (root / path).resolve()
+        if not candidate.is_relative_to(root) or not candidate.is_file():
+            return None
+        if candidate not in hash_cache:
+            hash_cache[candidate] = _sha(candidate)
+        return hash_cache[candidate]
+    def metadata_bindings(value):
+        metadata = value.get('metadata')
+        if not isinstance(metadata, dict):
+            return
+        if 'portable_sha256' in metadata:
+            path = value.get('source', value.get('path', value.get('view')))
+            actual = actual_sha(path)
+            previous = metadata['portable_sha256']
+            if actual and actual != previous:
+                metadata.setdefault('pre_storage_portable_sha256', previous)
+                metadata['portable_sha256'] = actual
+                updates.append(dict(path=path, binding='metadata.portable_sha256', previous_portable_sha256=previous,
+                                    portable_sha256=actual, source_sha256=metadata.get('source_sha256')))
+        if 'portable_fit_index_sha256' in metadata:
+            candidates = {link['path'] for link in value.get('data_links', [])
+                          if isinstance(link.get('path'), str) and link['path'].endswith('complete_native_fits_portable.json')}
+            if len(candidates) != 1:
+                raise ValueError('MAPP portable fit-index SHA needs one explicit portable index path.')
+            path = candidates.pop()
+            actual = actual_sha(path)
+            previous = metadata['portable_fit_index_sha256']
+            if actual and actual != previous:
+                metadata.setdefault('pre_storage_portable_fit_index_sha256', previous)
+                metadata['portable_fit_index_sha256'] = actual
+                updates.append(dict(path=path, binding='metadata.portable_fit_index_sha256', previous_portable_sha256=previous,
+                                    portable_sha256=actual, source_sha256=metadata.get('original_native_fit_index_sha256')))
     def walk(value):
         if isinstance(value, list):
             for item in value:
                 walk(item)
         elif isinstance(value, dict):
+            metadata_bindings(value)
             path = value.get('path', value.get('report_path'))
             if isinstance(path, str) and any(k in value for k in ('portable_sha256', 'source_sha256')):
                 candidate = (root / path).resolve()
                 if candidate.is_relative_to(root) and candidate.is_file():
-                    if candidate not in hash_cache:
-                        hash_cache[candidate] = _sha(candidate)
-                    actual = hash_cache[candidate]
+                    relative = candidate.relative_to(root).as_posix()
+                    if changed_paths is not None and relative not in changed_paths and re.fullmatch(r'[a-fA-F0-9]{64}', str(value.get('portable_sha256', ''))) and value.get('bytes') == candidate.stat().st_size:
+                        # Retain an immediately preceding completed compaction
+                        # verification, rather than re-reading immutable native
+                        # GB tables for each metadata-only reconciliation.
+                        for item in value.values():
+                            walk(item)
+                        return
+                    actual = actual_sha(path)
                     previous = value.get('portable_sha256')
                     if 'report_path' in value and 'bytes' in value:
                         value.setdefault('source_bytes', value['bytes'])
@@ -384,7 +426,8 @@ def compact_report(report_dir, *, alias_map=None, deduplicate=True, compress_htm
     return audit
 
 
-def reconcile_compact_metadata(report_dir, storage_audit=None, *, source_report_dir=None):
+def reconcile_compact_metadata(report_dir, storage_audit=None, *, source_report_dir=None,
+                               rehash_unchanged=True):
     """Reconcile generated portable metadata after a completed compaction.
 
     Alias payloads may already have been removed. Their recorded canonical
@@ -441,20 +484,131 @@ def reconcile_compact_metadata(report_dir, storage_audit=None, *, source_report_
             _atomic_write(path, text.encode('utf-8'))
             rewritten.append(dict(path=path.relative_to(root).as_posix(), previous_sha256=hashlib.sha256(original).hexdigest(), portable_sha256=_sha(path)))
     portable_updates = []
+    changed_paths = None if rehash_unchanged else {item['path'] for item in rewritten + restored}
+    shared_hashes = {}
     # Provenance first so a manifest binding to it sees its final bytes.
     for name in ('provenance.json', 'report-manifest.json'):
         path = root / name
         if not path.is_file():
             continue
         value = json.loads(path.read_text(encoding='utf-8'))
-        portable_updates.extend(dict(document=name, **item) for item in _refresh_portable_hashes(root, value))
+        portable_updates.extend(dict(document=name, **item) for item in _refresh_portable_hashes(root, value, changed_paths=changed_paths, hash_cache=shared_hashes))
         value['portable_storage'] = dict(schema='katana.report_storage/v1', audit='storage-audit.json', lossless=True)
         _atomic_write(path, json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8'))
+        if changed_paths is not None:
+            changed_paths.add(name)
     receipt = dict(schema='katana.report_compact_metadata_reconciliation/v1', created_utc=datetime.now(timezone.utc).isoformat(),
                    rewritten_generated_metadata=rewritten, portable_binding_updates=portable_updates,
-                   restored_native_json=restored, native_statistics_recomputed=False)
+                   restored_native_json=restored, native_statistics_recomputed=False,
+                   unchanged_native_hashes='reverified' if rehash_unchanged else 'retained from immediately preceding completed compaction proof; matching portable SHA and byte count required')
     audit.setdefault('metadata_reconciliation', []).append(receipt)
     audit['after_bytes'] = sum(path.stat().st_size for path in root.rglob('*') if path.is_file() and path.name not in {'REPORT.zip', 'storage-audit.json'})
     audit['saved_bytes'] = audit['before_bytes'] - audit['after_bytes']
     _atomic_write(root / 'storage-audit.json', json.dumps(audit, ensure_ascii=False, indent=2).encode('utf-8'))
     return receipt
+
+
+def _inspect_encoded_table(path, source_root, root):
+    text = path.read_text(encoding='utf-8')
+    if 'data-encoding="gzip-base64"' not in text:
+        return None
+    block = next((m for m in _SCRIPT.finditer(text) if re.search(r'\bid\s*=\s*["\']table-data["\']', m[1], re.I)), None)
+    if block is None or 'data-encoding="gzip-base64"' not in block[1]:
+        return None
+    sha_match = re.search(r'data-json-sha256="([a-f0-9]{64})"', block[1])
+    bytes_match = re.search(r'data-json-bytes="(\d+)"', block[1])
+    if not sha_match or not bytes_match:
+        raise ValueError('Encoded complete table lacks its lossless proof: ' + str(path))
+    packed = base64.b64decode(block[2].strip(), validate=True)
+    raw = gzip.decompress(packed)
+    sha = hashlib.sha256(raw).hexdigest()
+    if sha != sha_match[1] or len(raw) != int(bytes_match[1]):
+        raise ValueError('Interrupted table payload proof failed: ' + str(path))
+    original = source_root / path.relative_to(root)
+    original_verified = False
+    if original.is_file():
+        before_text = original.read_text(encoding='utf-8')
+        before = next((m for m in _SCRIPT.finditer(before_text) if re.search(r'\bid\s*=\s*["\']table-data["\']', m[1], re.I)), None)
+        if before is not None and 'data-encoding=' not in before[1]:
+            if hashlib.sha256(before[2].encode('utf-8')).hexdigest() != sha:
+                raise ValueError('Complete-table rows differ from the immutable source report: ' + str(path))
+            original_verified = True
+    payload = json.loads(raw)
+    return dict(path=path.relative_to(root).as_posix(), json_bytes=len(raw), json_sha256=sha,
+                gzip_bytes=len(packed), rows=len(payload['rows']), columns=len(payload.get('columns', [])),
+                preserved_from_interrupted_pass=True, immutable_source_payload_verified=original_verified)
+
+
+def recover_compact_report(report_dir, source_report_dir, alias_map, *, progress=None):
+    """Finish storage-only compaction after an interrupted presentation pass.
+
+    The source is read-only. Previously encoded complete tables are verified
+    and indexed; scientific JSON can be restored from matching source paths.
+    Partial starting size and the older source-report size are kept separate.
+    No original archive is deleted and no analysis or ZIP build is performed.
+    """
+    root = Path(report_dir).expanduser().resolve()
+    original_root = Path(source_report_dir).expanduser().resolve()
+    if root == original_root or not (original_root / 'REPORT.html').is_file():
+        raise ValueError('Recovery needs a distinct immutable source report.')
+    if (root / 'REPORT.zip').exists():
+        raise ValueError('Recover only the new, unarchived output report.')
+    emit = progress or (lambda value: None)
+    def size(folder):
+        return sum(p.stat().st_size for p in folder.rglob('*') if p.is_file() and p.name not in {'REPORT.zip', 'storage-audit.json'})
+    partial_start = size(root)
+    original_bytes = size(original_root)
+    emit(dict(phase='started', partial_start_bytes=partial_start, immutable_source_payload_bytes=original_bytes))
+    restored = []
+    for path in root.rglob('*.json'):
+        _inside(root, path)
+        if _portable_json_document(path, root, path.read_text(encoding='utf-8')):
+            continue
+        relative = path.relative_to(root)
+        original = _inside(original_root, original_root / relative)
+        if not original.is_file():
+            continue
+        before_sha, original_sha = _sha(path), _sha(original)
+        if before_sha != original_sha:
+            _atomic_write(path, original.read_bytes())
+            restored.append(dict(path=relative.as_posix(), interrupted_portable_sha256=before_sha,
+                                 restored_source_sha256=original_sha, basis='same native relative source path; immutable source bytes verified'))
+    emit(dict(phase='native_json_preserved', restored=len(restored)))
+    encoded = []
+    for path in root.rglob('*.html'):
+        _inside(root, path)
+        record = _inspect_encoded_table(path, original_root, root)
+        if record:
+            encoded.append(record)
+    emit(dict(phase='encoded_complete_tables_verified', tables=len(encoded), rows=sum(x['rows'] for x in encoded)))
+    supplied = json.loads(Path(alias_map).read_text(encoding='utf-8')) if isinstance(alias_map, (str, Path)) else alias_map
+    supplied = supplied.get('aliases', supplied)
+    present, already_removed = {}, []
+    for alias, canonical in supplied.items():
+        path, target = _inside(root, root / alias), _inside(root, root / canonical)
+        if path.suffix.lower() not in _DATA_SUFFIXES or _format_suffix(path) != _format_suffix(target):
+            continue
+        if path.is_file():
+            present[alias] = canonical
+        else:
+            source_alias = _inside(original_root, original_root / alias)
+            if not target.is_file() or not source_alias.is_file() or _sha(target) != _sha(source_alias):
+                raise ValueError('Previously removed alias lacks immutable byte proof: ' + alias)
+            already_removed.append(dict(path=alias, canonical=canonical, bytes=source_alias.stat().st_size))
+    audit = compact_report(root, alias_map=present)
+    emit(dict(phase='fast_compaction_finished', deleted_aliases=len(audit['deleted_duplicate_aliases']), newly_encoded_tables=len(audit['complete_table_payloads'])))
+    audit['deleted_duplicate_aliases'] = already_removed + audit['deleted_duplicate_aliases']
+    complete = {item['path']: item for item in encoded}
+    complete.update({item['path']: item for item in audit['complete_table_payloads']})
+    audit['complete_table_payloads'] = list(complete.values())
+    audit['recovery'] = dict(schema='katana.interrupted_report_storage_recovery/v1', created_utc=datetime.now(timezone.utc).isoformat(),
+                             partial_start_bytes=partial_start, immutable_source_payload_bytes=original_bytes,
+                             source_report=str(original_root), restored_native_json=restored,
+                             already_encoded_tables=len(encoded), source_report_untouched=True,
+                             scientific_results_rerun=0, zip_built=False)
+    _atomic_write(root / 'storage-audit.json', json.dumps(audit, ensure_ascii=False, indent=2).encode('utf-8'))
+    reconcile_compact_metadata(root, audit, rehash_unchanged=False)
+    final = json.loads((root / 'storage-audit.json').read_text(encoding='utf-8'))
+    emit(dict(phase='completed', after_bytes=final['after_bytes'], tables=len(final['complete_table_payloads']),
+              rows=sum(x['rows'] for x in final['complete_table_payloads']), deleted_aliases=len(final['deleted_duplicate_aliases'])))
+    return final
