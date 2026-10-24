@@ -81,6 +81,27 @@ before `blockwiseModules` calculates its own. TOM fitting without a gene prior
 also avoids unused prior matrices and index arrays. These changes preserve the
 declared correlation, signedness, power, module size and merge height.
 
+Dynamic Tree Cut receives the existing square distance matrix directly, rather
+than converting it to a condensed vector and reconstructing submatrices with
+Python loops. The sensitivity grid prepares that distance once for all recorded
+depths. This changes distance access and avoids repeated allocations; it does
+not remove a sensitivity depth or change the tree, cut, PAM options or event
+set. Regression checks compare complete label arrays against the previous
+condensed-distance path, including tied distances.
+
+The Python network diagnostics and the official R WGCNA module fit currently
+use distinct correlation/TOM implementations. They are retained separately:
+substituting one for the other would change scientific outputs. The execution
+optimization does not claim to collapse these distinct products into one TOM.
+
+Nextflow exports its actual `task.cpus` as the worker thread budget. Python BLAS
+and the R child inherit the allocation; R WGCNA threading is enabled explicitly
+within that budget. Standalone execution also respects the available CPU
+affinity and an explicit thread budget. Thread counts are execution settings,
+not changes to the correlation method or module parameters. Serial tree steps
+are not guaranteed to occupy every allocated core. Timestamped stage messages
+allow operators to distinguish matrix work, module fitting and tree cuts.
+
 ## Acceptance before scaling out
 
 Validate a single real comparison before submitting the remaining comparisons:

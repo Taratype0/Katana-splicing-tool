@@ -23,6 +23,8 @@ process KATANA_FLOW_TASK {
     def dependency_args = previous ? '--dependency-receipts ' + previous.collect { quote(it.resolve('task.receipt.json')) }.join(' ') : ''
     """
     ${isolation}
+    export KATANA_CPUS=${task.cpus}
+    export OMP_NUM_THREADS=${task.cpus} OPENBLAS_NUM_THREADS=${task.cpus} MKL_NUM_THREADS=${task.cpus} BLIS_NUM_THREADS=${task.cpus} NUMEXPR_NUM_THREADS=${task.cpus}
     ${executable} runtime-check --plan ${quote(plan)} --project ${quote(project_root.resolve(project_filename))} \\
         --task-id ${quote(spec.id)} --runtime-label ${quote(task.container ?: 'configured-host')} --out ${quote("runtime-${spec.id}.json")}
     ${executable} task --plan ${quote(plan)} --project ${quote(project_root.resolve(project_filename))} --task-id ${quote(spec.id)} \\

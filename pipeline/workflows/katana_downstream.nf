@@ -99,7 +99,7 @@ workflow KATANA_DOWNSTREAM {
     ENRICHMENT(readyTasks(plan, 'enrichment', EVIDENCE.out.result), project_root, project_filename)
     motif_tasks = readyTasks(plan, 'motiftrace', AS.out.result)
     MOTIFTRACE(motif_tasks.filter { spec, planFile, results -> !spec.parameters?.custom_motif_path }, project_root, project_filename)
-    motif_resource_tasks = motif_tasks.filter { spec, planFile, results -> spec.parameters?.custom_motif_path }
+    motif_resource_tasks = motif_tasks.filter { spec, planFile, results -> !!spec.parameters?.custom_motif_path }
         .map { spec, planFile, results -> tuple(spec, planFile, results, motifRuntimeInputs(spec)) }
     MOTIFTRACE_RESOURCE(motif_resource_tasks, project_root, project_filename)
     OVERLAP(readyTasks(plan, 'overlap', molecular), project_root, project_filename)

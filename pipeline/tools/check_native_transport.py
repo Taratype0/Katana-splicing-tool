@@ -88,6 +88,8 @@ def main() -> None:
     assert probes["omega"]["runtime_label"] == "fixture-network-image"
     assert probes["network-summary"]["runtime_label"] == "fixture-followup-image"
     assert probes["alpha"]["runtime_label"] == "configured-host"
+    assert all(set(probe["thread_budget"].values()) == {"1"}
+               for probe in probes.values()), "Task thread budgets did not reach the worker"
     assert receipts["gamma"]["finished"] < receipts["beta"]["finished"], "A false whole-group barrier delayed gamma"
     assert receipts["omega"]["finished"] < receipts["beta"]["finished"], "Network was blocked by unrelated beta"
     assert receipts["delta"]["started"] >= receipts["gamma"]["finished"]
@@ -143,6 +145,7 @@ def main() -> None:
                "scientific_model_execution": False, "native_transport_tasks": len(tasks()),
                "dependency_exact_parallelism": True, "required_failure_blocks_report": True,
                "runtime_probe_precedes_calculation": True, "stage_container_dispatch": True,
+               "allocated_thread_budget_reaches_workers": True,
                "container_execution_tested": False, "missing_container_blocks_host_fallback": True,
                "missing_dexseq_image_blocks_raw_entry_before_submission": True,
                "resume_all_cached": True, "completed_worker_bytes_and_mtimes_unchanged": True,

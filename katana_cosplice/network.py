@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
+import os
+import sys
+import time
 from typing import TYPE_CHECKING
 
 import matplotlib
@@ -17,7 +21,7 @@ from scipy.spatial.distance import squareform
 from sklearn.neighbors import NearestNeighbors
 
 from katana_cosplice.config import NetworkConfig
-from katana_cosplice.dynamic_tree import dynamic_tree_cut_labels
+from katana_cosplice.dynamic_tree import dynamic_tree_cut_label_grid, dynamic_tree_cut_labels
 
 if TYPE_CHECKING:
     from katana_cosplice.gene_prior import GeneMantelPrior
@@ -32,6 +36,48 @@ class NetworkResult:
     cut_height_sensitivity: pd.DataFrame
     selected_matrix: pd.DataFrame
     linkage_matrix: np.ndarray | None
+
+
+def _network_phase_call(name, function, *args, blas=False, **kwargs):
+    """Expose bounded stage progress and honour the allocated BLAS CPU count."""
+    started = time.perf_counter()
+    prefix = f"[Katana network] {datetime.now(timezone.utc).isoformat()} {name}"
+    print(prefix + " started", file=sys.stderr, flush=True)
+    try:
+        if blas:
+            from threadpoolctl import threadpool_limits
+            from katana_cosplice.r_wgcna import allocated_wgcna_threads
+
+            resource_variables = (
+                "KATANA_CPUS", "SLURM_CPUS_PER_TASK", "PBS_NP", "NSLOTS",
+                "KATANA_NETWORK_THREADS", "OMP_NUM_THREADS",
+                "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+            )
+            if any(os.environ.get(key) for key in resource_variables):
+                threads = allocated_wgcna_threads()
+                print(prefix + f" BLAS_threads={threads}", file=sys.stderr, flush=True)
+                with threadpool_limits(limits=threads, user_api="blas"):
+                    result = function(*args, **kwargs)
+            else:
+                # Preserve the installed BLAS choice for unconfigured local
+                # callers. An explicit scheduler/CLI/environment allocation is
+                # required before overriding their existing numeric runtime.
+                print(prefix + " BLAS_threads=runtime_default", file=sys.stderr, flush=True)
+                result = function(*args, **kwargs)
+        else:
+            result = function(*args, **kwargs)
+    except BaseException:
+        print(prefix + f" failed elapsed_seconds={time.perf_counter() - started:.3f}",
+              file=sys.stderr, flush=True)
+        raise
+    print(prefix + f" completed elapsed_seconds={time.perf_counter() - started:.3f}",
+          file=sys.stderr, flush=True)
+    return result
+
+
+def _average_linkage(distance: np.ndarray) -> np.ndarray:
+    # Keep SciPy's exact average-linkage implementation and tie handling.
+    return linkage(squareform(distance, checks=False), method="average")
 
 
 def residualize_matrix(matrix: pd.DataFrame, samples: pd.DataFrame, covariates: list[str]) -> pd.DataFrame:
@@ -149,7 +195,8 @@ def _tom_hierarchy(
             "CoSplice will not silently select a top-N subset."
         )
     correlation = (
-        correlation_matrix(matrix, settings.method)
+        _network_phase_call("correlation", correlation_matrix, matrix, settings.method,
+                            blas=True)
         if precomputed_correlation is None
         else np.asarray(precomputed_correlation, dtype=float)
     )
@@ -157,7 +204,7 @@ def _tom_hierarchy(
         raise ValueError("precomputed correlation must match the selected event universe")
     correlation = np.clip((correlation + correlation.T) / 2.0, -1.0, 1.0)
     np.fill_diagonal(correlation, 1.0)
-    adjacency = signed_soft_adjacency(correlation, settings)
+    adjacency = _network_phase_call("adjacency", signed_soft_adjacency, correlation, settings)
     if event_reliability is not None:
         reliability_factor = np.power(
             np.outer(event_reliability, event_reliability),
@@ -178,10 +225,10 @@ def _tom_hierarchy(
             adjacency[upper_rows, upper_cols] = reinforced
             adjacency[upper_cols, upper_rows] = reinforced
     np.fill_diagonal(adjacency, 0.0)
-    tom = topological_overlap_matrix(adjacency)
+    tom = _network_phase_call("TOM", topological_overlap_matrix, adjacency, blas=True)
     distance = np.clip(1.0 - tom, 0.0, 1.0)
     np.fill_diagonal(distance, 0.0)
-    hierarchy = linkage(squareform(distance, checks=False), method="average")
+    hierarchy = _network_phase_call("average_linkage", _average_linkage, distance)
     return (
         correlation,
         adjacency,
@@ -257,15 +304,14 @@ def discover_dynamic_label_grid(
     distance = np.clip(1.0 - tom, 0.0, 1.0)
     np.fill_diagonal(distance, 0.0)
     output: dict[int, np.ndarray] = {}
-    for deep_split in sorted(set(int(value) for value in deep_splits)):
-        raw_labels = dynamic_tree_cut_labels(
-            hierarchy,
-            distance,
-            min_module_size=settings.min_module_size,
-            deep_split=deep_split,
-            cut_height=settings.dynamic_cut_height,
-            pam_respects_dendro=settings.dynamic_pam_respects_dendro,
-        )
+    for deep_split, raw_labels in dynamic_tree_cut_label_grid(
+        hierarchy,
+        distance,
+        min_module_size=settings.min_module_size,
+        deep_splits=[int(value) for value in deep_splits],
+        cut_height=settings.dynamic_cut_height,
+        pam_respects_dendro=settings.dynamic_pam_respects_dendro,
+    ).items():
         labels, _ = _module_labels(raw_labels, settings.min_module_size)
         if settings.module_refinement:
             labels, _ = _refine_module_labels(matrix, labels, settings)
@@ -1074,15 +1120,14 @@ def _dynamic_tree_sensitivity(
     np.fill_diagonal(distance, 0.0)
     rows: list[dict[str, object]] = []
     n_events = len(distance)
-    for deep_split in sorted(set(settings.dynamic_deep_splits)):
-        raw = dynamic_tree_cut_labels(
-            linkage_matrix,
-            distance,
-            min_module_size=settings.min_module_size,
-            deep_split=deep_split,
-            cut_height=settings.dynamic_cut_height,
-            pam_respects_dendro=settings.dynamic_pam_respects_dendro,
-        )
+    for deep_split, raw in dynamic_tree_cut_label_grid(
+        linkage_matrix,
+        distance,
+        min_module_size=settings.min_module_size,
+        deep_splits=settings.dynamic_deep_splits,
+        cut_height=settings.dynamic_cut_height,
+        pam_respects_dendro=settings.dynamic_pam_respects_dendro,
+    ).items():
         labels, _ = _module_labels(raw, settings.min_module_size)
         counts = pd.Series(labels).value_counts()
         retained = counts.drop(labels="grey", errors="ignore")
@@ -1425,7 +1470,7 @@ def fit_network(
         if settings.module_detection == "wgcna_blockwise":
             from katana_cosplice.r_wgcna import exact_wgcna_labels
 
-            module_labels = exact_wgcna_labels(
+            module_labels = _network_phase_call("R_WGCNA", exact_wgcna_labels,
                 selected,
                 soft_power=settings.soft_power,
                 min_module_size=settings.min_module_size,
@@ -1471,7 +1516,7 @@ def fit_network(
             upper_rows, upper_cols = np.triu_indices(len(selected), k=1)
             gene_prior_matrix[upper_rows, upper_cols] = gene_prior_values
             gene_prior_matrix[upper_cols, upper_rows] = gene_prior_values
-        edges = _edge_table(
+        edges = _network_phase_call("edge_export", _edge_table,
             correlation,
             adjacency,
             selected.index.tolist(),

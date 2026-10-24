@@ -52,7 +52,10 @@ def main() -> None:
     elif args.command == "runtime-check":
         spec = next(item for item in json.loads(args.plan.read_text())["tasks"] if item["id"] == args.task_id)
         write(args.out, {"task_id": args.task_id, "runtime_label": args.runtime_label,
-                        "status": "failed" if spec.get("runtime_fail") else "ready", "scientific_execution": False})
+                        "status": "failed" if spec.get("runtime_fail") else "ready", "scientific_execution": False,
+                        "thread_budget": {key: os.environ.get(key) for key in
+                            ("KATANA_CPUS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                             "MKL_NUM_THREADS", "BLIS_NUM_THREADS", "NUMEXPR_NUM_THREADS")}})
         if spec.get("runtime_fail"):
             raise SystemExit("intentional transport-fixture runtime failure")
     elif args.command == "task":

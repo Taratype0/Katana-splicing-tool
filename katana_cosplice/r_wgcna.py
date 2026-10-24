@@ -4,10 +4,87 @@ import subprocess
 import shutil
 import sys
 import tempfile
+import os
+import threading
+from collections import deque
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+
+def allocated_wgcna_threads(threads: int | None = None) -> int:
+    """Use a declared CPU budget, bounded by the scheduler and CPU affinity.
+
+    An unconfigured local call stays single threaded.  In particular, the
+    machine's total core count is not a safe allocation for an individual task.
+    """
+    def positive(value: object) -> int | None:
+        try:
+            parsed = int(str(value))
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
+
+    if threads is not None and positive(threads) != threads:
+        raise ValueError("WGCNA threads must be a positive integer.")
+    scheduler = [positive(os.environ.get(key)) for key in
+                 ("KATANA_CPUS", "SLURM_CPUS_PER_TASK", "PBS_NP", "NSLOTS")]
+    scheduler = [value for value in scheduler if value is not None]
+    requested = positive(threads) or positive(os.environ.get("KATANA_NETWORK_THREADS"))
+    if requested is None:
+        requested = min(scheduler) if scheduler else next(
+            (value for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
+             if (value := positive(os.environ.get(key))) is not None), 1)
+    caps = scheduler.copy()
+    if hasattr(os, "sched_getaffinity"):
+        try:
+            caps.append(len(os.sched_getaffinity(0)))
+        except OSError:
+            pass
+    return max(1, min([requested, *caps]))
+
+
+def _threaded_r_env(executable: Path, threads: int) -> dict[str, str]:
+    from katana_cosplice.benchmark import _r_subprocess_env
+
+    environment = _r_subprocess_env(executable)
+    for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                "BLIS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "ALLOW_WGCNA_THREADS"):
+        environment[key] = str(threads)
+    environment["OMP_DYNAMIC"] = "FALSE"
+    return environment
+
+
+def _run_wgcna(command: list[str], *, environment: dict[str, str], timeout: int) -> tuple[int, str]:
+    """Stream progress to the job log while retaining a bounded failure tail."""
+    tail: deque[str] = deque(maxlen=100)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               text=True, encoding="utf-8", errors="replace", env=environment,
+                               bufsize=1)
+
+    def read_progress() -> None:
+        assert process.stdout is not None
+        for line in process.stdout:
+            tail.append(line)
+            sys.stderr.write(line)
+            sys.stderr.flush()
+
+    reader = threading.Thread(target=read_progress, name="katana-wgcna-progress", daemon=True)
+    reader.start()
+    try:
+        code = process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        reader.join()
+        raise
+    finally:
+        if process.poll() is not None:
+            reader.join()
+            if process.stdout is not None:
+                process.stdout.close()
+    return code, "".join(tail)
 
 
 def exact_wgcna_labels(
@@ -26,6 +103,7 @@ def exact_wgcna_labels(
     precomputed_correlation: np.ndarray | None = None,
     return_tom: bool = False,
     timeout_seconds: int = 1800,
+    threads: int | None = None,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Run official WGCNA with the declared correlation and network signedness."""
 
@@ -63,6 +141,7 @@ def exact_wgcna_labels(
         raise ValueError("timeout_seconds must be positive.")
     if return_tom and event_reliability is None:
         event_reliability = pd.Series(1.0, index=matrix.index)
+    thread_count = allocated_wgcna_threads(threads)
 
     with tempfile.TemporaryDirectory(prefix="katana_cosplice_wgcna_") as temp_dir:
         temp = Path(temp_dir)
@@ -98,6 +177,14 @@ def exact_wgcna_labels(
 args <- commandArgs(trailingOnly=TRUE)
 suppressPackageStartupMessages(library(WGCNA))
 suppressPackageStartupMessages(library(dynamicTreeCut))
+threads <- as.integer(args[16])
+if (threads > 1) enableWGCNAThreads(nThreads=threads) else disableWGCNAThreads()
+progress <- function(stage) {
+  message(sprintf("[Katana WGCNA %s] %s", format(Sys.time(), tz="UTC", usetz=TRUE), stage))
+}
+progress(sprintf("runtime threads=%d; WGCNA=%d; BLAS=%s; OMP=%s", threads,
+  WGCNAnThreads(), extSoftVersion()[["BLAS"]], Sys.getenv("OMP_NUM_THREADS")))
+progress("read input matrix and event reliability")
 dat <- read.csv(args[1], row.names=1, check.names=FALSE)
 relData <- read.csv(args[2], row.names=1, check.names=FALSE)
 rel <- setNames(relData[[1]], rownames(relData))
@@ -107,6 +194,7 @@ usePrecomputed <- as.logical(args[10])
 weightPower <- as.numeric(args[9])
 needsCorMat <- weightPower > 0 || usePrecomputed || as.logical(args[12])
 if (usePrecomputed) {
+  progress("read precomputed correlation")
   handle <- file(args[11], "rb")
   values <- readBin(handle, what="double", n=ncol(dat)^2, size=8, endian="little")
   close(handle)
@@ -115,9 +203,11 @@ if (usePrecomputed) {
   rownames(corMat) <- colnames(dat)
   colnames(corMat) <- colnames(dat)
 } else if (needsCorMat) {
-  corMat <- if (args[14] == 'bicor') bicor(dat, use='pairwise.complete.obs') else WGCNA::cor(dat, use='pairwise.complete.obs', method='pearson')
+  progress("correlation")
+  corMat <- if (args[14] == 'bicor') bicor(dat, use='pairwise.complete.obs', nThreads=threads) else WGCNA::cor(dat, use='pairwise.complete.obs', method='pearson', nThreads=threads)
 }
 if (weightPower <= 0 && !usePrecomputed && !as.logical(args[12])) {
+  progress("official blockwiseModules (single complete event block)")
   net <- blockwiseModules(
     dat,
     power=as.numeric(args[4]),
@@ -130,19 +220,24 @@ if (weightPower <= 0 && !usePrecomputed && !as.logical(args[12])) {
     pamRespectsDendro=as.logical(args[8]),
     deepSplit=as.integer(args[7]),
     maxBlockSize=ncol(dat),
+    nThreads=threads,
     verbose=0
   )
   colors <- net$colors
 } else {
+  progress("adjacency and reliability weights")
   similarity <- if (args[15] == "signed") (1 + corMat) / 2 else abs(corMat)
   adj <- similarity ^ as.numeric(args[4])
   relFactor <- outer(rel, rel, function(x, y) (x * y) ^ (weightPower / 2))
   adj <- adj * relFactor
   diag(adj) <- 1
+  progress("TOMsimilarity")
   tom <- TOMsimilarity(adj, TOMType='signed', TOMDenom='min', verbose=0)
   diss <- 1 - tom
   diag(diss) <- 0
+  progress("average linkage")
   tree <- hclust(as.dist(diss), method='average')
+  progress("dynamic tree cut")
   raw <- cutreeDynamic(
     dendro=tree,
     distM=diss,
@@ -153,6 +248,7 @@ if (weightPower <= 0 && !usePrecomputed && !as.logical(args[12])) {
   )
   colors <- labels2colors(raw)
   if (length(unique(colors[colors != 'grey'])) > 1) {
+    progress("mergeCloseModules")
     merged <- mergeCloseModules(
       dat,
       colors,
@@ -163,22 +259,23 @@ if (weightPower <= 0 && !usePrecomputed && !as.logical(args[12])) {
   }
 }
 if (as.logical(args[12])) {
+  progress("write TOM")
   handle <- file(args[13], "wb")
   writeBin(as.double(tom), handle, size=8, endian='little')
   close(handle)
 }
+progress("write module assignments")
 write.csv(
   data.frame(event_key=colnames(dat), raw_module=colors),
   args[3],
   row.names=FALSE,
   quote=TRUE
 )
+progress("complete")
 """.strip(),
             encoding="utf-8",
         )
-        from katana_cosplice.benchmark import _r_subprocess_env
-
-        completed = subprocess.run(
+        returncode, diagnostics = _run_wgcna(
             [
                 str(executable),
                 str(script_path),
@@ -197,17 +294,15 @@ write.csv(
                 str(tom_path),
                 cor_type,
                 "signed" if signed else "unsigned",
+                str(thread_count),
             ],
-            capture_output=True,
-            text=True,
             timeout=timeout_seconds,
-            check=False,
-            env=_r_subprocess_env(executable),
+            environment=_threaded_r_env(executable, thread_count),
         )
-        if completed.returncode != 0 or not output_path.exists():
+        if returncode != 0 or not output_path.exists():
             raise RuntimeError(
                 "Official R WGCNA backbone failed: "
-                + (completed.stderr.strip() or completed.stdout.strip())
+                + diagnostics.strip()
             )
         result = pd.read_csv(output_path).set_index("event_key").reindex(matrix.index)
         if result["raw_module"].isna().any():
