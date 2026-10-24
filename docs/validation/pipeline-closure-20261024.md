@@ -1,5 +1,11 @@
 # Pipeline integration and installation — 24 October 2026
 
+**Historical artifact record:** the [later development audit](development-audit-20261024.md)
+records the completed real-study report and the remaining current-release
+checks. This page describes software revision `9546632`; its paused-study
+observations below are historical, and its image does not contain later
+network fixes.
+
 This is a development acceptance record, not a production release or an
 nf-core approval. The original application and completed study results were
 preserved. Primary culture remains paused until the target-site runtime and deployment checks pass. Generated FASTQ, BAM and

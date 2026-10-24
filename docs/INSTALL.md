@@ -4,6 +4,13 @@
 
 Use the **`codex/package-development`** branch for the packaged workflow described here. `main` can lag behind it. Choose one of these routes:
 
+Read the [current development and reproducibility audit](validation/development-audit-20261024.md)
+before selecting an artifact. The accepted `dev-9546632` container below
+predates the latest network fixes; it is a historical installation check,
+not the final matching release image. The complete real-study report has been
+accepted, while its final historical-result assembly adapters still require
+public-package integration and matching release-image acceptance.
+
 | Route | What it supplies | Host requirements |
 | --- | --- | --- |
 | [Nextflow with the downstream image](../containers/downstream/README.md) | Katana Python, R and native analysis tools inside each downstream task; upstream modules use their own tool images | Linux execution host, Nextflow 25.10.4 or newer, compatible Java, Docker or supported Apptainer/Singularity setup |

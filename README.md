@@ -107,6 +107,11 @@ Depending on the analysis, Katana produces browsable result tables, interactive 
 
 The current implementation is on **`codex/package-development`**. Choose the installation that matches how you want to use Katana:
 
+The [current reproducibility audit](docs/validation/development-audit-20261024.md)
+distinguishes the accepted real-study report and source CI from the remaining
+generic report-assembly and matching release-image checks. The default `main`
+branch and earlier accepted image do not yet include all development changes.
+
 | Use | Installation |
 | --- | --- |
 | Run the integrated Nextflow pipeline | A Linux downstream image supplies Katana's Python, R and native tools; upstream nf-core modules keep their own tool images. See [container build/load and pipeline commands](containers/downstream/README.md). |
