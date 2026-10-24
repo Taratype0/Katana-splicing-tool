@@ -170,3 +170,19 @@ def test_metadata_reconciliation_after_aliases_removed_and_old_native_json_resto
     assert binding['path']=='outputs/results/native.tsv'
     assert binding['source_sha256']==binding['portable_sha256']==sha
     assert receipt['restored_native_json'][0]['restored_source_sha256']==hashlib.sha256(native_bytes).hexdigest()
+
+
+def test_all_embedded_native_json_and_octet_stream_payloads_are_immutable(tmp_path):
+    root, source, alias, view, raw, sha = _report(tmp_path)
+    payload='{"members":[{"gene":"G1","path":"../comparisons/B_vs_A/same.tsv","P":1e-200,"fdr":0.01}],"identity":"gene\\u0027s original value"}'
+    opaque='["../comparisons/B_vs_A/same.tsv","Infinity",null]'
+    content=view.read_text(encoding='utf-8')
+    content += '<script id="data" type="application/json">'+payload+'</script>'
+    content += "<script id='module-display-data' type='APPLICATION/OCTET-STREAM'>"+opaque+'</script>'
+    content += '<script>const navigation="../comparisons/B_vs_A/same.tsv";</script>'
+    view.write_text(content,encoding='utf-8')
+    compact_report(root,html_min_bytes=0)
+    actual=view.read_text(encoding='utf-8')
+    assert '<script id="data" type="application/json">'+payload+'</script>' in actual
+    assert "<script id='module-display-data' type='APPLICATION/OCTET-STREAM'>"+opaque+'</script>' in actual
+    assert 'const navigation="../results/native.tsv"' in actual

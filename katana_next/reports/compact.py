@@ -154,6 +154,16 @@ def _portable_json_document(document, root, text):
     return bool(re.search(r'"schema"\s*:\s*"katana\.portable_native_MAPP_fit_index/v1"', text))
 
 
+def _opaque_data_script(opening_tag):
+    """JSON/octet-stream script bodies are immutable data, not navigation."""
+    content_type = re.search(r'(?<![\w-])type\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))', opening_tag, re.I | re.S)
+    if content_type:
+        value = (content_type[2] or content_type[3]).split(';', 1)[0].strip().lower()
+        if value in {'application/json', 'application/octet-stream'} or value.endswith('+json'):
+            return True
+    return bool(re.search(r'\bid\s*=\s*["\']table-data["\']', opening_tag, re.I))
+
+
 def _rewrite_text(text, document, root, aliases):
     if not aliases:
         return text
@@ -196,12 +206,12 @@ def _rewrite_text(text, document, root, aliases):
             return _QUOTED_STRING.sub(quoted_token, value)
         return _JSON_STRING.sub(token, value)
     if document.suffix.lower() == '.html':
-        # Complete source-table cells are evidence, not navigational links.
-        # Preserve their JSON bytes verbatim even when a cell looks like a
-        # path that happens to be a duplicate portable payload.
+        # Scientific JSON payloads are evidence, not navigational links. Native
+        # network browsers can contain millions of member/metric strings here.
+        # Preserve every payload byte and do not tokenize its cells as code.
         parts, end = [], 0
         for script in _SCRIPT.finditer(text):
-            if re.search(r'\bid\s*=\s*["\']table-data["\']', script[1], re.I):
+            if _opaque_data_script(script[1]):
                 parts.extend((chunk(text[end:script.start()]), script[0]))
                 end = script.end()
         parts.append(chunk(text[end:]))
