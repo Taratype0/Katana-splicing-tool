@@ -63,10 +63,10 @@ def cards(report, cid="B_vs_A"):
 def test_two_rendered_comparisons_have_full_families_and_top10(accepted):
     assert check(accepted) == []
     for cid in ("B_vs_A", "C_vs_A"):
-        assert len(cards(accepted[2], cid)) == 10
+        assert len(cards(accepted[2], cid)) == 7
     (accepted[3].parent / "positive-gate.receipt.json").write_text(json.dumps({
         "passed": True, "scope": "generated controlled display records, no biological claims",
-        "comparisons": 2, "declared_models_per_comparison": 12, "main_motif_cards": 20,
+        "comparisons": 2, "declared_models_per_comparison": 12, "main_motif_cards": 14,
         "native_same_row_P_FDR_effect": True, "complete_family_attachments": True}, indent=2))
 
 
@@ -117,6 +117,9 @@ def test_different_test_P_cannot_be_combined_with_best_FDR(accepted):
         for link in panel["data_links"]:
             if link["label"] == ranking_link["label"]:
                 link.update(path=changed.name, portable_sha256=file_sha256(changed))
+    for table in report["complete_results"]:
+        if table.get("name") == "all-motif-ranked-recorded-tests | B_vs_A":
+            table["source"] = changed.name
     assert any("same actual selected native test row" in g["reason"] for g in check(accepted, report=report))
 
 
@@ -177,6 +180,46 @@ def test_completed_sequence_with_no_matched_pairs_keeps_models_and_explicit_NA(t
     actual = required_motif_report_gaps(root, plan, report, report_dir, project=project,
                                       receipts={key: value for key, (_, value) in pairs.items()}, transported=transported)
     assert actual == []
-    assert len(cards(report)) == 1
-    assert "P = not estimable; FDR = not estimable" in cards(report)[0]["caption"]
+    assert len(cards(report)) == 0
+    assert report["motif_summaries"][0]["status"] == "not_estimable"
+    assert report["motif_summaries"][0]["significant_models"] == 0
     assert len(pd.read_csv(source / "NEW_WINDOW_AND_FULL_SEQUENCE_TESTS.tsv.gz", sep="\t")) == 0
+
+
+def test_no_significant_native_motifs_require_truthful_notice_and_complete_outputs(tmp_path):
+    source, _ = _controlled_family(tmp_path/"source", "B_vs_A", 0)
+    native = source/"NEW_WINDOW_AND_FULL_SEQUENCE_TESTS.tsv.gz"
+    frame = pd.read_csv(native, sep="\t")
+    frame["q_new_window_family"] = .7
+    frame["raw_P_new_paired_swaps"] = .2
+    frame.to_csv(native, sep="\t", index=False)
+    complete = json.loads((source/"COMPLETE.json").read_text())
+    complete["members"][native.name] = {"sha256":file_sha256(native), "bytes":native.stat().st_size}
+    (source/"COMPLETE.json").write_text(json.dumps(complete))
+    project = {"project_id":"controlled-nonsignificant", "samples":[], "contrasts":[{"contrast_id":"B_vs_A",
+               "numerator":{"label":"B","sample_ids":[]}, "denominator":{"label":"A","sample_ids":[]}}]}
+    tasks = [{"id":"motif", "workflow_id":"prioritize.motiftrace_consequences", "dependencies":[],
+              "scope":{"contrast_ids":["B_vs_A"]}}]
+    root = tmp_path/"collection"
+    plan,pairs,transport = _fixture_collection(root, project, tasks, {"motif":(list(source.iterdir()),{})})
+    views = build_presentation_assets(root, plan, pairs, transport)
+    report_dir = tmp_path/"report"
+    report = build_report({"project_manifest":str(root/"project.json"), "artifacts":[],
+                           "extra_views":views["extra_views"], "dummy":True, "report_require_plot_data":True}, report_dir)
+    def transported(receipt, original):
+        return root/next(row["collection_path"] for row in transport if row["source"]["path"] == original)
+    def gaps(value):
+        return required_motif_report_gaps(root,plan,value,report_dir,project=project,
+               receipts={key:value for key,(_,value) in pairs.items()},transported=transported)
+    assert not gaps(report)
+    assert cards(report) == []
+    assert report["motif_summaries"][0]["status"] == "no_significant_motif"
+    text = (report_dir/"REPORT.html").read_text("utf-8")
+    assert "No motif has a recorded native test with FDR" in text
+    assert "top10-motif-" not in text
+    missing = copy.deepcopy(report); missing["motif_summaries"] = []
+    assert any("truthful significance summary" in g["reason"] for g in gaps(missing))
+    forged = copy.deepcopy(report); forged["motif_summaries"][0]["significant_models"] = 1
+    assert any("contradicts" in g["reason"] for g in gaps(forged))
+    dropped = copy.deepcopy(report); dropped["complete_results"] = [r for r in dropped["complete_results"] if "NEW_WINDOW_AND_FULL_SEQUENCE_TESTS" not in r["name"]]
+    assert any("complete scientific family" in g["reason"] for g in gaps(dropped))

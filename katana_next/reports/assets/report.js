@@ -2,7 +2,10 @@
   const $=id=>document.getElementById(id);
   const figures=[...document.querySelectorAll('.exhibit')];
   const chapters=[...document.querySelectorAll('section.chapter')];
-  let eventSet=JSON.parse($('report-settings')?.textContent||'{}').event_set||'stable_significant';
+  const settings=JSON.parse($('report-settings')?.textContent||'{}');
+  let eventSet=settings.event_set||'stable_significant';
+  const initialComparison=settings.initial_comparison||$('contrastSelect')?.options[0]?.value||'all';
+  if($('contrastSelect'))$('contrastSelect').value=initialComparison;
   const policySelectors=[...document.querySelectorAll('.das-select')];
   policySelectors.forEach(select=>{select.value=eventSet;select.addEventListener('change',()=>{eventSet=select.value;policySelectors.forEach(s=>s.value=eventSet);applyScope()})});
   if(location.protocol==='file:')document.querySelectorAll('a[href="REPORT.zip"]').forEach(a=>a.hidden=true);
@@ -11,17 +14,23 @@
     let n=0;
     for(const figure of figures){
       const c=figure.dataset.contrast||'all',t=figure.dataset.celltype||'all';
+      const group=JSON.parse(figure.dataset.comparisons||'[]');
       const policy=figure.dataset.policy||'common';
-      const show=(contrast==='all'||c==='all'||c===contrast)&&(celltype==='all'||t==='all'||t===celltype)&&(policy==='common'||policy===eventSet);
+      const show=(contrast==='all'||c===contrast||(c==='all'&&(!group.length||group.includes(contrast))))&&(celltype==='all'||t==='all'||t===celltype)&&(policy==='common'||policy===eventSet);
       figure.classList.toggle('scope-hidden',!show);if(show)n++;
+      for(const frame of figure.querySelectorAll('iframe[data-src]')){
+        if(show&&!frame.getAttribute('src'))frame.src=frame.dataset.src;
+        if(!show&&frame.getAttribute('src'))frame.removeAttribute('src');
+      }
     }
     chapters.forEach(ch=>ch.classList.toggle('no-visible-figures',!!ch.querySelector('.exhibit')&&![...ch.querySelectorAll('.exhibit')].some(f=>!f.classList.contains('scope-hidden'))));
-    if($('scopeSummary'))$('scopeSummary').textContent=n+' exhibits in this view';
+    if($('scopeSummary'))$('scopeSummary').textContent=n+' exhibits · selected comparison and shared study QC';
     window.visibleReportFigures=n;window.reportEventSet=eventSet;window.reportReady=true;updateNavigation();
   }
   for(const id of ['contrastSelect','celltypeSelect'])$(id)?.addEventListener('change',applyScope);
   $('resetScope')?.addEventListener('click',()=>{
-    for(const id of ['contrastSelect','celltypeSelect'])if($(id))$(id).value='all';
+    if($('contrastSelect'))$('contrastSelect').value=initialComparison;
+    if($('celltypeSelect'))$('celltypeSelect').value='all';
     applyScope();
   });
   $('printReport')?.addEventListener('click',()=>print());

@@ -10,7 +10,7 @@ import sys
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--project", required=True, type=Path,
+    parser.add_argument("--project", type=Path,
                         help="Existing katana.project.json or completed-report source descriptor JSON.")
     parser.add_argument("--outdir", required=True, type=Path,
                         help="New independent report directory; completed reports are never overwritten.")
@@ -19,14 +19,34 @@ def main(argv: list[str] | None = None) -> int:
                         help="Default RS-DAS; significant selects ordinary DAS. Original source statistics remain unchanged.")
     parser.add_argument("--catalog", "--asset-catalog", dest="catalog", type=Path,
                         help="Optional JSON analysis-artifact export. --asset-catalog is an alias for --catalog.")
+    parser.add_argument("--from-report", type=Path,
+                        help="Refresh presentation of an existing portable report; completed analyses are never rerun.")
+    parser.add_argument("--compact", action="store_true", help="Losslessly consolidate portable report storage.")
+    parser.add_argument("--network-display-parameters", type=Path,
+                        help="Optional JSON mapping from comparison IDs to their original network parameter files, for display-only edge export.")
     args = parser.parse_args(argv)
+    if args.compact and not args.from_report:
+        parser.error('--compact requires --from-report')
+    if args.network_display_parameters and not args.from_report:
+        parser.error('--network-display-parameters requires --from-report')
     try:
         from katana_next.reports import build_report
         # Rendering-library diagnostics belong on stderr; stdout is one JSON
         # result, suitable for Nextflow and other command-line callers.
         with redirect_stdout(sys.stderr):
-            manifest = build_report(args.project, args.outdir, catalog=args.catalog,
-                                    event_set=args.event_set)
+            if args.from_report:
+                from .refresh import refresh_report
+                parameters = None
+                if args.network_display_parameters:
+                    parameters = json.loads(args.network_display_parameters.read_text('utf-8-sig'))
+                    parameters = {cid: str((args.network_display_parameters.resolve().parent / path).resolve())
+                                  if not Path(path).is_absolute() else path for cid, path in parameters.items()}
+                manifest = refresh_report(args.from_report, args.outdir, project=args.project,
+                                          compact=args.compact, network_parameters=parameters)
+            else:
+                if not args.project: parser.error('--project or --from-report is required')
+                manifest = build_report(args.project, args.outdir, catalog=args.catalog,
+                                        event_set=args.event_set)
         output = args.outdir.expanduser().resolve()
         result = {
             "schema": "katana.report_cli_result/v1", "status": "completed",

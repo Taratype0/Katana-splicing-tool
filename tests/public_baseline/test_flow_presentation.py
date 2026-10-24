@@ -265,9 +265,10 @@ def test_generic_motif_views_verify_complete_family_and_keep_all_models(complete
     assert view["audit"]["proof_kind"] == "flow"
     assert view["audit"]["models"] == 3
     assert view["audit"]["new_scans"] == view["audit"]["new_statistical_tests"] == 0
-    assert len(view["panels"]) == 10
-    assert view["audit"]["top_motif_cards"] == 3
-    assert sum(not panel.get("output_only") for panel in view["panels"]) == 4
+    assert len(view["panels"]) == 7
+    assert view["audit"]["top_motif_cards"] == 0
+    assert sum(not panel.get("output_only") for panel in view["panels"]) == 0
+    assert view["motif_summaries"][0]["status"] == "no_significant_motif"
     assert before == {path.name: file_hash(path) for path in source.iterdir()}
 
 

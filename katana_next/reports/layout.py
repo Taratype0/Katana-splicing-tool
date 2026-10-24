@@ -8,7 +8,7 @@ from .engine import CHAPTERS, esc, safe, chapter_for
 
 
 def _scope(record):
-    return ' data-contrast="'+esc(record.get('contrast_id', record.get('comparison_id', 'all')))+'" data-celltype="'+esc(record.get('cell_type', 'all'))+'" data-policy="'+esc(record.get('policy') or 'common')+'"'
+    return ' data-contrast="'+esc(record.get('contrast_id', record.get('comparison_id', 'all')))+'" data-celltype="'+esc(record.get('cell_type', 'all'))+'" data-policy="'+esc(record.get('policy') or 'common')+'" data-comparisons="'+esc(json.dumps(record.get('comparison_ids') or []))+'"'
 
 
 def _policy_control(identity):
@@ -106,18 +106,34 @@ def _rbp_summary(record):
     return '<article class="exhibit wide rbp-enrichment" id="'+esc(record['id'])+'"'+_scope(record)+'><div class="exhibit-head"><h3>'+esc(record.get('title', 'RBP identity / declared-set enrichment'))+' | '+esc(record['contrast_id'])+'</h3></div><p class="fig-notes">'+esc(str(len(record['rows']))+' significant / '+str(record['tested_sets'])+' tested sets. Foreground: '+record['foreground_source']+'. Background: '+record['background_source']+'. '+record['resource_semantics'])+'</p><div class="table-scroll"><table class="metadata"><tr><th>RBP set</th><th>Hit genes</th><th>'+esc(record.get('effect_label', 'Fold enrichment'))+'</th><th>P</th><th>FDR</th><th>Recorded contributors</th></tr>'+rows+'</table></div><p class="fig-notes">'+esc(families)+'</p>'+_link(record['full_path'], 'Complete native enrichment statistics')+_link(record.get('all_hits_path', record['full_path']), 'All tested sets and full hit genes')+'</article>'
 
 
+def _motif_summary(record):
+    status = record.get('status')
+    heading = 'Significant motif sequences' if status == 'significant' else 'No significant motif' if status == 'no_significant_motif' else 'Motif tests not estimable'
+    minimum = record.get('min_native_fdr')
+    note = (' Minimum recorded test FDR: '+_cell(minimum)+'.') if minimum is not None else ''
+    full = _link(record['ranking_path'], 'All models and original P / FDR') if record.get('ranking_path') else ''
+    return '<article class="exhibit wide motif-significance" id="motif-status-'+esc(record['contrast_id'])+'"'+_scope(record)+'><h3>MotifTrace: '+heading+'</h3><p>'+esc(record['notice'])+note+'</p><p class="fig-notes">'+esc(record['native_test_family'])+'</p>'+full+'</article>'
+
+
+def _network_browser(record):
+    return '<article class="exhibit wide network-browser" id="'+esc(record['id'])+'"'+_scope(record)+'><div class="exhibit-head"><h3>Module network and complete gene lists | '+esc(record['contrast_id'])+'</h3></div><p class="fig-notes">Select a module below. The graph shows its observed event nodes and available native exported edges. Gene symbols, IDs and all event memberships are searchable and downloadable.</p>'+_link(record['source'], 'Open network and module genes in a full window')+'<iframe loading="lazy" data-src="'+esc(record['source'])+'" title="Module network and gene lists" class="network-frame"></iframe></article>'
+
+
 def render(builder):
     source, output = builder.source, builder.output
     project = source['project']
     sections = []
     for number, (title, note) in CHAPTERS.items():
         blocks = []
+        if number == 6:
+            blocks.extend(_network_browser(r) for r in builder.network_browsers)
         if number == 4 and len(project.get('contrasts', [])) == 1:
             blocks.append('<div class="status-panel"><strong>Cross-comparison: not applicable</strong>'
                           'One comparison was selected. Overlap and between-comparison direction analyses require '
                           'at least two comparisons. Any separately declared interaction model is reported independently.</div>')
         if number == 7:
             blocks.extend(_rbp_summary(r) for r in builder.enrichment_summaries)
+            blocks.extend(_motif_summary(r) for r in builder.motif_summaries)
         chapter_items = _ordered_panels(builder, number)
         inserted = set()
         for index, item in enumerate(chapter_items, 1):
@@ -163,7 +179,7 @@ def render(builder):
     options = ''.join('<option value="'+esc(c['contrast_id'])+'">'+esc(c.get('label', c['contrast_id']))+'</option>' for c in contrasts)
     footnote = project.get('metadata', {}).get('gene_filter_policy', {}).get('footnote_en', 'Actual source filtering and fitting scope are retained in provenance. Missing filtering records are not inferred.')
     appendix = '<section class="chapter" id="appendix"><div class="chapter-head"><span class="chapter-number">A</span><h2>Methods, parameters and complete results</h2></div><p>'+esc(footnote)+'</p><p>RS-DAS: native caller FDR/effect criteria plus IJC + SJC ≥ 10 in every declared biological sample in both contrast arms. Ordinary DAS: the same native caller criteria without the read-support gate. Original caller P/FDR and effects are preserved. Historical analyses with another measurement policy are retained as fixed completed outputs and never silently relabelled.</p><p>Top 10: native FDR ascending, absolute native effect descending when available, stable object identity. Missing effect sizes remain unavailable; transcript, exon and gene units are separate.</p><p>Networks require their declared measurable PSI population, not just significant DAS. Motif occurrences, group enrichment, window statistics and CLIP binding evidence retain separate meanings.</p><p>'+_link('outputs/index.html', 'Complete results')+' · '+_link('provenance.json', 'Actual parameters and provenance')+' · '+_link('REPORT.zip', 'Download report package')+'</p><p>Katana Splicing Tool · '+_link('https://github.com/Taratype0/Katana-splicing-tool', 'Software and citation information')+'. No publication DOI is claimed.</p></section>'
-    page = '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(project.get('name', 'Katana report'))+'</title><link rel="stylesheet" href="assets/report.css"><header class="topbar"><a class="wordmark" href="REPORT.html">KATANA</a><small>RNA SPLICING ANALYSIS</small><div class="top-actions">'+_link('outputs/index.html', 'Output files')+_link('REPORT.zip', 'Download package')+'<button id="printReport">Print / PDF</button></div></header><section class="cover"><p class="eyebrow">COMPLETED RESULTS · '+esc(source['mode'].upper())+'</p><h1>'+esc(project.get('name', 'Katana report'))+'</h1><p>'+str(len(project.get('samples', [])))+' biological samples · '+str(len(contrasts))+' declared comparisons · '+esc(annotation.get('genome_build', 'Reference recorded in source'))+'</p></section><div class="shell"><nav class="toc"><p class="toc-title">REPORT CONTENTS</p>'+toc+'<a href="#appendix">Methods and outputs</a></nav><main><div class="scopebar"><label>Comparison <select id="contrastSelect"><option value="all">All comparisons</option>'+options+'</select></label>'+_policy_control('report-das-selection')+'<button id="resetScope">Reset view</button><span id="scopeSummary" class="scope-summary"></span></div><p class="policy-explanation">Switching DAS selection changes its volcano, Top 10 and matched downstream views together. Fixed completed imports retain their original input population.</p>'+''.join(sections)+appendix+'</main></div><dialog id="figureModal"><div class="modal-top"><span id="modalTitle"></span><div class="modal-actions"><button id="fitFigure">Fit</button><button id="actualFigure">100%</button><a id="downloadFigure" download>Figure</a><button id="closeFigure">Close</button></div></div><div class="modal-scroll" id="modalScroll"><img id="modalImage" alt=""></div></dialog><script id="report-settings" type="application/json">'+json.dumps({'event_set': builder.event_set})+'</script><script src="assets/report.js"></script></html>'
+    page = '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(project.get('name', 'Katana report'))+'</title><link rel="stylesheet" href="assets/report.css"><header class="topbar"><a class="wordmark" href="REPORT.html">KATANA</a><small>RNA SPLICING ANALYSIS</small><div class="top-actions">'+_link('outputs/index.html', 'Output files')+_link('REPORT.zip', 'Download package')+'<button id="printReport">Print / PDF</button></div></header><section class="cover"><p class="eyebrow">COMPLETED RESULTS · '+esc(source['mode'].upper())+'</p><h1>'+esc(project.get('name', 'Katana report'))+'</h1><p>'+str(len(project.get('samples', [])))+' biological samples · '+str(len(contrasts))+' declared comparisons · '+esc(annotation.get('genome_build', 'Reference recorded in source'))+'</p></section><div class="shell"><nav class="toc"><p class="toc-title">REPORT CONTENTS</p>'+toc+'<a href="#appendix">Methods and outputs</a></nav><main><div class="scopebar"><label>Comparison <select id="contrastSelect">'+options+'</select></label>'+_policy_control('report-das-selection')+'<button id="resetScope">Reset view</button><span id="scopeSummary" class="scope-summary"></span></div><p class="policy-explanation">Switching DAS selection changes its volcano, Top 10 and matched downstream views together. Fixed completed imports retain their original input population.</p>'+''.join(sections)+appendix+'</main></div><dialog id="figureModal"><div class="modal-top"><span id="modalTitle"></span><div class="modal-actions"><button id="fitFigure">Fit</button><button id="actualFigure">100%</button><a id="downloadFigure" download>Figure</a><button id="closeFigure">Close</button></div></div><div class="modal-scroll" id="modalScroll"><img id="modalImage" alt=""></div></dialog><script id="report-settings" type="application/json">'+json.dumps({'event_set': builder.event_set, 'initial_comparison': contrasts[0]['contrast_id'] if contrasts else 'all'})+'</script><script src="assets/report.js"></script></html>'
     (output/'REPORT.html').write_text(page, encoding='utf-8')
     _outputs(builder)
     payload = {'schema': 'katana.approved_report/v1', 'specification_version': '1.0', 'project_id': project.get('project_id'),
@@ -173,6 +189,15 @@ def render(builder):
                'rbp_enrichment_summaries': builder.enrichment_summaries,
                'source_files': builder.audit, 'unavailable': builder.exclusions, 'no_upstream_rerun': True,
                'no_source_statistics_refit': True, 'dummy': bool(source.get('dummy', False))}
+    from .presentation import portable_display_project
+    payload['display_project'] = portable_display_project(project)
+    payload['mode'] = source['mode']
+    payload['motif_summaries'] = builder.motif_summaries
+    payload['network_browsers'] = builder.network_browsers
+    payload['presentation'] = {'default_comparison': contrasts[0]['contrast_id'] if contrasts else 'all',
+                               'view': 'one_comparison', 'network_dendrogram_in_main': False,
+                               'motif_sequence_rule': 'native selected-test FDR <= 0.05; at most 10 distinct models'}
+    if hasattr(builder, 'release_status'): payload['release_status'] = builder.release_status
     payload['figure_data_links'] = builder.figure_data_coverage()
     payload['report_selection'] = source.get('report_selection', {'applied': False})
     (output/'report-manifest.json').write_text(json.dumps(payload, indent=2, default=str)+'\n', encoding='utf-8')
@@ -186,9 +211,10 @@ def render(builder):
     provenance['figure_data_links'] = builder.figure_data_coverage()
     provenance['report_selection'] = source.get('report_selection', {'applied': False})
     (output/'provenance.json').write_text(json.dumps(provenance, indent=2, default=str)+'\n', encoding='utf-8')
-    with zipfile.ZipFile(output/'REPORT.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=4, strict_timestamps=False) as archive:
-        for path in sorted(output.rglob('*')):
-            if path.is_file() and path.name != 'REPORT.zip': archive.write(path, path.relative_to(output).as_posix())
+    if builder.create_archive:
+        with zipfile.ZipFile(output/'REPORT.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=4, strict_timestamps=False) as archive:
+            for path in sorted(output.rglob('*')):
+                if path.is_file() and path.name != 'REPORT.zip': archive.write(path, path.relative_to(output).as_posix())
     return payload
 
 

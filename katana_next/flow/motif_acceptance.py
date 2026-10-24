@@ -128,12 +128,16 @@ def _family(receipt, transported, cid):
 
 def _report_family(report, report_dir, cid, marker, complete_path, complete, paths, scientific, tests):
     model_ids = set(scientific["models"])
-    expected_count = min(10, len(model_ids))
+    from katana_next.reports.motif_display import motif_display_summary, significant_motif_ranking
+    keys = ["q_new_window_family", "raw_P_new_paired_swaps", "event_type", "direction", "region", "method", "window_nt", "window_start0"]
+    valid = tests.loc[tests.q_new_window_family.notna() & tests.raw_P_new_paired_swaps.notna()]
+    selected = {str(token): part.sort_values(keys, kind="stable").iloc[0] for token, part in valid.groupby("model_id", sort=False)}
+    expected_count = min(10, sum(row["q_new_window_family"] <= .05 for row in selected.values()))
     cards = [p for p in report.get("panels", []) if p.get("contrast_id") == cid and
              p.get("metadata", {}).get("component") == "motiftrace_sequence" and
              p.get("metadata", {}).get("motif_view_kind") == "top_motif" and not p.get("output_only")]
     if len(cards) != expected_count:
-        raise ValueError("Every completed MotifTrace comparison requires its own min(10, all models) main motif cards")
+        raise ValueError("Every completed MotifTrace comparison requires its own min(10, significant models) main motif cards")
     if len({p.get("id") for p in cards}) != expected_count:
         raise ValueError("MotifTrace main cards have duplicate panel identities")
     complete_sha = file_sha256(complete_path)
@@ -159,15 +163,17 @@ def _report_family(report, report_dir, cid, marker, complete_path, complete, pat
             raise ValueError("MotifTrace card data link changed after report construction")
         if any(file_sha256(_inside(report_dir, link["path"])) != test_sha for link in native):
             raise ValueError("MotifTrace native P/FDR rows were replaced in the report")
+    ranking_tables = [item for item in report.get("complete_results", []) if item.get("contrast_id") == cid and
+                      item.get("name") == f"all-motif-ranked-recorded-tests | {cid}"]
+    if len(ranking_tables) != 1:
+        raise ValueError("A comparison's MotifTrace output requires one complete recorded model ranking")
+    ranking_paths.add(_inside(report_dir, ranking_tables[0]["source"]))
     if len(ranking_paths) != 1:
         raise ValueError("A comparison's MotifTrace cards must share one complete declared ranking")
     ranking = _table(next(iter(ranking_paths)))
     if (len(ranking) != len(model_ids) or ranking.model_id.duplicated().any() or set(ranking.model_id) != model_ids or
         not ranking.comparison_id.eq(cid).all() or not ranking.report_policy.eq("stable_significant").all()):
         raise ValueError("MotifTrace complete model ranking is missing, truncated or belongs to another comparison")
-    keys = ["q_new_window_family", "raw_P_new_paired_swaps", "event_type", "direction", "region", "method", "window_nt", "window_start0"]
-    valid = tests.loc[tests.q_new_window_family.notna() & tests.raw_P_new_paired_swaps.notna()]
-    selected = {str(token): part.sort_values(keys, kind="stable").iloc[0] for token, part in valid.groupby("model_id", sort=False)}
     for row in ranking.to_dict("records"):
         native = selected.get(str(row["model_id"]))
         if native is None:
@@ -183,10 +189,19 @@ def _report_family(report, report_dir, cid, marker, complete_path, complete, pat
     ordered = ranking.sort_values(["q_new_window_family", "raw_P_new_paired_swaps", "model_id"], kind="stable", na_position="last")
     if ranking.model_id.tolist() != ordered.model_id.tolist() or ranking.display_rank.tolist() != list(range(1, len(ranking) + 1)):
         raise ValueError("MotifTrace ranking changed the declared native FDR/P/model order")
-    expected_top = ranking.head(expected_count)
+    expected_top = significant_motif_ranking(ranking)
     actual_top = sorted((p["metadata"].get("display_rank"), p["metadata"].get("model_id")) for p in cards)
     if actual_top != list(zip(expected_top.display_rank, expected_top.model_id)):
         raise ValueError("MotifTrace main cards omit or substitute a ranked model")
+    summaries = [item for item in report.get("motif_summaries", []) if item.get("contrast_id") == cid]
+    if len(summaries) != 1:
+        raise ValueError("Each completed MotifTrace comparison requires one truthful significance summary")
+    expected_summary = motif_display_summary(ranking, cid)
+    if any(summaries[0].get(key) != expected_summary[key] for key in expected_summary):
+        raise ValueError("MotifTrace significance summary contradicts the complete native ranking")
+    summary_ranking = _inside(report_dir, summaries[0].get("ranking_path", ""))
+    if summary_ranking not in ranking_paths or file_sha256(summary_ranking) != summaries[0].get("ranking_sha256"):
+        raise ValueError("MotifTrace significance summary is not bound to its complete recorded ranking")
     # Every frozen output remains a complete downloadable source, even when it
     # is not selected for the report body. Never certify only observed Top 10.
     members = {name: record["sha256"] for name, record in complete["members"].items()}

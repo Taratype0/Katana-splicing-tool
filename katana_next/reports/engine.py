@@ -57,6 +57,9 @@ class Builder:
         self.panels, self.tables, self.audit, self._copies = [], [], [], {}
         self.top10, self.policy_data, self.derived_audits = [], {}, []
         self.enrichment_summaries = []
+        self.motif_summaries = []
+        self.network_browsers = []
+        self.create_archive = True
         self.exclusions = []
         self.data_link_audit = []
         self._extra_asset_ids = {str(a.get('artifact_id')) for a in source.get('extra_assets', []) if a.get('artifact_id')}
@@ -436,6 +439,14 @@ class Builder:
                         record[key] = complete.relative_to(self.output).as_posix() if complete.is_relative_to(self.output) else self.copy(complete)
             self.top10.append(record)
         self.policy_data.update(results.get('policy_data', {}))
+        for raw in results.get('motif_summaries', []):
+            summary = copy.deepcopy(raw)
+            if summary.get('ranking_path'):
+                ranking = Path(summary['ranking_path'])
+                if not ranking.is_absolute(): ranking = self.output / ranking
+                summary['ranking_path'] = (ranking.relative_to(self.output).as_posix()
+                    if ranking.is_relative_to(self.output) else self.copy(ranking))
+            self.motif_summaries.append(summary)
         if results.get('gene_sets'):
             (self.output/'gene-set-inputs.json').write_text(json.dumps(results['gene_sets'], indent=2), encoding='utf-8')
         self.exclusions.extend(results.get('unavailable', []))
@@ -443,6 +454,8 @@ class Builder:
 
     def write(self):
         from .layout import render
+        from .presentation import prepare_presentation
+        prepare_presentation(self)
         coverage = self.figure_data_coverage()
         if coverage['strict_plot_data_required'] and coverage['unbound_main_figures']:
             raise ValueError('Every main figure requires exact plot_data; missing bindings: ' + ', '.join(p['id'] for p in coverage['unbound_main_figures']))

@@ -126,9 +126,9 @@ def test_multicontrast_top10_report_has_complete_portable_statistics_and_figures
     for view, cid in zip(views, ids, strict=True):
         assert all(table["contrast_id"] == cid and table["name"].endswith(" | " + cid) for table in view["tables"])
         cards = [p for p in report["panels"] if p["contrast_id"] == cid and p["title"].startswith("Top motif")]
-        assert len(cards) == 10
+        assert len(cards) == 7
         card_counts[cid] = len(cards)
-        assert view["audit"]["top_motif_RNA_examples"] == 10
+        assert view["audit"]["top_motif_RNA_examples"] == 7
         ranking = pd.read_csv(tmp_path / "views" / cid / "all-motif-ranked-recorded-tests.tsv", sep="\t", float_precision="round_trip")
         native = pd.read_csv(tmp_path / "sources" / cid / STAT_FILES[0], sep="\t", float_precision="round_trip")
         assert len(ranking) == 12 and ranking.model_id.nunique() == 12
@@ -150,13 +150,13 @@ def test_multicontrast_top10_report_has_complete_portable_statistics_and_figures
                 pixels = np.asarray(image.convert("RGB"))
                 assert image.width > 600 and image.height > 300 and pixels.std() > 5
             ET.parse(out / panel["svg"])
-        assert any("not significant" in p["caption"] for p in cards)
+        assert all("not significant" not in p["caption"] for p in cards)
         main = [p for p in report["panels"] if p["contrast_id"] == cid and not p.get("output_only")]
         assert not any(any(term in p["title"] for term in ("window profile", "maximum-cluster null", "sequence opportunity", "All-model completed")) for p in main)
         statistic_checks.append({"comparison_id": cid, "models_retained": 12,
-                                "top10": 10, "paired_native_values_preserved": True})
+                                "top10": 7, "paired_native_values_preserved": True})
     assert len({p["id"] for p in report["panels"]}) == len(report["panels"])
-    assert len([x for x in page.figures if "top10-motif-" in x.get("id", "")]) == 30
+    assert len([x for x in page.figures if "top10-motif-" in x.get("id", "")]) == 21
     for link in page.links:
         if "://" not in link and not link.startswith("#"):
             assert (out / link.split("#", 1)[0]).is_file(), link
@@ -170,7 +170,7 @@ def test_multicontrast_top10_report_has_complete_portable_statistics_and_figures
     assert source_identities == {name: _sha(name) for name in source_identities}
     _json(tmp_path / "report-acceptance.receipt.json", {
         "passed": True, "scope": "controlled generated display inputs; not a biological statistical validation",
-        "comparisons": statistic_checks, "motif_cards": card_counts, "main_top10_figures": 30,
+        "comparisons": statistic_checks, "motif_cards": card_counts, "main_top10_figures": 21,
         "native_P_q_effect_same_row": True, "source_files_unchanged": True,
         "all_report_links_exist": True, "all_png_and_svg_decoded": True,
         "seven_chapters_preserved": True, "complete_zip_members_byte_identical": True,

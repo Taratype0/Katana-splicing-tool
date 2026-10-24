@@ -29,6 +29,47 @@ workspace and shared workflow API. Its outputs are the HTML report, portable
 ZIP, provenance and machine-readable report manifest. The existing
 `reports.bundle` and completed-report import routes remain available.
 
+### Selected-comparison view and read-only refresh
+
+The main report opens on the first declared comparison. Selecting another
+comparison changes the visible differential, enrichment, network and motif
+results together; shared study QC remains visible. Cross-comparison panels
+retain their declared axes and appear only for the selected comparison's group.
+The seven chapters and blue/red palette are retained.
+
+The network chapter embeds the module browser directly. Module genes are
+complete, searchable and downloadable, with symbols, gene IDs and all event
+identities. The dendrogram remains in outputs rather than the main report.
+Where original fitted parameters and numeric inputs are authenticated, a graph
+view can re-export edges among the 100 highest recorded absolute-kME events per
+assigned module using the unchanged original adjacency kernel. The graph is an
+explicit display subset (up to 1,000 edges); complete module membership is not
+filtered. This does not rerun module discovery, TOM, association or enrichment.
+
+MotifTrace sequence cards show at most ten distinct models with a recorded
+native test FDR at or below 0.05. If none qualify, the main report says so instead
+of filling ten nonsignificant cards. All models and original statistics remain
+in outputs. The selected test-family FDR is not a new model-level FDR; MAPP's
+native Bonferroni results remain a separate method.
+
+Refresh an existing portable report without rerunning its analyses:
+
+```sh
+katana-report --from-report exports/previous-report --outdir exports/updated-report --compact
+```
+
+Older reports without embedded display-project metadata additionally require
+`--project study/katana.project.json`. Optional `--network-display-parameters`
+accepts a JSON mapping of comparison IDs to their original fitted parameter
+files. File paths in this mapping resolve relative to the mapping file.
+Unsupported or unavailable network parameters never trigger a replacement fit.
+
+`--compact` consolidates byte-identical result copies and losslessly compresses
+complete table-browser payloads, retaining every row and the native source
+tables. It writes a storage audit and updated portable-file hashes. The report
+must be refreshed into a new directory; prior reports and scientific files are
+preserved. Current browsers decode these self-contained tables offline.
+
 ### Relative file paths
 
 A report descriptor can live separately from the original study. Its

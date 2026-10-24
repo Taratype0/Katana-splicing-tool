@@ -14,9 +14,10 @@ import numpy as np
 import pandas as pd
 
 from .comparisons import BLUE, RED, _safe
+from .motif_display import motif_display_summary, significant_motif_ranking
 from .sources import digest
 
-VERSION = 'completed-motif-report-v2'
+VERSION = 'completed-motif-report-v3'
 SEQUENCE_FILES = ('ANALYSIS_PLAN_BEFORE_SCORING.json', 'FROZEN_SELECTED_EVENTS.tsv',
                   'PAIRED_FORM_INSTANCE_CHANGES.tsv.gz', 'ACTUAL_RNA_FORMS.tsv.gz',
                   'ACTUAL_LOCUS_HITS.tsv.gz', 'PAIRED_FORM_NORMALIZED_SCORES.tsv.gz')
@@ -322,7 +323,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                                   'native_P_q_FWER_unchanged': True, 'new_scans': 0, 'new_statistical_tests': 0,
                                   'profile_ranking': 'minimum native window-family q, paired raw P from that same test, model ID; no model-level FDR',
                                   'main_motif_limit': 10,
-                                  'main_motif_ranking': 'one recorded test per model: q, paired raw P, stable test coordinates; models ordered by that q, P, model ID; all models in outputs',
+                                  'main_motif_ranking': 'only recorded tests with native q <= 0.05; one test per distinct model, ordered by that q, paired P, model ID; all models remain in outputs',
                                   'significance_rule': 'native selected-test FDR <= 0.05; not a whole-model test',
                                   'RNA_example_rule': 'for each ranked model, earliest stable changing event with complete local forms within display limit; unavailable examples explicitly labelled',
                                   'RNA_example_max_nt': example_max_nt}, indent=2), encoding='utf-8')
@@ -430,7 +431,14 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
     summary = pd.DataFrame(aggregate.values()).sort_values(['minimum_full_family_window_q', 'minimum_raw_window_P', 'model_id'], kind='stable', na_position='last')
     ranking = _motif_ranking(summary, selected_tests, models)
     ranking_path = table(ranking, 'all-motif-ranked-recorded-tests', 'motif_model_recorded_test')
-    top10 = ranking.head(10).copy()
+    top10 = significant_motif_ranking(ranking)
+    display_summary = motif_display_summary(ranking, comparison_id)
+    display_summary.update(ranking_path=str(ranking_path), ranking_sha256=digest(ranking_path))
+    if display_summary['status'] != 'significant':
+        # A completed negative result gets one concise status in the body.
+        # Descriptive instance-count figures remain complete attachments.
+        for panel in panels:
+            panel['output_only'] = True
     top10_path = table(top10, 'top10-motif-recorded-tests', 'motif_model_recorded_test')
     # The complete browser contains every model and its actual selected native
     # test, including non-estimable models. No min-q value is relabelled as a
@@ -517,7 +525,8 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
         axes[1].text(0, 1, '\n'.join(display_lines), va='top', transform=axes[1].transAxes,
                      fontfamily='DejaVu Sans Mono', fontsize=7)
         fig.tight_layout(); save()
-        panels[-1]['metadata'].update(motif_view_kind='top_motif', model_id=token, display_rank=int(rank))
+        panels[-1]['metadata'].update(motif_view_kind='top_motif', model_id=token, display_rank=int(rank),
+                                     main_display_fdr_threshold=.05, main_display_eligible=True)
     fig, save = figure('window-statistics-all-models', 'All-model completed window statistics',
                        'Minimum native window-family q/P defines descriptive catalogue order, not model-level FDR. All declared models and complete original test families are retained; no P/q is recalculated.',
                        summary, 'motif_model_summary', [(test_source, 'Complete native test family', 'motif_window_test')],
@@ -594,6 +603,8 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
              'selected_events': len(selected), 'statistical_test_rows': int(summary.all_test_rows.sum()),
              'null_values': len(null), 'figures': len(panels), 'all_declared_models_retained': True,
              'top_motif_cards': len(top10), 'top_motif_RNA_examples': example_count,
+             'significant_models': display_summary['significant_models'],
+             'main_motif_status': display_summary['status'],
              'main_motif_limit': 10, 'model_level_FDR_created': False,
              'native_P_q_FWER_unchanged': True, 'statistical_family_split': False,
              'new_scans': 0, 'new_statistical_tests': 0, 'originals_unchanged': True,
@@ -602,4 +613,5 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
              'observed_at': datetime.now(timezone.utc).isoformat()}
     (out / 'motif-view.receipt.json').write_text(json.dumps(audit, indent=2), encoding='utf-8')
     return {'project_id': project_id, 'source_project_manifest_sha256': source_project_manifest_sha256,
-            'status': 'complete', 'panels': panels, 'tables': tables, 'unavailable': unavailable, 'audit': audit}
+            'status': 'complete', 'panels': panels, 'tables': tables, 'motif_summaries': [display_summary],
+            'unavailable': unavailable, 'audit': audit}
