@@ -116,7 +116,7 @@ def _motif_summary(record):
 
 
 def _network_browser(record):
-    return '<article class="exhibit wide network-browser" id="'+esc(record['id'])+'"'+_scope(record)+'><div class="exhibit-head"><h3>Module network and complete gene lists | '+esc(record['contrast_id'])+'</h3></div><p class="fig-notes">Select a module below. The graph shows its observed event nodes and available native exported edges. Gene symbols, IDs and all event memberships are searchable and downloadable.</p>'+_link(record['source'], 'Open network and module genes in a full window')+'<iframe loading="lazy" data-src="'+esc(record['source'])+'" title="Module network and gene lists" class="network-frame"></iframe></article>'
+    return '<article class="exhibit wide network-browser" id="'+esc(record['id'])+'"'+_scope(record)+'><div class="exhibit-head"><h3>Module network and complete gene lists | '+esc(record['contrast_id'])+'</h3></div><p class="fig-notes">Select a module below. The graph uses saved module membership and native adjacency; display-node and edge limits are stated in the browser. Gene symbols, IDs and all event memberships are searchable and downloadable.</p>'+_link(record['source'], 'Open network and module genes in a full window')+'<iframe loading="lazy" data-src="'+esc(record['source'])+'" title="Module network and gene lists" class="network-frame"></iframe></article>'
 
 
 def render(builder):
