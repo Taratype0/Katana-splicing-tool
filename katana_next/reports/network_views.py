@@ -15,6 +15,38 @@ VERSION = "observed-network-report-v1"
 BLUE, RED = "#2863A5", "#C63F4A"
 
 
+def _read_observed_kme_hubs(path, members):
+    """Validate the immutable Hub family without losing recorded float64 order."""
+    import numpy as np
+    import pandas as pd
+
+    # The producer ranks the original float64 values before writing their
+    # round-trip decimal representation. The default CSV parser can merge two
+    # adjacent values into one float, creating a false event-identity tie here.
+    # Preserve the recorded values exactly; no tolerance or re-ranking is used.
+    hubs = pd.read_csv(path, sep="\t", float_precision="round_trip")
+    assigned = members.module.ne("grey")
+    fields = {"event_key", "module", "module_membership_kME", "hub_event_score", "hub_event_rank", "hub_metric"}
+    if not fields <= set(hubs) or not hubs.event_key.is_unique or set(hubs.event_key) != set(members.loc[assigned, "event_key"]):
+        raise ValueError("Actual kME Hub family must cover every assigned event exactly once")
+    if len(hubs) and (not hubs.hub_metric.eq("abs_kME").all() or
+                     hubs.set_index("event_key").module.to_dict() != members.loc[assigned].set_index("event_key").module.to_dict()):
+        raise ValueError("Observed kME Hub family refers to another module assignment")
+    membership = pd.to_numeric(hubs.module_membership_kME, errors="coerce")
+    if not membership.dropna().between(-1.000001, 1.000001).all() or np.isinf(membership).any():
+        raise ValueError("Assigned observed kME values are invalid")
+    score = pd.to_numeric(hubs.hub_event_score, errors="coerce")
+    if not np.allclose(score, membership.abs(), equal_nan=True):
+        raise ValueError("Actual Hub scores differ from absolute observed kME")
+    ordered = hubs.assign(_abs=membership.abs()).sort_values(["module", "_abs", "event_key"],
+                                                ascending=[True, False, True], kind="stable", na_position="last")
+    expected_rank = pd.Series(ordered.groupby("module", sort=False).cumcount().to_numpy() + 1,
+                              index=ordered.event_key).sort_index()
+    if not np.array_equal(hubs.set_index("event_key").hub_event_rank.sort_index().to_numpy(), expected_rank.to_numpy()):
+        raise ValueError("Actual Hub ranks differ from the recorded kME and event tie rule")
+    return hubs
+
+
 def _significant_enrichment_display(tested, *, fdr=.05, per_module_library=2):
     """Select report terms only; never alter the full native correction family."""
     import pandas as pd
@@ -310,26 +342,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
     if not bootstrap_enabled:
         if hub_metric != "abs_kME":
             raise ValueError("Bootstrap-disabled report requires the declared absolute kME Hub metric")
-        assigned = members.module.ne("grey")
-        hubs = pd.read_csv(precomputed["hub_events"], sep="\t")
-        fields = {"event_key", "module", "module_membership_kME", "hub_event_score", "hub_event_rank", "hub_metric"}
-        if not fields <= set(hubs) or not hubs.event_key.is_unique or set(hubs.event_key) != set(members.loc[assigned, "event_key"]):
-            raise ValueError("Actual kME Hub family must cover every assigned event exactly once")
-        if len(hubs) and (not hubs.hub_metric.eq("abs_kME").all() or
-                         hubs.set_index("event_key").module.to_dict() != members.loc[assigned].set_index("event_key").module.to_dict()):
-            raise ValueError("Observed kME Hub family refers to another module assignment")
-        membership = pd.to_numeric(hubs.module_membership_kME, errors="coerce")
-        if not membership.dropna().between(-1.000001, 1.000001).all() or np.isinf(membership).any():
-            raise ValueError("Assigned observed kME values are invalid")
-        score = pd.to_numeric(hubs.hub_event_score, errors="coerce")
-        if not np.allclose(score, membership.abs(), equal_nan=True):
-            raise ValueError("Actual Hub scores differ from absolute observed kME")
-        ordered = hubs.assign(_abs=membership.abs()).sort_values(["module", "_abs", "event_key"],
-                                                    ascending=[True, False, True], kind="stable", na_position="last")
-        expected_rank = pd.Series(ordered.groupby("module", sort=False).cumcount().to_numpy() + 1,
-                                  index=ordered.event_key).sort_index()
-        if not np.array_equal(hubs.set_index("event_key").hub_event_rank.sort_index().to_numpy(), expected_rank.to_numpy()):
-            raise ValueError("Actual Hub ranks differ from the recorded kME and event tie rule")
+        hubs = _read_observed_kme_hubs(precomputed["hub_events"], members)
         imported = hubs[["event_key", "module_membership_kME", "hub_event_score", "hub_event_rank"]].rename(
             columns={"module_membership_kME": "kME", "hub_event_score": "abs_kME", "hub_event_rank": "hub_rank_abs_kME"})
         members = members.merge(imported, on="event_key", how="left", validate="one_to_one")
