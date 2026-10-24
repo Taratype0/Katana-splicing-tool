@@ -21,7 +21,12 @@ def builder(tmp_path, name='report'):
     return Builder({'project': project, 'artifacts': [], 'mode': 'bulk'}, output, 'stable_significant')
 
 
-def test_report_shows_selected_comparison_network_and_keeps_dendrogram_in_outputs(tmp_path):
+@pytest.mark.parametrize('title,metadata', [
+    ('Observed network dendrogram', {}),
+    ('Recorded tree fixture', {'network_view_role': 'dendrogram'}),
+    ('Recorded linkage display', {'flow_stage': 'network.fit', 'flow_artifact_key': 'dendrogram'}),
+])
+def test_report_shows_selected_comparison_network_and_keeps_dendrogram_in_outputs(tmp_path, title, metadata):
     b = builder(tmp_path)
     browser = b.output / 'outputs/rich/browser.html'
     browser.parent.mkdir(parents=True)
@@ -31,15 +36,15 @@ def test_report_shows_selected_comparison_network_and_keeps_dendrogram_in_output
                      'metadata': {'network_view_role': 'module_browser'}})
     image = b.output / 'tree.png'
     Image.new('RGB', (32, 32), 'white').save(image)
-    b.panels.append({'id': 'tree', 'title': 'Observed network dendrogram', 'chapter': 6,
-                     'image': 'tree.png', 'contrast_id': 'B_vs_A', 'metadata': {}})
+    b.panels.append({'id': 'tree', 'title': title, 'chapter': 6,
+                     'image': 'tree.png', 'contrast_id': 'B_vs_A', 'metadata': metadata})
     m = b.write()
     page = (b.output / 'REPORT.html').read_text('utf8')
     assert 'All comparisons</option>' not in page
     assert '<iframe loading="lazy" data-src="outputs/rich/browser.html"' in page
     assert 'id="tree"' not in page
     assert m['panels'][0]['output_only'] is True
-    assert 'Observed network dendrogram' in (b.output / 'outputs/index.html').read_text('utf8')
+    assert title in (b.output / 'outputs/index.html').read_text('utf8')
     assert m['presentation']['default_comparison'] == 'B_vs_A'
     assert len(m['network_browsers']) == 1
     assert m['display_project']['contrasts'] == b.source['project']['contrasts']

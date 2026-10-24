@@ -4,7 +4,12 @@
 def prepare_presentation(builder):
     """Keep native outputs while exposing networks and significant motifs."""
     for panel in builder.panels:
-        if panel.get('chapter') == 6 and 'dendrogram' in panel.get('title', '').lower():
+        metadata = panel.get('metadata', {})
+        recorded_tree = (metadata.get('network_view_role') == 'dendrogram' or
+                         (metadata.get('flow_stage') == 'network.fit' and
+                          metadata.get('flow_artifact_key') == 'dendrogram'))
+        if (panel.get('chapter') == 6 and
+                (recorded_tree or 'dendrogram' in panel.get('title', '').lower())):
             panel['output_only'] = True
             panel.setdefault('metadata', {})['main_display_note'] = 'Dendrogram retained in outputs by request.'
         if (panel.get('chapter') == 7 and panel.get('contrast_id', 'all') == 'all'

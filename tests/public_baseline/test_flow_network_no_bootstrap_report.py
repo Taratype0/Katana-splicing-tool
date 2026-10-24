@@ -134,6 +134,14 @@ def disabled_report(tmp_path, monkeypatch):
 def test_disabled_report_complete_with_actual_kme_and_no_fake_confidence(disabled_report):
     root, plan, result, manifest, report = disabled_report
     assert network_report_gaps(root, plan, manifest, report) == []
+    trees = [row for row in manifest['panels']
+             if row.get('metadata', {}).get('network_view_role') == 'dendrogram']
+    assert len(trees) == 2 and all(row.get('output_only') is True for row in trees)
+    main = (report/'REPORT.html').read_text(encoding='utf-8')
+    outputs = (report/'outputs/index.html').read_text(encoding='utf-8')
+    for tree in trees:
+        assert f'id="{tree["id"]}"' not in main
+        assert '../'+tree['image'] in outputs
     assert all(not row["unavailable"] for row in result["extra_views"])
     assert not any(row.get("metadata", {}).get("component") == "network_bootstrap" for row in manifest["unavailable"])
     for path in (root / "presentation").glob("network-*-inputs.json"):
