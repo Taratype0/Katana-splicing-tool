@@ -25,6 +25,7 @@ def exact_wgcna_labels(
     reliability_power: float = 0.5,
     precomputed_correlation: np.ndarray | None = None,
     return_tom: bool = False,
+    timeout_seconds: int = 1800,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Run official WGCNA with the declared correlation and network signedness."""
 
@@ -58,6 +59,8 @@ def exact_wgcna_labels(
         raise ValueError("WGCNA requires a nonempty matrix with unique event IDs.")
     if reliability_power < 0:
         raise ValueError("reliability_power must be nonnegative.")
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be positive.")
     if return_tom and event_reliability is None:
         event_reliability = pd.Series(1.0, index=matrix.index)
 
@@ -101,6 +104,8 @@ rel <- setNames(relData[[1]], rownames(relData))
 rel <- rel[colnames(dat)]
 if (anyNA(rel) || any(!is.finite(rel))) stop("Reliability did not align to event IDs")
 usePrecomputed <- as.logical(args[10])
+weightPower <- as.numeric(args[9])
+needsCorMat <- weightPower > 0 || usePrecomputed || as.logical(args[12])
 if (usePrecomputed) {
   handle <- file(args[11], "rb")
   values <- readBin(handle, what="double", n=ncol(dat)^2, size=8, endian="little")
@@ -109,10 +114,9 @@ if (usePrecomputed) {
   corMat <- matrix(values, nrow=ncol(dat), ncol=ncol(dat))
   rownames(corMat) <- colnames(dat)
   colnames(corMat) <- colnames(dat)
-} else {
+} else if (needsCorMat) {
   corMat <- if (args[14] == 'bicor') bicor(dat, use='pairwise.complete.obs') else WGCNA::cor(dat, use='pairwise.complete.obs', method='pearson')
 }
-weightPower <- as.numeric(args[9])
 if (weightPower <= 0 && !usePrecomputed && !as.logical(args[12])) {
   net <- blockwiseModules(
     dat,
@@ -196,7 +200,7 @@ write.csv(
             ],
             capture_output=True,
             text=True,
-            timeout=1800,
+            timeout=timeout_seconds,
             check=False,
             env=_r_subprocess_env(executable),
         )

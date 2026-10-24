@@ -102,6 +102,7 @@ class NetworkConfig:
     dynamic_deep_splits: list[int] = field(default_factory=lambda: [1, 2, 3, 4])
     dynamic_pam_respects_dendro: bool = False
     wgcna_rscript: str | None = None
+    wgcna_timeout_seconds: int = 1800
     wgcna_merge_cut_height: float = 0.25
     knn_neighbors: int = 50
     edge_smoothing: str = "shared_neighbor"
@@ -535,6 +536,8 @@ class CoSpliceConfig:
             raise ValueError(
                 "network.tom_dense_max_events must be at least twice min_module_size"
             )
+        if self.network.wgcna_timeout_seconds <= 0:
+            raise ValueError("network.wgcna_timeout_seconds must be positive")
         if not self.network.tom_cut_heights or any(
             not 0.0 < value < 1.0 for value in self.network.tom_cut_heights
         ):

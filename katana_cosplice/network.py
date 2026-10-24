@@ -164,19 +164,19 @@ def _tom_hierarchy(
             reliability_power / 2.0,
         ).astype(np.float32, copy=False)
         adjacency *= reliability_factor
-    base_as_adjacency = adjacency.copy()
-    upper_rows, upper_cols = np.triu_indices(len(matrix), k=1)
-    reinforced, gene_prior_values = _reinforce_with_gene_prior(
-        adjacency[upper_rows, upper_cols],
-        matrix.index,
-        upper_rows,
-        upper_cols,
-        gene_prior,
-        gene_prior_weight,
-    )
-    if len(reinforced):
-        adjacency[upper_rows, upper_cols] = reinforced
-        adjacency[upper_cols, upper_rows] = reinforced
+    # Without a gene prior these arrays are identical and read-only below.
+    # Avoid materialising two O(n^2) index arrays just to apply a no-op prior.
+    base_as_adjacency = adjacency if gene_prior is None else adjacency.copy()
+    gene_prior_values = np.empty(0, dtype=float)
+    if gene_prior is not None:
+        upper_rows, upper_cols = np.triu_indices(len(matrix), k=1)
+        reinforced, gene_prior_values = _reinforce_with_gene_prior(
+            adjacency[upper_rows, upper_cols], matrix.index,
+            upper_rows, upper_cols, gene_prior, gene_prior_weight,
+        )
+        if len(reinforced):
+            adjacency[upper_rows, upper_cols] = reinforced
+            adjacency[upper_cols, upper_rows] = reinforced
     np.fill_diagonal(adjacency, 0.0)
     tom = topological_overlap_matrix(adjacency)
     distance = np.clip(1.0 - tom, 0.0, 1.0)
@@ -866,6 +866,35 @@ def _adaptive_membership_cutoffs(
     )
 
 
+def _bounded_edge_indices(adjacency: np.ndarray, threshold: float, max_edges: int,
+                          block_rows: int = 64) -> tuple[np.ndarray, np.ndarray]:
+    """Exact largest exported edges with bounded index storage.
+
+    Only the existing display/export cap applies. Network construction uses
+    every event and edge. Ties at the cap use ascending row/column identity.
+    """
+    if max_edges < 1 or block_rows < 1:
+        raise ValueError("max_edges and block_rows must be positive")
+    rows = np.empty(0, dtype=np.int64)
+    cols = np.empty(0, dtype=np.int64)
+    for start in range(0, len(adjacency), block_rows):
+        chunk_rows, chunk_cols = [rows], [cols]
+        for i in range(start, min(start + block_rows, len(adjacency))):
+            js = np.flatnonzero(adjacency[i, i+1:] >= threshold) + i + 1
+            chunk_rows.append(np.full(len(js), i, dtype=np.int64))
+            chunk_cols.append(js)
+        rows, cols = np.concatenate(chunk_rows), np.concatenate(chunk_cols)
+        if len(rows) > max_edges:
+            scores = adjacency[rows, cols]
+            cutoff = np.partition(scores, len(scores) - max_edges)[-max_edges]
+            above = np.flatnonzero(scores > cutoff)
+            tied = np.flatnonzero(scores == cutoff)
+            tied = tied[np.lexsort((cols[tied], rows[tied]))][:max_edges-len(above)]
+            keep = np.concatenate((above, tied))
+            rows, cols = rows[keep], cols[keep]
+    return rows, cols
+
+
 def _edge_table(
     correlation: np.ndarray,
     adjacency: np.ndarray,
@@ -876,14 +905,17 @@ def _edge_table(
     base_as_adjacency: np.ndarray | None = None,
     gene_prior_matrix: np.ndarray | None = None,
 ) -> pd.DataFrame:
-    upper = np.triu_indices_from(adjacency, k=1)
-    scores = adjacency[upper]
-    selected = np.flatnonzero(scores >= threshold)
-    if len(selected) > max_edges:
-        top = np.argpartition(scores[selected], -max_edges)[-max_edges:]
-        selected = selected[top]
-    rows = upper[0][selected]
-    cols = upper[1][selected]
+    if len(adjacency) > 3000:
+        rows, cols = _bounded_edge_indices(adjacency, threshold, max_edges)
+    else:
+        upper = np.triu_indices_from(adjacency, k=1)
+        scores = adjacency[upper]
+        selected = np.flatnonzero(scores >= threshold)
+        if len(selected) > max_edges:
+            top = np.argpartition(scores[selected], -max_edges)[-max_edges:]
+            selected = selected[top]
+        rows = upper[0][selected]
+        cols = upper[1][selected]
     result = pd.DataFrame(
         {
             "event_a": np.asarray(event_keys, dtype=object)[rows],
@@ -1198,6 +1230,7 @@ def discover_module_labels(
                 cor_type=settings.method,
                 signed=settings.signed,
                 rscript=settings.wgcna_rscript,
+                timeout_seconds=settings.wgcna_timeout_seconds,
                 event_reliability=event_reliability,
                 reliability_power=reliability_power,
             )
@@ -1402,6 +1435,7 @@ def fit_network(
                 cor_type=settings.method,
                 signed=settings.signed,
                 rscript=settings.wgcna_rscript,
+                timeout_seconds=settings.wgcna_timeout_seconds,
                 event_reliability=(
                     reliability.reindex(selected.index)
                     if reliability is not None
@@ -1431,9 +1465,10 @@ def fit_network(
         if raw_labels is not None:
             module_labels, _ = _module_labels(raw_labels, settings.min_module_size)
         connectivity = adjacency.sum(axis=1)
-        gene_prior_matrix = np.zeros_like(adjacency)
-        upper_rows, upper_cols = np.triu_indices(len(selected), k=1)
-        if len(gene_prior_values):
+        gene_prior_matrix = None
+        if gene_prior is not None:
+            gene_prior_matrix = np.zeros_like(adjacency)
+            upper_rows, upper_cols = np.triu_indices(len(selected), k=1)
             gene_prior_matrix[upper_rows, upper_cols] = gene_prior_values
             gene_prior_matrix[upper_cols, upper_rows] = gene_prior_values
         edges = _edge_table(
@@ -1463,11 +1498,8 @@ def fit_network(
             if settings.module_detection in {"wgcna_blockwise", "dynamic_tree_cut"}
             else _cut_height_sensitivity(linkage_matrix, settings)
         )
-        n_graph_edges = int(
-            np.count_nonzero(
-                np.triu(adjacency >= settings.edge_threshold, k=1)
-            )
-        )
+        n_graph_edges = sum(int(np.count_nonzero(adjacency[i, i+1:] >= settings.edge_threshold))
+                            for i in range(len(adjacency)-1))
     elif settings.engine == "exact_hierarchical":
         correlation = correlation_matrix(selected, settings.method)
         base = (1.0 + correlation) / 2.0 if settings.signed else np.abs(correlation)
@@ -1736,6 +1768,9 @@ def fit_network(
         else False
     )
     diagnostics["tom_dense_max_events"] = settings.tom_dense_max_events
+    diagnostics["edge_export_tie_rule"] = (
+        "ascending_event_matrix_index" if len(selected) > 3000 else "legacy_partition_order"
+    )
     diagnostics["knn_neighbors"] = settings.knn_neighbors if settings.engine == "sparse_knn" else np.nan
     diagnostics["edge_smoothing"] = settings.edge_smoothing if settings.engine == "sparse_knn" else "none"
     diagnostics["shared_neighbor_weight"] = settings.shared_neighbor_weight if settings.engine == "sparse_knn" else np.nan

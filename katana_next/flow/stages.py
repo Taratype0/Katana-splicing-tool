@@ -712,6 +712,18 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
         if source is not None and source.is_dir():
             shutil.copytree(source, engine / prefix)
     config.output_dir = engine
+    # Execution limits must propagate to fit AND bootstrap, including plans
+    # created from an existing project rather than an external config file.
+    for key, target, attribute in (
+        ("tom_dense_max_events", config.network, "tom_dense_max_events"),
+        ("consensus_dense_max_events", config.consensus, "dense_max_events"),
+        ("wgcna_timeout_seconds", config.network, "wgcna_timeout_seconds"),
+    ):
+        if key in parameters:
+            value = parameters[key]
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{key} must be an explicit positive integer")
+            setattr(target, attribute, value)
     if identity:
         config.network.minimum_network_samples = identity["minimum_network_samples"]
     if adapter == "network.fit":
