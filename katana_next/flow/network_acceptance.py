@@ -30,7 +30,7 @@ def _role(metadata):
 def network_report_gaps(collection, plan, report_manifest, report_dir):
     """Require each planned network's own completed figures and module browser."""
     import pandas as pd
-    from .presentation import _network_task_identity, validate_network_view_proof
+    from .presentation import _network_task_identity, validate_network_view_proof, network_bootstrap_enabled
 
     root, report_dir = Path(collection).resolve(), Path(report_dir).resolve()
     fits = [task for task in plan["tasks"] if task.get("adapter") == "network.fit"]
@@ -70,7 +70,7 @@ def network_report_gaps(collection, plan, report_manifest, report_dir):
                            if a.get("metadata", {}).get("completion_scope") == "flow_verified_network_complete"}
             proof_names.discard(None)
             if len(proof_names) != 1:
-                raise ValueError("This network lacks its unique completed four-stage presentation proof")
+                raise ValueError("This network lacks its unique completed presentation proof")
             proof_path = _inside(root, next(iter(proof_names)))
             proof = read_json(proof_path)
             chosen = [c for c in project["contrasts"] if c["contrast_id"] in identity["contrast_ids"]]
@@ -86,7 +86,17 @@ def network_report_gaps(collection, plan, report_manifest, report_dir):
             scores = pd.read_csv(_inside(root, score_files[0]["path"]), sep="\t", index_col=0)
             selected = pd.read_csv(precomputed["selected_tests"], sep="\t")
             tested = pd.read_csv(precomputed["tested"], sep="\t")
-            required = {"all_module_sizes", "all_module_event_types", "dendrogram", "bootstrap_confidence", "module_browser"}
+            required = {"all_module_sizes", "all_module_event_types", "dendrogram", "module_browser"}
+            if network_bootstrap_enabled(plan):
+                required.add("bootstrap_confidence")
+            else:
+                if any(_role(a.get("metadata", {})) == "bootstrap_confidence" for a in scoped):
+                    raise ValueError("A bootstrap-disabled network cannot claim a completed confidence panel")
+                if any(a.get("metadata", {}).get("bootstrap_status") != "disabled_by_request"
+                       or a.get("metadata", {}).get("hub_metric") != "abs_kME"
+                       for a in scoped if a.get("metadata", {}).get("completion_scope") == "flow_verified_network_complete"):
+                    raise ValueError("Network views do not disclose the actual disabled bootstrap and kME ranking policy")
+                required.add("all_module_continuous_metrics")
             if len(scores.columns):
                 required.add("all_module_activity")
             if len(selected):

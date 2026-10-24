@@ -220,6 +220,9 @@ def required_report_gaps(collection, plan, report_manifest, report_dir, *, colle
                             "motiftrace_sequence": "prioritize.motiftrace_consequences"}
     required = {"gene_body_coverage", "network", "network_bootstrap", "network_dendrogram",
                 "rbp_identity", "motif_enrichment", "motiftrace_sequence", "clip", "mapp_native"}
+    from .presentation import network_bootstrap_enabled
+    if not network_bootstrap_enabled(plan):
+        required.remove("network_bootstrap")
     interactions_required = bool(plan.get("configuration", {}).get("interactions") or
                                  len(plan.get("configuration", {}).get("design_factors", [])) >= 2)
     if interactions_required:

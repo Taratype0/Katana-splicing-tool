@@ -36,7 +36,7 @@ def test_two_comparisons_have_independent_fit_and_followups(study):
         assert fit["parameters"]["n_samples"] == 10
         assert fit["parameters"]["sample_size_status"] == "minimum_met"
         children = [t for t in plan["tasks"] if t.get("adapter", "").startswith("network.") and t["dependencies"] == [fit["id"]]]
-        assert {t["adapter"] for t in children} == {"network.bootstrap", "network.associate", "network.annotate"}
+        assert {t["adapter"] for t in children} == {"network.associate", "network.annotate"}
         assert all(t["parameters"] == fit["parameters"] for t in children)
     cohort = create_plan(study, {"contrast_ids": ids, "network": {"scope": "cohort"}})
     cohort_fit = next(t for t in cohort["tasks"] if t.get("adapter") == "network.fit")
@@ -95,7 +95,7 @@ def test_single_declared_mode_is_resolved_and_recorded_for_every_network_task(st
     cid = manifest.contrasts[0].contrast_id
     plan = create_plan(path, {"contrast_ids": [cid]})
     tasks = [t for t in plan["tasks"] if t.get("adapter", "").startswith("network.")]
-    assert len(tasks) == 4
+    assert len(tasks) == 3
     assert all(t["parameters"]["rmats_mode"] == mode for t in tasks)
     config, _, _ = prepare_project_network(path, tmp_path / f"{mode}-projection",
         {"network_scope": "contrast", "contrast_ids": [cid]}, file_sha256)

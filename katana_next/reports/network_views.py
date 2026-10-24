@@ -198,7 +198,7 @@ def _completed_network_scope(completion_path, input_paths, contrasts):
     return scope, job, precomputed, [completion_path, *verified]
 
 
-def _write_browser(out, members, matrix, scores, samples, enrichment, edges_path):
+def _write_browser(out, members, matrix, scores, samples, enrichment, edges_path, *, bootstrap_enabled=True):
     """A full-member, paged module browser with no event or module truncation."""
     import pandas as pd
     rows = members.astype(object).where(pd.notna(members), None).to_dict("records")
@@ -249,6 +249,9 @@ let ids=d.members.map((r,i)=>i).filter(i=>d.members[i].module===sel.value),point
 const originalDraw=draw;draw=function(){originalDraw();drawNetwork()};document.querySelector('#network').onclick=e=>{const c=e.currentTarget,r=c.getBoundingClientRect(),x=(e.clientX-r.left)*c.width/r.width,y=(e.clientY-r.top)*c.height/r.height;let best=null,dist=100;for(const p of c.points){let q=(p[0]-x)**2+(p[1]-y)**2;if(q<dist){best=p;dist=q}}document.querySelector('#node').textContent=best?JSON.stringify(d.members[best[2]]):'Click near a node to inspect its complete identity and metrics.'};drawNetwork();
 '''
     page = page.replace("</script></html>", graph + "</script></html>")
+    if not bootstrap_enabled:
+        page = page.replace("Bootstrap confidence is a separate phase.",
+            "Hub ranking uses absolute observed event–module membership correlation (|kME|), descending within each assigned module; ties use event identity. Signed kME is retained. Bootstrap was disabled by request; kME is not resampling confidence.")
     (out / "browser" / "ALL_MODULES.html").write_text(page.replace("PAYLOAD", data), encoding="utf-8")
 
 
@@ -301,6 +304,36 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
     members["gene_symbol"] = members.gene_symbol.fillna("").astype(str)
     members["event_type"] = members.get("event_type", pd.Series("unrecorded", index=members.index)).fillna("unrecorded")
     members = members.sort_values(["module", "event_key"], kind="stable").reset_index(drop=True)
+    bootstrap_policy = (precomputed or {}).get("provenance", {}).get("bootstrap", {"enabled": True})
+    bootstrap_enabled = bootstrap_policy["enabled"]
+    hub_metric = bootstrap_policy.get("hub_metric", "legacy_recorded_metrics")
+    if not bootstrap_enabled:
+        if hub_metric != "abs_kME":
+            raise ValueError("Bootstrap-disabled report requires the declared absolute kME Hub metric")
+        assigned = members.module.ne("grey")
+        hubs = pd.read_csv(precomputed["hub_events"], sep="\t")
+        fields = {"event_key", "module", "module_membership_kME", "hub_event_score", "hub_event_rank", "hub_metric"}
+        if not fields <= set(hubs) or not hubs.event_key.is_unique or set(hubs.event_key) != set(members.loc[assigned, "event_key"]):
+            raise ValueError("Actual kME Hub family must cover every assigned event exactly once")
+        if len(hubs) and (not hubs.hub_metric.eq("abs_kME").all() or
+                         hubs.set_index("event_key").module.to_dict() != members.loc[assigned].set_index("event_key").module.to_dict()):
+            raise ValueError("Observed kME Hub family refers to another module assignment")
+        membership = pd.to_numeric(hubs.module_membership_kME, errors="coerce")
+        if not membership.dropna().between(-1.000001, 1.000001).all() or np.isinf(membership).any():
+            raise ValueError("Assigned observed kME values are invalid")
+        score = pd.to_numeric(hubs.hub_event_score, errors="coerce")
+        if not np.allclose(score, membership.abs(), equal_nan=True):
+            raise ValueError("Actual Hub scores differ from absolute observed kME")
+        ordered = hubs.assign(_abs=membership.abs()).sort_values(["module", "_abs", "event_key"],
+                                                    ascending=[True, False, True], kind="stable", na_position="last")
+        expected_rank = pd.Series(ordered.groupby("module", sort=False).cumcount().to_numpy() + 1,
+                                  index=ordered.event_key).sort_index()
+        if not np.array_equal(hubs.set_index("event_key").hub_event_rank.sort_index().to_numpy(), expected_rank.to_numpy()):
+            raise ValueError("Actual Hub ranks differ from the recorded kME and event tie rule")
+        imported = hubs[["event_key", "module_membership_kME", "hub_event_score", "hub_event_rank"]].rename(
+            columns={"module_membership_kME": "kME", "hub_event_score": "abs_kME", "hub_event_rank": "hub_rank_abs_kME"})
+        members = members.merge(imported, on="event_key", how="left", validate="one_to_one")
+        members["hub_rank_abs_kME"] = members.hub_rank_abs_kME.astype("Int64")
     psi = psi.reindex(index=members.event_key, columns=scores.index)
     modules = list(members.module.drop_duplicates())
     if set(scores.columns) != set(modules) - {"grey"}:
@@ -341,6 +374,10 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
               "network_label_policy": {"hard_filter": False, "apply_threshold_labels": False},
               "portable_root": str(out), "new_computation": "report views only; native-completed associations and ORA imported unchanged" if precomputed else "report views; explicit frozen trait tests and module ORA only"}
     flow_complete = completion_scope == "flow_verified_network_complete"
+    common.update(bootstrap_enabled=bootstrap_enabled,
+                  bootstrap_status="completed" if flow_complete and bootstrap_enabled else
+                                   "disabled_by_request" if not bootstrap_enabled else "not_computed",
+                  hub_metric=hub_metric)
     if precomputed and not flow_complete:
         common["numerical_import_source_job"] = precomputed["provenance"]["source_job_id"]
         common["source_lifecycle"] = "FAILED/1:0 preserved; numerical outputs independently verified"
@@ -349,7 +386,9 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
         common.pop("native_status", None)
         common.pop("native_exit_code", None)
         common.update(execution_backend="verified portable Nextflow task receipts",
-                      source_discovery_scope="Completed observed network and independently completed module bootstrap",
+                      source_discovery_scope=("Completed observed network and independently completed module bootstrap"
+                                              if bootstrap_enabled else
+                                              "Completed observed network; bootstrap disabled by request; absolute observed kME Hub ranking"),
                       flow_execution_plan_id=precomputed["provenance"]["flow_plan_id"],
                       new_computation="Read-only report views; completed contrast and ORA families imported unchanged")
 
@@ -376,7 +415,10 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
             frame.to_csv(path, sep="\t", index=False, compression="gzip" if compress else None)
         asset(path, title, caption, display=False, kind="table")
 
-    table(members, "all_module_members", "All module members and continuous metrics", "Every observed event, including unassigned grey. network_connectivity is the global adjacency sum, not kWithin. Original continuous metrics are preserved.")
+    table(members, "all_module_members", "All module members and continuous metrics", "Every observed event, including unassigned grey. network_connectivity is the global adjacency sum, not kWithin. Original continuous metrics are preserved." + (" Hub ranking: descending |kME| within each assigned module, ties by event identity. Signed kME is retained; this is not bootstrap confidence." if not bootstrap_enabled else ""))
+    if not bootstrap_enabled:
+        table(hubs, "module_hub_events", "Observed kME Hub events", "Complete already computed signed Pearson event–module correlations, original P/FDR and absolute kME ranks; no resampling confidence is inferred.", source=precomputed["hub_events"])
+        table(None, "module_hub_genes", "Observed kME Hub genes", "Complete already computed gene ranks: maximum |kME| among a gene's events within each module.", source=precomputed["hub_genes"])
     table(psi.reset_index(names="event_key"), "all_event_psi", "Complete module-member PSI", "All events and samples in original zero-to-one units; no row scaling.", compress=True)
     table(scores.reset_index(names="sample_id"), "module_activity", "Frozen observed module activity", "Unchanged source module-PC activity, with arbitrary PC orientation.")
     table(summary, "module_summary", "All module sizes and gene composition", "All modules and grey; unique genes counted once within a module.")
@@ -444,7 +486,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
         ax.tick_params(axis="x", rotation=70, labelsize=7)
         fig.colorbar(image, ax=ax, label="Frozen module-PC score")
         save(fig, "all_module_activity", "Module activity in all biological samples", "All modules and samples, ordered by declared condition for display. PC signs are arbitrary; positive activity is not increased exon inclusion.", data=plot.rename_axis("module").reset_index(), unit="module_sample_score", full_table="module_activity.tsv")
-    metrics = [key for key in ("network_connectivity", "module_membership", "module_membership_margin", "stability_score") if key in members]
+    metrics = [key for key in ("network_connectivity", "module_membership", "abs_kME", "module_membership_margin", "stability_score") if key in members]
     if metrics:
         fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), max(4, len(modules) * .22)), layout="constrained", squeeze=False)
         for ax, key in zip(axes[0], metrics):
@@ -486,15 +528,16 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
             ax.set(xticks=range(len(values)), xticklabels=values.index, ylabel="Frozen module-PC activity")
             ax.tick_params(axis="x", rotation=65, labelsize=7)
             save(fig, "module_activity_" + _slug(module), f"{module}: complete sample activity", "All biological samples; module-PC orientation remains unchanged from discovery.", data=values.rename_axis("sample_id").rename("activity").reset_index(), unit="module_sample_score", full_table="module_activity.tsv", module=module, display=False)
-        if "network_connectivity" in subset:
-            rank = subset.sort_values(["network_connectivity", "event_key"], ascending=[False, True], kind="stable").head(20)
+        rank_metric = "abs_kME" if not bootstrap_enabled else "network_connectivity"
+        if rank_metric in subset and module != "grey":
+            rank = subset.sort_values([rank_metric, "event_key"], ascending=[False, True], kind="stable").head(20)
             fig, ax = plt.subplots(figsize=(10, 7), layout="constrained")
             labels = [f"{r.gene_symbol or r.event_key} | {r.event_type}"[:65] for r in rank.itertuples()]
-            ax.barh(range(len(rank)), rank.network_connectivity, color=BLUE)
-            ax.set(yticks=range(len(rank)), yticklabels=labels, xlabel="Global adjacency connectivity (not intramodule kWithin)")
+            ax.barh(range(len(rank)), rank[rank_metric], color=BLUE)
+            ax.set(yticks=range(len(rank)), yticklabels=labels, xlabel="Absolute observed kME" if not bootstrap_enabled else "Global adjacency connectivity (not intramodule kWithin)")
             ax.invert_yaxis()
-            save(fig, "module_connectivity_" + _slug(module), f"{module}: connectivity-ranked members", "Display: first 20 by unchanged global connectivity, ties resolved by event key for display. Every member, original metric and rank remains in the complete table and paged browser; this is not a threshold-defined Hub claim.", data=rank, unit="event", full_table="all_module_members.tsv", module=module, display=False)
-    _write_browser(out, members, psi, scores, samples, tested, edges_path)
+            save(fig, "module_connectivity_" + _slug(module), f"{module}: {'|kME|' if not bootstrap_enabled else 'connectivity'}-ranked members", "Display: first 20 by " + ("absolute observed kME" if not bootstrap_enabled else "unchanged global connectivity") + ", ties resolved by event key for display. Every member, signed original metric and rank remains in the complete table and paged browser; this is not a threshold-defined Hub claim or a resampling confidence score.", data=rank, unit="event", full_table="all_module_members.tsv", module=module, display=False)
+    _write_browser(out, members, psi, scores, samples, tested, edges_path, bootstrap_enabled=bootstrap_enabled)
     asset(out / "browser" / "ALL_MODULES.html", "All network modules: members, PSI and activity", "All modules and grey, all members, searchable and paginated full PSI, continuous metrics and complete table links. No event is removed for display.", extra={"report_asset_kind": "html", "network_view_role": "module_browser"})
     for row in audit:
         current = _fingerprint(row["path"])
@@ -509,7 +552,9 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
                "native_baseline_job": job if not precomputed else None,
                "native_postprocessing_job": job if precomputed else None,
                "original_source_native_job": precomputed["provenance"].get("source_job_id") if precomputed else job,
-               "bootstrap_accepted": flow_complete, "network_discovery_runs": 0, "upstream_jobs": 0,
+               "bootstrap_accepted": flow_complete and bootstrap_enabled,
+               "bootstrap_enabled": bootstrap_enabled, "bootstrap_status": common["bootstrap_status"],
+               "hub_metric": hub_metric, "network_discovery_runs": 0, "upstream_jobs": 0,
                "sources_preserved": True, "figures": sum(a["path"].endswith(".png") for a in artifacts),
                "completion_scope": completion_scope,
                "new_trait_fits": 0 if precomputed else len(contrasts), "new_module_ora": not bool(precomputed),

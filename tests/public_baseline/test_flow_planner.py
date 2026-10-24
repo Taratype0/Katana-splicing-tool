@@ -46,7 +46,8 @@ def test_complete_report_does_not_silently_disable_missing_computations(study):
     assert "mapp" in descriptions
     assert "genebody" in descriptions
     assert next(t for t in plan["tasks"] if t["id"] == "reference-bed")["adapter"] == "reference.bed12"
-    assert {t.get("adapter") for t in plan["tasks"]} >= {"network.fit", "network.bootstrap", "qc.genebody", "mapp.maei"}
+    assert {t.get("adapter") for t in plan["tasks"]} >= {"network.fit", "network.associate", "network.annotate", "qc.genebody", "mapp.maei"}
+    assert not any(t.get("adapter") == "network.bootstrap" for t in plan["tasks"])
 
 
 def test_changed_plan_and_cycles_are_rejected(study):

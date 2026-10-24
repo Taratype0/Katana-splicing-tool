@@ -295,6 +295,9 @@ class ModuleInterpretationConfig:
     isoform_min_abs_delta_if: float = 0.10
     min_module_genes: int = 3
     fdr_cutoff: float = 0.05
+    # Existing standalone/frozen configurations retain their original ranking.
+    # New flow plans explicitly select abs_kME.
+    hub_metric: str = "legacy_composite"
 
 
 @dataclass
@@ -737,6 +740,8 @@ class CoSpliceConfig:
             raise ValueError("bayesian_preservation.tau_scale must be positive")
         if self.bayesian_preservation.grid_size < 51:
             raise ValueError("bayesian_preservation.grid_size must be at least 51")
+        if self.interpretation.hub_metric not in {"abs_kME", "legacy_composite"}:
+            raise ValueError("interpretation.hub_metric must be abs_kME or legacy_composite")
         if self.validation.bootstrap_iterations < 1:
             raise ValueError("validation.bootstrap_iterations must be positive")
         if not 0.0 <= self.validation.moderate_jaccard <= self.validation.robust_jaccard <= 1.0:

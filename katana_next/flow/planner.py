@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from copy import deepcopy
 import re
 import shutil
 
@@ -26,6 +27,7 @@ def create_plan(project, config):
     from katana_next.workflows.registry import WorkflowRegistry
     project_path, manifest = ManifestStore().load(project)
     settings, base = _configuration(config)
+    settings = deepcopy(settings)
     if settings.get("schema", "katana.flow.config/v1") != "katana.flow.config/v1":
         raise ValueError("Unsupported flow configuration schema")
     declared = {c.contrast_id for c in manifest.contrasts}
@@ -117,6 +119,20 @@ def create_plan(project, config):
         add("coverage-summary", "quality.read_coverage_bias", coverage_tasks)
 
     network = settings.get("network", {})
+    if not isinstance(network, dict):
+        raise ValueError("network must be a configuration object")
+    bootstrap = network.get("bootstrap", {})
+    if not isinstance(bootstrap, dict) or set(bootstrap) - {"enabled"}:
+        raise ValueError("network.bootstrap must contain only the explicit enabled boolean")
+    bootstrap_enabled = bootstrap.get("enabled", False)
+    if not isinstance(bootstrap_enabled, bool):
+        raise ValueError("network.bootstrap.enabled must be true or false")
+    network["bootstrap"] = {"enabled": bootstrap_enabled}
+    if not isinstance(network.get("parameters", {}), dict):
+        raise ValueError("network.parameters must be a configuration object")
+    network["parameters"] = dict(network.get("parameters", {}))
+    network["parameters"].setdefault("hub_metric", "abs_kME")
+    settings["network"] = network
     from .network_inputs import network_scope_identity, resolve_network_rmats_mode
     network_scope = network.get("scope", "contrast")
     if network_scope not in {"contrast", "cohort"}:
@@ -128,6 +144,18 @@ def create_plan(project, config):
         raise ValueError("Per-comparison network.configs cannot be used for a cohort discovery")
     for comparison_ids in ([[cid] for cid in contrasts] if network_scope == "contrast" else [contrasts]):
         params = dict(network.get("parameters", {}))
+        if "bootstrap_enabled" in params and (not isinstance(params["bootstrap_enabled"], bool)
+                                               or params["bootstrap_enabled"] != bootstrap_enabled):
+            raise ValueError("network.bootstrap.enabled conflicts with network.parameters.bootstrap_enabled")
+        params["bootstrap_enabled"] = bootstrap_enabled
+        params.setdefault("hub_metric", "abs_kME")
+        if params["hub_metric"] not in {"abs_kME", "legacy_composite"}:
+            raise ValueError("network.parameters.hub_metric must be abs_kME or legacy_composite")
+        if bootstrap_enabled:
+            iterations = params.get("bootstrap_iterations", 50)
+            if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 2:
+                raise ValueError("Enabled network bootstrap_iterations must be an integer of at least 2")
+            params["bootstrap_iterations"] = iterations
         if "network_scope" in params and params["network_scope"] != network_scope:
             raise ValueError("network.scope conflicts with network.parameters.network_scope")
         params.update(network_scope=network_scope, contrast_ids=comparison_ids)
@@ -144,7 +172,7 @@ def create_plan(project, config):
         scope = {**identity, "unit": "measurable_contrast_PSI" if network_scope == "contrast" else "measurable_cohort_PSI"}
         add(fit_id, "flow.network.fit", ["audit"], params, scope,
             adapter="network.fit", inputs=inputs)
-        for stage in ("bootstrap", "associate", "annotate"):
+        for stage in (("bootstrap", "associate", "annotate") if bootstrap_enabled else ("associate", "annotate")):
             add("network-" + stage + suffix, "flow.network." + stage, [fit_id],
                 params, {**identity, "unit": "module"}, adapter="network." + stage, inputs=inputs)
 

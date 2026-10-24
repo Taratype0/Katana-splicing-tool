@@ -56,6 +56,12 @@ The existing WGCNA/TOM route identifies co-splicing modules and produces members
 
 The integrated workflow fits a separate network for each selected comparison, using only that comparison's biological samples. Modules, activities, associations, network figures and enrichment retain the comparison identity. The configured sample minimum and the actual sample count are recorded alongside bootstrap and continuous membership metrics; meeting the sample minimum does not establish network stability. Existing cohort networks can still be imported with their original scope, without being relabeled as independent comparison networks.
 
+New integrated runs rank Hub events by absolute module eigengene membership
+`|kME|`, retaining signed kME and complete rankings. Bootstrap is off by default;
+it is an optional stability analysis enabled with `network.bootstrap.enabled`.
+Reports record the choice and do not describe ordinary kME as bootstrap
+confidence. See [network execution and ranking](docs/NETWORK_EXECUTION.md).
+
 ### One-click reports
 
 The approved report follows seven sections: design and QC; AS landscape; DEG/DAS/DTU/DEXSeq; cross-comparison results; GO/KEGG and pathways; co-splicing networks; and RBP/MotifTrace. It includes per-comparison Top 10 details, full-result links and a report-wide ordinary DAS / RS-DAS choice, with RS-DAS as the default. See the [approved report specification](docs/REPORT_SPECIFICATION.md).

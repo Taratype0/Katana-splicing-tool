@@ -2215,7 +2215,9 @@ class CoSplicePipeline:
                 "fingerprint": stage_fp, **settings,
                 "generated_plot_files": [str(path) for path in plots],
                 "method_basis": {
-                    "hub": "WGCNA-style module eigengene membership (kME) plus consensus confidence/connectivity",
+                    "hub": ("absolute eigengene membership |kME|; signed kME retained; gene score=max |kME| across its module events"
+                            if self.config.interpretation.hub_metric == "abs_kME" else
+                            "WGCNA-style module eigengene membership (kME) plus consensus confidence/connectivity"),
                     "motif": "rMAPS2-inspired positional motif-hit enrichment when a validated hit table is configured",
                     "enrichment": "one-sided hypergeometric test with Benjamini-Hochberg FDR",
                 },

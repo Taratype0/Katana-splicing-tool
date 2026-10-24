@@ -419,7 +419,10 @@ def collect_rich_results(
                 caption += (" Sequence-consequence substep completed; regional motif enrichment and "
                             "whole-comparison inference are not established by this asset.")
             if metadata.get("completion_scope") == "observed_network_baseline_only":
-                caption += (" Observed network baseline completed; bootstrap module confidence "
+                caption += (" Observed network completed; bootstrap was disabled by request. "
+                            "Observed kME is a membership measure, not resampling confidence."
+                            if metadata.get("bootstrap_enabled") is False else
+                            " Observed network baseline completed; bootstrap module confidence "
                             "requires its own completed phase and is not established by this asset.")
             stat = path.stat()
             result_meta = {**metadata, "adapter_version": ADAPTER_VERSION,
@@ -512,7 +515,8 @@ def collect_rich_results(
                                             if family == "mapp_parallel" else {}),
                                          "reason": "no_completed_project_matched_component"}})
     baseline_only = any(row["status"] == "available" and
-                        row["metadata"].get("completion_scope") == "observed_network_baseline_only"
+                        row["metadata"].get("completion_scope") == "observed_network_baseline_only" and
+                        row["metadata"].get("bootstrap_enabled") is not False
                         for row in results)
     bootstrap_complete = any(row["status"] == "available" and
                              row["metadata"].get("completion_scope") in {"bootstrap_confidence", "full_network_with_bootstrap"}

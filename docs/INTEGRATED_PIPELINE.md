@@ -167,8 +167,13 @@ already completed task families are rejected by this special recovery route.
   retained records. The report labels this as **Supplied BAM records**;
   it cannot recover discarded reads or the original trimming/alignment QC.
   FASTQ inputs retain separate raw, trimmed and alignment measurements.
-- By default each selected comparison gets its own network discovery, module
-  bootstrap, associations and annotation tasks, with explicit dependencies.
+- By default each selected comparison gets its own network discovery,
+  associations and annotation tasks, with explicit dependencies. Hub events
+  are ranked by `|kME|`, retaining signed membership and complete event/gene
+  tables. Bootstrap is disabled by default; explicitly setting
+  `network.bootstrap.enabled: true` adds the real resampling stage. Disabled
+  resampling is recorded as a user-selected omission, not a failed calculation
+  or a completed confidence analysis.
   Its input includes only the comparison's biological samples. The network
   tables, figures and enrichment keep this identity throughout collection and
   reporting. Numerical linkage and leaf IDs are saved before

@@ -18,6 +18,26 @@ NETWORK_SCOPE = "flow_verified_network_complete"
 MOTIF_PROOF_SCHEMA = "katana.flow.motif_view_inputs/v1"
 
 
+def network_bootstrap_enabled(plan):
+    """Only a sealed, explicit false can waive historical bootstrap products."""
+    value = plan.get("configuration", {}).get("network", {}).get("bootstrap", {}).get("enabled", True)
+    if not isinstance(value, bool):
+        raise ValueError("The sealed network bootstrap policy must be boolean")
+    return value
+
+
+def _network_required_stages(plan):
+    return {"network.fit", "network.associate", "network.annotate"} | (
+        {"network.bootstrap"} if network_bootstrap_enabled(plan) else set())
+
+
+def _network_presentation_policy(plan):
+    enabled = network_bootstrap_enabled(plan)
+    return {"enabled": enabled, "status": "completed" if enabled else "disabled_by_request",
+            "hub_metric": plan.get("configuration", {}).get("network", {}).get("parameters", {}).get(
+                "hub_metric", "abs_kME" if not enabled else "legacy_recorded_metrics")}
+
+
 def _safe(value):
     return re.sub(r"[^A-Za-z0-9._-]", "_", str(value))[:140] or "result"
 
@@ -86,7 +106,7 @@ def _network_task_identity(task, project):
 
 
 def _network_lifecycles(plan, receipts):
-    """Group all four completed stages by their actual fit dependency."""
+    """Group the explicitly selected stages by their actual fit dependency."""
     network = [task for task in plan["tasks"] if task.get("adapter", "").startswith("network.")]
     fits = {task["id"]: {"network.fit": (task, receipts[task["id"]][1])}
             for task in network if task["adapter"] == "network.fit"}
@@ -97,9 +117,11 @@ def _network_lifecycles(plan, receipts):
         if len(parents) != 1 or task["adapter"] in fits[parents[0]]:
             raise ValueError("Each network followup needs one unique fitted lifecycle")
         fits[parents[0]][task["adapter"]] = task, receipts[task["id"]][1]
-    required = {"network.fit", "network.bootstrap", "network.associate", "network.annotate"}
+    required = _network_required_stages(plan)
     if any(set(stages) != required for stages in fits.values()):
-        raise ValueError("The fixed network report needs all four completed network stages for every fit")
+        message = ("all four completed network stages for every fit" if network_bootstrap_enabled(plan)
+                   else "every selected completed network stage for every fit")
+        raise ValueError("The fixed network report needs " + message)
     return fits
 
 
@@ -113,7 +135,10 @@ def validate_network_view_proof(completion_path, input_paths, contrasts):
     plan = load_plan(root / "plan.json")
     if proof.get("plan_id") != plan["plan_id"] or proof.get("contrasts") != contrasts:
         raise ValueError("Network presentation has another plan or comparison population")
-    required = {"network.fit", "network.bootstrap", "network.associate", "network.annotate"}
+    required = _network_required_stages(plan)
+    policy = _network_presentation_policy(plan)
+    if ("bootstrap" in proof and proof["bootstrap"] != policy) or (not policy["enabled"] and "bootstrap" not in proof):
+        raise ValueError("Network presentation bootstrap policy differs from the sealed plan")
     task_values, records, paths = {}, {}, [path, root / "plan.json"]
     for record in proof["task_receipts"]:
         task, value, location = _task_proof(root, record, plan)
@@ -124,7 +149,7 @@ def validate_network_view_proof(completion_path, input_paths, contrasts):
         task_values[task["id"]] = value
         paths.append(location)
     if set(records) != required:
-        raise ValueError("Network fit, bootstrap, association and annotation must all actually complete")
+        raise ValueError("Every selected network fit, association, annotation and optional bootstrap must actually complete")
     fit_task, fit = records["network.fit"]
     identity = _network_task_identity(fit_task, read_json(root / "project.json"))
     if identity != proof.get("network_identity"):
@@ -164,11 +189,40 @@ def validate_network_view_proof(completion_path, input_paths, contrasts):
     precomputed = {name: _inside(root, relative) for name, relative in proof["precomputed"].items()}
     if not set(precomputed.values()) <= set(verified):
         raise ValueError("Complete association and enrichment families must be independently verified")
-    for name in ("linkage", "bootstrap_members", "bootstrap_modules"):
+    hub_keys = {"hub_events", "hub_genes", "hub_parameters"}
+    if not policy["enabled"] and not hub_keys <= set(precomputed):
+        raise ValueError("Absolute kME report ranking needs its actual completed Hub numerical family")
+    if hub_keys <= set(precomputed):
+        hub = read_json(precomputed["hub_parameters"])
+        if (hub.get("schema") != "katana.network.hub_membership/v1" or
+            hub.get("hub_metric") != policy["hub_metric"] or hub.get("network_refitted") is not False or
+            hub.get("signed_kME_retained") is not True):
+            raise ValueError("Completed Hub metadata differs from the declared observed kME policy")
+        required_sources = {"assignments", "psi", "activity", "annotation"}
+        if set(hub.get("sources", {})) != required_sources:
+            raise ValueError("Observed Hub metrics lack their complete fitted source identities")
+        source_names = {"assignments": f"04_network/{name}/event_module_assignments.tsv",
+                        "psi": f"04_network/{name}/selected_event_matrix.tsv",
+                        "activity": f"04_network/{name}/module_program_scores.tsv",
+                        "annotation": "02_matrix/event_metadata.tsv"}
+        annotation_engine = records["network.annotate"][1].get("execution_evidence", {}).get("engine_root")
+        for key, source in hub["sources"].items():
+            original = str((Path(engine) / source_names[key]).resolve())
+            allowed_paths = {original}
+            if annotation_engine:
+                allowed_paths.add(str((Path(annotation_engine) / source_names[key]).resolve()))
+            if (str(Path(source["path"]).resolve()) not in allowed_paths or
+                not any(member["source_path"] == original and member["sha256"] == source["sha256"]
+                        and member["task_id"] == fit_task["id"] for member in proof["files"])):
+                raise ValueError("Observed Hub metrics belong to another fitted numerical population")
+    numerical = ("linkage", "bootstrap_members", "bootstrap_modules") if policy["enabled"] else ("linkage",)
+    if not policy["enabled"] and {"bootstrap_members", "bootstrap_modules"} & set(proof):
+        raise ValueError("Disabled bootstrap cannot be represented by completed bootstrap products")
+    for name in numerical:
         if _inside(root, proof[name]) not in verified:
             raise ValueError("Network tree and module bootstrap need their actual saved numerical products")
     precomputed["provenance"] = {"source_task_id": fit_task["id"], "flow_plan_id": plan["plan_id"],
-                                 "network_identity": identity}
+                                 "network_identity": identity, "bootstrap": policy}
     return NETWORK_SCOPE, None, precomputed, [*paths, *verified]
 
 
@@ -256,22 +310,27 @@ def build_presentation_assets(root, plan, receipts, transport):
             for key, path in value["execution_evidence"].get("precomputed_views", {}).items():
                 members.append(proof_member(task["id"], path))
                 precomputed[key] = translated_path(path).relative_to(root).as_posix()
-        if set(precomputed) != {"full_tests", "selected_tests", "trait_audit", "tested", "background", "input_genes"}:
+        base_keys = {"full_tests", "selected_tests", "trait_audit", "tested", "background", "input_genes"}
+        hub_keys = {"hub_events", "hub_genes", "hub_parameters"}
+        if (set(precomputed) not in (base_keys, base_keys | hub_keys) or
+                (not network_bootstrap_enabled(plan) and not hub_keys <= set(precomputed))):
             raise ValueError("Network views require the complete already computed contrast and ORA families")
         linkage = engine / f"04_network/{name}/event_linkage.npy"
         members.append(proof_member(fit_task["id"], linkage))
-        bootstrap_task, bootstrap = network["network.bootstrap"]
-        boot_root = Path(bootstrap["execution_evidence"]["engine_root"]) / "04c_consensus_modules"
-        boot_members = boot_root / "consensus_event_module_assignments.tsv"
-        boot_modules = boot_root / "consensus_module_summary.tsv"
-        members += [proof_member(bootstrap_task["id"], path) for path in (boot_members, boot_modules)]
         proof = {"schema": NETWORK_PROOF_SCHEMA, "status": "completed", "plan_id": plan["plan_id"],
                  "contrasts": scoped_contrasts, "source_project_manifest_sha256": plan["project_manifest_sha256"],
                  "task_receipts": [task_record(task["id"]) for task, _value in network.values()],
                  "files": members, "precomputed": precomputed,
-                 "linkage": translated_path(linkage).relative_to(root).as_posix(),
-                 "bootstrap_members": translated_path(boot_members).relative_to(root).as_posix(),
-                 "bootstrap_modules": translated_path(boot_modules).relative_to(root).as_posix()}
+                 "bootstrap": _network_presentation_policy(plan),
+                 "linkage": translated_path(linkage).relative_to(root).as_posix()}
+        if network_bootstrap_enabled(plan):
+            bootstrap_task, bootstrap = network["network.bootstrap"]
+            boot_root = Path(bootstrap["execution_evidence"]["engine_root"]) / "04c_consensus_modules"
+            boot_members = boot_root / "consensus_event_module_assignments.tsv"
+            boot_modules = boot_root / "consensus_module_summary.tsv"
+            members += [proof_member(bootstrap_task["id"], path) for path in (boot_members, boot_modules)]
+            proof.update(bootstrap_members=translated_path(boot_members).relative_to(root).as_posix(),
+                         bootstrap_modules=translated_path(boot_modules).relative_to(root).as_posix())
         if identity:
             marker = engine / "network_scope.json"
             members.append(proof_member(fit_id, marker))
@@ -294,7 +353,9 @@ def build_presentation_assets(root, plan, receipts, transport):
                 artifact["name"] += " | " + display_contrast
                 artifact["metadata"]["caption"] += (f" Independent {display_contrast} network; "
                     f"{identity['n_samples']} declared biological samples. "
-                    "Actual bootstrap diagnostics and continuous membership measures are retained.")
+                    + ("Actual bootstrap diagnostics and continuous membership measures are retained."
+                       if network_bootstrap_enabled(plan) else
+                       "Hub ranking uses absolute observed kME; bootstrap was disabled by request and no resampling confidence is inferred."))
                 for link in artifact["metadata"].get("data_links", []):
                     link["contrast_id"] = display_contrast
         for entry in rendered["unavailable"]:

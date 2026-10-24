@@ -112,6 +112,119 @@ def _load_gmt(path: Path | None) -> tuple[dict[str, set[str]], dict[str, object]
     return sets, {"source_type": "gene_sets_gmt", "path": str(path), "status": "loaded", "rows": len(sets)}
 
 
+def _hub_tables_from_events(events, psi, scores, hub_metric):
+    if hub_metric not in {"abs_kME", "legacy_composite"}:
+        raise ValueError("hub_metric must be abs_kME or legacy_composite")
+    hub_rows: list[dict[str, object]] = []
+    for _, event in events.iterrows():
+        module = str(event["module"])
+        if module not in scores.columns or event["event_key"] not in psi.index:
+            correlation, pvalue, n_samples = np.nan, np.nan, 0
+        else:
+            correlation, pvalue, n_samples = _safe_pearson(
+                psi.loc[event["event_key"]].rename_axis("sample_id"),
+                pd.to_numeric(scores[module], errors="coerce").rename_axis("sample_id"),
+            )
+        confidence = (event.get("consensus_membership_confidence", np.nan) if hub_metric == "abs_kME" else
+                      event.get("consensus_membership_confidence", event.get("module_membership", np.nan)))
+        connectivity = event.get("network_connectivity", np.nan)
+        hub_rows.append(
+            {
+                "event_key": event["event_key"],
+                "module": module,
+                "gene_id": normalize_gene_id(event.get("gene_id")),
+                "gene_symbol": str(event.get("gene_symbol", "") or ""),
+                "event_type": event.get("event_type", ""),
+                "module_membership_kME": correlation,
+                "module_membership_pvalue": pvalue,
+                "n_samples": n_samples,
+                "consensus_confidence": confidence,
+                "network_connectivity": connectivity,
+            }
+        )
+    hub_events = pd.DataFrame(hub_rows)
+    if not hub_events.empty:
+        hub_events["module_membership_FDR"] = bh_adjust(hub_events["module_membership_pvalue"])
+        for column in ("module_membership_kME", "consensus_confidence", "network_connectivity"):
+            numeric = pd.to_numeric(hub_events[column], errors="coerce")
+            if column == "module_membership_kME":
+                numeric = numeric.abs()
+            hub_events[f"{column}_percentile"] = numeric.groupby(hub_events["module"]).rank(pct=True)
+        score_columns = [
+            "module_membership_kME_percentile",
+            "consensus_confidence_percentile",
+            "network_connectivity_percentile",
+        ]
+        if hub_metric == "abs_kME":
+            hub_events["hub_event_score"] = pd.to_numeric(hub_events["module_membership_kME"], errors="coerce").abs()
+            hub_events = hub_events.sort_values(
+                ["module", "hub_event_score", "event_key"], ascending=[True, False, True], kind="stable", na_position="last")
+            hub_events["hub_event_rank"] = hub_events.groupby("module").cumcount() + 1
+        else:
+            hub_events["hub_event_score"] = hub_events[score_columns].mean(axis=1, skipna=True)
+            hub_events["hub_event_rank"] = hub_events.groupby("module")["hub_event_score"].rank(method="min", ascending=False)
+        hub_events["hub_metric"] = hub_metric
+
+    genes = hub_events.copy()
+    genes["gene_key"] = np.where(
+        genes["gene_id"].astype(str).ne(""),
+        "id:" + genes["gene_id"].astype(str),
+        "sym:" + genes["gene_symbol"].astype(str).str.casefold(),
+    )
+    hub_genes = genes.groupby(["module", "gene_key"], as_index=False).agg(
+        gene_id=("gene_id", "first"),
+        gene_symbol=("gene_symbol", "first"),
+        n_module_events=("event_key", "nunique"),
+        event_types=("event_type", lambda value: ";".join(sorted(set(map(str, value))))),
+        max_abs_kME=("module_membership_kME", lambda value: pd.to_numeric(value, errors="coerce").abs().max()),
+        mean_hub_event_score=("hub_event_score", "mean"),
+        max_hub_event_score=("hub_event_score", "max"),
+    )
+    if hub_metric == "abs_kME":
+        hub_genes["hub_gene_score"] = hub_genes["max_abs_kME"]
+        hub_genes = hub_genes.sort_values(
+            ["module", "max_abs_kME", "gene_key"], ascending=[True, False, True], kind="stable", na_position="last")
+        hub_genes["hub_gene_rank"] = hub_genes.groupby("module").cumcount() + 1
+    else:
+        hub_genes["hub_gene_score"] = (
+            hub_genes.groupby("module")["max_abs_kME"].rank(pct=True)
+            + hub_genes.groupby("module")["max_hub_event_score"].rank(pct=True)
+            + hub_genes.groupby("module")["n_module_events"].rank(pct=True)
+        ) / 3.0
+        hub_genes["hub_gene_rank"] = hub_genes.groupby("module")["hub_gene_score"].rank(method="min", ascending=False)
+    hub_genes["hub_metric"] = hub_metric
+
+    return hub_events, hub_genes
+
+
+def module_hub_tables(assignments, psi, program_scores, event_metadata, *, hub_metric="abs_kME"):
+    """Calculate signed eigengene membership and hub ranks from cached products.
+
+    No network discovery, resampling or regulator/isoform analysis is performed.
+    Gene ranks use the maximum absolute membership among that gene's events.
+    """
+    module_column = _module_column(assignments)
+    membership = assignments[["event_key", module_column, *[
+        column for column in ("consensus_membership_confidence", "module_membership", "network_connectivity")
+        if column in assignments
+    ]]].rename(columns={module_column: "module"})
+    membership = membership.loc[membership["module"].astype(str).ne("grey")].drop_duplicates("event_key")
+    events = membership.merge(event_metadata, on="event_key", how="left", validate="one_to_one")
+    scores = program_scores.copy()
+    if not scores.index.isin(psi.columns).all() and "sample_id" in scores:
+        scores = scores.set_index("sample_id")
+    scores.index = scores.index.astype(str)
+    if events.empty:
+        if hub_metric not in {"abs_kME", "legacy_composite"}:
+            raise ValueError("hub_metric must be abs_kME or legacy_composite")
+        return (pd.DataFrame(columns=["event_key", "module", "gene_id", "gene_symbol", "event_type",
+                    "module_membership_kME", "module_membership_pvalue", "module_membership_FDR", "n_samples",
+                    "consensus_confidence", "network_connectivity", "hub_event_score", "hub_event_rank", "hub_metric"]),
+                pd.DataFrame(columns=["module", "gene_key", "gene_id", "gene_symbol", "n_module_events", "event_types",
+                    "max_abs_kME", "mean_hub_event_score", "max_hub_event_score", "hub_gene_score", "hub_gene_rank", "hub_metric"]))
+    return _hub_tables_from_events(events, psi, scores, hub_metric)
+
+
 def interpret_modules(
     assignments: pd.DataFrame,
     psi: pd.DataFrame,
@@ -143,70 +256,8 @@ def interpret_modules(
         scores = scores.set_index("sample_id")
     scores.index = scores.index.astype(str)
 
-    hub_rows: list[dict[str, object]] = []
-    for _, event in events.iterrows():
-        module = str(event["module"])
-        if module not in scores.columns or event["event_key"] not in psi.index:
-            correlation, pvalue, n_samples = np.nan, np.nan, 0
-        else:
-            correlation, pvalue, n_samples = _safe_pearson(
-                psi.loc[event["event_key"]].rename_axis("sample_id"),
-                pd.to_numeric(scores[module], errors="coerce").rename_axis("sample_id"),
-            )
-        confidence = event.get("consensus_membership_confidence", event.get("module_membership", np.nan))
-        connectivity = event.get("network_connectivity", np.nan)
-        hub_rows.append(
-            {
-                "event_key": event["event_key"],
-                "module": module,
-                "gene_id": normalize_gene_id(event.get("gene_id")),
-                "gene_symbol": str(event.get("gene_symbol", "") or ""),
-                "event_type": event.get("event_type", ""),
-                "module_membership_kME": correlation,
-                "module_membership_pvalue": pvalue,
-                "n_samples": n_samples,
-                "consensus_confidence": confidence,
-                "network_connectivity": connectivity,
-            }
-        )
-    hub_events = pd.DataFrame(hub_rows)
-    if not hub_events.empty:
-        hub_events["module_membership_FDR"] = bh_adjust(hub_events["module_membership_pvalue"])
-        for column in ("module_membership_kME", "consensus_confidence", "network_connectivity"):
-            numeric = pd.to_numeric(hub_events[column], errors="coerce")
-            if column == "module_membership_kME":
-                numeric = numeric.abs()
-            hub_events[f"{column}_percentile"] = numeric.groupby(hub_events["module"]).rank(pct=True)
-        score_columns = [
-            "module_membership_kME_percentile",
-            "consensus_confidence_percentile",
-            "network_connectivity_percentile",
-        ]
-        hub_events["hub_event_score"] = hub_events[score_columns].mean(axis=1, skipna=True)
-        hub_events["hub_event_rank"] = hub_events.groupby("module")["hub_event_score"].rank(method="min", ascending=False)
-
+    hub_events, hub_genes = _hub_tables_from_events(events, psi, scores, settings.hub_metric)
     candidate_support, candidate_audit = _read_candidate_support(support_root)
-    genes = hub_events.copy()
-    genes["gene_key"] = np.where(
-        genes["gene_id"].astype(str).ne(""),
-        "id:" + genes["gene_id"].astype(str),
-        "sym:" + genes["gene_symbol"].astype(str).str.casefold(),
-    )
-    hub_genes = genes.groupby(["module", "gene_key"], as_index=False).agg(
-        gene_id=("gene_id", "first"),
-        gene_symbol=("gene_symbol", "first"),
-        n_module_events=("event_key", "nunique"),
-        event_types=("event_type", lambda value: ";".join(sorted(set(map(str, value))))),
-        max_abs_kME=("module_membership_kME", lambda value: pd.to_numeric(value, errors="coerce").abs().max()),
-        mean_hub_event_score=("hub_event_score", "mean"),
-        max_hub_event_score=("hub_event_score", "max"),
-    )
-    hub_genes["hub_gene_score"] = (
-        hub_genes.groupby("module")["max_abs_kME"].rank(pct=True)
-        + hub_genes.groupby("module")["max_hub_event_score"].rank(pct=True)
-        + hub_genes.groupby("module")["n_module_events"].rank(pct=True)
-    ) / 3.0
-    hub_genes["hub_gene_rank"] = hub_genes.groupby("module")["hub_gene_score"].rank(method="min", ascending=False)
 
     joint = hub_genes.merge(candidate_support, on="gene_key", how="left", suffixes=("", "_support"))
     for flag in ("DEG_significant", "rMATS_significant", "DEXSeq_significant", "DTU_significant"):

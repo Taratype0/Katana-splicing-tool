@@ -1,9 +1,33 @@
 # Running independent comparison networks
 
 The flow creates one observed network for each selected contrast by default.
-Each network uses only the biological samples in that contrast. Its bootstrap,
-condition associations, enrichment and report views must reference that same fit.
+Each network uses only the biological samples in that contrast. Its condition
+associations, enrichment and report views must reference that same fit.
 A cohort-wide network is a separate, explicitly selected analysis.
+
+## Membership and optional resampling
+
+New flow plans do not run bootstrap by default. They create an observed fit,
+matched condition associations and module annotation. Events are ranked within
+each module by descending absolute eigengene membership `|kME|`, retaining the
+signed Pearson correlation and its P/FDR columns. Gene scores are the maximum
+absolute kME among that gene's events within the module. Exact ties use ascending
+event IDs or gene IDs. Connectivity and historical confidence columns remain
+available as separate metrics; they do not contribute to the `abs_kME` score.
+Neither kME nor the number of high-ranking events is a resampling stability test.
+
+The sealed flow configuration explicitly records
+`network.bootstrap.enabled: false` and `network.parameters.hub_metric: abs_kME`.
+The observed fit disables both edge and graph bootstrap iterations. Disabled
+bootstrap creates no bootstrap task, no synthetic success receipt and no claim
+that stability was calculated. Cached fit products suffice to export kME tables;
+this does not rerun discovery or change module membership.
+
+To request resampling explicitly, set `network.bootstrap.enabled: true` and
+`network.parameters.bootstrap_iterations` to an integer of at least two. That
+plan adds a real bootstrap stage, which must finish before the optional stability
+analysis can be accepted. Old sealed plans and standalone CoSplice configurations
+retain their recorded behavior and composite ranking unless explicitly migrated.
 
 ## Full event sets and execution limits
 
@@ -19,11 +43,12 @@ For an existing-results flow, explicit execution settings belong in
 {
   "network": {
     "scope": "contrast",
+    "bootstrap": {"enabled": false},
     "parameters": {
       "tom_dense_max_events": 65000,
       "consensus_dense_max_events": 65000,
       "wgcna_timeout_seconds": 86400,
-      "bootstrap_iterations": 50
+      "hub_metric": "abs_kME"
     }
   }
 }
@@ -63,8 +88,10 @@ Validate a single real comparison before submitting the remaining comparisons:
 1. Confirm the exact sample IDs, biological units and complete event universe.
 2. Require successful native completion and verified observed modules, activity,
    numerical tree, edge outputs and resolved configuration.
-3. Complete every declared biological-unit bootstrap and validate its input,
-   sample draw, kernel and output identities before reduction.
+3. Verify the signed kME, absolute membership ranks and the exact recorded hub
+   policy. Only when bootstrap was explicitly enabled, complete every declared
+   biological-unit resample and validate its input, sample draw, kernel and output
+   identities before reduction.
 4. Validate matched condition effects, enrichment foreground/background and hit
    genes, network figures, and the comparison-specific report links.
 5. Inspect peak memory and runtime, then schedule independent remaining

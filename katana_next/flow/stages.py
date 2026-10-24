@@ -344,6 +344,9 @@ def _output_metadata(path: Path, adapter: str) -> dict:
         if path.name == "event_linkage.npy":
             return {**metadata, "name": "Observed network: full numerical event linkage",
                     "entity_type": "network_linkage"}
+        if path.name in {"module_hub_events.tsv", "module_hub_genes.tsv"}:
+            return {**metadata, "name": "Observed network: " + path.name.removesuffix(".tsv").replace("_", " "),
+                    "entity_type": "network_hub_events" if path.name == "module_hub_events.tsv" else "network_hub_genes"}
         return metadata
     if adapter == "qc.genebody":
         metadata = {}
@@ -414,6 +417,10 @@ def execute_stage(spec: dict, output_dir: str | Path) -> dict:
     else:  # readiness has already rejected unsupported adapters.
         raise ValueError(adapter)
     records = _ledger(paths, adapter)
+    if adapter.startswith("network."):
+        for record in records:
+            record.setdefault("metadata", {}).update({
+                key: evidence[key] for key in ("bootstrap_enabled", "stability_status", "hub_metric") if key in evidence})
     identity = evidence.get("network_identity") if adapter.startswith("network.") else None
     if identity:
         for record in records:
@@ -676,6 +683,13 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
     projection = None
     manifest = None
     identity = None
+    bootstrap_enabled = parameters.get("bootstrap_enabled", True)
+    if not isinstance(bootstrap_enabled, bool):
+        raise ValueError("bootstrap_enabled must be true or false")
+    if adapter == "network.bootstrap" and not bootstrap_enabled:
+        raise ValueError("Network bootstrap is disabled by this explicit task policy")
+    if "hub_metric" in parameters and parameters["hub_metric"] not in {"abs_kME", "legacy_composite"}:
+        raise ValueError("hub_metric must be abs_kME or legacy_composite")
     # Only new explicitly scoped flow tasks use the six-sample comparison
     # contract. Old sealed tasks and standalone CoSplice retain their contract.
     if "network_scope" in parameters:
@@ -712,6 +726,11 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
         if source is not None and source.is_dir():
             shutil.copytree(source, engine / prefix)
     config.output_dir = engine
+    if "hub_metric" in parameters:
+        config.interpretation.hub_metric = parameters["hub_metric"]
+    if not bootstrap_enabled:
+        config.network.bootstrap_iterations = 0
+        config.network.consensus_bootstrap_iterations = 0
     # Execution limits must propagate to fit AND bootstrap, including plans
     # created from an existing project rather than an external config file.
     for key, target, attribute in (
@@ -739,8 +758,12 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
         config.gene_prior.enabled = False
         config.multiobjective_selection.enabled = False
         config.network.max_events = int(parameters.get("max_events", 0)) or None
-        config.network.bootstrap_iterations = int(parameters.get("bootstrap_iterations", 50))
-        config.consensus.bootstrap_iterations = int(parameters.get("bootstrap_iterations", 50))
+        if bootstrap_enabled:
+            iterations = parameters.get("bootstrap_iterations", 50)
+            if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations < 2:
+                raise ValueError("Enabled bootstrap_iterations must be an integer of at least 2")
+            config.network.bootstrap_iterations = iterations
+            config.consensus.bootstrap_iterations = iterations
         if parameters.get("rscript"):
             config.network.wgcna_rscript = str(parameters["rscript"])
         if inputs.get("project"):
@@ -795,6 +818,11 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
             paths = [*outputs.values(), *sorted((engine / "06b_module_annotation/plots").glob("*.png"))]
             precomputed, enrichment_paths = _network_enrichment(spec, engine)
             paths.extend(enrichment_paths)
+            if "hub_metric" in parameters:
+                hub_paths = _network_hubs(spec, engine, name)
+                precomputed.update(hub_paths)
+                paths.extend(map(Path, hub_paths.values()))
+                ran.append(f"hub_membership_{name}_cached")
     paths.append(resolved)
     if identity:
         marker = engine / "network_scope.json"
@@ -807,6 +835,11 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
             "fit_algorithm_unchanged": True, "original_output_modified": False,
             "dependency_compatibility": "dynamicTreeCut0.1.1 ordinal ranks retain exact values with integer index dtype",
             "analysis_id": "programs.cosplice"}
+    if "bootstrap_enabled" in parameters:
+        evidence.update(bootstrap_enabled=bootstrap_enabled,
+                        stability_status="enabled" if bootstrap_enabled else "not_requested")
+    if "hub_metric" in parameters:
+        evidence["hub_metric"] = parameters["hub_metric"]
     if identity:
         evidence["network_identity"] = identity
         evidence["interpretation_status"] = "minimum_met"
@@ -888,6 +921,43 @@ def _network_enrichment(spec, engine):
                          for key,value in libraries.items()},"background":"all unique measured network genes including grey",
                          "correction":"BH across every module and term within each explicit library"},indent=2),encoding="utf-8")
     return {k:str(v) for k,v in paths.items()}, [*paths.values(),resources]
+
+
+def _network_hubs(spec, engine, name="observed"):
+    """Export membership from the verified cached fit without any network refit."""
+    import pandas as pd
+    from katana_cosplice.module_interpretation import module_hub_tables
+    metric = spec.get("parameters", {}).get("hub_metric", "abs_kME")
+    source = Path(engine) / "04_network" / name
+    files = {"assignments": source / "event_module_assignments.tsv",
+             "psi": source / "selected_event_matrix.tsv",
+             "activity": source / "module_program_scores.tsv",
+             "annotation": Path(engine) / "02_matrix/event_metadata.tsv"}
+    assignments = pd.read_csv(files["assignments"], sep="\t", low_memory=False)
+    psi = pd.read_csv(files["psi"], sep="\t", index_col=0)
+    activity = pd.read_csv(files["activity"], sep="\t", index_col=0)
+    annotation = pd.read_csv(files["annotation"], sep="\t", low_memory=False)
+    events, genes = module_hub_tables(assignments, psi, activity, annotation, hub_metric=metric)
+    out = Path(engine) / "06e_module_interpretation"
+    out.mkdir(parents=True, exist_ok=True)
+    paths = {"hub_events": out / "module_hub_events.tsv", "hub_genes": out / "module_hub_genes.tsv",
+             "hub_parameters": out / "hub_parameters.json"}
+    events.to_csv(paths["hub_events"], sep="\t", index=False)
+    genes.to_csv(paths["hub_genes"], sep="\t", index=False)
+    paths["hub_parameters"].write_text(json.dumps({
+        "schema": "katana.network.hub_membership/v1", "hub_metric": metric,
+        "signed_kME_retained": True,
+        "event_score": ("absolute Pearson correlation with cached module activity" if metric == "abs_kME" else
+                        "mean available module kME/confidence/connectivity percentiles"),
+        "gene_score": ("maximum absolute kME among that gene's events within each module" if metric == "abs_kME" else
+                       "mean module percentiles of maximum kME, maximum event score and event count"),
+        "tie_rule": ("ascending event_key for events; ascending gene_key for genes" if metric == "abs_kME" else
+                     "historical shared minimum ranks"),
+        "module_source": name, "network_refitted": False, "bootstrap_performed": False,
+        "stability_claim": "kME measures membership, not resampling stability",
+        "sources": {key: {"path": str(path), "sha256": _sha(path)} for key, path in files.items()},
+    }, indent=2), encoding="utf-8")
+    return {key: str(value) for key, value in paths.items()}
 
 
 def _maei_tables(inputs):
