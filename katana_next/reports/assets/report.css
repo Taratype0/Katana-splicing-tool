@@ -22,3 +22,4 @@
 .top10-cell-value{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.5}.top10 .metadata th:first-child,.top10 .metadata td:first-child{width:42px}.top10 summary{cursor:pointer;white-space:nowrap}
 
 .network-frame{display:block;width:100%;height:1120px;border:1px solid var(--light);margin-top:14px;background:white}.network-browser>.fig-notes{max-width:1000px}.motif-significance{padding:18px 20px;border-left:3px solid var(--blue);background:#f6f8fa}.motif-significance h3{margin:0 0 8px}.motif-significance p{font-size:12px;line-height:1.6;margin:6px 0}.motif-significance>a{font-size:11px}@media print{.network-frame{height:1000px}.scope-hidden{display:none!important}}
+.scopebar{position:sticky;top:60px;z-index:4;background:white;padding:12px 0;border-bottom:1px solid var(--light)}.chapter{scroll-margin-top:135px}.rbp-enrichment>a{display:inline-block;margin-right:16px}@media print{.scopebar{display:none}}

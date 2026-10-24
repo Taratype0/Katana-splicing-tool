@@ -205,6 +205,7 @@ def render(builder):
     for group in [source, *source.get('supplemental', [])]:
         sources.append({'project_id': group['project'].get('project_id'), 'metadata': group['project'].get('metadata', {}),
                         'parameters': [{'analysis_id': r.get('analysis_id'), 'artifact_id': r.get('artifact_id'), 'parameters': r.get('parameters', {}), 'method_metadata': r.get('metadata', {})} for r in group['artifacts']]})
+    if hasattr(builder, 'preserved_source_projects'): sources = builder.preserved_source_projects
     provenance = {'schema': 'katana.report_provenance/v1', 'source_files': builder.audit, 'source_projects': sources,
                   'report_parameters': {'event_set': builder.event_set}, 'derived_views': builder.derived_audits,
                   'no_upstream_rerun': True, 'no_source_statistics_refit': True}

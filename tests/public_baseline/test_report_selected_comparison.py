@@ -51,6 +51,7 @@ def test_refresh_is_public_and_keeps_previous_report_and_native_values(tmp_path)
     native.parent.mkdir()
     native.write_text('event_id\tfdr\ndisplay-event\t0.5925\n')
     b.tables.append({'name': 'Native statistical values', 'source': 'outputs/native.tsv', 'chapter': 7})
+    b.source['artifacts'] = [{'analysis_id': 'prioritize.motiftrace_consequences', 'artifact_id': 'native', 'parameters': {'native_setting': 17}}]
     b.write()
     before = {p.relative_to(b.output).as_posix(): sha256(p.read_bytes()).hexdigest()
               for p in b.output.rglob('*') if p.is_file()}
@@ -60,6 +61,7 @@ def test_refresh_is_public_and_keeps_previous_report_and_native_values(tmp_path)
     assert (out / 'outputs/native.tsv').read_bytes() == native.read_bytes()
     assert m['contrasts'] == ['B_vs_A', 'C_vs_A']
     receipt = json.loads((out / 'presentation-refresh.json').read_text('utf8'))
+    assert json.loads((out/'provenance.json').read_text())['source_projects'] == json.loads((b.output/'provenance.json').read_text())['source_projects']
     assert receipt['original_report_unchanged'] is True and receipt['completed_analyses_rerun'] == 0
     assert all(sha256((b.output / p).read_bytes()).hexdigest() == v for p, v in before.items())
     with pytest.raises(FileExistsError): refresh_report(b.output, out)

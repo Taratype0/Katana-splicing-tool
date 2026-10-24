@@ -7,6 +7,11 @@ def prepare_presentation(builder):
         if panel.get('chapter') == 6 and 'dendrogram' in panel.get('title', '').lower():
             panel['output_only'] = True
             panel.setdefault('metadata', {})['main_display_note'] = 'Dendrogram retained in outputs by request.'
+        if (panel.get('chapter') == 7 and panel.get('contrast_id', 'all') == 'all'
+                and 'reference clip' in panel.get('title', '').lower()
+                and 'status' in panel.get('title', '').lower()):
+            panel['output_only'] = True
+            panel.setdefault('metadata', {})['main_display_note'] = 'Whole-study completion status remains in outputs; the main view is comparison-specific.'
     browsers, seen = [], set()
     for record in builder.tables:
         if (record.get('chapter') != 6 or record.get('analysis_id') != 'rich_browser'

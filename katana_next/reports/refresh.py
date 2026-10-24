@@ -127,6 +127,7 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
         if key in manifest: setattr(builder, attribute, deepcopy(manifest[key]))
     builder.data_link_audit = deepcopy(manifest.get('figure_data_links', {}).get('bindings', []))
     builder.derived_audits = deepcopy(provenance.get('derived_views', []))
+    builder.preserved_source_projects = deepcopy(provenance.get('source_projects', []))
     builder.derived_audits.append({'schema': 'katana.report_presentation_refresh/v1',
         'source_manifest_sha256': before[str(manifest_path)], 'network_browsers': network_receipts,
         'motif_significance': motif_audit, 'completed_analyses_rerun': 0})
