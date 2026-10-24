@@ -186,7 +186,7 @@ def render(builder):
     provenance['figure_data_links'] = builder.figure_data_coverage()
     provenance['report_selection'] = source.get('report_selection', {'applied': False})
     (output/'provenance.json').write_text(json.dumps(provenance, indent=2, default=str)+'\n', encoding='utf-8')
-    with zipfile.ZipFile(output/'REPORT.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
+    with zipfile.ZipFile(output/'REPORT.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=4, strict_timestamps=False) as archive:
         for path in sorted(output.rglob('*')):
             if path.is_file() and path.name != 'REPORT.zip': archive.write(path, path.relative_to(output).as_posix())
     return payload
