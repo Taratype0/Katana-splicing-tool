@@ -4,6 +4,12 @@ Katana assembles completed results into the approved seven-section report:
 design and QC; AS landscape; differential molecular results; cross-comparison
 results; GO/KEGG and pathways; co-splicing networks; RBP and MotifTrace.
 
+The current format was approved as final on **25 October 2026**. Future
+one-click reports keep the same seven chapters, blue/red presentation,
+comparison selector, network/module-gene browser and significance-aware motif
+display. Updating data or completing software integration does not redesign
+the report. See [the fixed specification](REPORT_SPECIFICATION.md).
+
 ## Command line and Python
 
 Install the development package with report dependencies:

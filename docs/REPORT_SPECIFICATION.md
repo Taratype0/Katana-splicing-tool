@@ -1,11 +1,14 @@
 # Approved Katana report specification
 
-Specification: **1.0 — approved 22 October 2026**.
+Specification: **1.1 — final report format approved 25 October 2026**.
 
-The user approved the bulk and single-cell dummy reports and explicitly asked
-to record this design as settled. This document fixes report content and
-behaviour. Approval of the design does not mean that the general report
-generator or the full distributed package has passed final acceptance.
+The user approved the latest completed bulk report as the fixed format for
+future one-click reports. It supersedes the earlier presentation examples;
+the original bulk and single-cell design approval of 22 October 2026 remains
+part of the history. Preserve this report's structure, visual style and
+interaction when updating results or rendering another eligible project.
+The machine-readable decision is in [FORMAT_APPROVAL.json](reports/FORMAT_APPROVAL.json).
+Report-format approval and software/pipeline release acceptance are separate.
 
 ## Report contents
 
@@ -28,6 +31,11 @@ Do not invent a publication or DOI.
 - Reports are generated in English. The approved report palette is B blue/red:
   positive `#C63F4A`, negative `#2863A5`, other/unassigned `#CDD1D6`, and a
   blue–white–red diverging heatmap. Keep nucleotide identity colours separate.
+- Open on one declared comparison, with a persistent comparison selector.
+  Switching it updates all comparison-scoped chapters together. Shared study
+  QC remains visible; grouped cross-comparison panels retain their declared
+  axes and appear only for the selected comparison's group. Do not return to
+  displaying every comparison together by default.
 - Full tables, matrices, sample-similarity plots and complete heatmap pages
   remain in the output directory with search, paging or expansion and download.
   Report previews never replace the complete results.
@@ -86,17 +94,20 @@ into a single-cell FASTQ pipeline.
 
 ## Implementation and change rules
 
-At approval, both dummy reports and their offline packages were verified. The
-development package provides existing analyses, Python/CLI/desktop entrypoints
-and selection-aware evidence exports. **Connecting this approved seven-section
-design to arbitrary eligible completed projects remains implementation work.**
+The generic Python/CLI report renderer and read-only completed-report refresh
+are implemented. The accepted real bulk reference passed selected-comparison
+browser checks, complete module-gene browsing, original-statistic and portable
+file checks, offline complete-table reading, and archive inventory/CRC checks.
+The accepted report and its complete archive remain immutable references.
 
-Next: implement that generic renderer, validate it using existing completed
-real results, finish current-version distribution/headless installation checks,
-and connect the downstream package to Nextflow. Completed upstream analyses
-must be reused. Preserve the original application and frozen scientific code.
+Additional project adapters, assay-specific acceptance, current-version CI and
+distribution checks, and complete pipeline-entry acceptance retain their own
+evidence and status. This approval does not declare all of them complete or
+turn single-cell design approval into real single-cell acceptance. Reuse
+completed analyses and preserve the original application and scientific code.
 
 Routine packaging, adapters, tests and fixes that preserve these decisions can
 proceed without renewed approval. Changes to approved report content, major
 visual behaviour, scientific defaults or scope require a new explicit decision
 and a new specification revision. Keep prior approved examples recoverable.
+Do not redesign this format during routine packaging or integration work.

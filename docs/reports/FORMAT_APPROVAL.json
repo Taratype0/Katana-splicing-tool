@@ -1,0 +1,32 @@
+{
+  "schema": "katana.approved_report_format/v1",
+  "specification_version": "1.1",
+  "approval_date": "2026-10-25",
+  "approval_timezone": "Europe/Berlin",
+  "previous_design_approval_date": "2026-10-22",
+  "decision": "The latest accepted real report is the fixed format for future one-click reports. Do not redesign it during routine development.",
+  "language": "en",
+  "palette": "B blue/red",
+  "chapter_count": 7,
+  "comparison_display": "one selected comparison; shared study QC retained; declared cross-comparison groups retained",
+  "network_display": "direct module graph plus complete searchable, paged and downloadable gene/event lists; drawing limits explicit",
+  "dendrogram_display": "outputs only",
+  "motif_display": "up to ten distinct models with recorded native test FDR <= 0.05; concise no-significance notice when none qualify",
+  "original_statistics_and_complete_results_retained": true,
+  "default_das": "RS-DAS; ordinary DAS switch retained report-wide where supported",
+  "complete_results_storage": "canonical byte-identical copies and lossless complete-table compression; no row truncation",
+  "specification_file": "docs/REPORT_SPECIFICATION.md",
+  "specification_sha256": "b5baa9c1ddfd3215ed1fa52fbef91fc6b0534f0a52a93d5affd28ec6d131ad1c",
+  "implementation_commit_at_approval": "c6f6cd790404e5eae2ba0e85b0598ce2cbda8df4",
+  "format_source_sha256": {
+    "katana_next/reports/assets/report.css": "fc5b8bbf599f462270e002ca25712a1ceee90955f5c3c8962ed8fb190f33ff73",
+    "katana_next/reports/assets/report.js": "2788e3512f7d90c0a0230caf6d8c0ca888097bdc4953fa6aab792812d4ba41b2",
+    "katana_next/reports/layout.py": "853ee1cf75474b4643883cddfd5fb8c71ad935584f677003d6e3fe99625ce2c5",
+    "katana_next/reports/presentation.py": "6e3b9c5ea859e97a5dfc7345e53bf9453a5a9a766a19937e6aeb6d9cbd613d79",
+    "katana_next/reports/network_views.py": "0287364ae951f397e999150962887fbe597bb17c17c9972d9367c9f2b50ed2ea",
+    "katana_next/reports/motif_display.py": "835126b852739498899441610d76e25e89c21daed91c48c2d9d40e100f878020",
+    "katana_next/reports/compact.py": "4dd15686e714c70bd0c61531702af0961a682f0d68657270fd26f0b1d50379bb"
+  },
+  "acceptance_boundary": "Real bulk report format and delivered reference accepted. Additional assays, pipeline entries, distribution and current CI have separate acceptance evidence.",
+  "change_rule": "Update data and results in this format. Changes to format or agreed scientific defaults require a new explicit user decision; technical fixes preserving it may proceed."
+}
