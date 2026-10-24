@@ -97,9 +97,14 @@ workflow KATANA_DOWNSTREAM {
     molecular = AS.out.result.mix(DEG.out.result, DTU.out.result)
     EVIDENCE(readyTasks(plan, 'evidence', molecular), project_root, project_filename)
     ENRICHMENT(readyTasks(plan, 'enrichment', EVIDENCE.out.result), project_root, project_filename)
-    motif_tasks = readyTasks(plan, 'motiftrace', AS.out.result)
-    MOTIFTRACE(motif_tasks.filter { spec, planFile, results -> !spec.parameters?.custom_motif_path }, project_root, project_filename)
-    motif_resource_tasks = motif_tasks.filter { spec, planFile, results -> !!spec.parameters?.custom_motif_path }
+    // Classify each ready task once. A single branch makes the two routes
+    // mutually exclusive, including when tasks arrive concurrently.
+    motif_routes = readyTasks(plan, 'motiftrace', AS.out.result).branch {
+        external: !!it[0].parameters?.custom_motif_path
+        bundled: true
+    }
+    MOTIFTRACE(motif_routes.bundled, project_root, project_filename)
+    motif_resource_tasks = motif_routes.external
         .map { spec, planFile, results -> tuple(spec, planFile, results, motifRuntimeInputs(spec)) }
     MOTIFTRACE_RESOURCE(motif_resource_tasks, project_root, project_filename)
     OVERLAP(readyTasks(plan, 'overlap', molecular), project_root, project_filename)

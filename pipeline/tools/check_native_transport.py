@@ -2,6 +2,7 @@
 """Run real Nextflow with synthetic transport fixtures, never biological fits."""
 from __future__ import annotations
 import argparse
+from collections import Counter
 import csv
 import hashlib
 import importlib.util
@@ -30,7 +31,10 @@ def tasks() -> list[dict]:
     return [task("alpha", "audit", []), task("beta", "audit", [], 8),
             task("gamma", "quality", ["alpha"]), task("delta", "as", ["gamma"]),
             task("epsilon", "quality", ["beta"]), task("zeta", "as", ["epsilon"]),
-            task("eta", "motiftrace", ["delta"]), task("theta", "motiftrace", ["delta"]), task("omega", "network_fit", ["alpha"]),
+            task("eta", "motiftrace", ["delta"]), task("theta", "motiftrace", ["delta"]),
+            task("eta-secondary", "motiftrace", ["zeta"]),
+            task("theta-secondary", "motiftrace", ["zeta"]),
+            task("omega", "network_fit", ["alpha"]),
             task("network-summary", "network_followup", ["omega"])]
 
 
@@ -45,6 +49,9 @@ def make_case(root: Path, *, failure: bool = False, runtime_failure: bool = Fals
     model = models / 'custom.tsv'
     model.write_text('model\tconsensus\nfixture\tACGU\n')
     next(task for task in planned if task['id'] == 'theta')['parameters'] = {'custom_motif_path': str(model.resolve())}
+    other_model = models / 'secondary.tsv'
+    other_model.write_text('model\tconsensus\nsecond\tUGCA\n')
+    next(task for task in planned if task['id'] == 'theta-secondary')['parameters'] = {'custom_motif_path': str(other_model.resolve())}
     if failure:
         planned[1]["fail"] = True
     if runtime_failure:
@@ -79,6 +86,18 @@ def main() -> None:
 
     case = make_case(root / "success")
     run(command(nextflow), case, "first")
+    first_traces = list((case / "output/pipeline_info").glob("trace-*.tsv"))
+    assert len(first_traces) == 1
+    with first_traces[0].open(encoding="utf-8") as handle:
+        first_rows = list(csv.DictReader(handle, delimiter="\t"))
+    motif_runs = Counter(row["name"] for row in first_rows if ":MOTIFTRACE" in row["name"])
+    expected_motif_runs = Counter({
+        "KATANA_DOWNSTREAM:MOTIFTRACE (eta)": 1,
+        "KATANA_DOWNSTREAM:MOTIFTRACE (eta-secondary)": 1,
+        "KATANA_DOWNSTREAM:MOTIFTRACE_RESOURCE (theta)": 1,
+        "KATANA_DOWNSTREAM:MOTIFTRACE_RESOURCE (theta-secondary)": 1,
+    })
+    assert motif_runs == expected_motif_runs, f"Motif tasks were dropped, duplicated or incorrectly routed: {motif_runs}"
     receipts = {path.parent.name: json.loads(path.read_text())
                 for path in (case / "output/downstream").rglob("task.receipt.json")}
     assert len(receipts) == len(tasks()), receipts.keys()
@@ -150,6 +169,8 @@ def main() -> None:
                "missing_dexseq_image_blocks_raw_entry_before_submission": True,
                "resume_all_cached": True, "completed_worker_bytes_and_mtimes_unchanged": True,
                "external_custom_motif_file_staged": True,
+               "motif_tasks_partitioned_exactly_once": True,
+               "plain_motif_tasks": 2, "external_motif_tasks": 2,
                "native_reference_filter": filtering[0]}
     (root / "acceptance.receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"status": "passed_native_transport_only", "receipt": str(root / "acceptance.receipt.json")}))

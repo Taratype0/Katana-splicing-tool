@@ -209,7 +209,7 @@
     "katana_motiftrace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
     "katana_next/client.py": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
     "katana_next/services/selection_routes.py": "f84bae21e008589ed1af1afcc7409b90ec1757dcc18675d98e29659630732da1",
-    "pyproject.toml": "09d78b161fe8a3beb58033365dc32b905092b91831ff1ec9f44fcfc7060f3cd9",
+    "pyproject.toml": "cd24246b872984e6dffbe35cfcd28f6787aa3fe4c066c6c265006052898fd419",
     "katana_next/workflows/motiftrace_consequences.py": "a9fe2cdf0e2dc14e5903a18a28b08035e29ecf691453bd1d93b1833b95d2026f",
     "katana_next/workflows/rbp_mechanism.py": "a9d1f69ae0d1416775bb8914bc49bfee58bde5f0c69a5aa1035a585ba31aacd2",
     "katana_next/science/motiftrace_execution.py": "cf501a906d296e5236fbcf46aea3ffbd5e8631418aabe109ca2778291a43c28b",
@@ -217,6 +217,19 @@
     "katana_next/reports/motif_native_index.py": "b49e13270cf1fcfbd61af2e244b57f448da95e8248dbecfb102fefbf0f2e58e9"
   },
   "interface_revisions": [
+    {
+      "integration_version": "1.0.0.post4",
+      "revision": "explicit-network-threadpool-runtime-dependency-20261024",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "09d78b161fe8a3beb58033365dc32b905092b91831ff1ec9f44fcfc7060f3cd9",
+          "current_sha256": "cd24246b872984e6dffbe35cfcd28f6787aa3fe4c066c6c265006052898fd419",
+          "reason": "Declare threadpoolctl>=3.1 as a direct dependency for bounded network BLAS execution. This package was already present in the locked runtime through scikit-learn; MotifTrace scientific sources, parameter definitions, inference families and completed results are unchanged."
+        }
+      ]
+    },
     {
       "integration_version": "1.0.0.post3",
       "revision": "locked-downstream-runtime-20261023",
