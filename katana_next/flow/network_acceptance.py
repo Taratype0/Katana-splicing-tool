@@ -115,12 +115,18 @@ def network_report_gaps(collection, plan, report_manifest, report_dir):
                 if not source_path.is_file():
                     raise ValueError(f"Network {role} source file is absent")
                 records = report_manifest.get("complete_results", []) if role == "module_browser" else report_manifest.get("panels", [])
+                # The approved concise report retains the complete source
+                # dendrogram and its exact numerical linkage in outputs. It
+                # is deliberately absent from the report body; it still must
+                # pass the same source identity, bytes and plot-data checks.
                 matches = [r for r in records if r.get("chapter") == 6 and r.get("contrast_id") == cid
-                           and not r.get("output_only")
+                           and (role == "dendrogram" or not r.get("output_only"))
                            and (r.get("metadata", {}).get("source_artifact_id") or r.get("source_artifact_id")) == source["artifact_id"]]
                 if len(matches) != 1:
                     raise ValueError(f"Network {role} is absent or duplicated in its exact comparison report")
                 rendered = matches[0]
+                if role == "dendrogram" and rendered.get("output_only") is not True:
+                    raise ValueError("Network dendrogram must be retained in complete outputs, outside the main report")
                 rmeta = rendered.get("metadata", {})
                 if rmeta.get("network_identity") != identity or _role(rmeta) != role:
                     raise ValueError(f"Network {role} report identity differs from its completed fit")

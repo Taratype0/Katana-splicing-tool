@@ -108,6 +108,14 @@ def test_positive_gate_accepts_each_exact_completed_comparison(complete_network_
                 if row.get('metadata', {}).get('network_view_role') == 'module_browser']
     assert {row['contrast_id'] for row in browsers} == {'B_vs_A', 'C_vs_A'}
     assert len({row['source_artifact_id'] for row in browsers}) == 2
+    trees = [row for row in manifest['panels'] if row.get('metadata', {}).get('flow_artifact_key') == 'dendrogram']
+    assert len(trees) == 2 and all(row.get('output_only') is True for row in trees)
+    body = (report/'REPORT.html').read_text(encoding='utf-8')
+    outputs = (report/'outputs/index.html').read_text(encoding='utf-8')
+    for tree in trees:
+        assert f'id="{tree["id"]}"' not in body
+        assert '../'+tree['image'] in outputs
+        assert (report/tree['image']).is_file()
 
 
 def test_missing_network_tasks_or_catalogue_return_concrete_gaps(tmp_path):
@@ -148,3 +156,33 @@ def test_positive_gate_rejects_cross_contrast_browser_and_changed_plot_bytes(com
     target = next(p for p in manifest['panels'] if p.get('metadata', {}).get('network_view_role') == 'all_module_sizes')
     (report / target['image']).write_bytes(b'changed fixture image')
     assert any('image differs' in gap['reason'] for gap in network_report_gaps(root, plan, manifest, report))
+
+
+@pytest.mark.parametrize('mutation', ['missing', 'duplicate', 'main', 'foreign_comparison', 'wrong_image', 'wrong_linkage_scope'])
+def test_output_only_dendrogram_still_requires_exact_complete_source_and_linkage(complete_network_report, mutation):
+    root, plan, manifest, report = complete_network_report
+    changed = copy.deepcopy(manifest)
+    tree = next(row for row in changed['panels'] if row.get('metadata', {}).get('flow_artifact_key') == 'dendrogram')
+    if mutation == 'missing':
+        changed['panels'].remove(tree)
+    elif mutation == 'duplicate':
+        changed['panels'].append(copy.deepcopy(tree))
+    elif mutation == 'main':
+        tree['output_only'] = False
+    elif mutation == 'foreign_comparison':
+        tree['contrast_id'] = 'C_vs_A'
+    elif mutation == 'wrong_image':
+        altered = report/'altered-retained-tree.png'
+        altered.write_bytes(b'Not the authenticated native source figure')
+        tree['image'] = altered.name
+    elif mutation == 'wrong_linkage_scope':
+        tree['data_links'][0]['contrast_id'] = 'OTHER'
+    assert network_report_gaps(root, plan, changed, report)
+
+
+def test_required_network_overviews_cannot_be_hidden_using_output_only(complete_network_report):
+    root, plan, manifest, report = complete_network_report
+    changed = copy.deepcopy(manifest)
+    panel = next(row for row in changed['panels'] if row.get('metadata', {}).get('network_view_role') == 'all_module_sizes')
+    panel['output_only'] = True
+    assert any('all_module_sizes' in gap['reason'] for gap in network_report_gaps(root, plan, changed, report))
