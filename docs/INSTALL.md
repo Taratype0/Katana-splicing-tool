@@ -7,9 +7,10 @@ Use the **`codex/package-development`** branch for the packaged workflow describ
 Read the [current development and reproducibility audit](validation/development-audit-20261024.md)
 before selecting an artifact. The accepted `dev-9546632` container below
 predates the latest network fixes; it is a historical installation check,
-not the final matching release image. The complete real-study report has been
-accepted, while its final historical-result assembly adapters still require
-public-package integration and matching release-image acceptance.
+not the final matching release image. The complete real-study report and its
+format have been accepted. The development package now provides explicit
+multi-source completed-result assembly; final installed-wheel/image acceptance
+is recorded separately from acceptance of that report.
 
 | Route | What it supplies | Host requirements |
 | --- | --- | --- |
@@ -17,8 +18,8 @@ public-package integration and matching release-image acceptance.
 | [Standalone Linux Conda](RUNTIME_ENVIRONMENTS.md#standalone-linux-environment) | The full native downstream runtime for direct CLI, Python and browser use | Linux x86-64 and Conda or micromamba |
 | [Python source installation](#source-checkout) | Browser, CLI, reports and Python analyses | Python 3.11 or newer; selected native computations need their additional runtime |
 
-For the current development image and its matching wheel, use the
-[current container acceptance record](validation/pipeline-closure-20261024.md).
+For the recorded development image and its matching wheel, use the
+[historical container acceptance record](validation/pipeline-closure-20261024.md).
 The [earlier runtime record](validation/downstream-runtime-20261023.md) documents
 the standalone Linux and Windows Python/browser installations; its older image
 does not include subsequent workflow/report fixes. Match the wheel, image and
@@ -27,7 +28,73 @@ has been published to a registry and no PyPI release is advertised.
 [Generic workflow acceptance](validation/generic-pipeline-20261023.md) is tracked
 separately from installation checks.
 
-### Load the current development container
+## Installed-package report commands
+
+Use one matched software revision across the wheel, image and exported
+Nextflow sources. A shared package version string alone is not sufficient:
+verify the supplied wheel SHA256, source commit, image ID and dependency-lock
+identities in its delivery/acceptance record. Existing accepted artifacts keep
+their original identities; a newer source change does not update an old image.
+No public PyPI or container-registry release is claimed.
+
+For report assembly only, install the supplied wheel with its report extra in
+a fresh Python 3.11+ environment, replacing the example filename with the exact
+wheel you received:
+
+```sh
+python -m pip install "/path/to/katana_splicing_tool-<version>-py3-none-any.whl[report]"
+python -m pip check
+katana-report --help
+```
+
+Run from the study workspace, outside the source checkout:
+
+```sh
+katana-report --project results.json --outdir exports/study-report \
+  --compact --no-archive --result-store payload-store
+```
+
+`results.json` can be an existing project/descriptor or an explicitly bound
+multi-source completed-result set. See the [two-source example, path mappings
+and identity checks](EXISTING_RESULTS.md#generate-one-report-from-several-completed-sources).
+Use `--archive downloads/study-report.zip` instead of `--no-archive` to produce a
+ZIP at a separate new location. The same command is available as
+`python -m katana_next.reports.cli`; it uses the installed package and preserves
+the approved seven-section format. Native differential/network/MAPP fits are
+not rerun to assemble a report.
+
+For new downstream calculations, use the [locked Linux Conda runtime](RUNTIME_ENVIRONMENTS.md#standalone-linux-environment)
+plus the matching wheel, or a matching downstream image. A report-only wheel
+installation does not supply R and the external analysis toolchain. Integrated
+Nextflow users obtain that toolchain from task containers and do not need a
+second host Conda installation.
+
+An installed image can run the same report command. Set `KATANA_IMAGE` to the
+locally built/loaded tag or immutable image reference in its delivery record.
+From a workspace containing the completed inputs, this Linux Docker example
+mounts those inputs read-only and writes a new report separately:
+
+```sh
+mkdir -p exports
+docker run --rm --network none --user "$(id -u):$(id -g)" \
+  --mount "type=bind,src=$PWD,dst=/data,readonly" \
+  --mount "type=bind,src=$PWD/exports,dst=/exports" \
+  --workdir /data "$KATANA_IMAGE" \
+  katana-report --project results.json --outdir /exports/study-report \
+  --compact --no-archive
+```
+
+Source descriptors must use relative paths within the mounted inputs or an
+explicit `--path-map` for the container's locations. Standalone Conda users run
+the same command with `micromamba run -n katana katana-report ...` after
+installing the native/pip locks and matching wheel. Genome references and
+analysis databases remain project resources rather than installer contents.
+
+### Load a recorded development container
+
+The commands in this subsection reproduce the historical `9546632` image
+record. It predates later fixes; use a matching new build/delivery record for
+current development rather than treating this tag as the latest release.
 
 On a Linux x86-64 Docker host, place the supplied archive and checksum file in
 the same directory, then run:

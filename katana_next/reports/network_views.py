@@ -56,6 +56,70 @@ def _significant_enrichment_display(tested, *, fdr=.05, per_module_library=2):
             .groupby(["module", "library"], sort=False).head(per_module_library).copy())
 
 
+def _scatter_marker_bounds(fig, ax, points):
+    """Actual rendered marker/stroke bounds, rather than just point centres."""
+    from matplotlib.transforms import Affine2D
+    fig.canvas.draw()
+    centres = points.get_offset_transform().transform(points.get_offsets())
+    transforms, shapes, widths = points.get_transforms(), points.get_paths(), points.get_linewidths()
+    boxes = []
+    for index, xy in enumerate(centres):
+        bounds = shapes[index % len(shapes)].get_extents(Affine2D(transforms[index % len(transforms)]))
+        stroke = widths[index % len(widths)] * fig.dpi / 72 / 2
+        boxes.append([float(xy[0] + bounds.x0 - stroke), float(xy[1] + bounds.y0 - stroke),
+                      float(xy[0] + bounds.x1 + stroke), float(xy[1] + bounds.y1 + stroke)])
+    axes = list(map(float, ax.get_window_extent().extents))
+    margin = (min(min(box[0] - axes[0], box[1] - axes[1], axes[2] - box[2], axes[3] - box[3])
+                  for box in boxes) if boxes else None)
+    return axes, boxes, margin
+
+
+def _pad_enrichment_markers(fig, ax, points, *, padding_pixels=5.):
+    """Use the accepted report's whitespace-only PNG/SVG clipping repair.
+
+    Marker areas, positions, row order, labels, colours and native statistics
+    stay untouched. Freeze the solved layout before saving either format so
+    constrained-layout cannot move an axis back through a boundary marker.
+    """
+    import numpy as np
+    offsets, sizes = np.asarray(points.get_offsets()).copy(), points.get_sizes().copy()
+    labels = [tick.get_text() for tick in ax.get_yticklabels()]
+    initial = {"x": list(ax.get_xlim()), "y": list(ax.get_ylim())}
+    if len(offsets):
+        for iteration in range(60):
+            axes, boxes, _ = _scatter_marker_bounds(fig, ax, points)
+            overflow = [max(0., axes[0] + padding_pixels - min(box[0] for box in boxes)),
+                        max(0., axes[1] + padding_pixels - min(box[1] for box in boxes)),
+                        max(0., max(box[2] for box in boxes) + padding_pixels - axes[2]),
+                        max(0., max(box[3] for box in boxes) + padding_pixels - axes[3])]
+            if max(overflow) < .05:
+                break
+            xlim, ylim = ax.get_xlim(), ax.get_ylim()
+            dx, dy = (xlim[1] - xlim[0]) / (axes[2] - axes[0]), (ylim[1] - ylim[0]) / (axes[3] - axes[1])
+            ax.set_xlim(xlim[0] - overflow[0] * dx * 1.15, xlim[1] + overflow[2] * dx * 1.15)
+            ax.set_ylim(ylim[0] - overflow[1] * dy * 1.15, ylim[1] + overflow[3] * dy * 1.15)
+        else:
+            raise RuntimeError("Network enrichment marker padding did not converge")
+    else:
+        iteration = 0
+    fig.canvas.draw()
+    fig.set_layout_engine("none")
+    axes, boxes, margin = _scatter_marker_bounds(fig, ax, points)
+    if (not np.array_equal(points.get_offsets(), offsets)
+            or not np.array_equal(points.get_sizes(), sizes)
+            or [tick.get_text() for tick in ax.get_yticklabels()] != labels):
+        raise RuntimeError("A whitespace-only network plot adjustment changed plotted data")
+    if margin is not None and margin <= 4.:
+        raise RuntimeError("Network enrichment bubbles remain clipped after padding")
+    return {"schema": "katana.network_display_padding/v1", "point_count": len(offsets),
+            "initial_axes_limits": initial, "corrected_axes_limits": {"x": list(ax.get_xlim()), "y": list(ax.get_ylim())},
+            "axes_bbox_px": axes, "point_bbox_px": boxes, "minimum_margin_px": margin,
+            "all_point_extents_inside_axes": margin is None or margin > 0,
+            "iteration_count": iteration, "point_values_areas_order_labels_unchanged": True,
+            "only_change": "Axes whitespace contains full rendered marker and stroke bounds",
+            "scientific_values_recomputed": False}
+
+
 def matched_module_associations(scores, samples, contrasts):
     """Run the frozen binary-trait adapter within each exact declared contrast.
 
@@ -139,6 +203,48 @@ def _slug(value):
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)) + "-" + sha256(str(value).encode()).hexdigest()[:8]
 
 
+def _authenticated_display_sources(completion_path, proof, precomputed, input_paths):
+    """Authenticate optional saved drawing parameters against the same fit.
+
+    Older view proofs enumerate the plotted numerical inputs, while collection
+    already transported the complete fit output ledger. Read those saved
+    siblings only when their source identity, size and SHA match the exact
+    completed fit receipt already validated by ``validate_network_view_proof``.
+    No receipt or source proof is changed by this compatibility bridge.
+    """
+    root = completion_path.parent.parent.resolve()
+    fit_id = precomputed["provenance"]["source_task_id"]
+    assignments = Path(input_paths[0]).resolve()
+    sources = [assignments.with_name(name) for name in ("parameters.json", "network_diagnostics.tsv")]
+    if not any(path.exists() for path in sources):
+        return []  # A legacy collection can still show its actual edge export.
+    for path in sources:
+        if not path.is_relative_to(root) or not path.is_file():
+            raise ValueError("Saved network drawing parameters and diagnostics must remain complete and bounded")
+    assignment_records = [row for row in proof["files"]
+                          if (root / row["path"]).resolve() == assignments and row["task_id"] == fit_id]
+    if len(assignment_records) != 1:
+        raise ValueError("Drawing parameters must belong to the exact verified assignment producer")
+    recorded_parent = assignment_records[0]["source_path"].replace("\\", "/").rsplit("/", 1)[0]
+    fits = []
+    for record in proof["task_receipts"]:
+        path = (root / record["path"]).resolve()
+        if not path.is_relative_to(root) or _fingerprint(path)["sha256"] != record["sha256"]:
+            raise ValueError("Completed fit receipt changed before optional drawing-parameter authentication")
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if value["task_id"] == fit_id:
+            fits.append(value)
+    if len(fits) != 1:
+        raise ValueError("Drawing parameters require the same unique completed fit receipt")
+    for path in sources:
+        expected = recorded_parent + "/" + path.name
+        rows = [row for row in fits[0]["outputs"] if row["path"].replace("\\", "/") == expected]
+        actual = _fingerprint(path)
+        if len(rows) != 1 or (actual["bytes"], actual["sha256"]) != (rows[0]["size_bytes"], rows[0]["sha256"]):
+            raise ValueError("Saved drawing parameters differ from the exact completed fit output ledger")
+    return sources
+
+
 def _completed_network_scope(completion_path, input_paths, contrasts):
     """Authenticate a native lifecycle without relabelling an imported failure.
 
@@ -149,7 +255,9 @@ def _completed_network_scope(completion_path, input_paths, contrasts):
     proof = json.loads(completion_path.read_text(encoding="utf-8"))
     if proof.get("schema") == "katana.flow.network_view_inputs/v1":
         from katana_next.flow.presentation import validate_network_view_proof
-        return validate_network_view_proof(completion_path, input_paths, contrasts)
+        scope, job, precomputed, paths = validate_network_view_proof(completion_path, input_paths, contrasts)
+        extra = _authenticated_display_sources(completion_path, proof, precomputed, input_paths)
+        return scope, job, precomputed, list(dict.fromkeys([*paths, *extra]))
     def native_text(key):
         value = proof.get(key, "")
         if isinstance(value, dict):
@@ -682,6 +790,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
     cmap = LinearSegmentedColormap.from_list("katana_blue_red", [BLUE, "#F4F5F7", RED])
 
     def save(fig, stem, title, caption, *, data, unit, full_table=None, **options):
+        extra_metadata = options.pop("extra", {})
         plot_table = out / "tables" / (stem + "-plot-data.tsv")
         data.to_csv(plot_table, sep="\t", index=False)
         contrast = options.get("contrast") or "all"
@@ -703,7 +812,7 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
         plt.close(fig)
         asset(path, title, caption, extra={"exports": {"png": str(path), "svg": str(svg)},
                                           "network_view_role": stem,
-                                          "data_links": links}, **options)
+                                          "data_links": links, **extra_metadata}, **options)
 
     fig, axes = plt.subplots(1, 2, figsize=(max(12, len(modules) * .38), 5), layout="constrained")
     for ax, column, label in ((axes[0], "n_events", "Events"), (axes[1], "n_genes", "Unique measured genes")):
@@ -752,18 +861,19 @@ def build_network_assets(*, assignments_path, scores_path, psi_path, annotation_
     if len(tested):
         # Main report display only. Full tested terms are written above.
         shown = _significant_enrichment_display(tested)
-        fig, ax = plt.subplots(figsize=(12, max(5, len(shown) * .2)), layout="constrained")
+        fig, ax = plt.subplots(figsize=(12, max(5, len(shown) * .2)), layout="constrained", dpi=150)
         shown = shown.sort_values(["module", "library", "FDR", "term"], kind="stable")
         x = -np.log10(shown.FDR.clip(lower=1e-300))
-        ax.scatter(x, range(len(shown)), s=20 + 12 * shown.overlap_count, color=BLUE, alpha=.8)
+        points = ax.scatter(x, range(len(shown)), s=20 + 12 * shown.overlap_count, color=BLUE, alpha=.8)
         ax.set(yticks=range(len(shown)), yticklabels=[f"{r.module} | {r.library} | {r.term}"[:125] for r in shown.itertuples()], xlabel="−log10(native BH FDR)")
         ax.tick_params(axis="y", labelsize=6)
         if shown.empty:
             ax.text(.5, .5, "No module GO / KEGG terms meet native FDR <= 0.05",
                     ha="center", va="center", transform=ax.transAxes)
             ax.axis("off")
+        padding = _pad_enrichment_markers(fig, ax, points)
         plotted_terms = shown.assign(plot_neglog10_fdr=x.to_numpy(), plot_point_area=20 + 12 * shown.overlap_count.to_numpy())
-        save(fig, "module_enrichment_overview", "Significant module GO / KEGG enrichment", "Display: native FDR <= 0.05 only, at most two lowest-FDR terms per module and library. No significant terms is shown explicitly. Point area follows overlap count. Complete tests including nonsignificant terms, all input and contributing genes, measured background and unchanged P/FDR are exported; module membership is unchanged.", data=plotted_terms, unit="module_term_test", full_table="module_enrichment.tsv.gz")
+        save(fig, "module_enrichment_overview", "Significant module GO / KEGG enrichment", "Display: native FDR <= 0.05 only, at most two lowest-FDR terms per module and library. No significant terms is shown explicitly. Point area follows overlap count. Complete tests including nonsignificant terms, all input and contributing genes, measured background and unchanged P/FDR are exported; module membership is unchanged.", data=plotted_terms, unit="module_term_test", full_table="module_enrichment.tsv.gz", extra={"display_padding": padding})
     for module in modules:
         subset = members.loc[members.module.eq(module)]
         if module in scores.columns:

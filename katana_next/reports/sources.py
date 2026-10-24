@@ -18,9 +18,9 @@ def _is_remote_uri(value):
     return '://' in str(value)
 
 
-def _native_paths(raw, base):
+def _native_paths(raw, base, mapper=None):
     """Resolve local manifest path fields on a copy, never arbitrary labels."""
-    native = copy.deepcopy(raw)
+    native = mapper.project(raw) if mapper else copy.deepcopy(raw)
 
     def normalize(record, keys):
         for key in keys:
@@ -36,9 +36,9 @@ def _native_paths(raw, base):
     return native
 
 
-def _view_paths(raw, base):
+def _view_paths(raw, base, mapper=None):
     """Resolve only declared view file references, without changing metadata."""
-    views = copy.deepcopy(raw)
+    views = mapper.project(raw) if mapper else copy.deepcopy(raw)
     for section, keys in (('panels', ('path', 'image', 'svg')),
                           ('tables', ('path', 'source', 'view')),
                           ('top10', ('full_path', 'full_table'))):
@@ -49,6 +49,8 @@ def _view_paths(raw, base):
             for link in record.get('data_links', []):
                 if link.get('path'):
                     link['path'] = str(_absolute_path(link['path'], base))
+                if link.get('source_collection_root'):
+                    link['source_collection_root'] = str(_absolute_path(link['source_collection_root'], base))
     return views
 
 
@@ -97,17 +99,21 @@ def report_contrast_selection(native, descriptor):
             'native_contrast_ids': native_ids, 'statistical_results_changed': False}
 
 
-def load_source(project, catalog=None):
+def load_source(project, catalog=None, *, path_mappings=None):
     """Load a descriptor using its own directory, or cwd for inline input.
 
     An explicit catalog argument follows command-line cwd semantics. Paths in
     a descriptor follow that descriptor, while native artifact paths follow the
     native project manifest. A file of extra views owns its own relative paths.
     """
-    return _load_source(project, catalog, inline_base=Path.cwd())
+    from .path_mapping import PathMappings
+    mapper = PathMappings(path_mappings)
+    return _load_source(project, catalog, inline_base=Path.cwd(), mapper=mapper)
 
 
-def _load_source(project, catalog=None, *, inline_base):
+def _load_source(project, catalog=None, *, inline_base, mapper=None):
+    from .path_mapping import PathMappings
+    mapper = mapper or PathMappings()
     source_files = []
     if isinstance(project, dict):
         value = copy.deepcopy(project)
@@ -117,6 +123,11 @@ def _load_source(project, catalog=None, *, inline_base):
         value = json.loads(location.read_text('utf-8-sig'))
         descriptor_base = location.parent
         source_files.append(location)
+    if value.get('schema') == 'katana.completed_result_set/v1':
+        if catalog is not None: raise ValueError('A completed result set declares each source catalog explicitly')
+        from .completed_sources import assemble_result_set
+        return assemble_result_set(value, base=descriptor_base, source_files=source_files, mapper=mapper)
+    value = mapper.project(value)
     native_base = descriptor_base
     if value.get('project_manifest'):
         manifest = _absolute_path(value['project_manifest'], descriptor_base)
@@ -129,7 +140,7 @@ def _load_source(project, catalog=None, *, inline_base):
     # a report-only copy. Existing supplementary evidence binds that identity.
     native_location = manifest if value.get('project_manifest') else (location if not isinstance(project, dict) and 'project' not in value else None)
     manifest_identity = digest(native_location) if native_location else hashlib.sha256(json.dumps(native, sort_keys=True, separators=(',', ':'), default=str).encode()).hexdigest()
-    native = _native_paths(native, native_base)
+    native = _native_paths(native, native_base, mapper=mapper)
     records = value.get('artifacts')
     explicit_catalog = catalog is not None
     catalog_base = Path.cwd() if catalog is not None else descriptor_base
@@ -165,7 +176,7 @@ def _load_source(project, catalog=None, *, inline_base):
         raise ValueError('Artifact export must contain a list of completed artifact records.')
     artifacts, seen = [], set()
     for raw in records:
-        record = copy.deepcopy(raw)
+        record = mapper.project(raw)
         if record.get('status', 'complete') not in ('complete', 'completed'):
             continue
         if record.get('project_id') and record['project_id'] != native.get('project_id'):
@@ -212,12 +223,12 @@ def _load_source(project, catalog=None, *, inline_base):
             raise ValueError('Extra report views require matching project identity and parent manifest hash.')
         if raw.get('status', 'complete') not in ('complete', 'completed'):
             raise ValueError('Extra report views must be completed; running or failed collections cannot be presented as completed results.')
-        views.append(_view_paths(raw, view_base))
+        views.append(_view_paths(raw, view_base, mapper=mapper))
     supplemental = []
     for item in value.get('supplemental_sources', []):
         if isinstance(item, str):
             item = str(_absolute_path(item, descriptor_base))
-        child = _load_source(item, inline_base=descriptor_base)
+        child = _load_source(item, inline_base=descriptor_base, mapper=mapper)
         parent = child['project'].get('metadata', {})
         parent_id = parent.get('source_project_id')
         expected = parent.get('source_project_manifest_SHA256')

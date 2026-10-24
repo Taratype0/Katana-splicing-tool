@@ -6,7 +6,7 @@ tests. Execution receipts and unchanged numerical families are prerequisites.
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 
 from .model import load_plan
@@ -16,6 +16,19 @@ from .runtime import canonical_hash, file_hash, file_record, read_json, write_js
 NETWORK_PROOF_SCHEMA = "katana.flow.network_view_inputs/v1"
 NETWORK_SCOPE = "flow_verified_network_complete"
 MOTIF_PROOF_SCHEMA = "katana.flow.motif_view_inputs/v1"
+
+
+def _producer_path(value):
+    """Compare producer identities lexically, never on the consumer machine.
+
+    A transported Linux ``/cfs/...`` identity must not become a path on the
+    Windows consumer's current drive. Conversely, Windows drive/UNC identities
+    retain Windows path semantics when inspected on Linux. Source strings and
+    hashes remain unchanged in their original scientific receipts.
+    """
+    text = str(value)
+    windows = (len(text) >= 3 and text[0].isalpha() and text[1] == ":" and text[2] in "/\\") or text.startswith("\\\\")
+    return PureWindowsPath(text) if windows else PurePosixPath(text)
 
 
 def network_bootstrap_enabled(plan):
@@ -207,12 +220,12 @@ def validate_network_view_proof(completion_path, input_paths, contrasts):
                         "annotation": "02_matrix/event_metadata.tsv"}
         annotation_engine = records["network.annotate"][1].get("execution_evidence", {}).get("engine_root")
         for key, source in hub["sources"].items():
-            original = str((Path(engine) / source_names[key]).resolve())
+            original = _producer_path(engine) / source_names[key]
             allowed_paths = {original}
             if annotation_engine:
-                allowed_paths.add(str((Path(annotation_engine) / source_names[key]).resolve()))
-            if (str(Path(source["path"]).resolve()) not in allowed_paths or
-                not any(member["source_path"] == original and member["sha256"] == source["sha256"]
+                allowed_paths.add(_producer_path(annotation_engine) / source_names[key])
+            if (_producer_path(source["path"]) not in allowed_paths or
+                not any(_producer_path(member["source_path"]) == original and member["sha256"] == source["sha256"]
                         and member["task_id"] == fit_task["id"] for member in proof["files"])):
                 raise ValueError("Observed Hub metrics belong to another fitted numerical population")
     numerical = ("linkage", "bootstrap_members", "bootstrap_modules") if policy["enabled"] else ("linkage",)

@@ -2,20 +2,31 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 
 
 def build_mapp_views(root, plan, receipts, transport):
     import numpy as np
     import pandas as pd
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.colors import LinearSegmentedColormap
     from .model import file_sha256, read_json, write_json
     from .runtime import canonical_hash
     root = Path(root).resolve()
     project = read_json(root / "project.json")
-    translated = {item["source"]["path"]: root / item["collection_path"] for item in transport}
+    translated = {}
+    for item in transport:
+        relative = Path(item["collection_path"])
+        path = (root / relative).resolve()
+        original = item["source"]["path"]
+        if (relative.is_absolute() or '\\' in item["collection_path"] or PureWindowsPath(str(relative)).drive or '..' in relative.parts
+                or not path.is_relative_to(root)):
+            raise ValueError("MAPP transported member escapes its declared collection")
+        if original in translated:
+            raise ValueError("MAPP transported member has a duplicate source identity")
+        translated[original] = path
     families, not_applicable = {}, []
     for task in plan["tasks"]:
         if task.get("adapter") != "mapp.maei":
@@ -96,7 +107,8 @@ def build_mapp_views(root, plan, receipts, transport):
             "correction": "Native MAEI per-window/sample Bonferroni; no pooled cross-window FDR",
             "calibrated_motiftrace_parallel": False})
         links.append({"role": "full_results", "label": "Every completed native fit and original statistics",
-                      "path": str(index_path), "contrast_id": cid, "policy": None, "unit": "native motif/window fit"})
+                      "path": str(index_path), "source_collection_root": str(root),
+                      "contrast_id": cid, "policy": None, "unit": "native motif/window fit"})
         tables.extend({"chapter": 7, "name": f"Native MAPP MAEI | {cid} | {task['id']}", "path": str(path),
                        "analysis_id": "prioritize.mapp_native", "contrast_id": cid} for task, path, _ in entries)
         activity_cols = [c for c in preview if str(c).startswith("activities_")]
@@ -104,7 +116,9 @@ def build_mapp_views(root, plan, receipts, transport):
         labels = [str(site) + " | " + str(model) for site, model in zip(preview.site, preview.native_model_id)]
         finite = np.abs(values[np.isfinite(values)])
         bound = float(finite.max()) if len(finite) else 1.0
-        fig, ax = plt.subplots(figsize=(10, max(4, .28 * len(preview))))
+        fig = Figure(figsize=(10, max(4, .28 * len(preview))))
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
         image = ax.imshow(np.ma.masked_invalid(values), cmap=cmap, vmin=-bound or -1, vmax=bound or 1, aspect="auto")
         ax.set_xticks(range(len(activity_cols)), [c.removeprefix("activities_") for c in activity_cols], rotation=45, ha="right")
         ax.set_yticks(range(len(preview)), labels, fontsize=7)
@@ -112,7 +126,7 @@ def build_mapp_views(root, plan, receipts, transport):
         fig.colorbar(image, ax=ax, label="Original native sample activity")
         fig.tight_layout()
         path = directory / "native_activity_heatmap.png"
-        fig.savefig(path, dpi=150); plt.close(fig)
+        fig.savefig(path, dpi=150); fig.clear()
         panels.append({"id": "native-maei-" + cid, "chapter": 7, "contrast_id": cid,
                        "title": "Native MAPP MAEI motif activities | " + cid, "path": str(path),
                        "data_links": links,

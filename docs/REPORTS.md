@@ -35,6 +35,38 @@ workspace and shared workflow API. Its outputs are the HTML report, portable
 ZIP, provenance and machine-readable report manifest. The existing
 `reports.bundle` and completed-report import routes remain available.
 
+### Several completed sources, one study report
+
+`--project` also accepts a `katana.completed_result_set/v1` JSON. It names the
+target project manifest plus explicitly selected completed descriptors,
+verified collections or views. This supports a base result set, independently
+completed comparison networks and native MAPP families without requiring an
+older report snapshot or rerunning their calculations. Source contributions
+retain their own identities, P/FDR and completion evidence. Different manifest
+revisions need an exact target-manifest SHA binding and the same biological
+design; different project IDs additionally need explicit presentation rebinding.
+See the [two-source example and identity rules](EXISTING_RESULTS.md#generate-one-report-from-several-completed-sources).
+
+```sh
+katana-report --project results.json --outdir exports/study-report \
+  --compact --no-archive --result-store payload-store
+```
+
+These options control storage and transport, not the approved report format:
+
+| Option | Effect |
+| --- | --- |
+| `--compact` | Consolidate byte-identical payloads and losslessly encode complete table pages; retain every result row and native source-table bytes. |
+| `--no-archive` | Generate the full offline report directory without a second ZIP. |
+| `--archive downloads/study-report.zip` | Write the ZIP to this new path instead of the default `REPORT.zip`; the CLI reports its exact location. Mutually exclusive with `--no-archive`. |
+| `--path-map paths.json` | Bind old absolute input prefixes to explicit locations on this machine for a fresh completed-result build. Source manifests remain unchanged. |
+| `--result-store payload-store` | Reuse verified immutable payloads across fresh builds, using hardlinks when possible and copies otherwise. The report remains independently portable. |
+
+The result store must be separate from source results and report output.
+`--result-store` is not accepted with `--from-report`; the latter already reuses
+an existing portable report's payloads. Explicit prefix mappings and their
+relative-path rules are described in [moving completed inputs](EXISTING_RESULTS.md#moving-completed-inputs-to-another-machine).
+
 ### Selected-comparison view and read-only refresh
 
 The main report opens on the first declared comparison. Selecting another
@@ -75,6 +107,9 @@ complete table-browser payloads, retaining every row and the native source
 tables. It writes a storage audit and updated portable-file hashes. The report
 must be refreshed into a new directory; prior reports and scientific files are
 preserved. Current browsers decode these self-contained tables offline.
+Add `--no-archive` to avoid a second ZIP, or use `--archive` to deliver it at a
+separate new path. These choices do not remove complete results from the report
+directory. No archive flag means `REPORT.zip` is created there.
 
 ### Relative file paths
 

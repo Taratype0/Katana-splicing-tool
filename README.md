@@ -66,7 +66,13 @@ confidence. See [network execution and ranking](docs/NETWORK_EXECUTION.md).
 
 The approved report follows seven sections: design and QC; AS landscape; DEG/DAS/DTU/DEXSeq; cross-comparison results; GO/KEGG and pathways; co-splicing networks; and RBP/MotifTrace. It includes per-comparison Top 10 details, full-result links and a report-wide ordinary DAS / RS-DAS choice, with RS-DAS as the default. See the [approved report specification](docs/REPORT_SPECIFICATION.md).
 
-The development package provides `katana-report` and `from katana_next.reports import build_report` for completed projects, and the same renderer is available as `reports.study` in the application. See [report inputs, commands and outputs](docs/REPORTS.md). Two additional export routes remain available:
+The development package provides `katana-report` and `from katana_next.reports import build_report` for completed projects, and the same renderer is available as `reports.study` in the application. One report can assemble explicitly declared completed collections, descriptors and views, retaining separate comparison identities and their original statistics. See [report inputs, commands and outputs](docs/REPORTS.md) and [assembling completed sources](docs/EXISTING_RESULTS.md#generate-one-report-from-several-completed-sources).
+
+```sh
+katana-report --project results.json --outdir exports/study-report --compact --no-archive
+```
+
+This generates the full offline report directory without an additional ZIP. Use `--archive` to choose a delivery ZIP location; explicit `--path-map` bindings support moved inputs and an optional `--result-store` shares immutable payloads across fresh reports. See [installed-package commands](docs/INSTALL.md#installed-package-report-commands) for matching wheel, container and Conda use. Two additional export routes remain available:
 
 - **Analysis and reproducibility package:** an HTML/PDF summary, figures, parameters, file inventory and ZIP attachments.
 - **Completed study-report import:** package an existing supported report and its attachments while retaining its original scope and results.
@@ -108,8 +114,8 @@ Depending on the analysis, Katana produces browsable result tables, interactive 
 The current implementation is on **`codex/package-development`**. Choose the installation that matches how you want to use Katana:
 
 The [current reproducibility audit](docs/validation/development-audit-20261024.md)
-distinguishes the accepted real-study report and source CI from the remaining
-generic report-assembly and matching release-image checks. The default `main`
+distinguishes the accepted real-study report and source CI from final
+installed-package and matching release-image checks. The default `main`
 branch and earlier accepted image do not yet include all development changes.
 
 | Use | Installation |

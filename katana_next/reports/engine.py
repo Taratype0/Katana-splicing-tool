@@ -60,6 +60,8 @@ class Builder:
         self.motif_summaries = []
         self.network_browsers = []
         self.create_archive = True
+        self.result_store = None
+        self.compact_tables = False
         self.exclusions = []
         self.data_link_audit = []
         self._extra_asset_ids = {str(a.get('artifact_id')) for a in source.get('extra_assets', []) if a.get('artifact_id')}
@@ -221,7 +223,8 @@ class Builder:
         sha = digest(source)
         destination = self.output / 'outputs' / prefix / (sha[:12] + '-' + source.name)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+        from .storage import copy_payload
+        copy_payload(source, destination, store=self.result_store, expected_sha=sha)
         if source.stat().st_size != before.st_size or source.stat().st_mtime_ns != before.st_mtime_ns or digest(destination) != sha:
             raise RuntimeError('Source changed during report collection: ' + str(source))
         relative = destination.relative_to(self.output).as_posix()
@@ -259,6 +262,9 @@ class Builder:
         view.parent.mkdir(parents=True, exist_ok=True)
         raw = Path('..') / Path(record['source']).relative_to('outputs')
         content = (ASSET_ROOT / 'table-template.html').read_text('utf-8').replace('__TITLE__', esc(record['name'])).replace('__RAW__', esc(raw.as_posix())).replace('__DATA__', data)
+        if self.compact_tables:
+            from .compact import _compress_table
+            content, _ = _compress_table(content, 32768)
         view.write_text(content, encoding='utf-8')
         return view.relative_to(self.output).as_posix()
 
@@ -407,6 +413,9 @@ class Builder:
     def add_views(self, results):
         for raw in results.get('panels', []):
             panel = dict(raw)
+            from .mapp_catalogs import prepare_portable_mapp_panel
+            panel, mapp_audit = prepare_portable_mapp_panel(panel, report_root=self.output, copy_file=self.copy)
+            if mapp_audit: self.derived_audits.append(mapp_audit)
             path = Path(panel.pop('path', panel.get('image', '')))
             if not path.is_absolute(): path = self.output/path
             panel['image'] = path.relative_to(self.output).as_posix() if path.is_relative_to(self.output) else self.copy(path, prefix='figures')
@@ -455,6 +464,17 @@ class Builder:
     def write(self):
         from .layout import render
         from .presentation import prepare_presentation
+        from .motif_display import apply_motif_significance_display
+        from .mapp_catalogs import validate_portable_mapp_panel
+        for panel in self.panels:
+            if panel.get('metadata', {}).get('component') == 'mapp_native':
+                self.derived_audits.append(validate_portable_mapp_panel(panel, report_root=self.output))
+        current, motif_audit = apply_motif_significance_display(
+            {'panels':self.panels,'complete_results':self.tables},self.output)
+        self.panels = current['panels']
+        if current['motif_summaries']:
+            self.motif_summaries = current['motif_summaries']
+            self.derived_audits.append(motif_audit)
         prepare_presentation(self)
         coverage = self.figure_data_coverage()
         if coverage['strict_plot_data_required'] and coverage['unbound_main_figures']:
@@ -462,11 +482,13 @@ class Builder:
         return render(self)
 
 
-def build_report(project, output_dir, *, catalog=None, event_set='stable_significant'):
+def build_report(project, output_dir, *, catalog=None, event_set='stable_significant',
+                 compact=False, create_archive=True, archive_path=None, result_store=None,
+                 path_mappings=None):
     output = Path(output_dir).expanduser().resolve()
     if output.exists() and any(output.iterdir()):
         raise FileExistsError('Choose a new report output directory; completed reports are preserved.')
-    source=load_source(project,catalog)
+    source=load_source(project,catalog,path_mappings=path_mappings)
     # Never permit report outputs inside an original source result tree.
     roots=[Path(source['project']['output_root']).resolve()] if source['project'].get('output_root') else []
     if any(output==root or output.is_relative_to(root) for root in roots):
@@ -474,5 +496,23 @@ def build_report(project, output_dir, *, catalog=None, event_set='stable_signifi
     output.mkdir(parents=True,exist_ok=True)
     shutil.copytree(ASSET_ROOT,output/'assets',dirs_exist_ok=True)
     builder=Builder(source,output,event_set)
+    builder.create_archive=False
+    builder.compact_tables=compact
+    if result_store:
+        store=Path(result_store).expanduser().resolve()
+        if store==output or store.is_relative_to(output) or output.is_relative_to(store) or any(store==root or store.is_relative_to(root) for root in roots):
+            raise ValueError('Result store must be separate from source results and report output')
+        builder.result_store=store
+    if source.get('assembly_audit'):
+        builder.derived_audits.append(source['assembly_audit'])
+        for path in source['source_files']: builder.copy(path,prefix='provenance')
     builder.collect()
-    return builder.write()
+    result=builder.write()
+    if compact:
+        from .compact import compact_report
+        compact_report(output)
+        result=json.loads((output/'report-manifest.json').read_text('utf-8'))
+    if create_archive:
+        from .refresh import write_archive
+        write_archive(output,archive_path=archive_path)
+    return result

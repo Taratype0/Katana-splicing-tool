@@ -371,12 +371,17 @@ def compact_report(report_dir, *, alias_map=None, deduplicate=True, compress_htm
         table = None
         if compress_html and path.suffix.lower() == '.html':
             text, table = _compress_table(text, html_min_bytes)
+            if table is None and 'data-encoding="gzip-base64"' in text:
+                table = _inspect_encoded_table(path, root, root)
+                if table:
+                    table.pop('preserved_from_interrupted_pass', None)
+                    table['previously_encoded_payload_verified'] = True
         data = text.encode('utf-8')
         if data != original:
             _atomic_write(path, data)
             rewritten.append(dict(path=path.relative_to(root).as_posix(), previous_sha256=hashlib.sha256(original).hexdigest(), portable_sha256=hashlib.sha256(data).hexdigest(), before_bytes=len(original), after_bytes=len(data)))
         if table:
-            tables.append(dict(path=path.relative_to(root).as_posix(), **table))
+            tables.append({**table, 'path': path.relative_to(root).as_posix()})
     # A lost reference is worse than a large report. Check supported portable
     # text references after rewriting, before deleting any aliases.
     for path in files:
@@ -598,8 +603,8 @@ def recover_compact_report(report_dir, source_report_dir, alias_map, *, progress
     audit = compact_report(root, alias_map=present)
     emit(dict(phase='fast_compaction_finished', deleted_aliases=len(audit['deleted_duplicate_aliases']), newly_encoded_tables=len(audit['complete_table_payloads'])))
     audit['deleted_duplicate_aliases'] = already_removed + audit['deleted_duplicate_aliases']
-    complete = {item['path']: item for item in encoded}
-    complete.update({item['path']: item for item in audit['complete_table_payloads']})
+    complete = {item['path']: item for item in audit['complete_table_payloads']}
+    complete.update({item['path']: item for item in encoded})
     audit['complete_table_payloads'] = list(complete.values())
     audit['recovery'] = dict(schema='katana.interrupted_report_storage_recovery/v1', created_utc=datetime.now(timezone.utc).isoformat(),
                              partial_start_bytes=partial_start, immutable_source_payload_bytes=original_bytes,
