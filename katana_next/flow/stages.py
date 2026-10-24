@@ -902,8 +902,17 @@ def _maei_tables(inputs):
     motifs = counts.to_numpy(dtype=float)
     if not np.isfinite(numeric).all() or not np.isfinite(motifs).all() or (numeric < 0).any() or (motifs < 0).any():
         raise ValueError("Native MAEI TPM and motif count inputs must be finite and nonnegative")
-    if (numeric[:, :n] > numeric[:, n:]).any() or (numeric[:, n:] <= 0).any():
+    excess = numeric[:, :n] - numeric[:, n:]
+    tolerance = 8 * np.finfo(float).eps * np.maximum(1.0, numeric[:, n:])
+    if (excess > tolerance).any() or (numeric[:, n:] <= 0).any():
         raise ValueError("MAEI total TPM must be positive and at least included TPM")
+    # Independently summed transcript subsets can differ by a few binary ULPs.
+    # Normalize only those rounding excursions in a private fitting input.
+    rounded = excess > 0
+    inclusion.attrs["tpm_roundoff_cells"] = int(rounded.sum())
+    inclusion.attrs["tpm_roundoff_max"] = float(excess[rounded].max()) if rounded.any() else 0.0
+    if rounded.any():
+        inclusion.iloc[:, n:] = np.maximum(numeric[:, :n], numeric[:, n:])
     if not inputs.get("quantity_provenance"):
         raise ValueError("MAEI requires explicit TPM/coordinate-bridge provenance, not raw event PSI")
     return inclusion, counts, samples
@@ -925,6 +934,11 @@ def _maei(spec: dict, out: Path) -> tuple[dict, list[Path]]:
         if _sha(native / relative) != bindings[relative]:
             raise ValueError(f"Official MAPP source fingerprint changed: {relative}")
     inclusion, counts, samples = _maei_tables(inputs)
+    fit_inclusion = Path(inputs["inclusion_table"]).resolve()
+    roundoff_cells = inclusion.attrs.get("tpm_roundoff_cells", 0)
+    if roundoff_cells:
+        fit_inclusion = out / "INCLUSION_TABLE_roundoff_normalized.tsv"
+        inclusion.to_csv(fit_inclusion, sep="\t")
     fraction = float(parameters.get("min_motif_fraction", 0.01))
     if not 0 <= fraction <= 1:
         raise ValueError("min_motif_fraction must be between zero and one")
@@ -945,7 +959,7 @@ def _maei(spec: dict, out: Path) -> tuple[dict, list[Path]]:
         "AUTHOR_NATIVE_MIXTURE_P_BONFERRONI.tsv"))
     env = _r_environment(rscript, parameters)
     _run([rscript, "--vanilla", str(script_root / "optimize-MARA-model-parameters.R"),
-          "--cpp_model", str(script_root / "model.cpp"), "--inclusion_table", str(Path(inputs["inclusion_table"]).resolve()),
+          "--cpp_model", str(script_root / "model.cpp"), "--inclusion_table", str(fit_inclusion),
           "--sitecount_matrix", str(Path(inputs["sitecount_matrix"]).resolve()), "--out1", str(activity),
           "--out2", str(nuisance), "--min_motif_fraction", str(fraction), "--average_expressions", "FALSE"],
          out, "MAPP_MAEI_fit", env=env)
@@ -970,6 +984,8 @@ def _maei(spec: dict, out: Path) -> tuple[dict, list[Path]]:
     provenance = out / "native_source_binding.json"
     provenance.write_text(json.dumps({"source_sha256": bindings, "quantity_provenance": inputs["quantity_provenance"],
         "reference": "https://github.com/gruber-sciencelab/MAPP", "native_commit": inputs.get("native_commit"),
+        "tpm_roundoff": {"cells": roundoff_cells, "max_absolute_adjustment": inclusion.attrs.get("tpm_roundoff_max", 0.0),
+                         "tolerance": "8 * float64 epsilon * max(1,total TPM)", "source_unchanged": True},
         "scope": "official standalone MAEI fit/Z/mixture statistics; prepared quantities and motif counts"}, indent=2), encoding="utf-8")
     return {"native_fitting_performed": True, "quantification_rerun": False,
             "full_nine_module_MAPP": False, "KAPAC_polyadenylation": False,
@@ -977,5 +993,5 @@ def _maei(spec: dict, out: Path) -> tuple[dict, list[Path]]:
             "events": len(inclusion), "motifs": len(counts.columns),
             "min_motif_fraction": fraction, "source_binding": str(provenance)}, [
                 activity, nuisance, zscore, extended, result, compat, provenance,
-                *sorted(out.glob("*.command.json")),
+                *sorted(out.glob("*.command.json")), *sorted(out.glob("INCLUSION_TABLE_roundoff_normalized.tsv")),
             ]
