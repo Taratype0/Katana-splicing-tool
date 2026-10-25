@@ -553,6 +553,12 @@ def refresh_completed_network_browser(source_html, target_html, *, parameters_pa
         raise ValueError("Target must retain browser/ALL_MODULES.html and its relative table links")
     source_bytes = source_html.read_bytes()
     source = source_bytes.decode("utf-8")
+    # A copied/compacted report may already point at content-addressed tables.
+    # Keep those exact portable destinations when replacing only its browser.
+    # The destination copy owns any API-to-file rewrites made by the caller.
+    link_source = target_html.read_text(encoding="utf-8-sig") if target_html.is_file() else source
+    recorded_links = {label.strip(): href for href, label in
+                      re.findall(r'<a\s+href="([^"]+)">(.*?)</a>', link_source, re.S)}
     match = re.search(r'<script\s+id=[\"\']data[\"\']\s+type=[\"\']application/json[\"\']>(.*?)</script>', source, re.S)
     if not match:
         raise ValueError("The source has no complete embedded native network payload")
@@ -599,9 +605,16 @@ def refresh_completed_network_browser(source_html, target_html, *, parameters_pa
                        bootstrap_enabled="Bootstrap was disabled by request" not in source,
                        display_graph=display_graph)
         updated = (temp / "browser/ALL_MODULES.html").read_text(encoding="utf-8")
+        for href, label in re.findall(r'<a\s+href="([^"]+)">(.*?)</a>', updated, re.S):
+            old = recorded_links.get(label.strip())
+            if old is None and label.strip() == "Module enrichment input genes":
+                old = recorded_links.get("Module input genes")
+            if old is not None:
+                updated = updated.replace(href, old)
         updated_payload = json.loads(re.search(r'<script id="data" type="application/json">(.*?)</script>', updated, re.S).group(1))
         if updated_payload != payload:
             raise RuntimeError("Presentation refresh changed native member, PSI, score or edge values")
+        (temp / "browser/ALL_MODULES.html").write_text(updated, encoding="utf-8")
         replace_copy(temp / "tables/all_module_genes.tsv", target_root / "tables/all_module_genes.tsv")
         if display_graph:
             display_edges.to_csv(temp / "tables/module_display_edges.tsv", sep="\t", index=False)

@@ -585,6 +585,10 @@ def copy_rich_asset(asset: dict[str, Any], destination: Path) -> dict[str, Any]:
                 text = text.replace(row["url"], rel)
                 rewritten.append({"file": str(target.relative_to(destination)), "from": row["url"], "to": rel})
             target.write_text(text, encoding="utf-8")
+    presentation_refresh = None
+    if meta.get("network_view_role") == "module_browser":
+        from .network_display_upgrade import upgrade_copied_network_browser
+        presentation_refresh = upgrade_copied_network_browser(asset, bounded[source])
     rows = []
     for path, target in bounded.items():
         size, stamp, digest = before[path]
@@ -593,7 +597,10 @@ def copy_rich_asset(asset: dict[str, Any], destination: Path) -> dict[str, Any]:
         rows.append({"source": str(path), "destination": target.relative_to(destination).as_posix(),
                      "source_bytes": size, "source_mtime_ns": stamp, "source_sha256": digest,
                      "portable_sha256": _sha(target), "original_preserved": True})
-    return {"schema": "katana.rich_asset_copy/v1", "asset_id": asset["id"],
+    result = {"schema": "katana.rich_asset_copy/v1", "asset_id": asset["id"],
             "path": str(bounded[source]), "files": rows, "link_rewrites": rewritten,
             "portability_warnings": meta.get("portability_warnings", []),
             "originals_preserved": True, "new_scientific_computation": False}
+    if presentation_refresh is not None:
+        result["network_presentation_refresh"] = presentation_refresh
+    return result

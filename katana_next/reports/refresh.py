@@ -96,6 +96,8 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
     shutil.copytree(ASSET_ROOT, output / 'assets')
 
     from .network_views import refresh_completed_network_browser
+    from .network_display_upgrade import bind_legacy_network_table_scopes, upgrade_copied_network_browser
+    scope_binding = bind_legacy_network_table_scopes(manifest)
     network_receipts = []
     for table in manifest.get('complete_results', []):
         if (table.get('chapter') != 6 or table.get('analysis_id') != 'rich_browser'
@@ -108,7 +110,15 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
         options = {}
         if network_parameters and table.get('contrast_id') in network_parameters:
             options['parameters_path'] = network_parameters[table['contrast_id']]
-        receipt = refresh_completed_network_browser(source / relative, output / relative, **options)
+        if options:
+            receipt = refresh_completed_network_browser(source / relative, output / relative, **options)
+        else:
+            asset = {'path': str(source / relative), 'metadata': table.get('metadata', {})}
+            receipt = upgrade_copied_network_browser(asset, output / relative)
+            if receipt is None:
+                receipt = {'schema': 'katana.completed_network_browser_refresh/v1', 'passed': True,
+                           'already_current': True, 'network_discovery_runs': 0,
+                           'association_tests': 0, 'enrichment_tests': 0}
         receipt['contrast_id'] = table.get('contrast_id')
         network_receipts.append(receipt)
         table.setdefault('metadata', {})['presentation_refresh'] = receipt
@@ -130,7 +140,7 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
     builder.preserved_source_projects = deepcopy(provenance.get('source_projects', []))
     builder.derived_audits.append({'schema': 'katana.report_presentation_refresh/v1',
         'source_manifest_sha256': before[str(manifest_path)], 'network_browsers': network_receipts,
-        'motif_significance': motif_audit, 'completed_analyses_rerun': 0})
+        'motif_significance': motif_audit, 'network_table_scope_binding': scope_binding, 'completed_analyses_rerun': 0})
     if manifest.get('release_status'): builder.release_status = deepcopy(manifest['release_status'])
     builder.create_archive = False
     result = builder.write()

@@ -237,6 +237,8 @@ class Builder:
         record = {'name': artifact.get('name', path.stem), 'analysis_id': artifact.get('analysis_id', ''),
                   'artifact_id': artifact.get('artifact_id'), 'source': self.copy(path), **table_schema(path)}
         record.update({k: artifact[k] for k in ('chapter', 'contrast_id', 'policy', 'unit') if k in artifact})
+        if not record.get('contrast_id') and len(artifact.get('contrast_ids') or []) == 1:
+            record['contrast_id'] = artifact['contrast_ids'][0]
         # Small complete tables receive a self-contained browser. Large result
         # tables retain complete Parquet/TSV access, never a false complete Top N.
         if record['rows'] <= 50000:
@@ -332,9 +334,13 @@ class Builder:
             if artifact.get('kind') == 'table' or path.suffix.lower() in ('.parquet', '.tsv', '.csv'):
                 self.table(artifact)
             elif path.suffix.lower() == '.html' and chapter not in (6, 7):
-                self.tables.append({'name': artifact.get('name', path.stem), 'source': self.copy(path, prefix='native-browsers'), 'analysis_id': artifact.get('analysis_id'), 'chapter': chapter})
+                self.tables.append({'name': artifact.get('name', path.stem), 'source': self.copy(path, prefix='native-browsers'), 'analysis_id': artifact.get('analysis_id'), 'chapter': chapter,
+                                    'artifact_id': artifact.get('artifact_id'),
+                                    'contrast_id': artifact['contrast_ids'][0] if len(artifact.get('contrast_ids') or []) == 1 else 'all'})
             elif chapter in (6, 7) and path.suffix.lower() not in ('.html', '.png', '.svg', '.jpg', '.jpeg') and not path.name.endswith('.vl.json'):
-                self.tables.append({'name': artifact.get('name', path.stem), 'source': self.copy(path, prefix='native-attachments'), 'analysis_id': artifact.get('analysis_id'), 'chapter': chapter})
+                self.tables.append({'name': artifact.get('name', path.stem), 'source': self.copy(path, prefix='native-attachments'), 'analysis_id': artifact.get('analysis_id'), 'chapter': chapter,
+                                    'artifact_id': artifact.get('artifact_id'),
+                                    'contrast_id': artifact['contrast_ids'][0] if len(artifact.get('contrast_ids') or []) == 1 else 'all'})
             elif chapter not in (6, 7):
                 self.figure(artifact, chapter)
         self.collect_rich({**self.source, 'artifacts': [*self.source['artifacts'], *self.source.get('extra_assets', [])]})
