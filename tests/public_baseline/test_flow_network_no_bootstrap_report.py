@@ -15,7 +15,8 @@ from katana_next.flow.runtime import canonical_hash, file_hash, write_json
 from katana_next.reports.engine import ASSET_ROOT, Builder
 from katana_next.reports.sources import load_source
 from test_flow_network_acceptance import _relative
-from test_flow_presentation import _two_contrast_network_collection, _fixture_collection
+from test_flow_presentation import (_two_contrast_network_collection, _fixture_collection,
+                                    _seal_fixture_collection)
 
 
 def _disabled_collection(tmp_path, *, declared=True, retain_bootstrap=False):
@@ -36,6 +37,35 @@ def _disabled_collection(tmp_path, *, declared=True, retain_bootstrap=False):
     products = {task["id"]: ([Path(row["path"]) for row in receipts[task["id"]][1]["outputs"]],
                              receipts[task["id"]][1]["execution_evidence"]) for task in tasks}
     for number, source in enumerate(sources):
+        # The no-bootstrap completed fixture has the same saved drawing inputs
+        # as a fresh native collection. Bind their actual bytes to its fit
+        # receipt, rather than bypassing the production completion gate.
+        from katana_cosplice.config import NetworkConfig
+        from katana_cosplice.network import correlation_matrix, signed_soft_adjacency
+        native = source / "fit-engine/04_network/observed"
+        settings = {"engine": "tom_hierarchical", "method": "bicor", "signed": True,
+                    "soft_power": 6, "edge_threshold": .1,
+                    "uncertainty": {"network_mode": "diagnostic_only"},
+                    "gene_prior": {"enabled": False}}
+        parameters = native / "parameters.json"
+        diagnostics = native / "network_diagnostics.tsv"
+        write_json(parameters, {"settings": settings, "synthetic_lifecycle_fixture": True})
+        pd.DataFrame([{"engine": "tom_hierarchical", "method": "bicor", "soft_power": 6,
+                       "signed_network": True, "uncertainty_weighting": False,
+                       "posterior_ensemble_correlation": False,
+                       "gene_mantel_prior_enabled": False}]).to_csv(diagnostics, sep="\t", index=False)
+        psi = pd.read_csv(native / "selected_event_matrix.tsv", sep="\t", index_col=0,
+                          float_precision="round_trip")
+        adjacency = signed_soft_adjacency(correlation_matrix(psi, "bicor"),
+                                         NetworkConfig(method="bicor", signed=True, soft_power=6))
+        # The legacy bootstrap fixture's arbitrary .8 edge is not a native
+        # bicor/power-6 output; this fixture records the actual unchanged kernel.
+        edges = [{"event_a": str(psi.index[i]), "event_b": str(psi.index[j]),
+                  "adjacency": float(adjacency[i, j])}
+                 for i in range(len(psi)) for j in range(i + 1, len(psi))
+                 if adjacency[i, j] >= .1]
+        pd.DataFrame(edges).to_csv(native / "network_edges.tsv", sep="\t", index=False)
+        products[f"fit-{number}"][0].extend([parameters, diagnostics])
         directory = source / "annotation-engine"
         events = pd.DataFrame({"event_key": ["e1", "e2", "e3", "e4"], "module": ["M01", "M01", "M02", "M02"],
             "module_membership_kME": [.9, -.95, .8, -.8], "hub_event_score": [.9, .95, .8, .8],
@@ -120,6 +150,7 @@ def disabled_report(tmp_path, monkeypatch):
                     "unit": "linkage fixture", "policy": None}]}})
     write_json(root / "artifacts.json", {"artifacts": _relative(native, root)})
     write_json(root / "report-project.json", {"extra_assets": _relative(result["extra_assets"], root)})
+    _seal_fixture_collection(root, plan, receipts)
     report = tmp_path / "report"; report.mkdir()
     shutil.copytree(ASSET_ROOT, report / "assets")
     builder = Builder(load_source({"project_manifest": str(root / "project.json"), "artifacts": native,
@@ -159,7 +190,18 @@ def test_disabled_report_complete_with_actual_kme_and_no_fake_confidence(disable
         assert not members.loc[assigned, "kME"].equals(members.loc[assigned, "module_membership"])
         assert members.loc[assigned, "hub_rank_abs_kME"].tolist() == [2., 1., 1., 2.]
         assert members.set_index("event_key").loc["e2", "kME"] == -.95
-        assert "kME is not resampling confidence" in (directory / "browser/ALL_MODULES.html").read_text(encoding="utf-8")
+        browser = (directory / "browser/ALL_MODULES.html").read_text(encoding="utf-8")
+        assert "kME is not resampling confidence" in browser
+        import re
+        graph = json.loads(re.search(r'<script id="module-display-data"[^>]*>(.*?)</script>',
+                                     browser, re.S).group(1))
+        assert set(graph["modules"]) == {"M01", "M02"}
+        assert graph["methods"]["matched_native_edges"] == 2
+        assert graph["methods"]["maximum_native_adjacency_difference"] == 0
+        assert graph["methods"]["network_discovery_runs"] == graph["methods"]["TOM_runs"] == 0
+        assert graph["methods"]["association_tests"] == graph["methods"]["enrichment_tests"] == 0
+        assert all(len(module["node_indices"]) == 2 and len(module["edges"]) == 1
+                   for module in graph["modules"].values())
         changed = copy.deepcopy(proof); changed["bootstrap"]["status"] = "completed"
         write_json(path, changed)
         with pytest.raises(ValueError, match="policy differs"):
