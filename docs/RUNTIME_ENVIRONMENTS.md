@@ -11,11 +11,11 @@ report and browser dependencies without PySide6. Neither route supplies study
 references: FASTA/GTF, motif libraries, CLIP peaks and pathway databases remain
 explicit, versioned inputs.
 
-The current Linux x86-64 development image is identified in the
-[current container record](validation/current-container-20261023.md), including
-its matching source commit, wheel, image ID and export checksum. Older runtime
-archives remain historical evidence. Build a matching wheel and image when
-changing the software revision. No registry image or PyPI release is claimed.
+The current Linux x86-64 development image, wheel and installed Conda binding
+are identified in the [entry/runtime record](validation/entrypoints-runtime-20261025.md).
+The [23 October container record](validation/current-container-20261023.md)
+and older archives remain historical evidence. Build a matching wheel and image
+when changing the software revision. No registry image or PyPI release is claimed.
 See [container build/load instructions](../containers/downstream/README.md). A complete runtime is a
 prerequisite for scientific workflow acceptance, not a substitute for it.
 The [generic workflow record](validation/generic-pipeline-20261023.md) tracks
@@ -98,7 +98,7 @@ scientific run. Full pipeline acceptance, statistical validity of a particular
 experiment and study completion remain separate checks. A successful import
 alone is not reported as a native fit.
 
-The `2.0.0b5.dev20261023` Linux x86-64 standalone build was installed in a new
+The historical `2.0.0b5.dev20261023` Linux x86-64 standalone build was installed in a new
 isolated environment and passed all 51 installation checks. The wheel was
 rebuilt from its source distribution and checked for browser assets, R scripts,
 author source and license notices. This environment uses Python 3.12.15,
@@ -113,6 +113,13 @@ changing output files. Windows passed 41 portable checks and actual browser
 HTTP checks. See the [validation record](validation/downstream-runtime-20261023.md)
 for artifact identities, scope and reproducible commands, and the
 [container instructions](../containers/downstream/README.md) for image builds.
+The current `2.0.0b5.dev20261025` artifacts retain the verified native layers and
+locks, check every installed package/resource against the new wheel, run
+`pip check`, and exercise public target restore/plan/cache reuse. The original
+51 native checks remain linked to their actual receipts and unchanged workers;
+they are not reported as 51 new executions for every application overlay.
+Complete-mode and report acceptance remain separate in the
+[current record](validation/entrypoints-runtime-20261025.md).
 
 The existing dynamicTreeCut 0.1.1 adapter converts finite, integral ordinal
 ranks to integer indices for recent SciPy versions. Ranking values, ordering,

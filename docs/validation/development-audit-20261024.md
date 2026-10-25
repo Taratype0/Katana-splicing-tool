@@ -1,5 +1,11 @@
 # Development and reproducibility audit — 24 October 2026
 
+**Historical snapshot.** Use the [current entry-point guide](../ENTRY_POINTS.md)
+for commands and present acceptance boundaries, and the
+[25 October entry/runtime record](entrypoints-runtime-20261025.md) for exact
+accepted artifacts. The remaining-work list below describes 24 October and is
+not the current completed-result reporting status; its original body is retained.
+
 This audit separates an accepted study deliverable from acceptance of the
 software that another user installs. It supersedes earlier statements that
 the Primary culture report was still paused or incomplete; the historical

@@ -6,18 +6,20 @@ The image contains no research data, genome references, motif libraries or
 study-specific configuration. Qt is not installed.
 
 Use `codex/package-development` for the commands below. The accepted runtime is
-Linux x86-64; native ARM64 and macOS execution have not been certified. Docker
-or a compatible Apptainer/Singularity setup must already be available on the
+Linux x86-64 with Docker; native ARM64 and macOS execution have not been
+certified. Apptainer/Singularity profiles are available but need qualification
+on the target site. The container engine must already be available on the
 execution host. Nextflow and Java run on that host; Katana's native dependencies
 run inside the image.
 
-There is no published registry image yet. The current local development image
-is `katana-downstream:dev-9546632`; its matching wheel, image ID, archive checksum
-and observed checks are in the [current acceptance record](../../docs/validation/pipeline-closure-20261024.md).
-The [earlier runtime record](../../docs/validation/downstream-runtime-20261023.md)
-refers to an older image. For later source revisions, build a matching wheel and
-image and retain their receipt. [Generic workflow evidence](../../docs/validation/generic-pipeline-20261023.md)
-is recorded separately from image installation checks.
+There is no published registry image yet. The
+[current entry/runtime record](../../docs/validation/entrypoints-runtime-20261025.md)
+identifies the `098ceae` development image and matching wheel. The
+[`dev-9546632` archive record](../../docs/validation/pipeline-closure-20261024.md)
+and [23 October runtime record](../../docs/validation/downstream-runtime-20261023.md)
+describe older images. An old archive does not acquire later fixes when source
+code changes. Build a matching wheel/image or obtain the exact artifact in its
+delivery record; keep image installation and scientific execution evidence separate.
 
 ## Build locally
 
@@ -34,7 +36,7 @@ Set `wheel` to the single file just built. From a clean checkout, use a commit
 tag to keep this build separate from earlier runtime-check images:
 
 ```sh
-wheel=dist/katana_splicing_tool-2.0.0b5.dev20261023-py3-none-any.whl
+wheel=dist/katana_splicing_tool-2.0.0b5.dev20261025-py3-none-any.whl
 image="katana-downstream:dev-$(git rev-parse --short HEAD)"
 python scripts/build_downstream_container.py \
   --wheel "$wheel" \
@@ -42,7 +44,9 @@ python scripts/build_downstream_container.py \
   --tag "$image"
 ```
 
-Use a new context directory outside the checkout. The helper pins the base by
+Select the actual single wheel produced by your build and verify its checksum;
+the example filename is not a download URL. Use a new context directory outside
+the checkout. The helper pins the base by
 digest and records the wheel, dependency locks and resulting image ID. It does
 not publish to a registry. A local Conda archive cache may be supplied through
 `--conda-cache`; only archives named in the lock are copied, then verified by

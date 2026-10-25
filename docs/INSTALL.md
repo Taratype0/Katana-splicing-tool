@@ -4,22 +4,31 @@
 
 Use the **`codex/package-development`** branch for the packaged workflow described here. `main` can lag behind it. Choose one of these routes:
 
+First choose the [entry point for your inputs](ENTRY_POINTS.md). The
+[current execution/runtime record](validation/entrypoints-runtime-20261025.md)
+binds the accepted software, wheel and image and separates raw bulk execution,
+completed-result reporting and target-analysis checks.
+
 Completed-result reporting is validated on Windows and matching Linux Conda
 and Docker environments, including full result links, network browsing and
 portable report refresh. The [validated versions and checks](validation/completed-results-runtime-20261025.md)
 identify the exact wheel/image and supported entry points. All four
-[GitHub CI jobs](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40151643701)
-passed. New FASTQ/BAM scientific runs have a
-[separate workflow validation record](validation/generic-pipeline-20261023.md).
+[GitHub CI jobs](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40184505728)
+passed at `098ceae`. The unchanged workflow sources retain the passing
+[native Nextflow CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40181808070)
+at `c448007`. New bulk FASTQ/BAM execution has
+[separate first/resume acceptance](validation/entrypoints-runtime-20261025.md#complete-bulk-workflow).
 
 | Route | What it supplies | Host requirements |
 | --- | --- | --- |
-| [Nextflow with the downstream image](../containers/downstream/README.md) | Katana Python, R and native analysis tools inside each downstream task; upstream modules use their own tool images | Linux execution host, Nextflow 25.10.4 or newer, compatible Java, Docker or supported Apptainer/Singularity setup |
+| [Nextflow with the downstream image](../containers/downstream/README.md) | Katana Python, R and native analysis tools inside each downstream task; upstream modules use their own tool images | Linux execution host, Nextflow 25.10.4 or newer and compatible Java; actual native acceptance uses Linux x86-64 Docker. Apptainer/Singularity profiles need site qualification. |
 | [Standalone Linux Conda](RUNTIME_ENVIRONMENTS.md#standalone-linux-environment) | The full native downstream runtime for direct CLI, Python and browser use | Linux x86-64 and Conda or micromamba |
 | [Python source installation](#source-checkout) | Browser, CLI, reports and Python analyses | Python 3.11 or newer; selected native computations need their additional runtime |
 
 For current artifact identities and check status, use the
-[completed-result report/runtime record](validation/completed-results-runtime-20261025.md).
+[entry/runtime record](validation/entrypoints-runtime-20261025.md). The
+[completed-result record](validation/completed-results-runtime-20261025.md)
+retains the earlier full study-report acceptance under its exact original artifacts.
 The [historical container acceptance record](validation/pipeline-closure-20261024.md)
 identifies the earlier development image and its matching wheel.
 The [earlier runtime record](validation/downstream-runtime-20261023.md) documents

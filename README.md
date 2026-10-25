@@ -16,7 +16,7 @@ A project records sample groups, biological replicates, donors, reference versio
 | BAM files and indexes, when needed | Sashimi, coverage and junction inspection, target-gene checks, and supported network or single-cell counting routes. |
 | Supported processed single-cell/nucleus data, MARVEL or long-read results | The corresponding downstream analyses or completed-result imports. |
 
-Analyses based on existing results do not require BAM files. Upstream raw-data processing continues to use established nf-core workflows; Katana connects their outputs with the experimental design. Input schemas and compatible references are specified for each analysis.
+Browsing completed results and assembling their report do not require BAM files. New read-backed calculations, including requested Sashimi, require BAMs and indexes accessible to the execution environment. The independent Katana Nextflow workflow reuses established nf-core modules for upstream processing and connects their outputs with the experimental design. Input schemas and compatible references are specified for each analysis.
 
 ## Analysis features
 
@@ -89,8 +89,9 @@ downstream-only and complete execution; completed work is retained with
 tasks, verify their products and enforce report completion. The existing
 `katana-report` command remains a renderer for already completed results.
 
-This integration is under execution acceptance, and is not an official nf-core
-release. A missing required calculation or resource blocks a complete report.
+Generated bulk FASTQ/BAM complete execution and all-cached repeats have passed. This is
+not an official nf-core release. A missing required calculation or resource
+blocks a complete report.
 Native MAPP fitting needs explicitly prepared, matching transcript quantities
 and motif-count inputs; these are not substituted with event PSI. See
 [integrated execution and current limits](docs/INTEGRATED_PIPELINE.md).
@@ -111,15 +112,20 @@ Depending on the analysis, Katana produces browsable result tables, interactive 
 
 ## Install and use
 
-The current implementation is on **`codex/package-development`**. Choose the installation that matches how you want to use Katana:
+The current implementation is on **`codex/package-development`**. Start with
+[Choose a Katana entry point](docs/ENTRY_POINTS.md), then choose the installation
+that matches how you want to use Katana:
 
 Completed-result reporting has been validated with the installed Windows
 package and matching Linux Conda and Docker environments. This covers the
 seven-section report, complete result links, network browsing and portable
-report refresh. See the [validated versions and checks](docs/validation/completed-results-runtime-20261025.md).
+report refresh. The [current entry/runtime record](docs/validation/entrypoints-runtime-20261025.md)
+identifies matching artifacts and the complete-mode and target checks.
 Ubuntu, Windows, interface and installed-wheel
-[CI checks](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40151643701)
-also passed. The default `main` branch can lag behind the development package.
+[CI checks](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40184505728)
+passed at `098ceae`. The unchanged workflow sources retain the passing
+[native Nextflow CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40181808070)
+at `c448007`. The default `main` branch can lag behind the development package.
 
 | Use | Installation |
 | --- | --- |
@@ -127,7 +133,7 @@ also passed. The default `main` branch can lag behind the development package.
 | Run downstream analyses directly from Python, CLI or browser | Use the [locked standalone Linux Conda environment](docs/RUNTIME_ENVIRONMENTS.md#standalone-linux-environment). |
 | Browse completed results, generate reports or develop the interface | Use the Python source installation below. Native R and analysis tools are additional requirements for new calculations. |
 
-New FASTQ/BAM analysis has a [separate workflow validation record](docs/validation/generic-pipeline-20261023.md); completed-result reporting does not rerun those analyses. Use the documented source or local container build below. Katana has not yet been published to PyPI or a container registry.
+Raw bulk FASTQ/BAM analysis has [separate execution checks](docs/validation/entrypoints-runtime-20261025.md); completed-result reporting does not rerun those analyses. Use the documented source or local container build below. Katana has not yet been published to PyPI or a container registry.
 
 For the browser and Python/CLI interface, use Python 3.11 or newer in a separate environment:
 
@@ -156,7 +162,13 @@ Inputs are registered in a project configuration. Sample/contrast-sheet onboardi
 
 The analyses described above are implemented in the existing Katana application and include both new calculations and completed-result imports. The source installation provides interface, CLI and Python access.
 
-Current development packages these capabilities for general distribution, including independent installation, dependency separation, input adapters, local/server execution and reports for new projects. The integrated Nextflow execution path is implemented on `codex/package-development`, with native scheduling, calculation components and installed-package checks. Full production FASTQ/BAM and release-environment acceptance remain in progress; a published PyPI installation command is not yet provided here.
+The development package includes independent installation, input adapters,
+local/server commands and reports. Generated bulk FASTQ/BAM complete execution,
+cache-only repeats, target restore and installed-runtime checks have passed. These software
+checks do not certify arbitrary assays, references or cluster deployments.
+Retained real-study results and their portable report have separate evidence.
+See the [current scope](docs/validation/entrypoints-runtime-20261025.md).
+A published PyPI installation command is not yet provided here.
 
 Further technical details are in [methods](docs/METHODS.md) and [development documentation](docs/development/ARCHITECTURE.md).
 

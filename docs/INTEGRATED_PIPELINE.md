@@ -1,16 +1,22 @@
 # Integrated bulk analysis and report
 
+Start with [Choose a Katana entry point](ENTRY_POINTS.md) for the concise input,
+command and current acceptance map.
+
 The workflow connects existing upstream modules, Katana computations and the
 approved seven-section report. It does not change the report layout, frozen
-MotifTrace algorithms or existing study results. It is a development workflow;
-clean-environment FASTQ/BAM production acceptance is still a separate release
-requirement. It is not an approved nf-core pipeline.
+MotifTrace algorithms or existing study results. Generated bulk FASTQ/BAM
+complete execution and unchanged cache repeats passed the
+[recorded checks](validation/entrypoints-runtime-20261025.md). Site deployment
+and biological suitability for a new experiment remain separate. It is not an
+approved nf-core pipeline.
 
 ## Execution
 
 Use the `codex/package-development` branch. For container execution, the host
-needs Nextflow 25.10.4 or newer, compatible Java and Docker or a supported
-Apptainer/Singularity installation. Build or load the matching Katana downstream
+needs Nextflow 25.10.4 or newer, compatible Java and a container engine. Native
+acceptance uses Linux x86-64 Docker; Apptainer/Singularity profiles need site
+qualification. Build or load the matching Katana downstream
 image using the [container instructions](../containers/downstream/README.md).
 That image supplies Python, R, RSeQC, FIMO and the other native dependencies;
 upstream nf-core tool modules keep their own tool images. The host does not need
