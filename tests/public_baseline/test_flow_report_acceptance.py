@@ -87,9 +87,24 @@ def test_verified_native_activity_render_does_not_require_absent_optional_parall
     assert not _mapp_gaps(gaps)
     panel = next(panel for panel in report["panels"] if panel.get("metadata", {}).get("component") == "mapp_native")
     assert panel["metadata"]["fit_task_ids"] == ["native"]
+    assert panel["metadata"]["calibrated_motiftrace_parallel"] is False
     assert {link["role"] for link in panel["data_links"]} == {"plot_data", "full_results"}
-    optional = next(row for row in report["unavailable"] if row.get("metadata", {}).get("component") == "mapp_parallel")
-    assert optional["metadata"]["requirement"] == "conditional_import"
+    assert not any(row.get("metadata", {}).get("component") == "mapp_parallel" for row in report["unavailable"])
+    provenance = read_json(out / "provenance.json")
+    decisions = [decision for audit in provenance["derived_views"]
+                 if isinstance(audit, dict) and audit.get("schema") == "katana.completed_component_status_reconciliation/v1"
+                 for decision in audit["decisions"] if decision["component"] == "mapp_parallel"]
+    assert len(decisions) == 1
+    optional = decisions[0]
+    assert optional["action"] == "optional_absence_retained_in_provenance"
+    assert optional["status"] == "not_computed" and optional["optional_source_supplied"] is False
+    assert optional["verified_evidence"] == []
+    original = optional["original_status"]
+    assert original["id"] == "rich-mapp_parallel-not-computed" and original["status"] == "not_computed"
+    assert original["metadata"]["component"] == "mapp_parallel"
+    assert original["metadata"]["requirement"] == "conditional_import"
+    assert original["metadata"]["optional_source_supplied"] is False
+    assert not any(decision.get("status") == "completed" for decision in decisions)
     assert "no new model is fitted" not in (out / "REPORT.html").read_text(encoding="utf-8")
     assert (out / "REPORT.zip").stat().st_size > 0
 
