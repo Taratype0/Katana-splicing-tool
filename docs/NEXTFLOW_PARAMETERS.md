@@ -6,6 +6,12 @@ and commands, use [NEXTFLOW_USAGE.md](NEXTFLOW_USAGE.md). Defaults below were
 checked against `pipeline/nextflow.config`, the public validator, importer and
 downstream planner for the accepted 25 October 2026 release.
 
+The four strandedness-inference parameters below are a **development-workflow
+addition** on `codex/package-development`. Use that checkout's
+`pipeline/main.nf`, as described in [the usage guide](NEXTFLOW_USAGE.md#2-installation-and-directory-layout).
+The frozen `v2.0.0-beta.5.dev20261025` wheel/export still requires explicit
+strandedness and does not gain these parameters from a documentation update.
+
 ## Configuration layers
 
 | Layer | Where it belongs | Examples |
@@ -99,6 +105,10 @@ original fitting universe.
 | --- | --- | --- |
 | `--skip_trimming` | `false` | Skip Trim Galore for FASTQ reads. BAMs are not trimmed. |
 | `--skip_fastqc` | `false` | Skip native FastQC only in upstream-only. Complete mode rejects `true`, because its fixed report requires measured sequencing QC. |
+| `--stranded_threshold` | `0.8` | Development `auto` only: minimum normalized sense or antisense fraction for a forward/reverse call. Matches the nf-core classification default. |
+| `--unstranded_threshold` | `0.1` | Development `auto` only: maximum absolute difference between normalized sense and antisense fractions for an unstranded call, after checking stranded calls. Inclusive boundary. |
+| `--strandedness_sample_size` | `200000` | Development `auto` only: RSeQC native maximum usable gene-overlapping alignment records sampled in BAM order. These are reads/alignment records, not paired fragments or random subsamples. |
+| `--strandedness_mapq` | `30` | Development `auto` only: native RSeQC minimum mapping quality for eligible alignments. This is independent of DEXSeq `--alignment_quality`. |
 | `--star_index` | unset | Prebuilt compatible STAR index directory. If absent, FASTQ input triggers index construction; a BAM-only study does not build an unused index. |
 | `--star_sjdb_overhang` | `99` | STAR genome-generation splice-junction overhang. Choose explicitly for the intended reference/library; it is not automatically `read_length-1`. |
 | `--star_genome_sa_index_nbases` | unset | Optional STAR index setting, useful when a reference requires a non-default value. |
@@ -113,6 +123,25 @@ alignment arguments include two-pass Basic, unsorted BAM output followed by
 Samtools sort/index, seed 0, NH/HI/AS/NM/MD attributes and unmapped records within
 BAM. Custom arguments require review of the actual process `ext.args` contract;
 blindly replacing it can remove required data.
+
+`auto` is a per-sample `strandedness` value, not a global `--strandedness` flag.
+Only those rows run RSeQC 5.0.3 after the existing genome-BAM audit/sort/index;
+FASTQ rows use their STAR BAM and BAM rows are not realigned. gffread 0.12.1
+builds BED12 from the matched **unfiltered** GTF, independently of the filtered
+native-analysis GTF. The sample-size/MAPQ defaults are RSeQC's native defaults;
+the direction thresholds follow nf-core's classification convention.
+
+Classification uses `sense/(sense+antisense)` and the corresponding reverse
+fraction, retaining the failed-to-determine fraction separately. A side at or
+above `stranded_threshold` wins; otherwise a difference at or below
+`unstranded_threshold` calls unstranded. Missing, invalid or undetermined
+evidence fails rather than falling back. Explicit declarations remain unchanged.
+Mixed explicit/`auto` requests are allowed before inference, but every selected
+comparison must have consistent **resolved** strandedness before native
+quantification/counting/testing begins. Requested/resolved settings and native
+RSeQC stdout/stderr are retained in pipeline QC and bundle provenance.
+See [the inference/tool pins](../pipeline/modules/local/infer_strandedness.provenance.json)
+and [nf-core's classification function](https://github.com/nf-core/rnaseq/blob/3.19.0/subworkflows/nf-core/fastq_qc_trim_filter_setstrandedness/main.nf#L19).
 
 ## 4. rMATS native testing
 

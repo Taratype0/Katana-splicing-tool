@@ -9,6 +9,30 @@ def requireParameters(names) {
     names.each { name -> if (!params[name]) error("Required parameter missing: --${name}") }
 }
 
+def validateStrandednessParameters() {
+    def stranded
+    def unstranded
+    try {
+        stranded = Double.parseDouble(params.stranded_threshold.toString())
+        unstranded = Double.parseDouble(params.unstranded_threshold.toString())
+    } catch (Exception ignored) {
+        error('Strandedness thresholds must be finite numeric values')
+    }
+    if (!Double.isFinite(stranded) || stranded <= 0.5 || stranded > 1 ||
+        !Double.isFinite(unstranded) || unstranded < 0 || unstranded >= 2 * stranded - 1) {
+        error('Require 0.5 < stranded_threshold <= 1 and 0 <= unstranded_threshold < 2*stranded_threshold-1')
+    }
+    if (!(params.strandedness_sample_size.toString() ==~ /^[0-9]+$/) ||
+        !(params.strandedness_mapq.toString() ==~ /^[0-9]+$/)) {
+        error('strandedness_sample_size and strandedness_mapq must be integers')
+    }
+    if (new BigInteger(params.strandedness_sample_size.toString()) < 1 ||
+        new BigInteger(params.strandedness_sample_size.toString()) > Integer.MAX_VALUE ||
+        new BigInteger(params.strandedness_mapq.toString()) > 255) {
+        error('Require positive strandedness_sample_size <= 2147483647 and 0 <= strandedness_mapq <= 255')
+    }
+}
+
 def inputDirectory(path) {
     def directory = path.toAbsolutePath().normalize()
     def outputs = file(params.outdir).toAbsolutePath().normalize()
@@ -30,6 +54,7 @@ workflow {
   --mode downstream-only  --project project.json --flow_plan /absolute/original/plan.json -resume
   --outdir results        -profile local|slurm,docker|singularity|apptainer
 Existing completed analysis: use downstream-only. Use -resume for this run's Nextflow cache.
+Samplesheet strandedness: forward|reverse|unstranded|auto. Auto uses matched genome-BAM RSeQC evidence.
 Required calculations are verified before the fixed seven-section report is accepted.'''
     } else {
         if (!(params.mode in ['complete', 'upstream-only', 'downstream-only'])) error('Invalid --mode')
@@ -64,6 +89,7 @@ Required calculations are verified before the fixed seven-section report is acce
                     Channel.value(inputDirectory(config_file.parent)), config_file.name)
             }
         } else {
+            validateStrandednessParameters()
             requireParameters(['input', 'contrasts', 'fasta', 'gtf'])
             if ((workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !params.dexseq_tools_container) {
                 error('Raw FASTQ/BAM execution requires --dexseq_tools_container pointing to the built DEXSeq tools image or SIF. See containers/dexseq-tools/README.md; no unpublished registry image is assumed.')

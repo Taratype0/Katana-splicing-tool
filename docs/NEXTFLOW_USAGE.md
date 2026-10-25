@@ -54,6 +54,21 @@ An existing export directory is not overwritten. A source checkout can instead
 use `pipeline/main.nf`. Pin the release/commit and matching images; do not mix
 an old wheel with a new workflow or assume a floating container tag is identical.
 
+**Development support for `strandedness=auto`:** use the
+`codex/package-development` checkout's `pipeline/main.nf`. The frozen
+`v2.0.0-beta.5.dev20261025` wheel and exported workflow retain their original
+explicit-strandedness requirement; they are not updated by these source changes.
+Until a new matching release is published, obtain the development workflow with:
+
+```sh
+git clone --branch codex/package-development https://github.com/Taratype0/Katana-splicing-tool.git katana-development
+nextflow run katana-development/pipeline/main.nf --help
+```
+
+For `auto`, replace the exported workflow path in the commands below with
+`katana-development/pipeline/main.nf`, retaining the other required study inputs
+and matching runtime configuration.
+
 Example study layout:
 
 ```text
@@ -105,7 +120,7 @@ Treated_3,Treated,../reads/Treated_3_R1.fastq.gz,../reads/Treated_3_R2.fastq.gz,
 | `condition` | Required; starts with a letter, then letters/digits/underscores. Matches contrast levels exactly, including case. |
 | `fastq_1` | Required for a FASTQ row. Relative paths resolve from the samplesheet directory. |
 | `fastq_2` | Mate file for paired reads; blank for single-end. FASTQ pairing determines `single_end`. |
-| `strandedness` | Required: `forward`, `reverse` or `unstranded`. `auto` is not accepted. |
+| `strandedness` | Required: `forward`, `reverse`, `unstranded`, or development-workflow `auto` as described below. Explicit values are preserved. |
 | `read_length` | Positive nominal read length, or supply study-wide `--read_length`. All samples in this route must declare the same nominal length. |
 | `subject` | Optional true biological-unit identity. If specified in a selected comparison, specify every participating subject. Do not reuse an identity for independent animals. |
 | `source` | Optional; `fastq` for FASTQ rows, `genome_bam` for BAM rows. Empty/`auto` is resolved from files. |
@@ -150,9 +165,9 @@ Provide a genome-coordinate `.bam`, not a transcriptome BAM or a BAM with
 removed sequences. The workflow audits header/reference contig compatibility,
 available sequence MD5 values, primary-record sequences/CIGAR, mate flags and
 read lengths before quantification, then creates its own sorted BAM and index.
-Supplying the original index is not required by this raw sheet. Strandedness
-and upstream read-removal history remain declared information, not conclusions
-reconstructed by the audit.
+Supplying the original index is not required by this raw sheet. The BAM audit
+does not establish strandedness; development-workflow `auto` adds the separate
+inference step below. Upstream read-removal history cannot be reconstructed.
 
 For variable observed lengths, `--allow_variable_read_length true` permits
 positive primary-record lengths up to the declared nominal length. It does not
@@ -161,6 +176,43 @@ comparison, layout and strandedness must be consistent.
 
 BAM QC describes the **supplied BAM records**. It cannot recover discarded
 reads, original raw FASTQ QC or the original trimming/alignment history.
+
+### Automatic strandedness in the development workflow
+
+Set `strandedness` to `auto` for each FASTQ or genome-BAM sample whose library
+direction is unknown. Declared `forward`/`reverse`/`unstranded` rows can coexist
+with `auto` rows and keep their declared values. Only `auto` samples incur
+inference.
+
+FASTQ samples first obtain their STAR genome BAM; supplied BAMs are not
+realigned. After the shared BAM/reference audit, sorting and indexing,
+gffread 0.12.1 converts the matched **unfiltered** GTF to BED12. RSeQC 5.0.3
+`infer_experiment.py` compares the alignments with these strand models. This
+uses no preliminary Salmon quantification or additional alignment. It supports
+the native paired- and single-end inference formats; complete-route runtime and
+assay qualification still have their documented scope.
+
+The defaults are `--strandedness_sample_size 200000` and
+`--strandedness_mapq 30`, matching RSeQC. Sampling takes the first eligible
+gene-overlapping alignment records in BAM order, rather than a random sample or
+200,000 paired fragments; the tool may read more records to find them.
+
+The sense and antisense fractions are normalized over their sum, excluding the
+separately reported failed-to-determine fraction. A normalized fraction of at
+least `--stranded_threshold 0.8` calls `forward` or `reverse`; otherwise an
+absolute difference of at most `--unstranded_threshold 0.1` calls `unstranded`.
+Other outcomes are **undetermined and stop execution**, with no unstranded
+fallback. Missing/malformed evidence, no informative alignments, or an inferred
+layout inconsistent with `single_end` also fail. All selected samples must be
+resolved and every selected comparison must have consistent actual
+strandedness before Salmon, DEXSeq or rMATS can start.
+
+The requested and resolved values, native RSeQC text/stderr evidence, parameters
+and inference audit are retained in pipeline QC outputs and bundle provenance.
+Failures keep their diagnostic evidence. Inference describes the supplied BAM;
+upstream strand filtering can bias it and cannot be reversed by this step.
+See the [four parameter definitions](NEXTFLOW_PARAMETERS.md#3-raw-read-qc-alignment-and-quantification)
+and [pinned module/tool provenance](../pipeline/modules/local/infer_strandedness.provenance.json).
 
 ## 4. Contrastsheet input and direction
 
@@ -459,6 +511,7 @@ Important outputs:
 | --- | --- |
 | `results/katana_bundle/manifest.json` | Upstream native artifact ledger and file hashes. |
 | `results/pipeline_info/` | Validated sheets/audits plus Nextflow trace, timeline, execution report and DAG. The Nextflow execution report is not the scientific Katana report. |
+| Pipeline QC strandedness evidence and bundle provenance | Development `auto` requests, resolved values, native RSeQC text/stderr and inference decisions; declared manual settings remain explicit. |
 | `results/bam/`, `quant/`, `dexseq_exon/`, `dtu/`, `DEG/` | Published upstream products. |
 | `results/downstream/` | Isolated downstream task products and collection, according to published process filenames. |
 | Final `REPORT.html`, `REPORT.zip` | Study report and portable download. Use the paths emitted by the actual command. |

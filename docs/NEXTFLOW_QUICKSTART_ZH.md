@@ -43,6 +43,19 @@ FASTQ/BAM 用同一条入口命令，由表中字段决定。配置、输入目�
 分开放；以上命令在研究项目根目录运行，不包含任何本机或 Dardel 固定路径。
 完整说明见 [Nextflow usage](NEXTFLOW_USAGE.md)。
 
+**开发版自动判断链特异性：** `strandedness=auto` 请使用
+`codex/package-development` 源码中的 `pipeline/main.nf`：
+
+```sh
+git clone --branch codex/package-development https://github.com/Taratype0/Katana-splicing-tool.git katana-development
+nextflow run katana-development/pipeline/main.nf --help
+```
+
+随后将上面运行命令的 `tools/katana-pipeline/main.nf` 换成
+`katana-development/pipeline/main.nf`，保留其他真实输入和匹配环境参数。
+已发布的 `v2.0.0-beta.5.dev20261025` wheel 和原有导出包保持冻结，仍要求手动填写
+链特异性；本次源码开发不会让旧安装包自动获得该功能。
+
 ## 2. 样本表怎么填
 
 可直接复制：[FASTQ 表](../examples/nextflow/samples_fastq.csv)、
@@ -70,11 +83,24 @@ Treated_1,Treated,../alignments/Treated_1.bam,reverse,false,150,animal_04
 - `sample` 唯一且以字母开头，只用字母、数字、下划线、点、连字符。
 - `condition` 以字母开头，只用字母、数字、下划线；与 contrast 表完全一致。
 - FASTQ 必须 gzip 压缩；`fastq_2` 留空表示单端，主验收覆盖双端。
-- `strandedness` 明确填 `forward/reverse/unstranded`，不支持自动猜测。
+- `strandedness` 填 `forward/reverse/unstranded`；上述开发版也接受 `auto`。
+  手动指定值保持不变，可与 `auto` 行混用。
 - BAM 必须是基因组坐标的 BAM，明确 `single_end`；转录组 BAM 不能替代。
 - `read_length` 为名义读长，可用 `--read_length` 补充；目前整套研究须一致。
 - `subject` 是真实生物学单位；独立动物填不同 ID，不能把 lane 当生物学重复。
 - 读段路径相对于 **samplesheet 所在目录**，因此 `inputs/samples.csv` 用 `../reads/`。
+
+`auto` 对 FASTQ、基因组 BAM 使用同一条判断路线：FASTQ 先经 STAR 对齐，现成 BAM
+不重新对齐；共享 BAM/参考审计、排序、索引后，由 gffread 将匹配的**完整未过滤 GTF**
+转成 BED12，再由 RSeQC 5.0.3 `infer_experiment.py` 判断。仅 `auto` 样本增加这一步。
+默认读取最多 200,000 条合格、与基因模型重叠的比对记录，MAPQ 至少 30；这是按 BAM
+顺序选取的读段记录，并非随机抽样或 200,000 个双端片段。
+
+正向、反向比例先在可判断记录中归一化：一侧至少 0.8 判为该方向；否则两侧比例差
+不超过 0.1 判为 `unstranded`。其他情况、没有可判断证据、格式/单双端不符均报错，
+**不会默认改成 unstranded**。所有所选样本判断完成、每个所选对比实际链特异性一致后，
+才进入 Salmon、DEXSeq、rMATS。请求值、实际值、原始 RSeQC 文本/日志及失败诊断
+保存在 pipeline QC 和 bundle provenance 中。此步骤不能还原 BAM 上游已丢弃的读段。
 
 **当前原始数据入口要求每个样本一行、一套已合并文件。** 不支持像 rnaseq 那样
 用重复 sample 行自动合并多 lane；先合并相容 lane，保留映射记录，或接入已合并 BAM。
@@ -119,6 +145,7 @@ SUPPA 由适配器固定输入顺序。DEXSeq 以实际原始 fold-change 列名
 | --- | --- |
 | 做哪些对比 | 上游 `contrasts.csv`；下游 `flow.json:contrast_ids` 再选已声明子集。 |
 | 参考版本 | `--fasta/--gtf/--reference_build/--annotation_release`。`--genome` 只是备用标签，不自动下载。 |
+| 自动链特异性，仅开发版 `auto` 行 | `--stranded_threshold=0.8`、`--unstranded_threshold=0.1`；RSeQC `--strandedness_sample_size=200000`、`--strandedness_mapq=30`。不改变手动指定行。 |
 | 排除假基因、线粒体编码基因 | 原生分析参考中默认执行，先于定量/差异；完整原注释和排除记录保留。 |
 | 普通 DAS / RS-DAS | `flow.json:event_set`，默认 `stable_significant` 即 RS-DAS；普通为 `significant`。 |
 | 读数支持 | 固定规则：选定对比中**每个样本** `IJC+SJC≥10`；不以平均值代替，无旧版额外一致性/近似 SE 门槛。 |

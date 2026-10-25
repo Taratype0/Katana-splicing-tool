@@ -25,6 +25,7 @@ include { TX2GENE_TXIMPORT } from '../subworkflows/local/tx2gene_tximport'
 include { DRIMSEQ_DEXSEQ_DTU } from '../subworkflows/local/drimseq_dexseq_dtu'
 include { RMATS } from '../subworkflows/local/rmats'
 include { SUPPA } from '../subworkflows/local/suppa'
+include { RESOLVE_STRANDEDNESS } from '../subworkflows/local/resolve_strandedness'
 
 def artifact(kind, path, relative_path, extra = [:]) {
     [extra + [kind: kind, relative_path: relative_path], path]
@@ -192,8 +193,15 @@ workflow KATANA_PIPELINE {
         .map { id, meta, bam, audit -> tuple(meta, bam) }
     SAMTOOLS_SORT(ch_audited_genome_input)
     SAMTOOLS_INDEX(SAMTOOLS_SORT.out.bam)
-    COLLATE_GENOME_BAM(SAMTOOLS_SORT.out.bam)
+    RESOLVE_STRANDEDNESS(SAMTOOLS_SORT.out.bam, SAMTOOLS_INDEX.out.bai,
+        VALIDATE_INPUTS.out.samples, VALIDATE_INPUTS.out.contrasts, PREPARE_REFERENCES.out.gtf,
+        Channel.value(file("${projectDir}/bin/katana_resolve_strandedness.py", checkIfExists: true)),
+        Channel.value(file("${projectDir}/bin/katana_validate_inputs.py", checkIfExists: true)))
+    ch_resolved_bam = RESOLVE_STRANDEDNESS.out.bam
+    ch_resolved_samples = RESOLVE_STRANDEDNESS.out.samplesheet.first()
+    COLLATE_GENOME_BAM(ch_resolved_bam)
     ch_versions = ch_versions.mix(CAPTURE_BAM_AUDIT.out.versions, SAMTOOLS_SORT.out.versions, SAMTOOLS_INDEX.out.versions, COLLATE_GENOME_BAM.out.versions)
+    ch_versions = ch_versions.mix(RESOLVE_STRANDEDNESS.out.versions)
 
     SALMON_GENOME_PROJECTION(COLLATE_GENOME_BAM.out.bam, PREPARE_REFERENCES.out.fasta,
         FILTER_ANALYSIS_GTF.out.gtf, Channel.value(file(params.salmon_archive)), params.salmon_archive_sha256)
@@ -201,19 +209,19 @@ workflow KATANA_PIPELINE {
 
     // Count each sample once, then fit only the declared contrasts.
     DEXSEQ_ANNOTATION(FILTER_ANALYSIS_GTF.out.gtf, params.aggregation)
-    DEXSEQ_DEU(FILTER_ANALYSIS_GTF.out.gtf, SAMTOOLS_SORT.out.bam, DEXSEQ_ANNOTATION.out.gff,
-        VALIDATE_INPUTS.out.samples, VALIDATE_INPUTS.out.contrasts,
+    DEXSEQ_DEU(FILTER_ANALYSIS_GTF.out.gtf, ch_resolved_bam, DEXSEQ_ANNOTATION.out.gff,
+        ch_resolved_samples, VALIDATE_INPUTS.out.contrasts,
         params.n_dexseq_plot, params.aggregation, params.alignment_quality)
     TX2GENE_TXIMPORT(SALMON_GENOME_PROJECTION.out.results.map { meta, directory -> tuple(meta, [directory]) }, FILTER_ANALYSIS_GTF.out.gtf)
     DRIMSEQ_DEXSEQ_DTU(TX2GENE_TXIMPORT.out.txi_dtu, TX2GENE_TXIMPORT.out.tximport_tx2gene,
-        VALIDATE_INPUTS.out.samples, VALIDATE_INPUTS.out.contrasts, params.n_dexseq_plot,
+        ch_resolved_samples, VALIDATE_INPUTS.out.contrasts, params.n_dexseq_plot,
         params.min_samps_gene_expr, params.min_samps_feature_expr, params.min_samps_feature_prop,
         params.min_feature_expr, params.min_feature_prop, params.min_gene_expr)
     ch_versions = ch_versions.mix(DEXSEQ_ANNOTATION.out.versions, DEXSEQ_DEU.out.versions,
         TX2GENE_TXIMPORT.out.versions, DRIMSEQ_DEXSEQ_DTU.out.versions)
 
     // Asynchronous task completion must never determine rMATS vector ordering.
-    ch_genome_conditions = SAMTOOLS_SORT.out.bam.map { meta, bam -> tuple(meta.condition, [meta, bam]) }
+    ch_genome_conditions = ch_resolved_bam.map { meta, bam -> tuple(meta.condition, [meta, bam]) }
         .groupTuple().map { condition, pairs ->
             def ordered = pairs.sort { a, b -> a[0].order_index <=> b[0].order_index }
             tuple(condition, ordered.collect { it[0] }, ordered.collect { it[1] })
@@ -225,7 +233,7 @@ workflow KATANA_PIPELINE {
 
     ADAPT_SUPPA_CONTRASTS(VALIDATE_INPUTS.out.contrasts)
     SUPPA(FILTER_ANALYSIS_GTF.out.gtf, TX2GENE_TXIMPORT.out.suppa_tpm,
-        VALIDATE_INPUTS.out.samples, ADAPT_SUPPA_CONTRASTS.out.contrasts,
+        ch_resolved_samples, ADAPT_SUPPA_CONTRASTS.out.contrasts,
         params.suppa_per_local_event, params.generateevents_boundary, params.generateevents_threshold,
         params.generateevents_exon_length, params.generateevents_event_type, params.generateevents_pool_genes,
         params.psiperevent_total_filter, params.diffsplice_local_event, params.diffsplice_method,
@@ -238,7 +246,7 @@ workflow KATANA_PIPELINE {
     ch_versions = ch_versions.mix(SUPPA.out.versions)
 
     KATANA_DIFFERENTIAL([id: 'study'], SALMON_GENOME_PROJECTION.out.results.map { it[1] }.collect(),
-        VALIDATE_INPUTS.out.samples, VALIDATE_INPUTS.out.contrasts, FILTER_ANALYSIS_GTF.out.gtf, params.design, '')
+        ch_resolved_samples, VALIDATE_INPUTS.out.contrasts, FILTER_ANALYSIS_GTF.out.gtf, params.design, '')
     ch_versions = ch_versions.mix(KATANA_DIFFERENTIAL.out.versions)
 
     // Every artifact has explicit provenance and destination. The export task
@@ -246,6 +254,7 @@ workflow KATANA_PIPELINE {
     ch_artifacts = PREPARE_REFERENCES.out.fasta.map { artifact('genome_fasta', it, 'refs/genome.fasta') }
         .mix(Channel.value(file("${projectDir}/assets/software-provenance.lock.json", checkIfExists: true)).map { artifact('provenance', it, 'provenance/software.lock.json') })
         .mix(Channel.value(file("${projectDir}/assets/migration-source-manifest.json", checkIfExists: true)).map { artifact('provenance', it, 'provenance/implementation-migration.json') })
+        .mix(Channel.value(file("${projectDir}/modules/local/infer_strandedness.provenance.json", checkIfExists: true)).map { artifact('provenance', it, 'provenance/strandedness/method-and-tool-pins.json') })
         .mix(FILTER_ANALYSIS_GTF.out.gtf.map { artifact('gtf', it, 'refs/annotation.gtf') })
         .mix(PREPARE_REFERENCES.out.gtf.map { artifact('provenance', it, 'provenance/reference/annotation.unfiltered.gtf') })
         .mix(ANALYSIS_TRANSCRIPTS.out.transcripts.map { artifact('transcript_fasta', it, 'refs/transcripts.fasta') })
@@ -253,6 +262,12 @@ workflow KATANA_PIPELINE {
         .mix(FILTER_ANALYSIS_GTF.out.receipt.map { artifact('provenance', it, 'provenance/gene_exclusions/filtering.receipt.json') })
         .mix(PREPARE_REFERENCES.out.hashes.map { artifact('provenance', it, 'provenance/reference/unfiltered_reference.sha256') })
         .mix(VALIDATE_INPUTS.out.audit.map { artifact('provenance', it, 'pipeline_info/input_audit.json') })
+        .mix(VALIDATE_INPUTS.out.samples.map { artifact('provenance', it, 'provenance/strandedness/samplesheet.requested.csv') })
+        .mix(RESOLVE_STRANDEDNESS.out.audit.map { artifact('provenance', it, 'provenance/strandedness/strandedness.audit.json') })
+        .mix(RESOLVE_STRANDEDNESS.out.summary.map { artifact('qc', it, 'qc/strandedness/strandedness.summary.tsv', [qc_type: 'strandedness', qc_phase: 'library']) })
+        .mix(RESOLVE_STRANDEDNESS.out.native_reports.map { meta, p -> artifact('provenance', p, "provenance/strandedness/${meta.id}.infer_experiment.txt", [sample_id: meta.id]) })
+        .mix(RESOLVE_STRANDEDNESS.out.native_logs.map { meta, p -> artifact('provenance', p, "provenance/strandedness/${meta.id}.infer_experiment.log", [sample_id: meta.id]) })
+        .mix(RESOLVE_STRANDEDNESS.out.bed.map { artifact('provenance', it, 'provenance/strandedness/reference_models.bed') })
         .mix(VALIDATE_REFERENCE.out.audit.map { artifact('provenance', it, 'provenance/reference_audit.json') })
         .mix(STAGE_FASTQ.out.audit.map { meta, p -> artifact('provenance', p, "provenance/fastq_staging/${meta.id}.json", [sample_id: meta.id]) })
         .mix(ADAPT_SUPPA_CONTRASTS.out.contrasts.map { artifact('provenance', it, 'provenance/contrastsheet.suppa.csv') })
@@ -333,7 +348,8 @@ workflow KATANA_PIPELINE {
     }
     ch_export_inputs = ch_artifacts.mix(ch_dtu_artifacts, ch_rmats_artifacts, ch_suppa_artifacts, ch_suppa_isoform_artifacts).collect(flat: false)
         .map { artifacts -> exportArtifactInputs(artifacts) }
-    ch_study_metadata = ch_rows_container.combine(ch_contrasts_container).map { row_container, contrast_container ->
+    ch_resolved_rows_container = ch_resolved_samples.splitCsv(header: true).collect().map { [records: it] }
+    ch_study_metadata = ch_resolved_rows_container.combine(ch_contrasts_container).map { row_container, contrast_container ->
         def rows = row_container.records
         def contrasts = contrast_container.records
         [analysis_purpose: params.analysis_purpose, design: params.design,
@@ -342,6 +358,11 @@ workflow KATANA_PIPELINE {
                 annotation_release: params.annotation_release ?: null,
                 validation: 'user_declared_labels_not_independently_verified'],
             quantification_method: 'salmon_2.8.0_genome_projection',
+            strandedness_resolution: [audit: 'provenance/strandedness/strandedness.audit.json',
+                method_for_auto: 'rseqc_infer_experiment_on_matched_genome_bam',
+                stranded_threshold: params.stranded_threshold, unstranded_threshold: params.unstranded_threshold,
+                sample_size: params.strandedness_sample_size, mapq: params.strandedness_mapq,
+                ambiguous_policy: 'fail_without_unstranded_fallback'],
             gene_exclusions: [exclude_pseudogenes: true, exclude_mitochondrial: true,
                 application_stage: 'before_quantification_counts_and_differential_models',
                 receipt: 'provenance/gene_exclusions/filtering.receipt.json',
@@ -362,15 +383,15 @@ workflow KATANA_PIPELINE {
                 rmats_group1: it.treatment, rmats_group2: it.control, deg_target: it.treatment, deg_reference: it.control,
                 suppa_input1: it.control, suppa_input2: it.treatment, suppa_direction: 'treatment_minus_control'] }]
     }
-    KATANA_EXPORT(ch_export_inputs, VALIDATE_INPUTS.out.samples, VALIDATE_INPUTS.out.contrasts,
+    KATANA_EXPORT(ch_export_inputs, ch_resolved_samples, VALIDATE_INPUTS.out.contrasts,
         Channel.value(file("${projectDir}/bin/katana_bundle.py", checkIfExists: true)), ch_study_metadata)
 
     emit:
     bundle = KATANA_EXPORT.out.bundle
     quant = SALMON_GENOME_PROJECTION.out.results
-    bam = SAMTOOLS_SORT.out.bam
+    bam = ch_resolved_bam
     bai = SAMTOOLS_INDEX.out.bai
-    samplesheet = VALIDATE_INPUTS.out.samples
+    samplesheet = ch_resolved_samples
     contrastsheet = VALIDATE_INPUTS.out.contrasts
     versions = ch_versions
     qc_files = ch_qc_files.flatten()

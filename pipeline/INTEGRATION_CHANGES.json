@@ -181,7 +181,12 @@
     {
       "path": "workflows/katana_core.nf",
       "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
-      "integrated_sha256": "440051fb42c99b165fcc2bfb6757f8c8dc124ac5cfc13f2ee3a6467a114f49b7"
+      "integrated_sha256": "498ab262c699090253eff1b5b8ae77ff7fae51f5695320a11bd358be2d57c84c"
+    },
+    {
+      "path": "bin/katana_validate_inputs.py",
+      "snapshot_sha256": "0d679b57d85dc61863ca509ed57932469e07137bd815b02e1330260f6f493195",
+      "integrated_sha256": "7f6ec50f870697573fb5b47993028a4d1c76f486a52c3467019d0a7fbece5920"
     }
   ],
   "purpose": [
@@ -193,7 +198,8 @@
     "Preserve declared reference, assay and pre-analysis exclusion provenance through bundle export and verified import",
     "Qualify BioContainers Docker image names with quay.io while retaining all tool versions, scripts and Singularity URLs",
     "Require an explicitly built DEXSeq tools image instead of the unpublished placeholder; preserve native scripts and parameters",
-    "Select the representative DEXSeq count version by sample identity and matched producer rather than asynchronous arrival; retain native count scripts, parameters and completed results"
+    "Select the representative DEXSeq count version by sample identity and matched producer rather than asynchronous arrival; retain native count scripts, parameters and completed results",
+    "Resolve per-sample auto strandedness with matched genome-BAM RSeQC evidence before Salmon, DEXSeq and rMATS; preserve declarations and native evidence, and reject unresolved or conflicting libraries"
   ],
   "scientific_test_algorithms_replaced": false,
   "already_completed_results_refitted": false

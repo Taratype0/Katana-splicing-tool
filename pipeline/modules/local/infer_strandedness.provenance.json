@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "purpose": "Genome-BAM strandedness inference shared by FASTQ and BAM entry, for samples explicitly requesting auto",
+  "upstream_rseqc_module": {
+    "repository": "https://github.com/nf-core/modules",
+    "git_commit": "05954dab2ff481bcb999f24455da29a5828af08d",
+    "path": "modules/nf-core/rseqc/inferexperiment",
+    "reference_pipeline": "https://github.com/nf-core/rnaseq/tree/3.19.0",
+    "files": {
+      "main.nf": {
+        "url": "https://raw.githubusercontent.com/nf-core/modules/05954dab2ff481bcb999f24455da29a5828af08d/modules/nf-core/rseqc/inferexperiment/main.nf",
+        "sha256": "5cba1233fe7b8e4809d46c31e4ab26a4ce027465a152779b93b28b7ff6239499"
+      },
+      "environment.yml": {
+        "url": "https://raw.githubusercontent.com/nf-core/modules/05954dab2ff481bcb999f24455da29a5828af08d/modules/nf-core/rseqc/inferexperiment/environment.yml",
+        "sha256": "287b9dc65c1a997402ab17f59263b95d2c142e31de0d09c99a3689130495b7c2"
+      }
+    }
+  },
+  "tool_pins": {
+    "rseqc": {
+      "version": "5.0.3",
+      "docker": "quay.io/biocontainers/rseqc:5.0.3--py39hf95cd2a_0",
+      "docker_manifest_digest": "sha256:9fc7027efc23a9dd2309ead1d285034da324eae64e6e940cb0760f4525fa28aa",
+      "singularity": "https://depot.galaxyproject.org/singularity/rseqc:5.0.3--py39hf95cd2a_0",
+      "registry_metadata": "https://quay.io/api/v1/repository/biocontainers/rseqc/tag/?specificTag=5.0.3--py39hf95cd2a_0",
+      "sdist_url": "https://files.pythonhosted.org/packages/8a/a0/49c6c15dd12c6219ea33d2286ec8ed7b77e793d3e817efab00bfd711dd85/RSeQC-5.0.3.tar.gz",
+      "sdist_sha256": "869f542e08f50c8874280d58e4f5565857b0aebac66a8eceef3f23016175061e"
+    },
+    "gffread": {
+      "version": "0.12.1",
+      "docker": "quay.io/biocontainers/gffread:0.12.1--h8b12597_0",
+      "docker_manifest_digest": "sha256:bb9ddd72fd11142e941ed626c51f4404c40bc2fc27f0faac52dcbcfa77f827b3",
+      "singularity": "https://depot.galaxyproject.org/singularity/gffread:0.12.1--h8b12597_0",
+      "registry_metadata": "https://quay.io/api/v1/repository/biocontainers/gffread/tag/?specificTag=0.12.1--h8b12597_0",
+      "source_git_commit": "5eae8078bf6be092aaa415919e85d5faedd4e2ed",
+      "source_url": "https://raw.githubusercontent.com/gpertea/gffread/5eae8078bf6be092aaa415919e85d5faedd4e2ed/gffread.cpp",
+      "source_sha256": "281c02585f052164abd5e33298feaa3e44f2d86bb48d782704d0c9a3fd36042e",
+      "option": "--bed",
+      "option_semantics": "Output transcript records as BED rather than GFF3, verified in pinned source; retain first 12 columns and validate coordinate/strand/block-count basics."
+    }
+  },
+  "adaptations": [
+    "Keep classic versions.yml emission for the existing pipeline version collector; do not adopt new topic/eval outputs.",
+    "Stage sorted genome BAM and BAI as one tuple; the native tool itself streams BAM records without index access.",
+    "Explicit sample_size and mapq arguments replace the open-ended upstream task.ext.args interface.",
+    "Capture native stdout as txt and stderr as log, including the native usable-read count.",
+    "Use fully qualified Quay image identifiers and recognize both Singularity and Apptainer.",
+    "Produce BED12 with the existing gffread0.12.1 container; no UCSC download or independent annotation resource.",
+    "Empty stub files do not invent measured strand fractions.",
+    "Request one CPU via process_single for the sequential native alignment stream; tool arguments and sampling defaults are unchanged."
+  ],
+  "native_contract": {
+    "default_sample_size": 200000,
+    "default_mapq": 30,
+    "sampling": "First eligible gene-overlapping alignment records in BAM stream order; not random subsampling and not paired fragment counts.",
+    "usable_read_count_stderr_pattern": "Total N usable reads were sampled",
+    "paired_forward_pattern": "1++,1--,2+-,2-+",
+    "paired_reverse_pattern": "1+-,1-+,2++,2--",
+    "single_forward_pattern": "++,--",
+    "single_reverse_pattern": "+-,-+",
+    "invalid_layout": "Mixture/Unknown Data type or a native layout that disagrees with declared single_end must fail in the caller.",
+    "native_filtering": "QC-failed, duplicate, secondary, unmapped and mapq-below-cutoff records are skipped; source does not explicitly skip supplementary records."
+  },
+  "classification_reference": {
+    "url": "https://github.com/nf-core/rnaseq/blob/3.19.0/subworkflows/nf-core/fastq_qc_trim_filter_setstrandedness/main.nf#L19",
+    "normalization": "sense/(sense+antisense), antisense/(sense+antisense)",
+    "stranded_threshold": 0.8,
+    "unstranded_threshold": 0.1,
+    "unstranded_comparison": "abs(normalized_sense-normalized_antisense) <= threshold",
+    "unresolved_policy": "Caller fails unresolved auto inference; no silent unstranded fallback."
+  },
+  "local_files_sha256": {
+    "pipeline/modules/local/infer_strandedness.nf": "3a00cf85dace508de8b460e45775f05ec6db66d86aa6b1175a4defbc76fd00e6",
+    "pipeline/modules/local/infer_strandedness.rseqc.environment.yml": "287b9dc65c1a997402ab17f59263b95d2c142e31de0d09c99a3689130495b7c2",
+    "pipeline/modules/local/infer_strandedness.gffread.environment.yml": "f7d090ca0c80077aaadcc25a89b6a68dae17b1525f98a4d9d658b0686b1e2827"
+  },
+  "validation": {
+    "source_and_registry_metadata_verified": true,
+    "environment_matches_pinned_upstream_byte_for_byte": true,
+    "native_container_execution": "not performed by this agent",
+    "scientific_dataset_execution": "not performed"
+  }
+}

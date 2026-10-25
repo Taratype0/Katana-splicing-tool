@@ -58,6 +58,13 @@ katana-flow export-pipeline --outdir tools/katana-pipeline
 The examples below use that exported `tools/katana-pipeline/main.nf`. Keep
 configuration/input directories separate from work and output directories.
 
+For the development addition `strandedness=auto`, use a
+`codex/package-development` checkout's `pipeline/main.nf` in place of that export;
+see [the development checkout command](NEXTFLOW_USAGE.md#2-installation-and-directory-layout).
+The published `v2.0.0-beta.5.dev20261025` wheel and original workflow export remain
+frozen and still require manual strandedness. No update to those assets is
+implied by the new source support.
+
 ## 1. New bulk FASTQ or BAM
 
 Both use the same command; the samplesheet declares the actual files:
@@ -74,14 +81,24 @@ nextflow run tools/katana-pipeline/main.nf -profile docker \
   --outdir results -work-dir work
 ```
 
-The current raw-entry sheet requires unique sample IDs, `condition` and explicit
-`strandedness`, plus `fastq_1`/optional `fastq_2` **or** `genome_bam`. Supply a
+The raw-entry sheet requires unique sample IDs, `condition` and `strandedness`,
+plus `fastq_1`/optional `fastq_2` **or** `genome_bam`. Supply a
 positive `read_length` for each sample or `--read_length` for the study. BAM
 input also requires explicit `single_end=true/false`. `source`, when supplied,
 is `fastq` or `genome_bam`; a transcriptome BAM does not substitute for it.
 The matched-reference and BAM-content checks still run. File paths must already
 be local or mounted. Do not use a downstream metadata-adapter example as a
 replacement for this raw-entry schema.
+
+The development workflow accepts `auto` alongside explicit
+`forward`/`reverse`/`unstranded` rows. Only `auto` rows add RSeQC inference after
+the shared BAM audit/sort/index, using the matched unfiltered GTF converted to
+BED12. FASTQ rows use their STAR alignments; supplied BAMs are not realigned.
+All selected samples must resolve and each selected comparison must retain
+consistent actual strandedness before Salmon/DEXSeq/rMATS. Undetermined calls
+stop execution without an unstranded fallback. Native evidence and requested/
+resolved settings are retained in pipeline QC and bundle provenance; see
+[the inference rules and defaults](NEXTFLOW_USAGE.md#automatic-strandedness-in-the-development-workflow).
 
 The contrast sheet uses `contrast,treatment,control`: include only the
 comparisons you want, with that direction. The project template declares

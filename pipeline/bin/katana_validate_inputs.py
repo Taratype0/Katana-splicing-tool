@@ -113,8 +113,8 @@ def validate_samples(rows: list[dict[str, str]], base: Path, *, check: bool, rea
                 raise InputError(f"{sample}: genome_bam must be a BAM file")
         row["single_end"] = str(single).lower()
         strand = row.get("strandedness", "").lower()
-        if strand not in {"forward", "reverse", "unstranded"}:
-            raise InputError(f"{sample}: explicit strandedness must be forward, reverse or unstranded")
+        if strand not in {"forward", "reverse", "unstranded", "auto"}:
+            raise InputError(f"{sample}: strandedness must be forward, reverse, unstranded or auto")
         row["strandedness"] = strand
         nominal_length = row.get("read_length") or read_length
         try:
@@ -180,7 +180,11 @@ def validate_contrasts(rows: list[dict[str, str]], samples: list[dict[str, str]]
             if analysis_purpose == "analysis" and subjects and len(subjects) != len(set(subjects)):
                 raise InputError(f"{name}: repeated subjects within {condition}; technical partitions are not biological replicates")
         for field in ("single_end", "strandedness", "read_length"):
-            if len({member[field] for member in selection}) > 1:
+            # auto is an unresolved declaration, not a fourth library type.
+            # Known conflicting values still fail here; auto samples are checked
+            # again against every selected arm after native strand inference.
+            values = {member[field] for member in selection if field != "strandedness" or member[field] != "auto"}
+            if len(values) > 1:
                 raise InputError(f"{name}: mixed {field} is unsupported in the shared rMATS complete-bundle route")
         left_subjects = {member["subject"] for member in groups[treatment] if member["subject"]}
         right_subjects = {member["subject"] for member in groups[control] if member["subject"]}
