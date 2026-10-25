@@ -80,7 +80,18 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
     if manifest.get('schema') != 'katana.approved_report/v1':
         raise ValueError('A complete portable Katana report manifest is required.')
     project_value = _project(manifest, project)
-    before = {str(p): digest(p) for p in (manifest_path, provenance_path, source / 'REPORT.html')}
+    control_paths = [manifest_path, provenance_path, source / 'REPORT.html']
+    previous_receipt = source / 'presentation-refresh.json'
+    if previous_receipt.is_file():
+        control_paths.append(previous_receipt)
+    before = {str(p): digest(p) for p in control_paths}
+    before_stats = {str(p): (p.stat().st_size, p.stat().st_mtime_ns) for p in control_paths}
+
+    def original_unchanged():
+        return all(p.is_file() and digest(p) == before[str(p)]
+                   and (p.stat().st_size, p.stat().st_mtime_ns) == before_stats[str(p)]
+                   for p in control_paths)
+
     provenance = json.loads(provenance_path.read_text('utf-8-sig'))
     output.mkdir(parents=True)
     excluded = {'REPORT.html', 'REPORT.zip', 'report-manifest.json', 'provenance.json'}
@@ -151,10 +162,16 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
     receipt = {'schema': 'katana.completed_report_refresh/v1', 'status': 'completed',
         'utc': datetime.now(timezone.utc).isoformat(), 'source_manifest_sha256': before[str(manifest_path)],
         'network_browsers': network_receipts, 'motif_significance': motif_audit,
-        'completed_analyses_rerun': 0, 'original_report_unchanged': all(digest(Path(p)) == sha for p, sha in before.items()),
+        'completed_analyses_rerun': 0, 'original_report_unchanged': original_unchanged(),
         'compact': compact}
     if not receipt['original_report_unchanged']:
         raise RuntimeError('Original report changed during refresh.')
-    (output / 'presentation-refresh.json').write_text(json.dumps(receipt, indent=2, default=str) + '\n', encoding='utf-8')
+    # The copied lifecycle receipt can share an inode with the source. Replace
+    # its directory entry instead of writing through that retained hard link.
+    from .compact import _atomic_write
+    _atomic_write(output / 'presentation-refresh.json',
+                  (json.dumps(receipt, indent=2, default=str) + '\n').encode('utf-8'))
     if create_archive: write_archive(output)
+    if not original_unchanged():
+        raise RuntimeError('Original report changed during refresh.')
     return result
