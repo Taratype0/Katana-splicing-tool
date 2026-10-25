@@ -113,10 +113,13 @@ Depending on the analysis, Katana produces browsable result tables, interactive 
 
 The current implementation is on **`codex/package-development`**. Choose the installation that matches how you want to use Katana:
 
-The [current reproducibility audit](docs/validation/development-audit-20261024.md)
-distinguishes the accepted real-study report and source CI from final
-installed-package and matching release-image checks. The default `main`
-branch and earlier accepted image do not yet include all development changes.
+Completed-result reporting has been validated with the installed Windows
+package and matching Linux Conda and Docker environments. This covers the
+seven-section report, complete result links, network browsing and portable
+report refresh. See the [validated versions and checks](docs/validation/completed-results-runtime-20261025.md).
+Ubuntu, Windows, interface and installed-wheel
+[CI checks](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40151643701)
+also passed. The default `main` branch can lag behind the development package.
 
 | Use | Installation |
 | --- | --- |
@@ -124,7 +127,7 @@ branch and earlier accepted image do not yet include all development changes.
 | Run downstream analyses directly from Python, CLI or browser | Use the [locked standalone Linux Conda environment](docs/RUNTIME_ENVIRONMENTS.md#standalone-linux-environment). |
 | Browse completed results, generate reports or develop the interface | Use the Python source installation below. Native R and analysis tools are additional requirements for new calculations. |
 
-The Linux image and standalone environment have passed [installation and native-runtime checks](docs/validation/downstream-runtime-20261023.md). Those records identify a specific earlier wheel and image; newer development changes require a newly built matching wheel and image. [Generic workflow acceptance](docs/validation/generic-pipeline-20261023.md) is recorded separately. There is no published Katana image registry or PyPI release yet; use the documented local build and verify its artifact identity.
+New FASTQ/BAM analysis has a [separate workflow validation record](docs/validation/generic-pipeline-20261023.md); completed-result reporting does not rerun those analyses. Use the documented source or local container build below. Katana has not yet been published to PyPI or a container registry.
 
 For the browser and Python/CLI interface, use Python 3.11 or newer in a separate environment:
 

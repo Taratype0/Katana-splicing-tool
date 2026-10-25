@@ -4,13 +4,13 @@
 
 Use the **`codex/package-development`** branch for the packaged workflow described here. `main` can lag behind it. Choose one of these routes:
 
-Read the [current development and reproducibility audit](validation/development-audit-20261024.md)
-before selecting an artifact. The accepted `dev-9546632` container below
-predates the latest network fixes; it is a historical installation check,
-not the final matching release image. The complete real-study report and its
-format have been accepted. The development package now provides explicit
-multi-source completed-result assembly; final installed-wheel/image acceptance
-is recorded separately from acceptance of that report.
+Completed-result reporting is validated on Windows and matching Linux Conda
+and Docker environments, including full result links, network browsing and
+portable report refresh. The [validated versions and checks](validation/completed-results-runtime-20261025.md)
+identify the exact wheel/image and supported entry points. All four
+[GitHub CI jobs](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40151643701)
+passed. New FASTQ/BAM scientific runs have a
+[separate workflow validation record](validation/generic-pipeline-20261023.md).
 
 | Route | What it supplies | Host requirements |
 | --- | --- | --- |
@@ -18,8 +18,10 @@ is recorded separately from acceptance of that report.
 | [Standalone Linux Conda](RUNTIME_ENVIRONMENTS.md#standalone-linux-environment) | The full native downstream runtime for direct CLI, Python and browser use | Linux x86-64 and Conda or micromamba |
 | [Python source installation](#source-checkout) | Browser, CLI, reports and Python analyses | Python 3.11 or newer; selected native computations need their additional runtime |
 
-For the recorded development image and its matching wheel, use the
-[historical container acceptance record](validation/pipeline-closure-20261024.md).
+For current artifact identities and check status, use the
+[completed-result report/runtime record](validation/completed-results-runtime-20261025.md).
+The [historical container acceptance record](validation/pipeline-closure-20261024.md)
+identifies the earlier development image and its matching wheel.
 The [earlier runtime record](validation/downstream-runtime-20261023.md) documents
 the standalone Linux and Windows Python/browser installations; its older image
 does not include subsequent workflow/report fixes. Match the wheel, image and
