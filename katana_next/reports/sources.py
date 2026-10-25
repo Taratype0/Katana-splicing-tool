@@ -9,7 +9,9 @@ def digest(path):
         return hashlib.file_digest(handle, 'sha256').hexdigest()
 
 
-def _absolute_path(value, base):
+def _absolute_path(value, base, mapper=None):
+    if mapper is not None:
+        return mapper.resolve(value, base)
     path = Path(value).expanduser()
     return (path if path.is_absolute() else base / path).resolve()
 
@@ -25,7 +27,7 @@ def _native_paths(raw, base, mapper=None):
     def normalize(record, keys):
         for key in keys:
             if record.get(key) and not _is_remote_uri(record[key]):
-                record[key] = str(_absolute_path(record[key], base))
+                record[key] = str(_absolute_path(record[key], base, mapper))
 
     normalize(native, ('input_root', 'output_root'))
     normalize(native.get('annotation') or {}, ('gtf', 'genome_fasta', 'transcript_fasta'))
@@ -45,12 +47,12 @@ def _view_paths(raw, base, mapper=None):
         for record in views.get(section, []):
             for key in keys:
                 if record.get(key):
-                    record[key] = str(_absolute_path(record[key], base))
+                    record[key] = str(_absolute_path(record[key], base, mapper))
             for link in record.get('data_links', []):
                 if link.get('path'):
-                    link['path'] = str(_absolute_path(link['path'], base))
+                    link['path'] = str(_absolute_path(link['path'], base, mapper))
                 if link.get('source_collection_root'):
-                    link['source_collection_root'] = str(_absolute_path(link['source_collection_root'], base))
+                    link['source_collection_root'] = str(_absolute_path(link['source_collection_root'], base, mapper))
     return views
 
 
@@ -130,7 +132,7 @@ def _load_source(project, catalog=None, *, inline_base, mapper=None):
     value = mapper.project(value)
     native_base = descriptor_base
     if value.get('project_manifest'):
-        manifest = _absolute_path(value['project_manifest'], descriptor_base)
+        manifest = _absolute_path(value['project_manifest'], descriptor_base, mapper)
         native = json.loads(manifest.read_text('utf-8-sig'))
         source_files.append(manifest)
         native_base = manifest.parent
@@ -150,9 +152,9 @@ def _load_source(project, catalog=None, *, inline_base, mapper=None):
             catalog, catalog_base = records, descriptor_base
         records = None
     output_value = native.get('output_root', native_base)
-    output_root = None if _is_remote_uri(output_value) else _absolute_path(output_value, native_base)
+    output_root = None if _is_remote_uri(output_value) else _absolute_path(output_value, native_base, mapper)
     if records is None:
-        candidates = [_absolute_path(catalog, catalog_base)] if catalog else [native_base / 'native-artifact-catalog.json']
+        candidates = [_absolute_path(catalog, catalog_base, mapper)] if catalog else [native_base / 'native-artifact-catalog.json']
         if not catalog and output_root is not None:
             candidates.append(output_root / '.katana/artifact_manifest.json')
         for path in candidates:
@@ -181,7 +183,7 @@ def _load_source(project, catalog=None, *, inline_base, mapper=None):
             continue
         if record.get('project_id') and record['project_id'] != native.get('project_id'):
             raise ValueError('Artifact belongs to a different project; use an explicitly verified supplemental source.')
-        path = _absolute_path(record.get('path', ''), native_base)
+        path = _absolute_path(record.get('path', ''), native_base, mapper)
         if not path.is_file():
             record['missing_reason'] = 'Recorded completed artifact file is unavailable.'
         record['path'] = str(path.resolve())
@@ -205,17 +207,17 @@ def _load_source(project, catalog=None, *, inline_base, mapper=None):
         if asset.get('status', 'complete') not in ('complete', 'completed'):
             raise ValueError('Extra report assets must be explicitly completed.')
         if asset.get('path'):
-            asset['path'] = str(_absolute_path(asset['path'], descriptor_base))
+            asset['path'] = str(_absolute_path(asset['path'], descriptor_base, mapper))
         for key, path in meta.get('exports', {}).items():
             if key in ('png', 'svg') and path:
-                meta['exports'][key] = str(_absolute_path(path, descriptor_base))
+                meta['exports'][key] = str(_absolute_path(path, descriptor_base, mapper))
         for link in meta.get('data_links', []):
             if link.get('path'):
-                link['path'] = str(_absolute_path(link['path'], descriptor_base))
+                link['path'] = str(_absolute_path(link['path'], descriptor_base, mapper))
     for raw in value.get('extra_views', []):
         view_base = descriptor_base
         if isinstance(raw, str):
-            path = _absolute_path(raw, descriptor_base)
+            path = _absolute_path(raw, descriptor_base, mapper)
             raw = json.loads(path.read_text('utf-8-sig'))
             source_files.append(path)
             view_base = path.parent
@@ -227,7 +229,7 @@ def _load_source(project, catalog=None, *, inline_base, mapper=None):
     supplemental = []
     for item in value.get('supplemental_sources', []):
         if isinstance(item, str):
-            item = str(_absolute_path(item, descriptor_base))
+            item = str(_absolute_path(item, descriptor_base, mapper))
         child = _load_source(item, inline_base=descriptor_base, mapper=mapper)
         parent = child['project'].get('metadata', {})
         parent_id = parent.get('source_project_id')
@@ -262,7 +264,16 @@ def read_table(path, *, columns=None, filters=None):
     path = Path(path)
     import pandas as pd
     if path.suffix == '.parquet':
-        return pd.read_parquet(path, columns=columns, filters=filters)
+        import pyarrow.dataset as ds
+        import pyarrow.parquet as pq
+        # Large completed tables often put several contrasts in one row group.
+        # Parallel row-group prefetch can expand the whole study before the
+        # requested contrast is returned. Bound scan buffers without changing
+        # predicates, row order, types or native statistical values.
+        scanner = ds.dataset(path, format='parquet').scanner(
+            columns=columns, filter=pq.filters_to_expression(filters) if filters else None,
+            batch_size=16384, batch_readahead=1, fragment_readahead=1, use_threads=False)
+        return scanner.to_table().to_pandas(use_threads=False)
     return pd.read_csv(path, sep='\t' if any(s.lower() in ('.tsv', '.txt') for s in path.suffixes) else ',', usecols=columns)
 
 
