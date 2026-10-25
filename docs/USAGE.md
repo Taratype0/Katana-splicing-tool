@@ -1,5 +1,21 @@
 # Using Katana
 
+Install the accepted version from `main` using the [installation guide](INSTALL.md).
+Start with the command matching your input:
+
+| Starting point | Entry |
+| --- | --- |
+| Bulk FASTQ or genome-aligned BAM | Nextflow `--mode complete`: upstream, selected Katana calculations and the seven-section report. |
+| A native bundle or project with downstream calculations still needed | `katana-flow import` if needed, then Nextflow `--mode downstream-only`. |
+| Completed analysis results | `katana-report`: assemble the fixed report without refitting analyses. |
+| Interactive result inspection and target selection | `katana-open`: start the browser and its Python service. |
+| Selected genes or exact events | `katana-targets`: generate independent cards, requested Sashimi and portable target reports. |
+
+The [entry-point guide](ENTRY_POINTS.md) gives the complete FASTQ/BAM,
+existing-result, reporting and target commands. Use only the comparisons you
+want to analyze. Raw-read execution is bulk RNA-seq; processed single-cell and
+single-nucleus inputs retain their own supported downstream scope.
+
 ## Projects and inputs
 
 Open an existing v2 Katana project manifest in the interface. It records samples, contrasts, input assets, reference annotations and output locations. Supported legacy projects can be migrated into a separate output location:
@@ -75,13 +91,19 @@ For a multi-contrast Landscape, each selected sample must have a valid PSI and m
 
 MotifTrace exposes event-level sequence consequences, motif and RBP evidence, and links back to their source inputs. Choose the appropriate evidence layer: RBP identity annotations, boundary motif/reference binding evidence, and mature-RNA sequence consequences answer different questions. Native method results and valid imported results retain their source identities. The presence of a resource does not establish that every optional author-native fit has run.
 
-For count-bearing network discovery, declare the complete fitted cohort and use the `network-all-samples-counts-v1` input policy. Every participating sample must have valid PSI and IJC+SJC >=10 for an event to enter; events with a constant PSI vector are excluded. Do not use significant DAS events as the default input universe. Count and sample mapping must be available; a fraction of supported samples, a group average or a passing subset of contrasts cannot replace per-sample support.
+For count-bearing network discovery, declare every biological sample in the fitted network and use the `network-all-samples-counts-v1` input policy. In the integrated pipeline, each selected comparison gets an independent network using only its own samples. Every participating sample must have valid PSI and IJC+SJC >=10 for an event to enter; events with a constant PSI vector are excluded. Do not use significant DAS events as the default input universe. Count and sample mapping must be available; a fraction of supported samples, a group average or a passing subset of contrasts cannot replace per-sample support.
 
 The older missingness/count-support fractions, per-condition replicate/coverage thresholds, positive variance floor, repeatability and strong condition-response gates are no longer active input filters for this policy. They may remain diagnostics. Choose or import the correct count mode and retain JC/JCEC or other measurement provenance. External PSI-only input remains explicitly `read_support_not_assessed`; it must not be represented as having passed the ten-count rule.
 
 For imported rMATS network matrices, inspect the source-selection table: the adapter retains its canonical source choice per condition/event type (largest file, then lexical path/side order). The new QC checks every sample in that resolved matrix. It does not compare all alternative tables for agreement, so it cannot certify that repeated sample/event observations are identical across comparisons. Counts are not assembled or median/max-aggregated across comparison tables. By default, `max_events=0` uses all eligible events; a positive cap deliberately limits a run to a recorded, variance-ranked exploratory subset.
 
-Inspect module membership, scores, hub evidence and stability before comparing conditions. A network fitted over a cohort is not refitted independently inside each small contrast by default. Module association, preservation and functional annotation have separate statistical meanings. This input approval does not change raw BAM-junction measurement settings or the existing module-size/merging algorithm. Reopening old network results preserves their original policy and does not recompute them.
+Inspect module membership, activities, Hub evidence and the actual fitted sample count. The integrated pipeline keeps each comparison's discovery, associations, network figures and enrichment separate. A previously completed cohort-wide network can be imported with its original scope; importing it does not turn it into independent per-comparison fits. Module association, preservation and functional annotation have separate statistical meanings. Reopening old network results preserves their original policy and does not recompute them. See [network scope](NETWORK_SCOPE.md) and [execution and ranking](NETWORK_EXECUTION.md).
+
+Integrated runs rank Hub events by `|kME|`, retaining signed kME and complete
+rankings. Bootstrap is off by default. Setting `network.bootstrap.enabled` in
+the flow configuration enables the optional resampling stage; ordinary kME is
+not described as bootstrap confidence. Standalone network configurations retain
+their explicit scope and sample minimum.
 
 New-policy runs record `network-all-samples-counts-v1` in their resolved configuration and output provenance. Legacy QC settings may be retained as diagnostics but cannot reactivate retired gates. Do not point the new standalone run at a historical output directory: an output missing the new policy is protected against overwrite, including with force. The application uses the independently versioned engine identity for new-policy output and cache locations.
 
@@ -159,16 +181,55 @@ CLI stage command for these versioned views. Direct legacy numerical stage
 methods retain their internal raw schema. Historical refinement modes cannot
 be presented as an unfiltered partition merely by disabling their labels.
 
-## English reports
+## Seven-section study reports
 
-The two existing report entries remain available:
+Generate the fixed study report from completed results:
+
+```sh
+katana-report --project results.json --outdir exports/study-report --compact --no-archive
+```
+
+Open `exports/study-report/REPORT.html`. Use the report's comparison selector
+to show one selected comparison at a time. The seven sections are design and
+QC; AS landscape; DEG/DAS/DTU/DEXSeq; cross-comparison results; GO/KEGG and
+pathways; co-splicing networks; and RBP/MotifTrace. Per-comparison Top 10 tables,
+network graphs and full member/gene tables are retained. MotifTrace displays
+significant motifs with their native P/FDR and Top 10 details; complete model
+and diagnostic tables remain downloadable. The
+[report specification](REPORT_SPECIFICATION.md) defines the fixed layout.
+
+RS-DAS is the default (`--event-set stable_significant`). To choose ordinary DAS
+initially, use `--event-set significant`. The report-wide selector synchronizes
+supported downstream views and Top 10 tables; modules requiring RS retain that
+explicit requirement. Switching a displayed set never refits source statistics.
+
+For an existing portable report, use a new output directory:
+
+```sh
+katana-report --from-report portable-report --outdir exports/refreshed-report --compact --no-archive
+```
+
+Use `--archive downloads/study-report.zip` instead of `--no-archive` for a
+download package. For inputs moved between machines, use explicit `--path-map`
+bindings. See [completed sources and file identities](EXISTING_RESULTS.md) for
+result descriptors, multiple completed collections and matched nf-core output
+mapping. An arbitrary nf-core output folder is not automatically a complete
+Katana project; nf-core/rnaseq alone does not supply all splicing endpoints.
+
+`katana-report` assembles completed evidence. `katana-flow report` is the
+integrated workflow's strict completion gate after all required calculations
+have passed. Missing, failed, not-estimable and genuinely zero-finding analyses
+remain distinct. Neither renderer invents missing analyses or performs new
+statistical fits. Exclusions are applied to the relevant analysis inputs and
+recorded; an unfiltered historical result is never silently relabeled.
+
+The following compatibility export workflows also remain available. They do
+not replace the fixed seven-section study-report entry above:
 
 | Workflow | Purpose | Prerequisites |
 | --- | --- | --- |
 | `reports.bundle` | Reproducibility evidence package: HTML/PDF summary, inventory, provenance and ZIP. | Compatible completed artifacts in the project's catalog. |
-| `reports.interpreted_bundle` | Interpreted study report: findings, design, evidence, limitations and complete attachments. | A delivery configuration referencing completed standardized delivery folders, or an approved English reader report with its tables and figures. |
-
-The interpreted route preserves the existing report structure: main findings; experimental design; abundance and splicing evidence; replicate patterns; qualified interactions; functional interpretation; network modules; usage/candidates; supporting regulatory evidence; limitations and reproducibility attachments. Content depends on the actual completed delivery. It does not fabricate a section's analysis when prerequisites are missing.
+| `reports.interpreted_bundle` | Import/export of a compatible historical study delivery and its attachments. | A delivery configuration referencing completed standardized delivery folders, or an approved reader report with its tables and figures. |
 
 Run the general evidence package after confirming its plan:
 
@@ -178,7 +239,36 @@ python -m katana_next.cli --project ../analysis-project/katana.project.json run 
 
 For the interpreted route, provide a parameters JSON containing `config_path`. Its delivery configuration declares `study`, `result_root` and `manifest_path`; the optional approved-reader route also declares `approved_reader_root`. This route is not an unrestricted report generator for any arbitrary folder.
 
-Both report routes read completed evidence. Missing, failed, unassessable and genuinely zero-finding analyses remain distinct. Gene exclusion policies and filters must be applied to the relevant results and documented; an unfiltered delivery cannot simply be relabeled as filtered. Report output is English.
+## Gene/Event deep dive
+
+Start `katana-open`, select rows in completed result tables and add genes or
+exact events to the target basket. Export the request ZIP; BAMs and large
+references remain outside it. On the machine holding the read resources:
+
+```sh
+katana-targets inspect --request targets.zip
+katana-targets plan --request targets.zip --bindings bindings.json
+katana-targets run --request targets.zip --bindings bindings.json --outdir target-results
+katana-targets results --outdir target-results
+```
+
+Use the exported resource IDs in `bindings.json` to bind that machine's BAMs,
+indexes and references. The independent reports include Gene/Event cards,
+available expression/splicing/usage evidence, per-sample data, requested
+Sashimi, figures and complete interactive tables. A gene request retains all
+available measured events for that gene, including non-significant events.
+It does not change the main seven-section report or repeat upstream/network/
+MotifTrace fits.
+
+Open `INDEX.html` or import returned results into the Katana browser. To
+restore a returned ZIP into a new resumable workspace:
+
+```sh
+katana-targets restore --results completed-targets.zip --outdir restored-targets
+```
+
+The same CLI runs locally or within a server allocation. It does not submit
+Slurm/PBS jobs automatically. See [target commands, scheduling and reuse](TARGET_COMMANDS.md).
 
 ## Python interface
 
@@ -192,4 +282,15 @@ with KatanaProject("../analysis-project/katana.project.json") as project:
         completed_job = project.run("reports.bundle")
 ```
 
-This interface currently shares the installed application dependencies. It does not yet constitute a separately packaged, minimal headless analysis core.
+The same package provides completed-report assembly directly from Python:
+
+```python
+from katana_next.reports import build_report
+
+manifest = build_report("results.json", "exports/python-study-report", compact=True, create_archive=False)
+```
+
+[MotifTrace](MOTIFTRACE.md) and [target analysis](TARGET_COMMANDS.md#python-interface-and-direct-export)
+also expose public Python interfaces. Use the locked standalone Linux runtime
+for new native calculations; Python-only installation does not install R or
+external tools. Qt remains optional and is not required for CLI/browser use.

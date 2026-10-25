@@ -26,7 +26,8 @@ eligibility still applies.
 
 ## Install one matching software set
 
-Use the development branch and the [installation guide](INSTALL.md). The
+Use `main` and the [installation guide](INSTALL.md). Further development
+continues on `codex/package-development`. The
 Nextflow host needs Java/Nextflow and its container engine. Katana Python, R
 and external tools run in the downstream image; upstream tools use their
 declared images. Standalone downstream users can instead use the

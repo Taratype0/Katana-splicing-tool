@@ -8,18 +8,17 @@ the interface version is recorded separately as `1.0.0.post1`.
 
 ## Install
 
-Use Python 3.11 or newer in a virtual environment. From a checkout of the
-development branch:
+Use Python 3.11 or newer in a virtual environment. From an accepted `main`
+checkout:
 
 ```sh
-git switch codex/package-development
 python -m pip install ".[motiftrace]"
 katana-motiftrace modes
 ```
 
-For the browser or desktop application, install `".[motiftrace,next]"` instead.
-The installation currently also includes Katana's shared desktop and network
-dependencies. An independently minimized MotifTrace distribution is not yet
+For the browser application, install `".[motiftrace,next]"` instead.
+The installation includes Katana's shared network dependencies; Qt is an
+optional `desktop` extra. An independently minimized MotifTrace distribution is not yet
 provided. There is no separate published `pip install motiftrace` package.
 
 ## Select an analysis
@@ -149,7 +148,7 @@ continue to expose the underlying established workflows.
   evidence must be read at its stated scope; it is not a claim that every
   possible project, resource or external executable has been validated.
 
-This development branch adds package interfaces and distribution checks. It
+The package provides shared interfaces and distribution checks. It
 does not change the frozen original application, recompute completed studies or
 publish their private input files. The recorded release identity and adapter
 boundary are in [the integration record](motiftrace/integration.v1.json).

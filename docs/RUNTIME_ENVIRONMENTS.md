@@ -11,7 +11,7 @@ report and browser dependencies without PySide6. Neither route supplies study
 references: FASTA/GTF, motif libraries, CLIP peaks and pathway databases remain
 explicit, versioned inputs.
 
-The current Linux x86-64 development image, wheel and installed Conda binding
+The accepted Linux x86-64 image, wheel and installed Conda binding
 are identified in the [entry/runtime record](validation/entrypoints-runtime-20261025.md).
 The [23 October container record](validation/current-container-20261023.md)
 and older archives remain historical evidence. Build a matching wheel and image
@@ -66,7 +66,7 @@ use the locked setuptools/wheel tools; build isolation is disabled to avoid an
 unrecorded temporary build environment.
 
 The `dist/` glob must select one matching Katana wheel. A source checkout does
-not contain that built artifact. To build from the current development branch,
+not contain that built artifact. To build from the accepted `main` checkout,
 use the [wheel build instructions](INSTALL.md#development-wheels), or use a
 supplied wheel with its recorded checksum. Do not combine an older image or
 wheel with newer task code without rebuilding and checking that combination.

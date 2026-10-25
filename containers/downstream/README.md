@@ -5,7 +5,8 @@ tasks. Existing upstream modules retain their own nf-core tool environments.
 The image contains no research data, genome references, motif libraries or
 study-specific configuration. Qt is not installed.
 
-Use `codex/package-development` for the commands below. The accepted runtime is
+Use `main` for the commands below; further development continues on
+`codex/package-development`. The accepted runtime is
 Linux x86-64 with Docker; native ARM64 and macOS execution have not been
 certified. Apptainer/Singularity profiles are available but need qualification
 on the target site. The container engine must already be available on the
@@ -77,7 +78,7 @@ Confirm the image ID against the accompanying validation record. A source ZIP
 or Git clone is not a container archive. These commands do not download a
 Katana image from an unpublished registry. Match the archive's wheel/source
 identity to your pipeline revision; the earlier installation-check image is not
-an archive of current development code.
+an archive of the current software.
 
 ## Check before analysis
 

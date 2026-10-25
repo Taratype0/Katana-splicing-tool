@@ -12,10 +12,11 @@ the report. See [the fixed specification](REPORT_SPECIFICATION.md).
 
 ## Command line and Python
 
-Install the development package with report dependencies:
+From the accepted `main` checkout, install the package with its report and
+shared application/evidence dependencies:
 
 ```sh
-python -m pip install ".[report]"
+python -m pip install ".[report,next]"
 katana-report --project study/katana.project.json --outdir exports/study-report
 ```
 

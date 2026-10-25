@@ -2,7 +2,9 @@
 
 ## Choose an installation
 
-Use the **`codex/package-development`** branch for the packaged workflow described here. `main` can lag behind it. Choose one of these routes:
+Use **`main`** for the accepted workflow described here. Further development
+continues on `codex/package-development`; use a recorded commit or backup tag
+when reproducing a specific version. Choose one of these routes:
 
 First choose the [entry point for your inputs](ENTRY_POINTS.md). The
 [current execution/runtime record](validation/entrypoints-runtime-20261025.md)
@@ -39,6 +41,26 @@ has been published to a registry and no PyPI release is advertised.
 [Generic workflow acceptance](validation/generic-pipeline-20261023.md) is tracked
 separately from installation checks.
 
+## Versions and rollback
+
+`main` contains the accepted software. `codex/package-development` is used for
+subsequent development. Record the exact Git commit with each installation;
+existing wheel/image acceptance records keep their original source hashes.
+This promotion does not publish a new PyPI package or container image.
+
+The previous `main` is preserved by the annotated tag
+[`archive/pre-main-package-20261025`](https://github.com/Taratype0/Katana-splicing-tool/tree/archive/pre-main-package-20261025),
+at commit `c873ee8e97c0ef626234f4f9698280d79c94c57e`.
+To inspect that version, use a separate checkout and environment:
+
+```sh
+git clone --branch archive/pre-main-package-20261025 https://github.com/Taratype0/Katana-splicing-tool.git Katana-previous
+```
+
+Do not switch a running installation or existing study directory in place.
+The tag preserves the old code; it does not rewrite projects or completed
+results into an older format.
+
 ## Installed-package report commands
 
 Use one matched software revision across the wheel, image and exported
@@ -53,7 +75,7 @@ a fresh Python 3.11+ environment, replacing the example filename with the exact
 wheel you received:
 
 ```sh
-python -m pip install "/path/to/katana_splicing_tool-<version>-py3-none-any.whl[report]"
+python -m pip install "/path/to/katana_splicing_tool-<version>-py3-none-any.whl[report,next]"
 python -m pip check
 katana-report --help
 ```
@@ -101,40 +123,23 @@ the same command with `micromamba run -n katana katana-report ...` after
 installing the native/pip locks and matching wheel. Genome references and
 analysis databases remain project resources rather than installer contents.
 
-### Load a recorded development container
+### Build or load a matching container
 
-The commands in this subsection reproduce the historical `9546632` image
-record. It predates later fixes; use a matching new build/delivery record for
-current development rather than treating this tag as the latest release.
+Follow the [container build instructions](../containers/downstream/README.md#build-locally)
+to build the accepted software from `main`. If an image archive was supplied,
+verify its archive checksum, load it and compare the actual image ID with the
+same delivery record. The [current runtime record](validation/entrypoints-runtime-20261025.md)
+binds the accepted `098ceae` software, matching wheel and image. A historical
+archive does not include later fixes simply because `main` was updated.
 
-On a Linux x86-64 Docker host, place the supplied archive and checksum file in
-the same directory, then run:
+For new FASTQ/BAM processing, also [build or load the separate DEXSeq tools image](../containers/dexseq-tools/README.md)
+and pass its actual identity with `--dexseq_tools_container`. Existing-result
+downstream-only analysis does not need that upstream image. Upstream nf-core
+modules retain their own pinned tool images, which the executor must be able
+to obtain. No unpublished registry tag is used as an installation source.
 
-```sh
-sha256sum --check SHA256SUMS
-docker load -i katana-downstream-dev-9546632-linux-amd64.tar.gz
-docker image inspect katana-downstream:dev-9546632 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
-docker run --rm --network none katana-downstream:dev-9546632 katana-flow --help
-```
-
-For **new FASTQ/BAM processing**, also load the supplied DEXSeq tools archive:
-
-```sh
-docker load -i kanata-dexseq-tools-dev-20261024-linux-amd64.tar.gz
-docker image inspect kanata-dexseq-tools:dev-20261024 --format '{{.Id}}'
-```
-
-Set `--dexseq_tools_container kanata-dexseq-tools:dev-20261024` when starting
-`complete` or `upstream-only` mode with Docker. Existing-result downstream-only
-analysis does not need this upstream image. If no archive was supplied,
-[build it locally](../containers/dexseq-tools/README.md); do not try to pull the
-previously assumed, unpublished registry tag. The runtime record lists both
-archive hashes and image IDs. Upstream modules also use their pinned public
-tool images, which the execution host must be able to obtain.
-
-Compare the image ID with the current acceptance record. The archive is a local
-development deliverable, not a registry download; users without it can follow
-the [build instructions](../containers/downstream/README.md#build-locally).
+The [historical `9546632` image record](validation/pipeline-closure-20261024.md)
+is retained for reproducing that older version; it is not the current install.
 The host needs Docker and, for the integrated pipeline, Java/Nextflow. Katana's
 Python/R/native dependencies are inside the image; a host Conda environment is
 not needed. Standalone CLI/browser users can use the locked Conda route below.
@@ -152,7 +157,7 @@ rerun a completed computation.
 Use a fresh environment so an older installation cannot supply hidden dependencies:
 
 ```sh
-git clone --branch codex/package-development https://github.com/Taratype0/Katana-splicing-tool.git
+git clone --branch main https://github.com/Taratype0/Katana-splicing-tool.git
 cd Katana-splicing-tool
 python -m venv .venv
 ```
@@ -172,12 +177,12 @@ Or on Linux/macOS:
 Then install and start the browser interface:
 
 ```sh
-python -m pip install -e ".[next]"
+python -m pip install -e ".[next,flow,contracts]"
 python -m pip check
 katana-open --port 8765 --runtime-root ../katana-runtime
 ```
 
-The `next` extra supplies the application service, artifact storage and report dependencies. Developers can add test tools with `python -m pip install -e '.[next,next-dev]'`. Qt is optional: install the `desktop` extra only for the compatibility desktop mode. Browser and CLI installations do not require PySide6. Editable installation resolves the declared dependency ranges; use the standalone locks or accepted image when reproducing the complete native runtime.
+The `next` extra supplies the application service, artifact storage and report dependencies; `flow` and `contracts` include the workflow interface and schema validation. Developers can add test tools with `python -m pip install -e '.[next,flow,contracts,next-dev]'`. Qt is optional: install the `desktop` extra only for the compatibility desktop mode. Browser and CLI installations do not require PySide6. Editable installation resolves the declared dependency ranges; use the standalone locks or accepted image when reproducing the complete native runtime.
 
 The launcher opens a browser by default and prints its actual URL. If the requested port is occupied, it can select another free port. Launch logs and service metadata go into the external runtime directory. `python -m katana_next.launcher` provides the same entry point when invoking a specific Python environment.
 
@@ -214,8 +219,9 @@ katana-targets --help
 
 Replace the placeholder with the actual wheel filename. Wheels are development
 artifacts until a formal release is accepted. To build a browser wheel from
-source, first run `pnpm build` in `apps/web`, then `python -m build --wheel` in
-the repository root. Set `KATANA_REQUIRE_WEB=1` in the build environment to fail
+source, use the built browser assets already included in the checkout. If the
+frontend has changed, rebuild it with `pnpm build` in `apps/web` first, then run
+`python -m build --wheel` in the repository root. Set `KATANA_REQUIRE_WEB=1` in the build environment to fail
 if browser assets have not been built. A CLI-only build can omit those assets.
 The same wheel supports local and server execution; BAM/reference paths are
 configured on the machine running Python. See [target workflows](TARGET_COMMANDS.md).

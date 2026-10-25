@@ -13,7 +13,8 @@ approved nf-core pipeline.
 
 ## Execution
 
-Use the `codex/package-development` branch. For container execution, the host
+Use the accepted workflow on `main`. Further development continues on
+`codex/package-development`. For container execution, the host
 needs Nextflow 25.10.4 or newer, compatible Java and a container engine. Native
 acceptance uses Linux x86-64 Docker; Apptainer/Singularity profiles need site
 qualification. Build or load the matching Katana downstream

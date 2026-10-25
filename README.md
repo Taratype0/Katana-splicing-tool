@@ -43,7 +43,7 @@ Browse results by gene, event or motif and export RNA FASTA, site tables, genomi
 
 MotifTrace supports new sequence analyses and imports of compatible completed sequence or parallel MAPP results. Imported method identities and P/FDR values are retained. The integrated workflow can prepare and fit the original MAPP MAEI model when matching transcript quantities, reference sequences and motif-count inputs are available; it does not substitute PSI for transcript abundance or run all MAPP subworkflows. Local RNA reconstruction and motif predictions do not establish measured RBP binding.
 
-The development package provides `from katana_motiftrace import MotifTrace`,
+The package provides `from katana_motiftrace import MotifTrace`,
 `katana-motiftrace` commands, and a shared MotifTrace mode selector in the
 browser interface. See [MotifTrace inputs, API and commands](docs/MOTIFTRACE.md)
 for the six analysis/import modes, requirements and examples.
@@ -66,7 +66,7 @@ confidence. See [network execution and ranking](docs/NETWORK_EXECUTION.md).
 
 The approved report follows seven sections: design and QC; AS landscape; DEG/DAS/DTU/DEXSeq; cross-comparison results; GO/KEGG and pathways; co-splicing networks; and RBP/MotifTrace. It includes per-comparison Top 10 details, full-result links and a report-wide ordinary DAS / RS-DAS choice, with RS-DAS as the default. See the [approved report specification](docs/REPORT_SPECIFICATION.md).
 
-The development package provides `katana-report` and `from katana_next.reports import build_report` for completed projects, and the same renderer is available as `reports.study` in the application. One report can assemble explicitly declared completed collections, descriptors and views, retaining separate comparison identities and their original statistics. See [report inputs, commands and outputs](docs/REPORTS.md) and [assembling completed sources](docs/EXISTING_RESULTS.md#generate-one-report-from-several-completed-sources).
+The package provides `katana-report` and `from katana_next.reports import build_report` for completed projects, and the same renderer is available as `reports.study` in the application. One report can assemble explicitly declared completed collections, descriptors and views, retaining separate comparison identities and their original statistics. See [report inputs, commands and outputs](docs/REPORTS.md) and [assembling completed sources](docs/EXISTING_RESULTS.md#generate-one-report-from-several-completed-sources).
 
 ```sh
 katana-report --project results.json --outdir exports/study-report --compact --no-archive
@@ -79,7 +79,7 @@ This generates the full offline report directory without an additional ZIP. Use 
 
 Reports retain significant and non-significant results and document actual filtering and exclusions. Unrun analyses and missing matching downstream results are identified. Report generation reads completed analyses; it does not infer experimental purpose or rescue, generate a validation programme, or rerun upstream processing. Selected gene/event dossiers remain separate interactive analyses.
 
-### Integrated analysis workflow (development)
+### Integrated analysis workflow
 
 The [Nextflow workflow](pipeline/main.nf) connects bulk FASTQ/BAM processing,
 Katana calculations and the fixed seven-section report. Expensive comparisons
@@ -100,7 +100,7 @@ and motif-count inputs; these are not substituted with event PSI. See
 
 The browser interface lets users open projects, inspect samples and designs, select comparisons and parameters, follow task status, filter result tables, save candidate genes or events, inspect gene cards and figures, and export results. MotifTrace, networks and reports are accessible through their analysis pages.
 
-The browser connects to a Katana Python service running locally or on the analysis server. The service accesses project files and runs calculations; the browser displays results and controls jobs. Offline report HTML remains available for reading completed results and does not start new analyses. The CLI and Python interface support scripted and server-side use. [MotifTrace](docs/MOTIFTRACE.md) has dedicated API and command-line examples; other modules remain available through the shared workflow commands as their packaged interfaces are finalized.
+The browser connects to a Katana Python service running locally or on the analysis server. The service accesses project files and runs calculations; the browser displays results and controls jobs. Offline report HTML remains available for reading completed results and does not start new analyses. The CLI and Python interface support scripted and server-side use. [MotifTrace](docs/MOTIFTRACE.md) has dedicated API and command-line examples; other analyses use the shared project workflow commands described in [usage](docs/USAGE.md).
 
 The browser is the current interface and release target. Existing desktop and mode-chooser entry points remain available for compatibility; a new standalone desktop distribution is not planned.
 
@@ -112,7 +112,7 @@ Depending on the analysis, Katana produces browsable result tables, interactive 
 
 ## Install and use
 
-The current implementation is on **`codex/package-development`**. Start with
+The accepted implementation is available on **`main`**. Start with
 [Choose a Katana entry point](docs/ENTRY_POINTS.md), then choose the installation
 that matches how you want to use Katana:
 
@@ -125,7 +125,9 @@ Ubuntu, Windows, interface and installed-wheel
 [CI checks](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40184505728)
 passed at `098ceae`. The unchanged workflow sources retain the passing
 [native Nextflow CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40181808070)
-at `c448007`. The default `main` branch can lag behind the development package.
+at `c448007`. Those records identify the actual tested commits and artifacts;
+merging documentation does not change their identities. Further development
+continues on `codex/package-development`.
 
 | Use | Installation |
 | --- | --- |
@@ -138,7 +140,7 @@ Raw bulk FASTQ/BAM analysis has [separate execution checks](docs/validation/entr
 For the browser and Python/CLI interface, use Python 3.11 or newer in a separate environment:
 
 ```sh
-git clone --branch codex/package-development https://github.com/Taratype0/Katana-splicing-tool.git
+git clone --branch main https://github.com/Taratype0/Katana-splicing-tool.git
 cd Katana-splicing-tool
 python -m venv .venv
 ```
@@ -146,7 +148,7 @@ python -m venv .venv
 Activate the environment with `.venv\Scripts\Activate.ps1` in Windows PowerShell or `. .venv/bin/activate` on Linux. Then install and open the browser interface:
 
 ```sh
-python -m pip install -e ".[next]"
+python -m pip install -e ".[next,flow,contracts]"
 katana-open --runtime-root ../katana-runtime
 ```
 
@@ -156,13 +158,13 @@ katana-open --runtime-root ../katana-runtime
 python -m katana_next.cli --project path/to/katana.project.json run reports.bundle
 ```
 
-Inputs are registered in a project configuration. Sample/contrast-sheet onboarding and upstream-result adapters are being unified for new users. See [installation](docs/INSTALL.md) and [usage](docs/USAGE.md) for migration, formats and resources. References and databases are supplied separately; installing a tool environment does not provide genome or motif resources.
+Inputs are registered in a project configuration. Raw FASTQ/BAM runs use the documented sample and contrast sheets. Existing nf-core results require explicit file, sample, comparison and reference mappings before downstream execution; an arbitrary output directory is not automatically a complete Katana project. See [installation](docs/INSTALL.md), [entry points](docs/ENTRY_POINTS.md) and [usage](docs/USAGE.md) for formats and commands. References and databases are supplied separately; installing a tool environment does not provide genome or motif resources.
 
-## Development status
+## Validation and release status
 
 The analyses described above are implemented in the existing Katana application and include both new calculations and completed-result imports. The source installation provides interface, CLI and Python access.
 
-The development package includes independent installation, input adapters,
+The package includes independent installation, input adapters,
 local/server commands and reports. Generated bulk FASTQ/BAM complete execution,
 cache-only repeats, target restore and installed-runtime checks have passed. These software
 checks do not certify arbitrary assays, references or cluster deployments.

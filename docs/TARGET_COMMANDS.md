@@ -13,8 +13,10 @@ including non-significant events.
 
 ## Run locally or on a server
 
-Install the development wheel with `pip install 'katana_splicing_tool-<version>-py3-none-any.whl[targets]'`.
-Add the `next` extra for the browser service. Use the Python environment that
+Install a matching wheel with `pip install 'katana_splicing_tool-<version>-py3-none-any.whl[targets,next]'`.
+These extras include the shared evidence dependencies and browser service.
+For source installation from `main`, use `python -m pip install '.[targets,next]'`.
+Use the Python environment that
 will perform the analysis; Windows, Linux and other compatible Python platforms
 use the same commands. No SSH configuration, Dardel path or Slurm account is
 part of a target request.
