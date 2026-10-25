@@ -1,7 +1,7 @@
 {
   "schema": "katana.motiftrace_integration/v1",
   "scientific_release": "1.0.0-frozen.20261017",
-  "integration_version": "1.0.0.post4",
+  "integration_version": "1.0.0.post5",
   "frozen_source_archive_sha256": "fe3f0220d16940a7d90f06a22320d0dee7aa8ebc3d7186f76a131a6d351a5778",
   "frozen_release_manifest_sha256": "d8329931ecb1f453897cb2f8d157dff4fe046c7746d3e10805cfdc43db98357e",
   "scientific_parameter_changes": false,
@@ -209,7 +209,7 @@
     "katana_motiftrace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
     "katana_next/client.py": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
     "katana_next/services/selection_routes.py": "f84bae21e008589ed1af1afcc7409b90ec1757dcc18675d98e29659630732da1",
-    "pyproject.toml": "cd24246b872984e6dffbe35cfcd28f6787aa3fe4c066c6c265006052898fd419",
+    "pyproject.toml": "8d441a2bec5274e14334b2ee129bea2ca900930dd91fc0e62af6ee4f8555a0e8",
     "katana_next/workflows/motiftrace_consequences.py": "a9fe2cdf0e2dc14e5903a18a28b08035e29ecf691453bd1d93b1833b95d2026f",
     "katana_next/workflows/rbp_mechanism.py": "a9d1f69ae0d1416775bb8914bc49bfee58bde5f0c69a5aa1035a585ba31aacd2",
     "katana_next/science/motiftrace_execution.py": "cf501a906d296e5236fbcf46aea3ffbd5e8631418aabe109ca2778291a43c28b",
@@ -217,6 +217,31 @@
     "katana_next/reports/motif_native_index.py": "b49e13270cf1fcfbd61af2e244b57f448da95e8248dbecfb102fefbf0f2e58e9"
   },
   "interface_revisions": [
+    {
+      "integration_version": "1.0.0.post5",
+      "revision": "distribution-version-metadata-20261025",
+      "scientific_release_unchanged": true,
+      "scientific_calculation_changes": false,
+      "scientific_parameter_changes": false,
+      "scientific_sources_manifest_sha256": "a4bd76153a3975213c0994e004d65d7785113a2adef3ade86ecb46e7f289a7ed",
+      "workflow_modes_manifest_sha256": "82f67e45f464c98276868e2b15b25fb9ec683f4bc0c67611d507eeb5284d105b",
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "cd24246b872984e6dffbe35cfcd28f6787aa3fe4c066c6c265006052898fd419",
+          "current_sha256": "8d441a2bec5274e14334b2ee129bea2ca900930dd91fc0e62af6ee4f8555a0e8",
+          "change_kind": "distribution_version_only",
+          "previous_distribution_version": "2.0.0b5.dev20261023",
+          "current_distribution_version": "2.0.0b5.dev20261025",
+          "previous_source_commit": "5ca65332cb5c0c3c7faca7485d00d301afa29cce",
+          "current_source_commit": "766c71f52523dc65ae85d10239114f4bd6b66b60",
+          "changed_toml_fields": [
+            "project.version"
+          ],
+          "reason": "Distribution version metadata only, from 2.0.0b5.dev20261023 to 2.0.0b5.dev20261025. Replacing that one version string exactly reconstructs the recorded previous file SHA256. Dependencies, entry points and packaged-resource declarations are unchanged. The 23 scientific-source records, six workflow modes, scientific versions, parameter definitions, inference families and completed results are unchanged. This audit revision does not change the MotifTrace facade or scientific release."
+        }
+      ]
+    },
     {
       "integration_version": "1.0.0.post4",
       "revision": "explicit-network-threadpool-runtime-dependency-20261024",
