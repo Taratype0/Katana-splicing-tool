@@ -1,5 +1,9 @@
 # Runtime environments
 
+The accepted wheel, Docker archives and native lock files are available through
+the [release installation guide](RELEASE_INSTALL.md). Their checksums and image
+IDs are recorded in the downloadable release manifest.
+
 The integrated Nextflow pipeline uses a versioned Katana image for its downstream
 tasks. Existing upstream nf-core tool modules keep their own environments and
 images. Its users do not need to activate or repair a shared host Conda environment.

@@ -1,8 +1,13 @@
 # Upstream DEXSeq tools image
 
+The [downloadable release](../../docs/RELEASE_INSTALL.md#linux-nextflow-with-docker)
+includes the accepted `kanata-dexseq-tools:dev-20261024` Docker archive. Load it
+and verify its image ID against the release manifest, or build locally below.
+
 The raw FASTQ/BAM route needs DEXSeq annotation and exon counting in addition to
 the Katana downstream image. The previous GHCR address was an unpublished
-placeholder. Use an explicitly built image; downstream-only analysis of existing
+placeholder. Use the verified release archive or an explicitly built image;
+downstream-only analysis of existing
 results does not need this image.
 
 From a checkout on a Linux x86-64 Docker host:

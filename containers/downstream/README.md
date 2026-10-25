@@ -1,5 +1,10 @@
 # Katana downstream image
 
+Load the accepted image archive from the
+[downloadable release](../../docs/RELEASE_INSTALL.md#linux-nextflow-with-docker),
+or build a new matching image using the instructions below. The downloadable
+archive is a Docker image export, not a registry reference.
+
 This image supplies the Python, R and native tools used by Katana downstream
 tasks. Existing upstream modules retain their own nf-core tool environments.
 The image contains no research data, genome references, motif libraries or

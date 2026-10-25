@@ -26,6 +26,9 @@ eligibility still applies.
 
 ## Install one matching software set
 
+The [downloadable release](RELEASE_INSTALL.md) supplies the matching wheel,
+Docker archives, exported workflow and dependency locks.
+
 Use `main` and the [installation guide](INSTALL.md). Further development
 continues on `codex/package-development`. The
 Nextflow host needs Java/Nextflow and its container engine. Katana Python, R

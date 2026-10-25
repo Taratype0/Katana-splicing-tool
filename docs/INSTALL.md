@@ -1,5 +1,10 @@
 # Installation
 
+For downloadable wheels and matching Docker images, use the
+[release installation guide](RELEASE_INSTALL.md). Source installation and local
+builds remain available below. The published assets retain their original
+accepted wheel/image identities.
+
 ## Choose an installation
 
 Use **`main`** for the accepted workflow described here. Further development
@@ -46,7 +51,8 @@ separately from installation checks.
 `main` contains the accepted software. `codex/package-development` is used for
 subsequent development. Record the exact Git commit with each installation;
 existing wheel/image acceptance records keep their original source hashes.
-This promotion does not publish a new PyPI package or container image.
+The downloadable assets preserve the accepted builds; they are not a PyPI
+package or a container-registry publication.
 
 The previous `main` is preserved by the annotated tag
 [`archive/pre-main-package-20261025`](https://github.com/Taratype0/Katana-splicing-tool/tree/archive/pre-main-package-20261025),
