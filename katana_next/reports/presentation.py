@@ -3,8 +3,31 @@
 
 def prepare_presentation(builder):
     """Keep native outputs while exposing networks and significant motifs."""
+    selected = {row['contrast_id'] for row in builder.source['project'].get('contrasts', [])}
+    # Completed sources can contain more comparisons than the requested report.
+    # Their native tables remain in outputs; only selected summaries belong in
+    # the approved one-comparison presentation.
+    builder.enrichment_summaries = [
+        row for row in builder.enrichment_summaries
+        if not selected or row.get('contrast_id') in selected or row.get('contrast_id') == 'all'
+    ]
+    rbp_scopes = {(row['contrast_id'], row.get('cell_type', 'all'))
+                  for row in builder.enrichment_summaries
+                  if str(row.get('id', '')).startswith('rbp-enrichment-')}
     for panel in builder.panels:
         metadata = panel.get('metadata', {})
+        # Legacy completed ORA views did not carry analysis_id. Their explicit
+        # RBP-identity title and exact comparison/cell scope identify the saved
+        # redundant charts. Keep every chart and its data in outputs, and show
+        # the compact significant-set summary with complete contributors.
+        rbp_identity = (metadata.get('enrichment_category') == 'RBP_identity'
+                        or panel.get('title', '').startswith('RBP identity |'))
+        if (panel.get('chapter') == 7 and rbp_identity
+                and (panel.get('contrast_id'), panel.get('cell_type', 'all')) in rbp_scopes):
+            panel['output_only'] = True
+            panel.setdefault('metadata', {})['main_display_note'] = (
+                'Compact RBP enrichment and complete hit genes are shown in the main view; '
+                'the recorded identity chart and all tests remain in outputs.')
         recorded_tree = (metadata.get('network_view_role') == 'dendrogram' or
                          (metadata.get('flow_stage') == 'network.fit' and
                           metadata.get('flow_artifact_key') == 'dendrogram'))
