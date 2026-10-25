@@ -628,7 +628,11 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
                 fig, ax = _axes(label + " event types | " + comparison)
                 ax.grid(False)
                 if values.sum():
-                    ax.pie(values, labels=EVENTS, colors=EVENT_COLORS, autopct="%1.1f%%", startangle=90)
+                    _, names, percentages = ax.pie(values, labels=EVENTS, colors=EVENT_COLORS, autopct="%1.1f%%", startangle=90)
+                    for count, name, percentage in zip(values, names, percentages):
+                        if not count:
+                            name.set_text("")
+                            percentage.set_text("")
                 else:
                     ax.text(.5, .5, "No eligible events", transform=ax.transAxes, ha="center")
                 view.figure(fig, comparison + "-AS-composition-" + label, 2, label + " event composition | " + comparison,

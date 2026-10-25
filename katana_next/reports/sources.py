@@ -113,6 +113,18 @@ def load_source(project, catalog=None, *, path_mappings=None):
     return _load_source(project, catalog, inline_base=Path.cwd(), mapper=mapper)
 
 
+def _artifact_comparisons(record):
+    """Use recorded comparison identity, including native enrichment lineage."""
+    comparisons = record.get('contrast_ids') or record.get('comparison_ids') or []
+    if not comparisons:
+        comparisons = [scope.get(key) for scope in (record, record.get('parameters') or {}, record.get('metadata') or {})
+                       for key in ('contrast_id', 'comparison_id') if scope.get(key)]
+    if not comparisons:
+        provenance = (record.get('metadata') or {}).get('native_background_provenance') or {}
+        comparisons = [item['contrast_id'] for item in provenance.get('native_inputs', []) if item.get('contrast_id')]
+    return tuple(sorted(set(comparisons)))
+
+
 def _load_source(project, catalog=None, *, inline_base, mapper=None):
     from .path_mapping import PathMappings
     mapper = mapper or PathMappings()
@@ -193,7 +205,10 @@ def _load_source(project, catalog=None, *, inline_base, mapper=None):
             if not complete:
                 continue
             record.setdefault('metadata', {})['report_completion_evidence'] = evidence
-        key = (record.get('analysis_id'), record.get('name'), tuple(record.get('contrast_ids', [])), record.get('parameters', {}).get('sequence_scope'), record.get('parameters', {}).get('event_set'))
+        parameters = record.get('parameters') or {}
+        key = (record.get('analysis_id'), record.get('name'), record.get('kind'), record.get('entity_type'),
+               _artifact_comparisons(record), parameters.get('sequence_scope'), parameters.get('event_set'),
+               parameters.get('foreground_source', (record.get('metadata') or {}).get('foreground_source')))
         if key in seen:
             continue
         seen.add(key)

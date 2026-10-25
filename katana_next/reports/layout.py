@@ -159,7 +159,16 @@ def render(builder):
         if number == 6 and any(str(x).startswith('programs.') for x in available_analyses):
             missing = [r for r in missing if 'network' not in str(r.get('id', '')).lower()]
         if not blocks:
-            blocks.append('<div class="status-panel"><strong>No completed result available</strong>This component is not computed. No synthetic data or other study has been substituted.</div>')
+            enrichment_results = number == 5 and any(
+                (r.get('chapter') or chapter_for(r.get('analysis_id', ''))) == 5
+                and r.get('analysis_id') in {'prioritize.enrichment', 'interpretation.joint_pathways'}
+                and {'term', 'pvalue', 'fdr'} <= set(r.get('columns', [])) for r in builder.tables)
+            if enrichment_results:
+                blocks.append('<div class="status-panel"><strong>No GO/KEGG panel for this selection</strong>'
+                              'No GO/KEGG panel is available for this selection. See complete output tables '
+                              'for recorded enrichment results, input genes and backgrounds.</div>')
+            else:
+                blocks.append('<div class="status-panel"><strong>No completed result available</strong>This component is not computed. No synthetic data or other study has been substituted.</div>')
         seen_missing = set()
         for entry in missing:
             text = entry.get('reason') or entry.get('caption') or 'No completed result supplied.'
