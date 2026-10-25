@@ -6,7 +6,7 @@ import json
 import re
 
 
-def _completed_inputs(metadata):
+def _completed_inputs(metadata, *, require_display_parameters=True):
     from .network_views import _completed_network_scope, _fingerprint
     from katana_next.flow.runtime import canonical_hash
 
@@ -44,7 +44,7 @@ def _completed_inputs(metadata):
     parameters = inputs[0].with_name('parameters.json')
     required = {parameters, *[parameters.with_name(name) for name in (
         'network_diagnostics.tsv', 'event_module_assignments.tsv', 'selected_event_matrix.tsv', 'network_edges.tsv')]}
-    if not required <= set(authenticated):
+    if require_display_parameters and not required <= set(authenticated):
         raise ValueError('Complete saved settings and fitted numerical inputs are required for the approved module graph')
     binding = metadata.get('report_source_binding', {})
     if binding.get('native_manifest_sha256') and _fingerprint(root / 'project.json')['sha256'] != binding['native_manifest_sha256']:
@@ -88,7 +88,14 @@ def upgrade_copied_network_browser(asset, target):
     text = source.read_text(encoding='utf-8-sig')
     graph_match = re.search(r'<script\s+id=["\']module-display-data["\'][^>]*>(.*?)</script>', text, re.S)
     graph = json.loads(graph_match.group(1)) if graph_match else None
-    if graph and graph.get('modules') and 'id="gene-body"' in text and 'id="network-display-size"' in text:
+    current_controls = 'id="gene-body"' in text and 'id="network-display-size"' in text
+    current_graph = isinstance(graph, dict) and isinstance(graph.get('modules'), dict)
+    # Zero assigned modules is a valid completed graph, not missing analysis.
+    # Historical bootstrap reports can already have the current complete-gene
+    # UI while honestly retaining only their original exported native edges.
+    # They have no no-bootstrap |kME| graph to re-export during packaging.
+    current_native_edges = graph_match is not None and graph is None and metadata.get('bootstrap_enabled') is True
+    if current_controls and (current_graph or current_native_edges):
         return None
     if metadata.get('completion_scope') != 'flow_verified_network_complete':
         # Older externally imported networks can gain complete gene browsing;
@@ -121,7 +128,7 @@ def bind_legacy_network_table_scopes(manifest):
         completion = Path(metadata.get('completion_manifest', ''))
         if not completion.is_file():
             continue  # Portable-only refresh cannot manufacture absent proof.
-        root, _, _, _, _ = _completed_inputs(metadata)
+        root, _, _, _, _ = _completed_inputs(metadata, require_display_parameters=False)
         if root in visited:
             continue
         visited.add(root)

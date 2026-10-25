@@ -54,6 +54,29 @@ def _fixture_collection(root, project, tasks, products):
     return plan, receipts, transport
 
 
+def _seal_fixture_collection(root, plan, receipts):
+    """Content-bound fixture collection, never a claimed native cluster run."""
+    from katana_next.flow.collect import COLLECTION_SCHEMA, validate_collection
+    root = Path(root)
+    ledger = []
+    for path in sorted(root.rglob('*')):
+        if path.is_file() and path.name != 'collection.receipt.json':
+            relative = path.relative_to(root).as_posix()
+            ledger.append({**file_record(path), 'path': relative, 'relative_path': relative})
+    value = {'schema': COLLECTION_SCHEMA, 'status': 'completed', 'plan_id': plan['plan_id'],
+             'source_project_manifest_sha256': plan['project_manifest_sha256'],
+             'project_id': json.loads((root / 'project.json').read_text())['project_id'],
+             'outputs': ledger, 'synthetic_lifecycle_fixture': True,
+             'tasks': [{'task_id': key, 'status': record['status'], 'receipt_sha256': record['receipt_sha256']}
+                       for key, (_, record) in receipts.items()],
+             'task_receipts': [{'task_id': key, 'collection_path': path.relative_to(root).as_posix()}
+                               for key, (path, _) in receipts.items()]}
+    value['receipt_sha256'] = canonical_hash(value)
+    write_json(root / 'collection.receipt.json', value)
+    assert validate_collection(root)['synthetic_lifecycle_fixture'] is True
+    return value
+
+
 def _network_collection(tmp_path):
     from scipy.cluster.hierarchy import linkage
     from katana_next.reports.network_views import matched_module_associations
@@ -115,6 +138,7 @@ def test_generic_network_complete_views_never_repeat_completed_stats(tmp_path, m
     monkeypatch.setattr("katana_next.workflows.module_functions.enrich_modules", forbidden)
     root = tmp_path / "collection"
     result = build_presentation_assets(root, plan, receipts, transport)
+    _seal_fixture_collection(root, plan, receipts)
     assert len(result["extra_assets"]) >= 10
     audit = json.loads((root / "presentation/network/network-report.receipt.json").read_text())
     assert audit["bootstrap_accepted"] is True
@@ -194,6 +218,7 @@ def test_two_contrast_networks_reach_seven_chapter_report_without_collapsing(tmp
     monkeypatch.setattr("katana_next.workflows.module_functions.enrich_modules", forbidden)
     root = tmp_path / "collection"
     result = build_presentation_assets(root, plan, receipts, transport)
+    _seal_fixture_collection(root, plan, receipts)
     assets = result["extra_assets"]
     assert len({a["artifact_id"] for a in assets}) == len(assets)
     assert {tuple(a["contrast_ids"]) for a in assets} == {("B_vs_A",), ("C_vs_A",)}

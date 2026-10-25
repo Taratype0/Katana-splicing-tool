@@ -58,6 +58,20 @@ def test_null_display_payload_is_not_mistaken_for_completed_graph(tmp_path, monk
         upgrade.upgrade_copied_network_browser(asset, tmp_path / 'copy/browser/ALL_MODULES.html')
 
 
+@pytest.mark.parametrize('bootstrap, graph', [(False, {'modules': {}, 'methods': {'network_discovery_runs': 0}}),
+                                            (True, None)])
+def test_current_zero_module_or_historical_native_edge_ui_does_not_invent_another_graph(tmp_path, monkeypatch, bootstrap, graph):
+    source = _browser(tmp_path / 'source/browser/ALL_MODULES.html')
+    source.write_text(source.read_text() + '<script id="module-display-data" type="application/json">' + json.dumps(graph)
+                      + '</script><div id="gene-body"></div><div id="network-display-size"></div>')
+    asset = _asset(source)
+    asset['metadata'].update(completion_scope='flow_verified_network_complete', bootstrap_enabled=bootstrap)
+    before = source.read_bytes()
+    monkeypatch.setattr(upgrade, '_completed_inputs', lambda *_: pytest.fail('Current native UI must not trigger another export'))
+    assert upgrade.upgrade_copied_network_browser(asset, tmp_path / 'copy/browser/ALL_MODULES.html') is None
+    assert source.read_bytes() == before
+
+
 def test_network_browser_identity_must_match_completed_ledger_and_payload(tmp_path):
     native = _browser(tmp_path / 'collection/presentation/network/browser/ALL_MODULES.html')
     source = _browser(tmp_path / 'portable/browser/ALL_MODULES.html')
@@ -95,7 +109,7 @@ def test_legacy_missing_table_scopes_use_verified_record_ids_not_title_inference
     digest = sha256(table.read_bytes()).hexdigest()
     artifacts = [{'artifact_id': 'native-id', 'analysis_id': 'programs.cosplice', 'name': 'Uninformative registered name',
                   'path': str(table), 'contrast_ids': ['B_vs_A']}]
-    monkeypatch.setattr(upgrade, '_completed_inputs', lambda *_: (root, {}, completion, {}, None))
+    monkeypatch.setattr(upgrade, '_completed_inputs', lambda *_, **__: (root, {}, completion, {}, None))
     import katana_next.flow.collect
     monkeypatch.setattr(katana_next.flow.collect, 'materialize_report_descriptor', lambda *_: {'artifacts': artifacts})
     manifest = {'network_browsers': [{'metadata': {'completion_scope': 'flow_verified_network_complete', 'completion_manifest': str(completion)}}],
@@ -128,3 +142,20 @@ def test_browser_upgrade_retains_compacted_exact_table_destinations(tmp_path):
     assert 'href="../../../results/exact-input-genes.tsv"' in text
     assert 'href="../tables/all_module_genes.tsv"' in text
     assert source.read_bytes() == before
+
+
+def test_legacy_bootstrap_scope_authentication_does_not_require_a_different_display_algorithm(tmp_path):
+    from test_flow_presentation import _network_collection, _seal_fixture_collection
+    from katana_next.flow.presentation import build_presentation_assets
+    plan, receipts, transport, _ = _network_collection(tmp_path)
+    root = tmp_path / 'collection'
+    result = build_presentation_assets(root, plan, receipts, transport)
+    _seal_fixture_collection(root, plan, receipts)
+    browser = next(a for a in result['extra_assets'] if a['metadata'].get('network_view_role') == 'module_browser')
+    metadata = browser['metadata']
+    assert metadata['bootstrap_enabled'] is True
+    # Scope recovery still validates the actual plan, fit and follow-up receipts;
+    # it does not need parameters for an algorithm that this fit never used.
+    assert upgrade._completed_inputs(metadata, require_display_parameters=False)[0] == root
+    with pytest.raises(ValueError, match='Complete saved settings'):
+        upgrade._completed_inputs(metadata)

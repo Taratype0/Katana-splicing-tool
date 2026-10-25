@@ -16,7 +16,7 @@ from katana_next.flow.presentation import build_presentation_assets
 from katana_next.flow.runtime import write_json
 from katana_next.reports.engine import ASSET_ROOT, Builder
 from katana_next.reports.sources import load_source
-from test_flow_presentation import _two_contrast_network_collection, _fixture_collection
+from test_flow_presentation import _two_contrast_network_collection, _fixture_collection, _seal_fixture_collection
 
 
 def _relative(value, root):
@@ -91,6 +91,7 @@ def complete_network_report(tmp_path, request):
                                     'contrast_id': cid, 'unit': 'network fixture', 'policy': None}]}})
     write_json(root / 'artifacts.json', {'artifacts': _relative(native, root)})
     write_json(root / 'report-project.json', {'extra_assets': _relative(result['extra_assets'], root)})
+    _seal_fixture_collection(root, plan, receipts)
     report = tmp_path / 'report'; report.mkdir()
     shutil.copytree(ASSET_ROOT, report / 'assets')
     descriptor = {'project_manifest': str(root / 'project.json'), 'artifacts': native,
