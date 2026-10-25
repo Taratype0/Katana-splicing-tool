@@ -37,6 +37,10 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--format", choices=("json", "tsv"), default="json")
     inspect = sub.add_parser("results", help="Verify a returned result directory or manifest.")
     inspect.add_argument("--outdir", required=True, type=Path)
+    restore = sub.add_parser("restore", help="Restore verified result ZIP/directory to a new resumable local workspace.")
+    restore.add_argument("--results", required=True, type=Path, help="Target result ZIP, directory or result-manifest.json.")
+    restore.add_argument("--outdir", required=True, type=Path, help="New empty local result directory; existing products are never overwritten.")
+    restore.add_argument("--project-id", help="Require this exact project identity before creating the local owner.")
     return parser
 
 
@@ -81,6 +85,9 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValueError("--workers must be positive.")
                 result = run_targets(args.request, args.outdir, resources=args.bindings,
                                      workers=args.workers, target_ids=args.target_ids)
+            elif args.action == "restore":
+                from .restore import restore_results
+                result = restore_results(args.results, args.outdir, expected_project_id=args.project_id)
             else:
                 from .runner import inspect_results
                 result = inspect_results(args.outdir)

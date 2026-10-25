@@ -148,6 +148,45 @@ def test_module_graph_display_uses_exact_native_kernel_without_changing_membersh
     assert source_bytes == {p.name: p.read_bytes() for p in root.iterdir()}
 
 
+def test_module_graph_accepts_exact_frozen_native_six_digit_export_without_refitting(tmp_path):
+    root = tmp_path / "native"
+    members, matrix, _ = _native_graph_fixture(root)
+    path = root / "network_edges.tsv"
+    # This is the actual frozen fit_network writer, rather than the synthetic
+    # fixture's otherwise full-precision pandas export. Save its immutable
+    # source bytes and verify the drawing gate, not a relaxed numeric epsilon.
+    native = pd.read_csv(path, sep="\t", float_precision="round_trip")
+    precise = float(native.iloc[0].adjacency)
+    native.to_csv(path, sep="\t", index=False, float_format="%.6g")
+    rounded = float(pd.read_csv(path, sep="\t", float_precision="round_trip").iloc[0].adjacency)
+    assert abs(precise - rounded) > 1e-7
+    before = {p.name: p.read_bytes() for p in root.iterdir()}
+    graph, _ = _module_display_graph(members, matrix, root / "parameters.json", max_edges=10)
+    assert graph["methods"]["matched_native_edges"] == 1
+    assert graph["methods"]["native_export_serialization_matches"] == 1
+    assert graph["methods"]["native_export_serialization_recovered_edges"] == 1
+    assert graph["methods"]["maximum_native_adjacency_difference"] == abs(precise - rounded)
+    assert before == {p.name: p.read_bytes() for p in root.iterdir()}
+
+
+def test_module_graph_rejects_changed_weight_within_native_rounding_maximum(tmp_path):
+    root = tmp_path / "native"
+    members, matrix, _ = _native_graph_fixture(root)
+    path = root / "network_edges.tsv"
+    edges = pd.read_csv(path, sep="\t", float_precision="round_trip")
+    precise = float(edges.iloc[0].adjacency)
+    # This is smaller than a blanket 5e-7 rounding tolerance, but is neither
+    # the exact original adjacency nor its authoritative %.6g serialization.
+    altered = precise - 4e-7
+    assert float("%.6g" % precise) != altered
+    edges.loc[0, "adjacency"] = altered
+    edges.to_csv(path, sep="\t", index=False)
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="immutable native exported value"):
+        _module_display_graph(members, matrix, root / "parameters.json")
+    assert path.read_bytes() == before
+
+
 @pytest.mark.parametrize("mutation", ["parameters", "native_scope", "weighted"])
 def test_module_graph_display_refuses_substituted_parameters_or_another_fit(tmp_path, mutation):
     root = tmp_path / "native"

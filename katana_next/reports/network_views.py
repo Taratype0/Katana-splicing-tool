@@ -409,6 +409,7 @@ def _module_display_graph(members, matrix, parameters_path, *, max_nodes=100, ma
     native_lookup = {(min(str(r.event_a), str(r.event_b)), max(str(r.event_a), str(r.event_b))): float(r.adjacency)
                      for r in native_edges.itertuples()}
     groups, rows, matching, max_difference = {}, [], 0, 0.0
+    serialized_matching, serialization_recovered = 0, 0
     for module in members.module.drop_duplicates():
         if module == "grey":
             continue
@@ -429,9 +430,18 @@ def _module_display_graph(members, matrix, parameters_path, *, max_nodes=100, ma
             a, b = event_keys[i], event_keys[j]
             key = (min(a, b), max(a, b))
             if key in native_lookup:
-                difference = abs(weight - native_lookup[key])
+                exported_weight = native_lookup[key]
+                difference = abs(weight - exported_weight)
                 max_difference = max(max_difference, difference)
-                if difference > 1e-7:
+                # The frozen fit writer saves result.edges with %.6g. Compare
+                # that exact serialization too: float32 adjacency can differ
+                # by almost 5e-7 from its six-significant-digit TSV value.
+                # Keep the existing full-precision export check; do not apply
+                # a wider arbitrary tolerance or change either native value.
+                serialized_identity = float("%.6g" % weight) == exported_weight
+                serialized_matching += int(serialized_identity)
+                serialization_recovered += int(serialized_identity and difference > 1e-7)
+                if difference > 1e-7 and not serialized_identity:
                     raise ValueError("A module-view adjacency differs from its immutable native exported value")
                 matching += 1
         displayed = eligible[:max_edges]
@@ -452,6 +462,9 @@ def _module_display_graph(members, matrix, parameters_path, *, max_nodes=100, ma
         "adjacency": "float32(((1 + bicor) / 2) ** 6); diagonal zero; native threshold >= 0.1",
         "edge_order": "adjacency descending, then exact event identities",
         "matched_native_edges": matching, "maximum_native_adjacency_difference": max_difference,
+        "native_export_serialization": "katana_cosplice.pipeline.fit_network: result.edges.to_csv(float_format='%.6g')",
+        "native_export_serialization_matches": serialized_matching,
+        "native_export_serialization_recovered_edges": serialization_recovered,
         "network_discovery_runs": 0, "TOM_runs": 0, "linkage_runs": 0,
         "association_tests": 0, "enrichment_tests": 0, "native_results_unchanged": True,
         "full_module_membership_retained": True, "full_topology_claimed": False}

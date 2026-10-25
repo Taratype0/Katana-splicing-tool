@@ -77,6 +77,7 @@ plan_targets(request_path, resources=None, *, outdir=None) -> dict
 run_targets(request_path, output_dir, resources=None, *, workers=None,
             target_ids=None, progress=None) -> dict
 inspect_results(output_dir) -> dict
+restore_results(source, output_dir, *, expected_project_id=None) -> dict
 ```
 
 `resources` is a bindings JSON path or dictionary. `target_ids` is an explicit
@@ -91,6 +92,20 @@ Return `schema`, `status` (`complete`, `partial`, `failed` or `cache_hit`),
 `request_id`, `report`, `archive`, `manifest`, `targets` and cache summary.
 Original P/FDR and source test-family identity remain intact. No DESeq2,
 rMATS, network fit or MotifTrace rescan is implicitly started.
+
+`restore_results` accepts a verified result ZIP, directory or manifest and a
+new empty local output directory. It authenticates the full request/evidence
+ledger, project/source-manifest identity, all target biological identities,
+comparison scopes and existing product hashes before creating a new local
+owner. Existing completion records and result-manifest bytes are copied,
+not rewritten. A separate `.target-restore.json` binds the original manifest
+and archive SHA256 and distinguishes local restoration from scientific
+completion. `TARGET_REQUEST.zip` reproduces the authenticated request/evidence
+subset for the next public plan/run without the source project database or
+the origin's exported request ZIP. Reader/renderer/source fingerprints and
+resource-based cache eligibility are unchanged. Unknown writer claims,
+occupied destinations, traversal, aliasing, tampered products and mismatched
+identities are rejected; diagnostics and old products are never removed.
 
 Use the existing NativeSashimiAdapter, preserve its exact event geometry and
 biological replicate ordering, and record the actual reader. Missing BAM/index

@@ -26,4 +26,9 @@ def inspect_results(*args, **kwargs):
     return inspect(*args, **kwargs)
 
 
-__all__ = ["export_targets", "plan_targets", "run_targets", "inspect_results"]
+def restore_results(*args, **kwargs):
+    from .restore import restore_results as restore
+    return restore(*args, **kwargs)
+
+
+__all__ = ["export_targets", "plan_targets", "run_targets", "inspect_results", "restore_results"]

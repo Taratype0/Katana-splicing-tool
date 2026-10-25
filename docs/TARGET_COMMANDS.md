@@ -82,6 +82,42 @@ the actual comparison IDs for every target.
 secure connection. An offline HTML report can display all included results;
 running Python or reading BAMs requires the service or CLI.
 
+## Restore returned results on another machine
+
+To browse a result ZIP, extract it and open `INDEX.html`, or use **Import
+results** in the matching project's browser workspace. Importing results opens
+their verified reports; it does not submit new work.
+
+To continue CLI work from the returned products, restore them into a new empty
+directory. You do not need the original project database or exported request
+ZIP:
+
+```sh
+katana-targets restore --results completed-targets.zip --outdir restored-targets
+katana-targets inspect --request restored-targets/TARGET_REQUEST.zip
+katana-targets plan --request restored-targets/TARGET_REQUEST.zip --bindings bindings.json --outdir restored-targets
+katana-targets run --request restored-targets/TARGET_REQUEST.zip --bindings bindings.json --outdir restored-targets
+katana-targets results --outdir restored-targets
+```
+
+`--results` also accepts an unpacked result directory or its
+`result-manifest.json`. Optional `--project-id` requires an exact expected
+project identity. Restore verifies the complete member hashes, target and
+request identities, original comparison scopes and existing completion
+records before creating a new local owner. It preserves the original result
+manifest, native statistics and per-target provenance. `TARGET_REQUEST.zip`
+contains the original request and evidence needed by the next plan/run;
+`.target-restore.json` records the source manifest/archive SHA256 and the new
+local restoration separately from the original scientific completion.
+
+Restore performs no analysis, Sashimi read counting or figure rendering.
+Rebind BAMs/indexes and references using the execution machine's paths, then
+check the plan. Matching methods, evidence and resources reuse the completed
+targets; restoring a result alone does not certify a different software or
+resource identity as a cache hit. An occupied output directory, unknown writer
+claims, unsafe archive, altered product or mismatched project is rejected;
+existing products and claims are never removed to make a restore succeed.
+
 ## Batch and scheduler use
 
 ```sh
@@ -112,7 +148,7 @@ diagnostic record and can be retried independently.
 ## Python interface and direct export
 
 ```python
-from katana_next.targets import export_targets, plan_targets, run_targets, inspect_results
+from katana_next.targets import export_targets, plan_targets, run_targets, inspect_results, restore_results
 
 # context is an existing Katana ProjectContext, opened by the caller.
 exported = export_targets(context, [{
@@ -125,6 +161,9 @@ exported = export_targets(context, [{
 plan = plan_targets(exported["archive_path"], resources="bindings.json")
 result = run_targets(exported["archive_path"], "target-reports", resources="bindings.json")
 verified = inspect_results("target-reports")
+
+# A returned result package can become a new resumable local workspace.
+restored = restore_results("completed-targets.zip", "restored-targets")
 ```
 
 For scripted export, write the selection array above to `selections.json`, then

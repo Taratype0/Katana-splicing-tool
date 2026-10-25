@@ -107,6 +107,15 @@ failed, not requested, unavailable and non-estimable results.
 
 ## Existing components and remaining work
 
+Returned products can be reopened offline or imported into the matching
+browser project for viewing. Continuing CLI work from a downloaded result ZIP
+uses explicit `katana-targets restore` into a new empty directory. It verifies
+the original request and product identities, preserves existing completion
+records, and creates a separate local owner, portable `TARGET_REQUEST.zip`
+and restoration provenance. It never relabels restored results as a new
+scientific computation; cache reuse remains conditional on the actual method,
+evidence and rebound resources. See [the restore commands](TARGET_COMMANDS.md#restore-returned-results-on-another-machine).
+
 Existing components include table selection, selection validation/routing,
 selected-gene PSI/expression views, exact-event native Sashimi, network and
 MotifTrace browsers, and parameter/source-aware caching. The original richer

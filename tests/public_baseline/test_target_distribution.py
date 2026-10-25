@@ -72,6 +72,25 @@ def test_installed_target_cli_relocates_without_the_original_project(tmp_path):
     assert all(p.stat().st_mtime_ns == stamp for p, stamp in products.items())
     verified = _cli(destination, "results", "--outdir", destination / "reports")
     assert verified.get("status") != "failed"
+    # A downloaded ZIP intentionally has no local owner or original exported
+    # request ZIP. Restore must verify it and create both before cache reuse.
+    returned = tmp_path / "return-machine"
+    returned.mkdir()
+    returned_zip = returned / "completed-targets.zip"
+    shutil.copy2(result["archive"], returned_zip)
+    restored = _cli(returned, "restore", "--results", returned_zip,
+                    "--outdir", returned / "restored", "--project-id", context.manifest.project_id)
+    assert restored["restored"] and restored["status"] == "complete"
+    assert restored["restoration"]["original_completion_history_preserved"]
+    assert Path(restored["request"]).name == "TARGET_REQUEST.zip"
+    planned = _cli(returned, "plan", "--request", restored["request"], "--outdir", returned / "restored")
+    assert planned["ready"] and all(task["reusable"] for task in planned["tasks"])
+    restored_files = {p: (p.read_bytes(), p.stat().st_mtime_ns)
+                      for p in (returned / "restored").rglob("*") if p.is_file()}
+    reused = _cli(returned, "run", "--request", restored["request"],
+                  "--outdir", returned / "restored", "--workers", "1")
+    assert reused["status"] == "cache_hit" and reused["cache"]["hits"] == 1
+    assert all((p.read_bytes(), p.stat().st_mtime_ns) == proof for p, proof in restored_files.items())
 
 
 def test_browser_and_target_entrypoint_are_in_the_wheel():
