@@ -40,9 +40,13 @@ workflow RESOLVE_STRANDEDNESS {
             if (!(strand in ['forward', 'reverse', 'unstranded'])) error("Unresolved strand for ${id}")
             tuple(meta + [strandedness: strand], bam)
         }
+    ch_resolved_bai = ch_indexed.map { meta, bam, bai -> tuple(meta.id, meta, bai) }
+        .join(ch_resolved_meta, failOnDuplicate: true, failOnMismatch: true)
+        .map { id, meta, bai, strand -> tuple(meta + [strandedness: strand], bai) }
 
     emit:
     bam = ch_resolved_bam
+    bai = ch_resolved_bai
     samplesheet = RESOLVE_SAMPLE_STRANDEDNESS.out.samplesheet
     audit = RESOLVE_SAMPLE_STRANDEDNESS.out.audit
     summary = RESOLVE_SAMPLE_STRANDEDNESS.out.summary

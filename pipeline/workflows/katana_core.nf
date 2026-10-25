@@ -279,7 +279,7 @@ workflow KATANA_PIPELINE {
         .mix(REFERENCE_FAIDX.out.dict.map { artifact('provenance', it, 'provenance/reference.genome.dict') })
         .mix(SALMON_GENOME_PROJECTION.out.results.map { meta, directory -> artifact('quant', directory.resolve('quant.sf'), "quant/${meta.id}/quant.sf", [sample_id: meta.id]) })
         .mix(SAMTOOLS_SORT.out.bam.map { meta, bam -> artifact('bam', bam, "bam/${meta.id}.bam", [sample_id: meta.id]) })
-        .mix(SAMTOOLS_INDEX.out.bai.map { meta, bai -> artifact('bai', bai, "bam/${meta.id}.bam.bai", [sample_id: meta.id]) })
+        .mix(RESOLVE_STRANDEDNESS.out.bai.map { meta, bai -> artifact('bai', bai, "bam/${meta.id}.bam.bai", [sample_id: meta.id]) })
         .mix(KATANA_DIFFERENTIAL.out.results.flatMap { meta, files -> tableArtifacts(files, 'deg', 'DEG', /^(.+)\.deseq2\.results\.tsv$/) })
         .mix(KATANA_DIFFERENTIAL.out.normalised_counts.map { meta, p -> artifact('normalized_counts', p, 'DEG/all.normalised_counts.tsv') })
         .mix(KATANA_DIFFERENTIAL.out.annotation.map { meta, p -> artifact('annotation', p, 'refs/annotation.tsv') })
@@ -390,7 +390,7 @@ workflow KATANA_PIPELINE {
     bundle = KATANA_EXPORT.out.bundle
     quant = SALMON_GENOME_PROJECTION.out.results
     bam = ch_resolved_bam
-    bai = SAMTOOLS_INDEX.out.bai
+    bai = RESOLVE_STRANDEDNESS.out.bai
     samplesheet = ch_resolved_samples
     contrastsheet = VALIDATE_INPUTS.out.contrasts
     versions = ch_versions

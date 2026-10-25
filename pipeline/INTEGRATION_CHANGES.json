@@ -181,7 +181,7 @@
     {
       "path": "workflows/katana_core.nf",
       "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
-      "integrated_sha256": "498ab262c699090253eff1b5b8ae77ff7fae51f5695320a11bd358be2d57c84c"
+      "integrated_sha256": "b961acf64724f34754acd7d36ed7a4ad01cc8c1bc9f6cf69a24ffc4ca4bef999"
     },
     {
       "path": "bin/katana_validate_inputs.py",

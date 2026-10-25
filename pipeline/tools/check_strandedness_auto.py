@@ -91,7 +91,7 @@ def main():
 include { RESOLVE_STRANDEDNESS } from 'MODULE'
 process CONSUMER {
     tag "${meta.id}"
-    input: tuple val(meta), path(bam)
+    input: tuple val(meta), path(bam), path(bai)
     output: path "${meta.id}.resolved.json"
     script:
     if (meta.strandedness != params.expected) error("Wrong propagated strand for ${meta.id}: ${meta.strandedness}")
@@ -106,7 +106,10 @@ workflow {
     indices=rows.map { row -> tuple([id:row.sample],file("${params.inputs}/${row.sample}.bam.bai")) }
     RESOLVE_STRANDEDNESS(bams,indices,Channel.value(file(params.samples)),Channel.value(file(params.contrasts)),
         Channel.value(file("${params.inputs}/annotation.gtf")),Channel.value(file(params.resolver)),Channel.value(file(params.validator)))
-    CONSUMER(RESOLVE_STRANDEDNESS.out.bam)
+    // The public BAM/index outputs must retain identical whole metadata maps,
+    // including actual strand calls, rather than only matching sample IDs.
+    CONSUMER(RESOLVE_STRANDEDNESS.out.bam.join(RESOLVE_STRANDEDNESS.out.bai,
+        failOnDuplicate:true,failOnMismatch:true))
 }
 """.replace('MODULE',module))
     # Explicitly small resource requests are for this tiny generated fixture.
