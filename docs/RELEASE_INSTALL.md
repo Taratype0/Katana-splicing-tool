@@ -6,6 +6,11 @@ workflow and native dependency locks. This is a beta release. The wheel and
 images retain their tested identities; publishing them does not rebuild the
 software or recompute studies.
 
+Use the [Nextflow guide](NEXTFLOW_USAGE.md), [complete parameter reference](NEXTFLOW_PARAMETERS.md)
+and [Chinese quick start](NEXTFLOW_QUICKSTART_ZH.md) for sample/contrast formats,
+entry points and analysis choices. Copyable sheets are in
+[examples/nextflow](../examples/nextflow/README.md).
+
 ## Choose downloads
 
 | Use | Release assets |

@@ -1,0 +1,7 @@
+sample,condition,source,genome_bam,strandedness,single_end,read_length
+control_1,CONTROL,genome_bam,../alignments/control_1.bam,reverse,false,150
+control_2,CONTROL,genome_bam,../alignments/control_2.bam,reverse,false,150
+control_3,CONTROL,genome_bam,../alignments/control_3.bam,reverse,false,150
+treated_1,TREATED,genome_bam,../alignments/treated_1.bam,reverse,false,150
+treated_2,TREATED,genome_bam,../alignments/treated_2.bam,reverse,false,150
+treated_3,TREATED,genome_bam,../alignments/treated_3.bam,reverse,false,150

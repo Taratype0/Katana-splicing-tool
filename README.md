@@ -116,6 +116,9 @@ Download the Python wheel and matching Linux Docker archives from
 [Katana 2.0.0 beta 5](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261025).
 The [release installation guide](docs/RELEASE_INSTALL.md) covers checksums,
 browser/CLI installation, Docker loading and the locked Conda route.
+For analysis inputs and execution, see the [Nextflow usage guide](docs/NEXTFLOW_USAGE.md),
+[parameter reference](docs/NEXTFLOW_PARAMETERS.md) and
+[Chinese quick start](docs/NEXTFLOW_QUICKSTART_ZH.md).
 
 The accepted implementation is available on **`main`**. Start with
 [Choose a Katana entry point](docs/ENTRY_POINTS.md), then choose the installation

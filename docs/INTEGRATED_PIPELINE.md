@@ -50,10 +50,12 @@ An export never replaces an existing pipeline directory.
 
 For a new bulk study:
 
-First [build the separate DEXSeq tools image](../containers/dexseq-tools/README.md).
+First [load the released DEXSeq tools archive](RELEASE_INSTALL.md#linux-nextflow-with-docker)
+or [build the separate image](../containers/dexseq-tools/README.md).
 The upstream annotation/count steps use unchanged GPL tools that are not included
-in the Katana downstream image. No public DEXSeq image is assumed to exist.
-Set `DEXSEQ_IMAGE` to the built local image or verified site-provided image/SIF.
+in the Katana downstream image. The release supplies a verified Docker archive;
+there is no implicit registry tag. Set `DEXSEQ_IMAGE` to the loaded image,
+a matching local build or a verified site-provided image/SIF.
 
 ```sh
 nextflow run pipeline/main.nf -profile docker \

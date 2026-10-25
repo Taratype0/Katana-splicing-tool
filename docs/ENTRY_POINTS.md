@@ -5,6 +5,10 @@ workflow when reads still need processing, and the target workflow after
 choosing genes or events.** These entries share the package but perform
 different work; successful report assembly does not certify a new raw-data run.
 
+For full input/contrast formats and execution choices, use the
+[Nextflow usage guide](NEXTFLOW_USAGE.md), [parameter reference](NEXTFLOW_PARAMETERS.md)
+or [Chinese quick start](NEXTFLOW_QUICKSTART_ZH.md).
+
 | Starting material | Command or interface | Work performed |
 | --- | --- | --- |
 | Bulk FASTQ | Nextflow `--mode complete` | Upstream processing → Katana inputs → selected downstream analyses → report. |

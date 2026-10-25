@@ -1,0 +1,7 @@
+sample,condition,source,fastq_1,fastq_2,strandedness,read_length
+control_1,CONTROL,fastq,../reads/control_1_R1.fastq.gz,../reads/control_1_R2.fastq.gz,reverse,150
+control_2,CONTROL,fastq,../reads/control_2_R1.fastq.gz,../reads/control_2_R2.fastq.gz,reverse,150
+control_3,CONTROL,fastq,../reads/control_3_R1.fastq.gz,../reads/control_3_R2.fastq.gz,reverse,150
+treated_1,TREATED,fastq,../reads/treated_1_R1.fastq.gz,../reads/treated_1_R2.fastq.gz,reverse,150
+treated_2,TREATED,fastq,../reads/treated_2_R1.fastq.gz,../reads/treated_2_R2.fastq.gz,reverse,150
+treated_3,TREATED,fastq,../reads/treated_3_R1.fastq.gz,../reads/treated_3_R2.fastq.gz,reverse,150
