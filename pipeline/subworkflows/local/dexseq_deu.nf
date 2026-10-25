@@ -7,6 +7,26 @@ include { DEXSEQ_COUNT        } from '../../modules/local/dexseq_count'
 include { DEXSEQ_EXON         } from '../../modules/local/dexseq_exon'
 include { CONTRAST_TASK_SHEETS } from '../../modules/local/split_contrasts'
 
+def stableCountVersion(counts, versions) {
+    // A cached task can arrive before a task that originally finished first.
+    // Select one declared version output by sample identity, never arrival or
+    // its work-directory hash. Keep counts and versions paired by producer.
+    def sample_directories = counts.map { meta, files ->
+        def paths = [files].flatten()
+        if (paths.size() != 1) error('DEXSeq count version selection requires one count file per sample')
+        tuple(paths[0].parent.toString(), meta.id.toString())
+    }
+    def version_directories = versions.map { path -> tuple(path.parent.toString(), path) }
+    sample_directories.join(version_directories, failOnDuplicate: true, failOnMismatch: true)
+        .toSortedList { a, b -> a[1] <=> b[1] }
+        .map { rows ->
+            if (!rows || rows.collect { it[1] }.unique(false).size() != rows.size()) {
+                error('DEXSeq count version selection requires unique sample identities')
+            }
+            rows[0][2]
+        }
+}
+
 workflow DEXSEQ_DEU {
 
     take:
@@ -52,7 +72,7 @@ workflow DEXSEQ_DEU {
         alignment_quality
     )
 
-    ch_versions = ch_versions.mix(DEXSEQ_COUNT.out.versions.first())
+    ch_versions = ch_versions.mix(stableCountVersion(DEXSEQ_COUNT.out.dexseq_clean_txt, DEXSEQ_COUNT.out.versions))
 
     //
     // MODULE: DEXSeq DEU

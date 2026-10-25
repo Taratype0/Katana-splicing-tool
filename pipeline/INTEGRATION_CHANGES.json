@@ -174,6 +174,11 @@
       "integrated_sha256": "f8af906cf5064f2b2d13419e378d099be12ccb251bf345e33df8f65e3e6fc551"
     },
     {
+      "path": "subworkflows/local/dexseq_deu.nf",
+      "snapshot_sha256": "990fa7c14cf60ab85e37b4b0b5bf0f635337e9f2e0abc4b15487bc96c2b59323",
+      "integrated_sha256": "531c7592e015a4890210e4d9aa6dd3618db1d5c5fd86d15740121ef1aeebb6b5"
+    },
+    {
       "path": "workflows/katana_core.nf",
       "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
       "integrated_sha256": "440051fb42c99b165fcc2bfb6757f8c8dc124ac5cfc13f2ee3a6467a114f49b7"
@@ -187,7 +192,8 @@
     "Bind native QC sources to exact sample IDs and raw/trimmed/alignment phases in the portable bundle",
     "Preserve declared reference, assay and pre-analysis exclusion provenance through bundle export and verified import",
     "Qualify BioContainers Docker image names with quay.io while retaining all tool versions, scripts and Singularity URLs",
-    "Require an explicitly built DEXSeq tools image instead of the unpublished placeholder; preserve native scripts and parameters"
+    "Require an explicitly built DEXSeq tools image instead of the unpublished placeholder; preserve native scripts and parameters",
+    "Select the representative DEXSeq count version by sample identity and matched producer rather than asynchronous arrival; retain native count scripts, parameters and completed results"
   ],
   "scientific_test_algorithms_replaced": false,
   "already_completed_results_refitted": false
