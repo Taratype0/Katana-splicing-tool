@@ -142,6 +142,10 @@ quantification/counting/testing begins. Requested/resolved settings and native
 RSeQC stdout/stderr are retained in pipeline QC and bundle provenance.
 See [the inference/tool pins](../pipeline/modules/local/infer_strandedness.provenance.json)
 and [nf-core's classification function](https://github.com/nf-core/rnaseq/blob/3.19.0/subworkflows/nf-core/fastq_qc_trim_filter_setstrandedness/main.nf#L19).
+Thresholds require `0.5 < stranded_threshold <= 1` and
+`0 <= unstranded_threshold < 2*stranded_threshold-1`, so the classification
+regions cannot overlap. The sample budget must be a positive integer and MAPQ
+an integer from 0 to 255. See [native auto-inference validation and output paths](validation/auto-strandedness-20261025.md).
 
 ## 4. rMATS native testing
 
