@@ -43,18 +43,19 @@ FASTQ/BAM 用同一条入口命令，由表中字段决定。配置、输入目�
 分开放；以上命令在研究项目根目录运行，不包含任何本机或 Dardel 固定路径。
 完整说明见 [Nextflow usage](NEXTFLOW_USAGE.md)。
 
-**开发版自动判断链特异性：** `strandedness=auto` 请使用
-`codex/package-development` 源码中的 `pipeline/main.nf`：
+**主分支源码中的自动判断链特异性：** `strandedness=auto` 请使用当前
+`main` 源码中的 `pipeline/main.nf`：
 
 ```sh
-git clone --branch codex/package-development https://github.com/Taratype0/Katana-splicing-tool.git katana-development
-nextflow run katana-development/pipeline/main.nf --help
+git clone --branch main https://github.com/Taratype0/Katana-splicing-tool.git katana-source
+nextflow run katana-source/pipeline/main.nf --help
 ```
 
 随后将上面运行命令的 `tools/katana-pipeline/main.nf` 换成
-`katana-development/pipeline/main.nf`，保留其他真实输入和匹配环境参数。
+`katana-source/pipeline/main.nf`，保留其他真实输入和匹配环境参数。
 已发布的 `v2.0.0-beta.5.dev20261025` wheel 和原有导出包保持冻结，仍要求手动填写
-链特异性；本次源码开发不会让旧安装包自动获得该功能。
+链特异性；主分支源码更新不会改变这些已发布文件。原有下游容器仍可使用；
+新增判断步骤使用独立固定版本的 RSeQC/gffread 镜像。
 
 ## 2. 样本表怎么填
 
@@ -83,7 +84,7 @@ Treated_1,Treated,../alignments/Treated_1.bam,reverse,false,150,animal_04
 - `sample` 唯一且以字母开头，只用字母、数字、下划线、点、连字符。
 - `condition` 以字母开头，只用字母、数字、下划线；与 contrast 表完全一致。
 - FASTQ 必须 gzip 压缩；`fastq_2` 留空表示单端，主验收覆盖双端。
-- `strandedness` 填 `forward/reverse/unstranded`；上述开发版也接受 `auto`。
+- `strandedness` 填 `forward/reverse/unstranded`；上述 `main` 源码入口也接受 `auto`。
   手动指定值保持不变，可与 `auto` 行混用。
 - BAM 必须是基因组坐标的 BAM，明确 `single_end`；转录组 BAM 不能替代。
 - `read_length` 为名义读长，可用 `--read_length` 补充；目前整套研究须一致。
@@ -145,7 +146,7 @@ SUPPA 由适配器固定输入顺序。DEXSeq 以实际原始 fold-change 列名
 | --- | --- |
 | 做哪些对比 | 上游 `contrasts.csv`；下游 `flow.json:contrast_ids` 再选已声明子集。 |
 | 参考版本 | `--fasta/--gtf/--reference_build/--annotation_release`。`--genome` 只是备用标签，不自动下载。 |
-| 自动链特异性，仅开发版 `auto` 行 | `--stranded_threshold=0.8`、`--unstranded_threshold=0.1`；RSeQC `--strandedness_sample_size=200000`、`--strandedness_mapq=30`。不改变手动指定行。 |
+| 自动链特异性，源码入口 `auto` 行 | `--stranded_threshold=0.8`、`--unstranded_threshold=0.1`；RSeQC `--strandedness_sample_size=200000`、`--strandedness_mapq=30`。不改变手动指定行。 |
 | 排除假基因、线粒体编码基因 | 原生分析参考中默认执行，先于定量/差异；完整原注释和排除记录保留。 |
 | 普通 DAS / RS-DAS | `flow.json:event_set`，默认 `stable_significant` 即 RS-DAS；普通为 `significant`。 |
 | 读数支持 | 固定规则：选定对比中**每个样本** `IJC+SJC≥10`；不以平均值代替，无旧版额外一致性/近似 SE 门槛。 |

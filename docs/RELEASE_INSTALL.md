@@ -6,6 +6,20 @@ workflow and native dependency locks. This is a beta release. The wheel and
 images retain their tested identities; publishing them does not rebuild the
 software or recompute studies.
 
+The current `main` source also supports `strandedness=auto`. That addition is
+not in these frozen beta 5 wheel/workflow downloads. For auto inference, keep
+the matching downloaded downstream images but run the current source workflow:
+
+```sh
+git clone --branch main --single-branch https://github.com/Taratype0/Katana-splicing-tool.git tools/katana-source
+nextflow run tools/katana-source/pipeline/main.nf --help
+```
+
+Use that `pipeline/main.nf` path in the complete FASTQ/BAM command below.
+RSeQC/gffread use their own declared upstream environments. Exporting a workflow
+from an older installed wheel does not update it. See
+[auto-strandedness requirements and validation](validation/auto-strandedness-20261025.md).
+
 Use the [Nextflow guide](NEXTFLOW_USAGE.md), [complete parameter reference](NEXTFLOW_PARAMETERS.md)
 and [Chinese quick start](NEXTFLOW_QUICKSTART_ZH.md) for sample/contrast formats,
 entry points and analysis choices. Copyable sheets are in

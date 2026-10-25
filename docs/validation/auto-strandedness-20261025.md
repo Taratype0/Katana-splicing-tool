@@ -1,14 +1,15 @@
 # Automatic library strandedness
 
-The development Nextflow workflow accepts `strandedness=auto` for bulk FASTQ
-and genome-BAM input, for both single-end and paired-end libraries. Explicit
+The current `main` source Nextflow workflow accepts `strandedness=auto` for bulk
+FASTQ and genome-BAM input, for both single-end and paired-end libraries. Explicit
 `forward`, `reverse` and `unstranded` declarations remain supported.
 
-This feature is on `codex/package-development`. The published
+This feature is available in the current `main` source checkout. The published
 `v2.0.0-beta.5.dev20261025` assets are unchanged and do not contain it. Run the
-development checkout's `pipeline/main.nf`; exporting a workflow from the older
+`main` source checkout's `pipeline/main.nf`; exporting a workflow from the older
 installed wheel does not upgrade it. The new upstream module uses its own
-declared RSeQC/gffread environments; the Katana downstream image is unchanged.
+declared RSeQC/gffread environments; the released Katana downstream image remains
+usable and unchanged.
 
 ## Method and output
 

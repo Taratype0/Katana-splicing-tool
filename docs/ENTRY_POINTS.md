@@ -33,9 +33,8 @@ eligibility still applies.
 The [downloadable release](RELEASE_INSTALL.md) supplies the matching wheel,
 Docker archives, exported workflow and dependency locks.
 
-Use `main` and the [installation guide](INSTALL.md). Further development
-continues on `codex/package-development`. The
-Nextflow host needs Java/Nextflow and its container engine. Katana Python, R
+Use the current `main` source checkout and the [installation guide](INSTALL.md).
+The Nextflow host needs Java/Nextflow and its container engine. Katana Python, R
 and external tools run in the downstream image; upstream tools use their
 declared images. Standalone downstream users can instead use the
 [locked Linux Conda environment](RUNTIME_ENVIRONMENTS.md).
@@ -58,12 +57,12 @@ katana-flow export-pipeline --outdir tools/katana-pipeline
 The examples below use that exported `tools/katana-pipeline/main.nf`. Keep
 configuration/input directories separate from work and output directories.
 
-For the development addition `strandedness=auto`, use a
-`codex/package-development` checkout's `pipeline/main.nf` in place of that export;
-see [the development checkout command](NEXTFLOW_USAGE.md#2-installation-and-directory-layout).
+For `strandedness=auto`, use the current `main` source checkout's
+`pipeline/main.nf` in place of that export; see [the source checkout command](NEXTFLOW_USAGE.md#2-installation-and-directory-layout).
 The published `v2.0.0-beta.5.dev20261025` wheel and original workflow export remain
 frozen and still require manual strandedness. No update to those assets is
-implied by the new source support.
+implied by the source support. The released downstream container remains usable;
+RSeQC/gffread inference runs in its own pinned upstream images.
 
 ## 1. New bulk FASTQ or BAM
 
@@ -90,7 +89,7 @@ The matched-reference and BAM-content checks still run. File paths must already
 be local or mounted. Do not use a downstream metadata-adapter example as a
 replacement for this raw-entry schema.
 
-The development workflow accepts `auto` alongside explicit
+The current `main` source workflow accepts `auto` alongside explicit
 `forward`/`reverse`/`unstranded` rows. Only `auto` rows add RSeQC inference after
 the shared BAM audit/sort/index, using the matched unfiltered GTF converted to
 BED12. FASTQ rows use their STAR alignments; supplied BAMs are not realigned.
@@ -98,7 +97,7 @@ All selected samples must resolve and each selected comparison must retain
 consistent actual strandedness before Salmon/DEXSeq/rMATS. Undetermined calls
 stop execution without an unstranded fallback. Native evidence and requested/
 resolved settings are retained in pipeline QC and bundle provenance; see
-[the inference rules and defaults](NEXTFLOW_USAGE.md#automatic-strandedness-in-the-development-workflow).
+[the inference rules and defaults](NEXTFLOW_USAGE.md#automatic-strandedness-in-the-source-workflow).
 
 The contrast sheet uses `contrast,treatment,control`: include only the
 comparisons you want, with that direction. The project template declares

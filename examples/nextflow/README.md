@@ -18,13 +18,14 @@ sample sheet containing those exact condition names; it is not compatible with
 the two-group sheets unchanged. A condition label containing two factors does
 not fit an interaction model. Only list the comparisons needed for the study.
 
-### Development workflow: unknown strandedness
+### Source workflow: unknown strandedness
 
-In a `codex/package-development` source checkout, any chosen sample's
+In the current `main` source checkout, any chosen sample's
 `strandedness` cell may be `auto`. The existing manual examples remain valid;
 declared `forward`, `reverse` and `unstranded` rows keep their values and can
 coexist with `auto` rows. Use the checkout's `pipeline/main.nf`. The frozen
-`v2.0.0-beta.5.dev20261025` wheel/export does not support `auto`.
+`v2.0.0-beta.5.dev20261025` wheel/export does not support `auto`. The released
+downstream container remains usable; inference uses its own pinned upstream images.
 
 Only `auto` samples run RSeQC 5.0.3 inference on the shared audited, sorted and
 indexed genome BAM, using BED12 derived from the matched unfiltered GTF.
@@ -35,7 +36,7 @@ normalized over informative sense/antisense evidence. Undetermined calls fail,
 and every selected comparison must have consistent resolved strandedness before
 Salmon/DEXSeq/rMATS. Pipeline QC and bundle provenance retain the requested
 values, decisions and native RSeQC evidence. See
-[the detailed inference rules](../../docs/NEXTFLOW_USAGE.md#automatic-strandedness-in-the-development-workflow).
+[the detailed inference rules](../../docs/NEXTFLOW_USAGE.md#automatic-strandedness-in-the-source-workflow).
 
 Use the [Nextflow usage guide](../../docs/NEXTFLOW_USAGE.md) for required files,
 validation commands, supported designs and effect direction. The

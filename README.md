@@ -120,6 +120,13 @@ For analysis inputs and execution, see the [Nextflow usage guide](docs/NEXTFLOW_
 [parameter reference](docs/NEXTFLOW_PARAMETERS.md) and
 [Chinese quick start](docs/NEXTFLOW_QUICKSTART_ZH.md).
 
+The current `main` workflow also accepts `strandedness=auto` for single-end and
+paired-end bulk FASTQ/BAM input. It measures library orientation before native
+quantification and differential analysis, retaining the requested and resolved
+values. Use the current checkout's `pipeline/main.nf` for this feature; the
+beta 5 downloadable wheel/workflow remains unchanged. See
+[automatic strandedness and validation](docs/validation/auto-strandedness-20261025.md).
+
 The accepted implementation is available on **`main`**. Start with
 [Choose a Katana entry point](docs/ENTRY_POINTS.md), then choose the installation
 that matches how you want to use Katana:
@@ -129,13 +136,13 @@ package and matching Linux Conda and Docker environments. This covers the
 seven-section report, complete result links, network browsing and portable
 report refresh. The [current entry/runtime record](docs/validation/entrypoints-runtime-20261025.md)
 identifies matching artifacts and the complete-mode and target checks.
-Ubuntu, Windows, interface and installed-wheel
-[CI checks](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40184505728)
-passed at `098ceae`. The unchanged workflow sources retain the passing
-[native Nextflow CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40181808070)
-at `c448007`. Those records identify the actual tested commits and artifacts;
-merging documentation does not change their identities. Further development
-continues on `codex/package-development`.
+The released artifacts retain their original accepted versions. The current
+source adds a separately checked auto-strandedness route; its
+[native Nextflow CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40210590441)
+exercises generated alignments, actual tool containers, failure gates and cache
+reuse. [Validation records](docs/validation/auto-strandedness-20261025.md) distinguish
+these checks from the earlier complete-study and runtime checks. Further
+development continues on `codex/package-development`.
 
 | Use | Installation |
 | --- | --- |

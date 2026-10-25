@@ -51,22 +51,23 @@ nextflow run tools/katana-pipeline/main.nf --help
 ```
 
 An existing export directory is not overwritten. A source checkout can instead
-use `pipeline/main.nf`. Pin the release/commit and matching images; do not mix
-an old wheel with a new workflow or assume a floating container tag is identical.
+use `pipeline/main.nf`. Record the checkout commit and runtime image identities;
+a workflow exported by a wheel retains the source bundled in that wheel.
 
-**Development support for `strandedness=auto`:** use the
-`codex/package-development` checkout's `pipeline/main.nf`. The frozen
+**Source support for `strandedness=auto`:** use the current `main` checkout's
+`pipeline/main.nf`. The frozen
 `v2.0.0-beta.5.dev20261025` wheel and exported workflow retain their original
 explicit-strandedness requirement; they are not updated by these source changes.
-Until a new matching release is published, obtain the development workflow with:
+The released Katana downstream container remains usable; the inference processes
+use their own pinned RSeQC/gffread images. Obtain the current source workflow with:
 
 ```sh
-git clone --branch codex/package-development https://github.com/Taratype0/Katana-splicing-tool.git katana-development
-nextflow run katana-development/pipeline/main.nf --help
+git clone --branch main https://github.com/Taratype0/Katana-splicing-tool.git katana-source
+nextflow run katana-source/pipeline/main.nf --help
 ```
 
 For `auto`, replace the exported workflow path in the commands below with
-`katana-development/pipeline/main.nf`, retaining the other required study inputs
+`katana-source/pipeline/main.nf`, retaining the other required study inputs
 and matching runtime configuration.
 
 Example study layout:
@@ -120,7 +121,7 @@ Treated_3,Treated,../reads/Treated_3_R1.fastq.gz,../reads/Treated_3_R2.fastq.gz,
 | `condition` | Required; starts with a letter, then letters/digits/underscores. Matches contrast levels exactly, including case. |
 | `fastq_1` | Required for a FASTQ row. Relative paths resolve from the samplesheet directory. |
 | `fastq_2` | Mate file for paired reads; blank for single-end. FASTQ pairing determines `single_end`. |
-| `strandedness` | Required: `forward`, `reverse`, `unstranded`, or development-workflow `auto` as described below. Explicit values are preserved. |
+| `strandedness` | Required: `forward`, `reverse`, `unstranded`, or `auto` in the current `main` source workflow. Explicit values are preserved. |
 | `read_length` | Positive nominal read length, or supply study-wide `--read_length`. All samples in this route must declare the same nominal length. |
 | `subject` | Optional true biological-unit identity. If specified in a selected comparison, specify every participating subject. Do not reuse an identity for independent animals. |
 | `source` | Optional; `fastq` for FASTQ rows, `genome_bam` for BAM rows. Empty/`auto` is resolved from files. |
@@ -166,7 +167,7 @@ removed sequences. The workflow audits header/reference contig compatibility,
 available sequence MD5 values, primary-record sequences/CIGAR, mate flags and
 read lengths before quantification, then creates its own sorted BAM and index.
 Supplying the original index is not required by this raw sheet. The BAM audit
-does not establish strandedness; development-workflow `auto` adds the separate
+does not establish strandedness; `auto` adds the separate
 inference step below. Upstream read-removal history cannot be reconstructed.
 
 For variable observed lengths, `--allow_variable_read_length true` permits
@@ -177,7 +178,7 @@ comparison, layout and strandedness must be consistent.
 BAM QC describes the **supplied BAM records**. It cannot recover discarded
 reads, original raw FASTQ QC or the original trimming/alignment history.
 
-### Automatic strandedness in the development workflow
+### Automatic strandedness in the source workflow
 
 Set `strandedness` to `auto` for each FASTQ or genome-BAM sample whose library
 direction is unknown. Declared `forward`/`reverse`/`unstranded` rows can coexist
@@ -511,7 +512,7 @@ Important outputs:
 | --- | --- |
 | `results/katana_bundle/manifest.json` | Upstream native artifact ledger and file hashes. |
 | `results/pipeline_info/` | Validated sheets/audits plus Nextflow trace, timeline, execution report and DAG. The Nextflow execution report is not the scientific Katana report. |
-| Pipeline QC strandedness evidence and bundle provenance | Development `auto` requests, resolved values, native RSeQC text/stderr and inference decisions; declared manual settings remain explicit. |
+| Pipeline QC strandedness evidence and bundle provenance | `auto` requests, resolved values, native RSeQC text/stderr and inference decisions; declared manual settings remain explicit. |
 | `results/bam/`, `quant/`, `dexseq_exon/`, `dtu/`, `DEG/` | Published upstream products. |
 | `results/downstream/` | Isolated downstream task products and collection, according to published process filenames. |
 | Final `REPORT.html`, `REPORT.zip` | Study report and portable download. Use the paths emitted by the actual command. |
