@@ -8,7 +8,7 @@ from katana_next.reports.presentation import prepare_presentation
 def _builder(tmp_path):
     return SimpleNamespace(
         source={'project': {'contrasts': [{'contrast_id': 'B_vs_A'}]}}, output=tmp_path,
-        tables=[], network_browsers=[], panels=[],
+        tables=[], network_browsers=[], panels=[], exclusions=[], derived_audits=[],
         enrichment_summaries=[{'id': 'rbp-enrichment-saved', 'contrast_id': 'B_vs_A',
                                'cell_type': 'all', 'rows': [], 'tested_sets': 3}],
     )

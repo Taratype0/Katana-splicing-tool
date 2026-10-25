@@ -57,6 +57,8 @@ def prepare_presentation(builder):
                          'source': record['source'], 'title': 'Module network and complete gene lists',
                          'metadata': record.get('metadata', {})})
     builder.network_browsers = browsers
+    from .component_status import reconcile_component_statuses
+    reconcile_component_statuses(builder)
 
 
 def portable_display_project(project):
