@@ -22,6 +22,7 @@ usable because the inference processes use their own pinned RSeQC/gffread images
 | Study/resources | `project-template.json` or an imported v2 `project.json` | Species, exact samples/contrasts, resources, JC/JCEC and original result provenance. |
 | Downstream plan | `flow.json`, schema `katana.flow.config/v1` | Selected contrasts, RS-DAS, per-module analysis parameters, independent networks, QC and MAPP. |
 | Site execution | Nextflow `-c site.config` | Fully qualified process resource selectors, account policy and executor configuration. |
+| Managed storage runner | `katana-flow run` arguments | `--outdir`, `--run-dir`, `--keep-work`, `--resume`, `--profile`, repeated `--site-config`. |
 | Deep dive | Exported request plus `bindings.json` and target CLI arguments | Chosen source row IDs, target scope, BAM/index locations and worker budget. |
 
 Do not invent `--deg_fdr`, `--rs_das`, `--motif_top10` or `--rmats_mode` flags.
@@ -68,6 +69,8 @@ nf-core profile to add undeclared methods to Katana.
 | `--flow_plan` | unset | Original sealed executed downstream plan; only downstream-only. Bypasses replanning, so an additional `--flow_config` is not applied. |
 | `--outdir` | `results` | Published output root; keep outside input project/config roots. |
 | `--publish_dir_mode` | `copy` | Upstream general publication mode. Some processes explicitly retain `copy` for portable deliverables; this is not a global storage-deduplication switch. |
+| `--storage_mode` | `retain` | `retain` preserves legacy publication. `lean` avoids known large duplicate publications, retains full native statistics/models and forces portable copies. This flag alone does not delete work; the managed runner selects lean and verifies stage cleanup. |
+| `--managed_preflight` | `false` | Internal managed upstream-only gate: require complete-flow resource/template preflight before upstream execution. Requires the matching project template and flow configuration; does not change scientific tests. |
 | `--flow_report_revision` | `1` | Explicit presentation-only report task revision. Letters/digits/dot/underscore/hyphen; no scientific threshold change. |
 | `--help` | `false` | Print concise pipeline help. This guide is the full parameter reference; an nf-core schema-generated launcher is not claimed. |
 
@@ -75,6 +78,43 @@ The required raw-sheet headers are `sample,condition,strandedness`, plus actual
 FASTQ/BAM fields. The validator supplements these with explicit resolved
 `source,assay,single_end,read_length,subject,batch` fields. See the complete
 [samplesheet and contrast specification](NEXTFLOW_USAGE.md#3-samplesheet-input).
+
+### Managed execution and cleanup commands
+
+These are **`katana-flow` CLI arguments**, not additional scientific Nextflow
+parameters. They require an installation containing the updated managed
+runner; old wheels/images/exported workflows are not changed automatically.
+See [storage management](STORAGE_MANAGEMENT.md) for complete commands and
+retention guarantees.
+
+| Command/argument | Default | Effect |
+| --- | --- | --- |
+| `run --mode` | `complete` | `complete` runs native upstream then downstream; `downstream-only` starts from a prepared project. |
+| Run `--outdir` | required | New final delivery root: retained project, fixed report, native supporting outputs and evidence. |
+| Run `--run-dir` | sibling `OUTDIR.run` | Private ownership/state/work directory; not a shared arbitrary work root. |
+| Run `--keep-work` | off | Disable automatic successful-stage work deletion; keep lean publication. |
+| Run `--resume` | off | Resume this exact managed run with unchanged input/software/configuration identities. Completed verified handoffs are reused; unknown engine termination blocks blind resubmission. |
+| Run `--profile` | `local` | Native Nextflow profile string, e.g. `slurm,apptainer`. |
+| Repeated run `--site-config` | none | Explicit native Nextflow site configuration files; no implicit site substitution. |
+| Run `--params-file` | none | Supported native scientific/resource params file. Managed routing, input/output locations and cleanup arguments are controlled by the runner. |
+| Run `--input --contrasts --fasta --gtf --project_template --flow_config` | required for complete | Same bulk samplesheet, requested contrasts, references and downstream resource settings as the raw complete route. |
+| Run `--project` | required for downstream-only | Prepared Katana project; source resources remain available until final retention succeeds. |
+| Run `--flow_plan` | none | Exact compatible original sealed plan, downstream-only; replaces replanning with `--flow_config`. |
+| Run `--katana_container --dexseq_tools_container --flow_executable` | unset; unset; `katana-flow` | Same declared runtime selection as native Nextflow; container profiles require matching usable images. |
+| Run `--pipeline` | installed bundled workflow | Optional explicit `main.nf`; identity participates in resume checks. |
+| Run `--nextflow-command-json` | `["nextflow"]` | Explicit executable-prefix argv, useful for a pinned native Nextflow/Java launcher; no shell evaluation. |
+| `clean-run --run-dir` | required | Dry-run cleanup plan for an already completed, verified managed scope; refuses arbitrary/failed/running work. |
+| Clean `--apply` | off | Apply that bounded cleanup plan after final delivery revalidation. |
+| `retain-project --collection --project --outdir` | required | Retain original completed products and required resources with independent bindings; no scientific recalculation. |
+| `verify-retained --directory` | required | Verify and reload a retained project at its current location. |
+
+Automatic cleanup removes the successful upstream work after complete bundle
+handoff, then successful downstream work after report/project/delivery
+verification. Original inputs and shared resources are preserved. Container and
+Conda caches stay outside reclaimable work and are not automatically deleted.
+Deleting stage work removes its native Nextflow cache-resume capability; a
+failed or unverified stage retains its work. Linux/native Nextflow is required;
+Windows users may use an already configured WSL/Linux execution environment.
 
 ## 2. Reference, library and supported design
 

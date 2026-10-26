@@ -156,8 +156,22 @@ def build_complete_report(collection, outdir):
 
 
 def main(argv=None):
+    supplied = list(sys.argv[1:] if argv is None else argv)
+    if supplied and supplied[0] == "run":
+        from .managed import main as managed_main
+        return managed_main(supplied[1:])
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
+    sub.add_parser("run", help="Run native upstream/downstream with verified staged and final storage cleanup")
+    command = sub.add_parser("clean-run", help="Preview or clean only a completed, independently verified managed run")
+    command.add_argument("--run-dir", required=True, type=Path)
+    command.add_argument("--apply", action="store_true", help="Apply the bounded plan; default is a dry run")
+    command = sub.add_parser("retain-project", help="Retain verified collection and project inputs without recomputing analysis")
+    command.add_argument("--collection", required=True, type=Path)
+    command.add_argument("--project", required=True, type=Path)
+    command.add_argument("--outdir", required=True, type=Path)
+    command = sub.add_parser("verify-retained", help="Reload a retained project independently of source work")
+    command.add_argument("--directory", required=True, type=Path)
     command = sub.add_parser("export-pipeline")
     command.add_argument("--outdir", required=True, type=Path)
     command = sub.add_parser("seal-existing", help="Seal explicitly bounded historical results without running analysis")
@@ -218,7 +232,17 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         with redirect_stdout(sys.stderr):
-            if args.action == "export-pipeline":
+            if args.action == "clean-run":
+                from .managed import clean_completed_run
+                result = clean_completed_run(args.run_dir, apply=args.apply)
+            elif args.action == "retain-project":
+                from .storage_project import retain_collection_project
+                result = retain_collection_project(args.collection, args.project, args.outdir)
+            elif args.action == "verify-retained":
+                from .storage_project import validate_retained_project
+                context = validate_retained_project(args.directory)
+                result = {"status": "completed", "project": str(context.manifest_path)}
+            elif args.action == "export-pipeline":
                 from .distribution import export_pipeline
                 result = {"pipeline": str(export_pipeline(args.outdir))}
             elif args.action == "seal-existing":

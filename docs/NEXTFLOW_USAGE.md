@@ -661,6 +661,18 @@ directory. Katana does not automatically submit to every cluster scheduler.
 
 ## 13. Resume, updates and storage
 
+For automatic cleanup after verified stage handoffs, use
+[`katana-flow run`](STORAGE_MANAGEMENT.md). It runs the same native upstream
+and downstream methods, retains a complete reusable analysis project and the
+fixed report, then removes only its owned completed stage work. Add
+`--keep-work` to retain native caches; `katana-flow clean-run --run-dir
+results.run` previews later cleanup of a completed managed run. The
+[storage guide](STORAGE_MANAGEMENT.md) covers commands, retained native
+statistics, failure recovery, tool caches and the exact deletion boundaries.
+
+The commands below describe direct Nextflow execution. `--storage_mode lean`
+can reduce duplicate publication there, but does not enable automatic cleanup.
+
 Repeat an unchanged Nextflow command from the original launch directory with
 `-resume`; retain `.nextflow/`, original work files and input identities.
 An unchanged completed process is reused only if Nextflow's fingerprint and

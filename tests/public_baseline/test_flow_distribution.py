@@ -36,3 +36,10 @@ def test_flow_cli_is_batch_safe_and_available_outside_checkout(tmp_path):
     result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, env=environment, timeout=30)
     assert result.returncode == 0, result.stderr
     assert "export-pipeline" in result.stdout and "collect" in result.stdout
+    for action in ("run", "retain-project", "verify-retained", "clean-run"):
+        checked = subprocess.run([*command[:-1], action, "--help"], cwd=tmp_path,
+            capture_output=True, text=True, env=environment, timeout=30)
+        assert checked.returncode == 0, checked.stderr
+        assert "usage:" in checked.stdout
+        if action == "run":
+            assert "--keep-work" in checked.stdout and "--run-dir" in checked.stdout

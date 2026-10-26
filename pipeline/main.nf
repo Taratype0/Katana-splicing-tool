@@ -58,6 +58,7 @@ Samplesheet strandedness: forward|reverse|unstranded|auto. Auto uses matched gen
 Required calculations are verified before the fixed seven-section report is accepted.'''
     } else {
         if (!(params.mode in ['complete', 'upstream-only', 'downstream-only'])) error('Invalid --mode')
+        if (!(params.storage_mode in ['retain', 'lean'])) error('Invalid --storage_mode; use retain or lean')
         if (params.flow_plan && params.mode != 'downstream-only') error('--flow_plan reuses completed downstream work and requires --mode downstream-only')
         if (!(params.katana_stage_containers instanceof Map)) error('--katana_stage_containers must be a map of execution groups to images')
         def groups = ['control', 'report', 'audit', 'quality', 'as', 'deg', 'dtu', 'landscape', 'evidence',
@@ -66,13 +67,13 @@ Required calculations are verified before the fixed seven-section report is acce
         if (params.katana_stage_containers.any { key, value -> !(key in groups) || !(value instanceof String) || !value.trim() }) {
             error('Katana stage containers require known execution-group keys and nonempty image references')
         }
-        if (params.mode != 'upstream-only' && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !params.katana_container) {
+        if ((params.mode != 'upstream-only' || params.managed_preflight) && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !params.katana_container) {
             error('A Katana container profile requires --katana_container pointing to your built full runtime image; host fallback is disabled')
         }
-        if (params.mode != 'upstream-only' && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !(params.flow_executable in ['katana-flow', '/opt/conda/bin/katana-flow'])) {
+        if ((params.mode != 'upstream-only' || params.managed_preflight) && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !(params.flow_executable in ['katana-flow', '/opt/conda/bin/katana-flow'])) {
             error('Container profiles require the image launcher katana-flow or /opt/conda/bin/katana-flow; mounted host launchers are not allowed')
         }
-        if (params.mode == 'complete' && params.skip_fastqc) {
+        if ((params.mode == 'complete' || params.managed_preflight) && params.skip_fastqc) {
             error('Complete fixed-report mode requires native sequencing FastQC. Use upstream-only for an explicitly skipped QC stage.')
         }
         if (params.mode == 'downstream-only') {
@@ -98,7 +99,7 @@ Required calculations are verified before the fixed seven-section report is acce
             contrasts = Channel.value(file(params.contrasts, checkIfExists: true))
             fasta = Channel.value(file(params.fasta, checkIfExists: true))
             gtf = Channel.value(file(params.gtf, checkIfExists: true))
-            if (params.mode == 'complete') {
+            if (params.mode == 'complete' || params.managed_preflight) {
                 requireParameters(['project_template', 'flow_config'])
                 template_file = file(params.project_template, checkIfExists: true)
                 template = Channel.value(inputDirectory(template_file.parent))

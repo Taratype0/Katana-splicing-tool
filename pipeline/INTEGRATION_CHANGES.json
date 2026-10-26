@@ -11,7 +11,27 @@
     {
       "path": "conf/upstream_modules.config",
       "snapshot_sha256": "0a32f38bce21b712643f68335fbd12cad61a9a083c84c00e00dcbedd18055284",
-      "integrated_sha256": "030e98a102ec950c8989f3b7b9d28846c85769b0b284b7034c1d0f3a6a64e47f"
+      "integrated_sha256": "04ee645dfb26290ced915fc0305d1854278985ebac5d5879e4278a3e8421e0b3",
+      "integration_revisions": [
+        {
+          "revision": "lean-upstream-publication-20261026",
+          "previous_public_commit": "e9842ab51f13cbbb7ea67faed36e447a56031530",
+          "previous_integrated_sha256": "030e98a102ec950c8989f3b7b9d28846c85769b0b284b7034c1d0f3a6a64e47f",
+          "integrated_sha256": "04ee645dfb26290ced915fc0305d1854278985ebac5d5879e4278a3e8421e0b3",
+          "scope": "publication_and_storage_policy_only",
+          "default_mode": "retain",
+          "lean_mode": "Suppress duplicate read/alignment/reference publications and rMATS prep/tmp caches; canonical full bundle remains unchanged.",
+          "scientific_modules_modified": false,
+          "scientific_parameters_changed": false,
+          "statistical_algorithms_changed": false,
+          "bundle_artifact_inventory_changed": false,
+          "native_statistics_preserved": "Keep native fitted R objects, diagnostics, SUPPA definitions and statistics, and complete Salmon provenance in native_models or existing native output trees; unknown statistical formats are retained.",
+          "reference_index_policy": "Lean does not publish a duplicate regenerable STAR index; user-supplied shared indexes are untouched.",
+          "shared_or_original_inputs_deleted": false,
+          "validation_contract": "tests/test_storage_publish.py",
+          "configuration_resolution": "Resolve output paths using path closures; resolve parameter-dependent mode/enabled/pattern options with lazy GStrings containing direct params expressions supported by Nextflow 25.10.4 setters and config -flat export; preserve saveAs closures. This includes later profile and extra -c parameter overrides."
+        }
+      ]
     },
     {
       "path": "modules/local/capture_bam_audit.nf",
@@ -199,7 +219,8 @@
     "Qualify BioContainers Docker image names with quay.io while retaining all tool versions, scripts and Singularity URLs",
     "Require an explicitly built DEXSeq tools image instead of the unpublished placeholder; preserve native scripts and parameters",
     "Select the representative DEXSeq count version by sample identity and matched producer rather than asynchronous arrival; retain native count scripts, parameters and completed results",
-    "Resolve per-sample auto strandedness with matched genome-BAM RSeQC evidence before Salmon, DEXSeq and rMATS; preserve declarations and native evidence, and reject unresolved or conflicting libraries"
+    "Resolve per-sample auto strandedness with matched genome-BAM RSeQC evidence before Salmon, DEXSeq and rMATS; preserve declarations and native evidence, and reject unresolved or conflicting libraries",
+    "Provide opt-in lean publication to avoid duplicate large read/alignment/reference outputs and rebuildable caches while retaining native statistical models, diagnostics, quantification provenance and the complete canonical bundle"
   ],
   "scientific_test_algorithms_replaced": false,
   "already_completed_results_refitted": false

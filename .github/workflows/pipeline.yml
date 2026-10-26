@@ -61,3 +61,8 @@ jobs:
           python -B pipeline/tools/check_strandedness_auto.py \
             --nextflow-command-json "$runtime_command" \
             --outdir "$RUNNER_TEMP/katana-auto-strandedness"
+          KATANA_NEXTFLOW_COMMAND_JSON="$runtime_command" python -B -m unittest discover \
+            -s pipeline/tests -p test_storage_publish.py -v
+          python -B pipeline/tools/check_managed_storage.py \
+            --nextflow-command-json "$runtime_command" \
+            --outdir "$RUNNER_TEMP/katana-managed-storage"

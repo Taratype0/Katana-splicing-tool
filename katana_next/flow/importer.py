@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import csv
 import io
+import os
 import shutil
 from pathlib import Path, PurePosixPath
 
@@ -36,7 +37,7 @@ def _upstream_metadata(source, paths):
     return result, next(iter(builds), "")
 
 
-def import_bundle(bundle, project_template, outdir):
+def import_bundle(bundle, project_template, outdir, *, owned_link_root=None):
     from katana_next.domain.models import ProjectManifest
     bundle = Path(bundle).resolve()
     template_path = Path(project_template).resolve()
@@ -45,6 +46,11 @@ def import_bundle(bundle, project_template, outdir):
     if source.get("schema") != "katana-pipeline-bundle/v1" or source.get("status") != "complete":
         raise ValueError("Complete mode requires a complete genuine upstream bundle")
     out = Path(outdir).resolve()
+    # Managed handoffs may link their own immutable checkpoint files within one
+    # filesystem. Borrowed user inputs retain the independent-copy behavior.
+    owned = Path(owned_link_root).resolve(strict=True) if owned_link_root is not None else None
+    if owned is not None and (not bundle.is_relative_to(owned) or not out.is_relative_to(owned)):
+        raise ValueError("Linked bundle handoff must remain inside its owned stage")
     if out.exists():
         raise ValueError("Import destination already exists; completed inputs are preserved")
     artifacts = source.get("artifacts", [])
@@ -210,7 +216,13 @@ def import_bundle(bundle, project_template, outdir):
     for relative, path in paths.items():
         destination = out / "bundle" / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, destination)
+        if owned is not None and path.resolve().is_relative_to(owned) and relative not in normalized_members:
+            try:
+                os.link(path, destination)
+            except OSError:
+                shutil.copyfile(path, destination)
+        else:
+            shutil.copyfile(path, destination)
         if file_sha256(path) != file_sha256(destination):
             raise ValueError("Imported native bytes changed while copying")
     for relative, content in normalized_members.items():

@@ -89,6 +89,11 @@ downstream-only and complete execution; completed work is retained with
 tasks, verify their products and enforce report completion. The existing
 `katana-report` command remains a renderer for already completed results.
 
+For quota-limited runs, `katana-flow run` performs verified upstream and
+downstream handoffs and removes each stage's owned work after success. Final
+results, a reusable analysis project and BAM/index resources remain available;
+failed work is preserved for recovery. See [storage management and commands](docs/STORAGE_MANAGEMENT.md).
+
 Generated bulk FASTQ/BAM complete execution and all-cached repeats have passed. This is
 not an official nf-core release. A missing required calculation or resource
 blocks a complete report.
