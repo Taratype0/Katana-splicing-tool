@@ -269,18 +269,19 @@ report's principal DAS layer uses its declared rMATS sources.
 | `contrast_ids` | All **declared** project contrasts | Nonempty, unique selected subset. Not all possible pairwise comparisons. |
 | `event_set` | `stable_significant` | RS-DAS; alternative `significant` is ordinary DAS. Report switch preserves both views where supported. |
 | `parameters` | `{}` | Map from exact workflow ID to that workflow's recognized runtime parameters. |
-| `qc` | `{}` | Gene-body coverage configuration. `reference_bed` can name matching BED12; otherwise generated from matching GTF. `rseqc_executable` defaults to `geneBody_coverage.py`. |
+| `qc` | `{}` | Optional gene-body coverage configuration, used only with `analyses.coverage: true`. `reference_bed` can name matching BED12; otherwise generated from matching GTF. `rseqc_executable` defaults to `geneBody_coverage.py`. |
 | `network` | Per-contrast network configuration | See next section. |
 | `design_factors` | Not automatically inferred | Explicit factor declaration. A multifactor study requires matching fitted-interaction definitions for the strict complete report. |
 | `interactions` | `[]` | Dedicated interaction entries with `id`, `design_path`, `reference_a`, `reference_b` and supported workflow parameters. Actual count inputs and model eligibility are required. |
 | `mapp` | Project-derived native MAEI | `adapter: "mapp.maei"`; `inputs`, `parameters`, optional `prepare_parameters`. Empty inputs resolve the packaged author source and actual project quantification. |
 
-The complete plan includes audit/read support, AS landscape, molecular evidence,
+The selected plan includes audit/read support, AS landscape, molecular evidence,
 selected cross-comparison analysis, evidence-specific enrichments/RBP identity,
-per-comparison MotifTrace/boundary/CLIP, sequencing/gene-body QC, independent
-networks and the native MAPP family. It is not a universal collection of
-`skip_*` flags. To run a subset as a module, use its standalone CLI/API and
-retain its partial scope rather than claim complete-report acceptance.
+per-comparison MotifTrace/boundary/CLIP, sequencing QC, independent networks
+and the native MAPP family. The extra gene-body BAM scan is opt-in. Optional
+modules can be disabled through `analyses` in the flow configuration; disabled
+modules are not scheduled and are recorded as not selected in the report.
+See [analysis selection](ANALYSIS_AND_EXECUTION_OPTIONS.md).
 
 ### Differential thresholds and evidence selection
 
@@ -463,7 +464,7 @@ Their complete current parameter lists are not interchangeable with Katana's.
 
 `flow.json` accepts `analyses` with boolean switches for `landscape`,
 `cross_comparison`, `enrichment`, `rbp_identity`, `motiftrace`, `motif_binding`,
-`mapp`, `coverage`, `sequencing_qc`, `network` and `interaction`. Every switch defaults to `true`.
+`mapp`, `coverage`, `sequencing_qc`, `network` and `interaction`. Every switch defaults to `true` except `coverage`, which defaults to `false` (extra RSeQC BAM scan is opt-in).
 A `false` value omits its tasks and report content. Core design/QC and molecular
 results remain. See [selection, resource and resume examples](ANALYSIS_AND_EXECUTION_OPTIONS.md).
 

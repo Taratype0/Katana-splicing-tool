@@ -2,6 +2,10 @@
 DEFAULTS = dict.fromkeys(("landscape", "cross_comparison", "enrichment", "rbp_identity",
                           "motiftrace", "motif_binding", "mapp", "coverage", "network",
                           "interaction", "sequencing_qc"), True)
+# Extra transcript-by-transcript BAM traversal is opt-in. It is not part of
+# nf-core/rnaseq's default RSeQC module list. Existing explicit selections stay
+# authoritative, including previously sealed plans that selected this analysis.
+DEFAULTS["coverage"] = False
 
 
 def analysis_selection(configuration):

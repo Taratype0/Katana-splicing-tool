@@ -37,7 +37,7 @@ def test_only_requested_comparisons_get_independent_expensive_tasks(study):
 
 
 def test_complete_report_does_not_silently_disable_missing_computations(study):
-    plan = create_plan(study, {"design_factors": ["background", "treatment"]})
+    plan = create_plan(study, {"design_factors": ["background", "treatment"], "analyses": {"coverage": True}})
     checked = preflight_plan(plan)
     assert checked["ready"] is False
     descriptions = json.dumps(checked["errors"])

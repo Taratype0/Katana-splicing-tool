@@ -37,7 +37,8 @@ def test_misspelled_or_ambiguous_switches_fail(options):
 
 def test_default_remains_full_and_one_mapp_preparation_per_comparison(study):
     plan = create_plan(study, {})
-    assert all(plan['configuration']['analyses'].values())
+    assert plan['configuration']['analyses']['coverage'] is False
+    assert all(value for key, value in plan['configuration']['analyses'].items() if key != 'coverage')
     preparations = [t for t in plan['tasks'] if t.get('adapter') == 'mapp.prepare']
     fits = [t for t in plan['tasks'] if t.get('adapter') == 'mapp.maei']
     assert len(preparations) == len(plan['contrast_ids'])

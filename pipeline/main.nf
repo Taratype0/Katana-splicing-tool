@@ -54,6 +54,8 @@ workflow {
   --mode downstream-only  --project project.json --flow_plan /absolute/original/plan.json -resume
   --outdir results        -profile local|slurm,docker|singularity|apptainer
 Existing completed analysis: use downstream-only. Use -resume for this run's Nextflow cache.
+Use -c examples/nextflow/kth.config for the supplied Dardel shared-queue example.
+Extra RSeQC gene-body scanning is opt-in: flow.json analyses.coverage=true.
 Samplesheet strandedness: forward|reverse|unstranded|auto. Auto uses matched genome-BAM RSeQC evidence.
 Required calculations are verified before the fixed seven-section report is accepted.'''
     } else {

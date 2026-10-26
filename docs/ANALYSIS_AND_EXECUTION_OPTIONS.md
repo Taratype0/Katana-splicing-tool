@@ -21,7 +21,7 @@ recorded as `not_selected` in the report manifest. Enabled analyses still need
 their inputs and completed outputs. A failed selected calculation is not treated
 as a user opt-out.
 
-| Switch (all default to `true`) | What it includes |
+| Switch (default `true` except `coverage`) | What it includes |
 |---|---|
 | `landscape` | AS landscape, PSI summaries and associated report views |
 | `cross_comparison` | Event overlap and direction comparisons, where at least two contrasts are selected |
@@ -31,7 +31,7 @@ as a user opt-out.
 | `motif_binding` | Boundary motif and CLIP analysis |
 | `mapp` | Native MAPP MAEI fits and any explicitly supplied calibrated parallel results |
 | `sequencing_qc` | Imported sequencing QC summaries (FASTQ/BAM caller outputs) |
-| `coverage` | Annotation BED preparation, per-sample gene-body coverage and summary |
+| `coverage` (default `false`) | Optional extra RSeQC gene-body BAM scan and summary; set `true` explicitly to calculate |
 | `network` | Independent per-comparison networks, associations, annotation and browsers |
 | `interaction` | Explicitly configured factorial interaction models |
 
@@ -42,6 +42,16 @@ order, colours, comparison selector and figure formats are unchanged. A wholly
 disabled optional chapter is omitted without renumbering the remaining ones.
 This selection applies to downstream calculations; it does not disable the
 upstream expression/splicing calls needed to produce the core input bundle.
+
+The extra RSeQC `geneBody_coverage.py` scan is disabled for new plans unless
+`analyses.coverage` is explicitly `true`. The default RSeQC module lists in
+[nf-core/rnaseq 3.26.0](https://github.com/nf-core/rnaseq/blob/3.26.0/nextflow.config)
+and [3.27.0](https://github.com/nf-core/rnaseq/blob/3.27.0/nextflow.config) do not
+include this tool. Routine BAM processing, strand inference and sequencing QC
+are separate and remain enabled. Skipping this optional measurement does not
+change the seven-chapter layout or claim that a coverage curve was computed.
+Existing explicit selections and sealed plans are unchanged. To stop this extra
+scan in a new plan based on an older config, set `analyses.coverage` to `false`.
 
 ## Resources and partitions
 

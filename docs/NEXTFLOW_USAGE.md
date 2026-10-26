@@ -17,6 +17,62 @@ Options from another pipeline are not automatically Katana options.
 - [Installation and release assets](RELEASE_INSTALL.md)
 - [Accepted versions and tested boundaries](validation/entrypoints-runtime-20261025.md)
 
+## Direct command-line example (no parameter YAML required)
+
+`-params-file` is an optional, standard Nextflow way to load YAML/JSON values.
+`study.yml` is not a required Katana file or a reserved filename. All native
+parameters can instead be supplied explicitly, including `--outdir`.
+
+From a checkout with a **matching installed package/container**, the complete
+FASTQ or BAM command has this form. Replace the example paths, reference IDs,
+allocation and images with real values; this is not a ready-to-run study command.
+The sample sheet selects FASTQ versus BAM input.
+
+```bash
+nextflow run pipeline/main.nf \
+  -profile slurm,apptainer \
+  -c examples/nextflow/kth.config \
+  --slurm_account YOUR_ALLOCATION \
+  --mode complete \
+  --input /data/project/samples.csv \
+  --contrasts /data/project/contrasts.csv \
+  --fasta /data/reference/genome.fa \
+  --gtf /data/reference/annotation.gtf \
+  --reference_build YOUR_BUILD \
+  --annotation_release YOUR_RELEASE \
+  --project_template /data/project/project-template.json \
+  --flow_config /data/project/flow.json \
+  --katana_container /data/images/katana-matching-version.sif \
+  --dexseq_tools_container /data/images/dexseq-tools.sif \
+  --outdir /data/project/results \
+  -work-dir /data/project/work \
+  -resume
+```
+
+The shell line continuations form one command. `--outdir` is the final output
+root, `-work-dir` is the Nextflow work/cache directory, `-c` loads a Groovy site
+configuration, and `-profile` selects runtime profiles. `-resume` reuses retained
+matching work when present; it does not recover deleted work.
+
+[The supplied kth.config](../examples/nextflow/kth.config) is a Katana Dardel
+example with shared allocation and the Klemming bind. Load the site's runtime
+modules before launch. Other clusters should replace it with their own site
+configuration. The name `kth.config` is arbitrary, not a Nextflow option.
+
+The official nf-core institutional profile is named
+[`pdc_kth`](https://nf-co.re/configs/pdc_kth/), not `kth_config`. This Katana
+checkout does not automatically import that institutional profile. Its current
+`--project` option names a downstream project file, whereas the official profile
+uses `--project` for the Slurm account; do not apply it unchanged. This example
+uses `--slurm_account` instead and does not automatically route jobs to memory
+nodes. Queue/account configuration is separate from biological parameters.
+
+`project-template.json` and `flow.json` are still Katana-specific required inputs
+for a complete run: they describe the downstream project/resources and analyses.
+They are not standard requirements of nf-core/rnaseq, and an abbreviated command
+must not hide them. See the sections below for their contents. Nothing requires
+an additional `study.yml` on top of these files.
+
 ## 1. Choose an entry
 
 | Available input | Entry | What executes |
@@ -356,7 +412,7 @@ Save `inputs/flow.json`:
   "parameters": {
     "differential.deg": {"fdr": 0.05, "min_abs_log2fc": 1.0}
   },
-  "qc": {"rseqc_executable": "geneBody_coverage.py"},
+  "analyses": {"coverage": false},
   "network": {
     "scope": "contrast",
     "bootstrap": {"enabled": false},

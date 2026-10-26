@@ -42,3 +42,16 @@ Use the [Nextflow usage guide](../../docs/NEXTFLOW_USAGE.md) for required files,
 validation commands, supported designs and effect direction. The
 [parameter reference](../../docs/NEXTFLOW_PARAMETERS.md) separates Nextflow
 options from project resources and downstream settings.
+
+### Site configuration and full command
+
+`kth.config` is an optional Dardel example: use `-profile slurm,apptainer`,
+`-c examples/nextflow/kth.config` and `--slurm_account YOUR_ALLOCATION`.
+It selects `shared` without memory-based queue switches. It is not the official
+`pdc_kth` profile. The [direct command example](../../docs/NEXTFLOW_USAGE.md#direct-command-line-example-no-parameter-yaml-required)
+shows input, comparison, reference, downstream configuration, images, output and
+work paths explicitly. A YAML parameter file is optional.
+
+The additional RSeQC gene-body BAM scan defaults off in new downstream plans.
+Set `analyses.coverage: true` in `flow.json` only when requesting this measurement.
+This does not disable normal BAM processing or auto-strandedness inference.

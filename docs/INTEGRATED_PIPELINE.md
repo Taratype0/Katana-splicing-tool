@@ -169,7 +169,7 @@ already completed task families are rejected by this special recovery route.
   four evidence-specific enrichments and RBP identity use the existing
   scientific workflows. Each comparison has independent MotifTrace and
   boundary/CLIP tasks. Backgrounds match detected/testable evidence.
-- Gene-body QC is calculated from BAM and matched BED12; it is not inferred
+- When explicitly selected (`analyses.coverage: true`), gene-body QC is calculated from BAM and matched BED12; it is not inferred
   from FastQC. BED12 is generated from the matching GTF when no explicit BED
   is supplied. Coverage summaries wait for all declared sample measurements.
 - For BAM input, an independent FastQC task measures each supplied BAM's
@@ -246,7 +246,7 @@ provenance. Reference CLIP is not a measurement in the current experiment.
   "contrast_ids": ["B_vs_A"],
   "event_set": "stable_significant",
   "parameters": {"differential.deg": {"fdr": 0.05, "min_abs_log2fc": 1.0}},
-  "qc": {"reference_bed": "reference.bed", "rseqc_executable": "geneBody_coverage.py"},
+  "analyses": {"coverage": false},
   "network": {"scope": "contrast"},
   "design_factors": ["condition"],
   "interactions": [],
