@@ -20,8 +20,14 @@ def execution_limits(max_tests=DEFAULT_MAX_TESTS, max_matrix_cells=DEFAULT_MAX_M
     for name, value in values.items():
         if value is None:
             continue
+        if isinstance(value, str):
+            try:
+                value = float(value)
+            except ValueError:
+                raise ValueError(f"{name} must be null or a positive integer legacy value") from None
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 1 or not float(value).is_integer():
             raise ValueError(f"{name} must be null or a positive integer legacy value")
+        values[name] = value
     return {key: int(value) if value is not None else None for key, value in values.items()}
 
 

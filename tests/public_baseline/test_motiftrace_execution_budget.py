@@ -66,10 +66,20 @@ def test_adapter_ast_diff_is_execution_budget_only():
     assert ast.dump(actual, include_attributes=False) == ast.dump(baseline, include_attributes=False)
 
 
-@pytest.mark.parametrize("value", [0, -1, 1.1, True, float("nan"), float("inf"), "100"])
+@pytest.mark.parametrize("value", [0, -1, 1.1, True, float("nan"), float("inf"), "invalid", "1.5", "nan", "inf"])
 def test_invalid_execution_budgets_rejected(value):
     with pytest.raises(ValueError):
         execution_limits(value, 8_000_000)
+
+
+@pytest.mark.parametrize("value", ["1000000", "1000000.0", "1e6", " 1000000 "])
+def test_retired_workflow_number_strings_remain_compatible(value):
+    from katana_next.workflows.registry import WorkflowRegistry
+    for identity in ("prioritize.motiftrace_consequences", "prioritize.rbp_mechanism"):
+        request = WorkflowRegistry().get(identity).normalize_parameters(
+            {"max_tests": value, "max_matrix_cells": "8000000"})
+        assert execution_limits(request["max_tests"], request["max_matrix_cells"]) == {
+            "max_tests": 1_000_000, "max_matrix_cells": 8_000_000}
 
 
 def test_preflight_counts_exact_full_family_without_imposing_a_limit(tmp_path):

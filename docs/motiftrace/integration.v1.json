@@ -219,7 +219,7 @@
     "katana_next/workflows/motiftrace_consequences.py": "0e2b02fc0d0d58f6fbb4cd11915226aa646a905eee71332f1d0b39c4e137715b",
     "katana_next/workflows/rbp_mechanism.py": "f8a149a3cf641c25b30c2808346639afc91d0b0895968d4a0d5e71abbc4cd2ad",
     "katana_next/science/motiftrace_execution.py": "2d31e648395fe62acf471a78ea7b5a5d2c773f28672402270b0e370d979a61de",
-    "katana_next/science/motiftrace_budget.py": "4db1312d0a627cf1260c1c6514d7e2b7d2246fcc723e516b73a6a4a889306ec2",
+    "katana_next/science/motiftrace_budget.py": "900b8a0f751f8cc8b3e85964bd0203a1c3f9047b987de5fffc22189628d00534",
     "katana_next/reports/motif_native_index.py": "3c583ec58e00a999d66bdbc742a8fad487e4dd6b6532cd26938c9051551df244"
   },
   "interface_revisions": [
@@ -295,7 +295,7 @@
         {
           "path": "katana_next/science/motiftrace_budget.py",
           "previous_sha256": "01ddf8e42f97aea3b109311ff014985d924c8912c4faa07e5768bb0314a62f5f",
-          "current_sha256": "4db1312d0a627cf1260c1c6514d7e2b7d2246fcc723e516b73a6a4a889306ec2",
+          "current_sha256": "900b8a0f751f8cc8b3e85964bd0203a1c3f9047b987de5fffc22189628d00534",
           "change_kind": "execution_interface_or_distribution_version"
         },
         {
