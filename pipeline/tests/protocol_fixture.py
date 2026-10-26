@@ -48,6 +48,15 @@ def main() -> None:
     if args.command == "plan":
         document = json.loads(args.config.read_text())
         assert args.project.is_file()
+        if document.get("schema") == "katana.flow.config/v1":
+            # Native flat-entry transport test: parse real generated settings,
+            # but perform no biological computation in this explicit test CLI.
+            assert document["network"]["scope"] == "contrast"
+            assert document["parameters"]["differential.deg"]["fdr"] > 0
+            document["tasks"] = [
+                {"id": "fixture-audit", "execution_group": "audit", "workflow_id": "fixture", "dependencies": [], "delay": 0},
+                {"id": "fixture-quality", "execution_group": "quality", "workflow_id": "fixture", "dependencies": ["fixture-audit"], "delay": 0},
+                {"id": "fixture-as", "execution_group": "as", "workflow_id": "fixture", "dependencies": ["fixture-quality"], "delay": 0}]
         planned = {"schema": "test.nextflow_transport/v1", "tasks": document["tasks"]}
         if document.get("task_cache_scope") == "ancestry-v1":
             import importlib.util

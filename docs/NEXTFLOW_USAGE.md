@@ -19,6 +19,10 @@ Options from another pipeline are not automatically Katana options.
 
 ## Direct command-line example (no parameter YAML required)
 
+The test branch now generates project/settings JSON automatically. See the
+[direct parameter guide](NEXTFLOW_SIMPLE.md) and [full YAML template](../examples/nextflow/params.complete.yaml).
+Older published wheels still use the explicit configuration examples later in this guide.
+
 `-params-file` is an optional, standard Nextflow way to load YAML/JSON values.
 `study.yml` is not a required Katana file or a reserved filename. All native
 parameters can instead be supplied explicitly, including `--outdir`.
@@ -40,8 +44,11 @@ nextflow run pipeline/main.nf \
   --gtf /data/reference/annotation.gtf \
   --reference_build YOUR_BUILD \
   --annotation_release YOUR_RELEASE \
-  --project_template /data/project/project-template.json \
-  --flow_config /data/project/flow.json \
+  --species 'Mus musculus' \
+  --gene_sets /data/resources/pathways.gmt \
+  --rbp_gene_sets /data/resources/rbp_gene_sets.gmt \
+  --motif_database /data/resources/motifs.json \
+  --clip_peaks /data/resources/matched_clip_peaks.tsv \
   --katana_container /data/images/katana-matching-version.sif \
   --dexseq_tools_container /data/images/dexseq-tools.sif \
   --outdir /data/project/results \
@@ -67,11 +74,9 @@ uses `--project` for the Slurm account; do not apply it unchanged. This example
 uses `--slurm_account` instead and does not automatically route jobs to memory
 nodes. Queue/account configuration is separate from biological parameters.
 
-`project-template.json` and `flow.json` are still Katana-specific required inputs
-for a complete run: they describe the downstream project/resources and analyses.
-They are not standard requirements of nf-core/rnaseq, and an abbreviated command
-must not hide them. See the sections below for their contents. Nothing requires
-an additional `study.yml` on top of these files.
+`project-template.json` and `flow.json` are now generated internally on the test
+branch. The explicit JSON examples below remain available for advanced settings
+and older releases; they are not additional requirements of the direct route.
 
 ## 1. Choose an entry
 

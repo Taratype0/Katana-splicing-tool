@@ -817,7 +817,7 @@ class CrossComparisonWorkflow(WorkflowBase):
 
 
 class CandidateEvidenceWorkflow(WorkflowBase):
-    version = "2.2.0"
+    version = "2.2.1"
     definition = WorkflowDefinition(
         workflow_id="prioritize.evidence",
         workspace_id="prioritize",

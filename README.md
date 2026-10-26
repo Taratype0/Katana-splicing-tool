@@ -1,5 +1,7 @@
 # Katana
 
+Test-branch entrypoint update: [direct Nextflow run guide](docs/NEXTFLOW_SIMPLE.md) · [complete parameter template](examples/nextflow/params.complete.yaml).
+
 **RNA splicing analysis, co-splicing networks and MotifTrace, with an interactive study report.**
 
 Katana connects RNA-seq processing with expression, splicing, transcript usage and exon usage analysis. Start from bulk FASTQ, genome-aligned BAM, or existing analysis results. Explore the results in a browser and select genes or events for a closer look.

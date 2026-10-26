@@ -51,7 +51,9 @@ for entry in INVENTORY["workflows"]:
     elif entry["workflow_id"] == "reports.interpreted_bundle":
         entry["version"] = "1.5.0+network_labels.20261022"
     elif entry["workflow_id"] == "prioritize.evidence":
-        entry["version"] = "2.2.0"
+        # Native parameter transport adds explicit per-layer cutoffs; inherited
+        # defaults and the immutable historical inventories remain unchanged.
+        entry["version"] = "2.2.1"
     elif entry["workflow_id"] == "prioritize.enrichment":
         entry["version"] = "2.4.0"
         entry["parameter_defaults"].update({

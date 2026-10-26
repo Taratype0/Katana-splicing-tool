@@ -1049,6 +1049,8 @@ def build_candidate_evidence(
     parameters: dict[str, Any],
 ) -> pd.DataFrame:
     fdr = float(parameters.get("fdr", 0.05))
+    deg_fdr = fdr if parameters.get("deg_fdr") is None else float(parameters["deg_fdr"])
+    dtu_fdr = fdr if parameters.get("dtu_fdr") is None else float(parameters["dtu_fdr"])
     deg_fc = float(parameters.get("deg_min_abs_log2fc", 1.0))
     if events.empty:
         events = pd.DataFrame(columns=["comparison_id", "gene_id", "gene_symbol", "event_id", "significant", "stable_significant", "abs_dpsi", "fdr"])
@@ -1069,7 +1071,7 @@ def build_candidate_evidence(
     )
     if not deg.empty:
         deg_work = deg.copy()
-        deg_work["deg_significant"] = deg_work["deg_fdr"].le(fdr) & deg_work["log2fc"].abs().ge(deg_fc)
+        deg_work["deg_significant"] = deg_work["deg_fdr"].le(deg_fdr) & deg_work["log2fc"].abs().ge(deg_fc)
         deg_summary = (
             deg_work.sort_values("deg_fdr")
             .drop_duplicates(["comparison_id", "gene_id"])
@@ -1087,7 +1089,7 @@ def build_candidate_evidence(
                 evidence = evidence.sort_values("dtu_fdr").drop_duplicates(["comparison_id", "gene_id", "transcript_id"])
             summary = evidence.groupby(["comparison_id", "gene_id"], dropna=False).agg(
                 **{f"best_{prefix}_fdr": ("dtu_fdr", "min"),
-                   f"significant_{prefix}_{feature}": ("dtu_fdr", lambda values: int(values.le(fdr).sum()))}
+                   f"significant_{prefix}_{feature}": ("dtu_fdr", lambda values: int(values.le(dtu_fdr).sum()))}
             ).reset_index()
             event_summary = event_summary.merge(summary, on=["comparison_id", "gene_id"], how="outer")
     if not events.empty and "dpsi" in events:

@@ -4,6 +4,25 @@ def containerRuntimePrelude(engine) {
     export PYTHONNOUSERSITE=1 PYTHONSAFEPATH=1''' : ''
 }
 
+process KATANA_FLOW_CONFIGURE {
+    label 'katana_control'
+    input:
+    val request
+    path runtime_resources, stageAs: 'resources/??????/*'
+    path generator, stageAs: 'katana_configure.py'
+    output:
+    path 'configuration', emit: configuration
+    script:
+    def quote = { value -> "'" + value.toString().replace("'", "'\"'\"'") + "'" }
+    def encoded = groovy.json.JsonOutput.toJson(request).getBytes('UTF-8').encodeBase64().toString()
+    def paths = runtime_resources instanceof List ? runtime_resources : [runtime_resources]
+    """
+    ${containerRuntimePrelude(workflow.containerEngine)}
+    python3 ${quote(generator)} --request-base64 ${quote(encoded)} \\
+        --outdir configuration --resources ${paths.collect { quote(it) }.join(' ')}
+    """
+}
+
 process KATANA_FLOW_PREFLIGHT {
     label 'katana_control'
     input:
@@ -11,6 +30,7 @@ process KATANA_FLOW_PREFLIGHT {
     val project_template_filename
     path flow_config, stageAs: 'flow-config'
     val flow_config_filename
+    path runtime_resources, stageAs: 'resources/??????/*'
     output:
     path 'preflight.json', emit: receipt
     script:
@@ -32,6 +52,7 @@ process KATANA_FLOW_IMPORT {
     val project_template_filename
     path flow_config, stageAs: 'flow-config'
     val flow_config_filename
+    path runtime_resources, stageAs: 'resources/??????/*'
 
     output:
     path 'workspace', emit: workspace

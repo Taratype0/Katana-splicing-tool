@@ -15,19 +15,24 @@ usable because the inference processes use their own pinned RSeQC/gffread images
 
 ## Configuration layers
 
+**Test-branch update:** [direct downstream parameters](NEXTFLOW_SIMPLE.md) now
+generate internal JSON. See [all native defaults](NEXTFLOW_NATIVE_OPTIONS.md).
+The advanced JSON fields below remain supported; older releases retain their old interface.
+
 | Layer | Where it belongs | Examples |
 | --- | --- | --- |
 | Nextflow launcher | Single-dash Nextflow arguments | `-profile`, `-params-file`, `-c`, `-work-dir`, `-resume`. |
 | Pipeline parameters | `--parameter` or a Nextflow YAML/JSON params file | `--mode`, `--input`, `--contrasts`, reference paths and rMATS settings. |
-| Study/resources | `project-template.json` or an imported v2 `project.json` | Species, exact samples/contrasts, resources, JC/JCEC and original result provenance. |
-| Downstream plan | `flow.json`, schema `katana.flow.config/v1` | Selected contrasts, RS-DAS, per-module analysis parameters, independent networks, QC and MAPP. |
+| Study/resources | Direct `--species` and resource paths; generated template, or an existing imported `project.json` | Species, exact samples/contrasts, resources, JC/JCEC and original result provenance. |
+| Downstream plan | Direct switches/thresholds; generated `flow.json`, or an advanced explicit config | Selected contrasts, RS-DAS, per-module analysis parameters, independent networks, QC and MAPP. |
 | Site execution | Nextflow `-c site.config` | Fully qualified process resource selectors, account policy and executor configuration. |
 | Managed storage runner | `katana-flow run` arguments | `--outdir`, `--run-dir`, `--keep-work`, `--resume`, `--profile`, repeated `--site-config`. |
 | Deep dive | Exported request plus `bindings.json` and target CLI arguments | Chosen source row IDs, target scope, BAM/index locations and worker budget. |
 
-Do not invent `--deg_fdr`, `--rs_das`, `--motif_top10` or `--rmats_mode` flags.
-Those are not public top-level pipeline parameters. Use the supported
-configuration field or the appropriate command below.
+The test branch supports `--deg_fdr`, `--deg_log2fc`, `--das_fdr`, `--das_dpsi`,
+`--dtu_fdr`, `--rmats_mode` and `--event_set`. Use `--event_set stable_significant`
+for RS-DAS. There is no `--rs_das` or `--motif_top10` flag; the approved significant-only
+Top 10 presentation is unchanged.
 
 Example `inputs/params.yaml` for `nextflow ... -params-file inputs/params.yaml`:
 
@@ -39,8 +44,11 @@ fasta: references/genome.fa
 gtf: references/annotation.gtf
 reference_build: YOUR_BUILD
 annotation_release: YOUR_RELEASE
-project_template: inputs/project-template.json
-flow_config: inputs/flow.json
+species: Mus musculus
+gene_sets: resources/pathways.gmt
+rbp_gene_sets: resources/rbps.gmt
+motif_database: resources/motifs.json
+clip_peaks: resources/matched-peaks.tsv
 katana_container: YOUR_MATCHING_KATANA_IMAGE_OR_SIF
 dexseq_tools_container: YOUR_MATCHING_DEXSEQ_IMAGE_OR_SIF
 outdir: results
@@ -63,9 +71,9 @@ nf-core profile to add undeclared methods to Katana.
 | `--contrasts` | unset | Selected contrast CSV/TSV; required for complete/upstream-only. |
 | `--fasta` | unset | Matching genomic FASTA, required for raw-entry modes. |
 | `--gtf` | unset | Matching GTF, required for raw-entry modes. |
-| `--project_template` | unset | Resource/metadata template, required for complete mode. |
+| `--project_template` | unset | Advanced resource/metadata template; generated automatically by the direct route. |
 | `--project` | unset | Katana v2 project manifest; required for downstream-only. |
-| `--flow_config` | unset | Downstream configuration; required for complete, and downstream-only unless reusing `--flow_plan`. |
+| `--flow_config` | unset | Advanced downstream configuration; generated automatically when omitted. |
 | `--flow_plan` | unset | Original sealed executed downstream plan; only downstream-only. Bypasses replanning, so an additional `--flow_config` is not applied. |
 | `--outdir` | `results` | Published output root; keep outside input project/config roots. |
 | `--publish_dir_mode` | `copy` | Upstream general publication mode. Some processes explicitly retain `copy` for portable deliverables; this is not a global storage-deduplication switch. |
@@ -80,6 +88,9 @@ FASTQ/BAM fields. The validator supplements these with explicit resolved
 [samplesheet and contrast specification](NEXTFLOW_USAGE.md#3-samplesheet-input).
 
 ### Managed execution and cleanup commands
+
+The optional managed wrapper below retains its explicit configuration interface.
+The simplified `nextflow run` route above does not require these two JSON files.
 
 These are **`katana-flow` CLI arguments**, not additional scientific Nextflow
 parameters. They require an installation containing the updated managed
