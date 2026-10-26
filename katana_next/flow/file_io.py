@@ -6,10 +6,21 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import time
 from threading import RLock
 
 _digests = OrderedDict()
 _lock = RLock()
+
+
+def metadata_cache_ready(stamp):
+    if os.name != 'nt':
+        return True
+    # NTFS ChangeTime can coalesce rapid writes within a clock tick. Avoid
+    # trusting a just-written identity until that window has passed. Stable
+    # large inputs retain the existing metadata cache; no delay is introduced.
+    changed_unix_ns = stamp[4] * 100 - 11644473600 * 1_000_000_000
+    return time.time_ns() - changed_unix_ns > 2_000_000_000
 
 
 def identity(path):
@@ -41,7 +52,7 @@ def digest(path):
     key = (("inode" if before[1] else str(path)), *before)
     with _lock:
         cached = _digests.get(key)
-        if cached is not None and os.environ.get("KATANA_VERIFY_CONTENT") != "1":
+        if cached is not None and metadata_cache_ready(before) and os.environ.get("KATANA_VERIFY_CONTENT") != "1":
             _digests.move_to_end(key)
             return cached
     with path.open('rb') as handle:
@@ -49,7 +60,12 @@ def digest(path):
     if identity(path) != before:
         raise ValueError(f'File changed during content verification: {path}')
     with _lock:
-        _digests[key] = value
+        # Do not retain an ambiguous fresh identity for reuse after the window:
+        # another same-tick write could otherwise inherit that old digest.
+        if metadata_cache_ready(before):
+            _digests[key] = value
+        else:
+            _digests.pop(key, None)
         while len(_digests) > 8192:
             _digests.popitem(last=False)
     return value

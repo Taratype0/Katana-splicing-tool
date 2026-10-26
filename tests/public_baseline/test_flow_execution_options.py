@@ -78,6 +78,12 @@ def test_verification_reuses_identity_but_detects_same_size_modified_input(tmp_p
     source = tmp_path / 'data.tsv'
     source.write_text('abcd')
     record = file_record(source)
+    if os.name == 'nt':
+        # Mature metadata can use the fast path. Fresh Windows identities
+        # deliberately rehash because ChangeTime may coalesce rapid writes.
+        import time
+        time.sleep(2.1)
+        verify_files([record])
     calls = []
     original = file_io.hashlib.file_digest
     def counted(*args):
@@ -92,6 +98,32 @@ def test_verification_reuses_identity_but_detects_same_size_modified_input(tmp_p
     with pytest.raises(ValueError, match='changed'):
         verify_files([record])
     assert calls == [1]
+
+
+def test_fresh_windows_style_identity_does_not_hide_same_tick_edit(tmp_path, monkeypatch):
+    source = tmp_path / 'fresh.tsv'
+    source.write_text('abcd')
+    record = file_record(source)
+    stamp = file_io.identity(source)
+    source.write_text('wxyz')
+    # Model an unchanged metadata stamp while testing the real digest path.
+    monkeypatch.setattr(file_io, 'identity', lambda path: stamp)
+    monkeypatch.setattr(file_io, 'metadata_cache_ready', lambda stamp: False)
+    with pytest.raises(ValueError, match='changed'):
+        verify_files([record])
+
+
+def test_aging_does_not_make_an_unverified_fresh_record_trusted(tmp_path, monkeypatch):
+    source = tmp_path / 'aging.tsv'
+    source.write_text('abcd')
+    monkeypatch.setattr(file_io, 'metadata_cache_ready', lambda stamp: False)
+    record = file_record(source)
+    assert record['metadata_cache_ready'] is False
+    source.write_text('wxyz')
+    monkeypatch.setattr(file_io, 'identity', lambda path: record['file_identity'])
+    monkeypatch.setattr(file_io, 'metadata_cache_ready', lambda stamp: True)
+    with pytest.raises(ValueError, match='changed'):
+        verify_files([record])
 
 
 def test_owned_product_survives_work_deletion_and_copy_fallback(tmp_path, monkeypatch):

@@ -74,21 +74,24 @@ def file_record(path: str | Path) -> dict:
     path = Path(path).resolve()
     if not path.is_file():
         raise FileNotFoundError(path)
-    from .file_io import identity
+    from .file_io import identity, metadata_cache_ready
     before = identity(path)
     digest = file_hash(path)
     after = identity(path)
     if before != after:
         raise ValueError(f"File changed while its content was verified: {path}")
-    return {"path": str(path), "size_bytes": after[2], "sha256": digest, "file_identity": after}
+    return {"path": str(path), "size_bytes": after[2], "sha256": digest, "file_identity": after,
+            "metadata_cache_ready": metadata_cache_ready(after)}
 
 
 def verify_files(records: list[dict]) -> None:
-    from .file_io import identity
+    from .file_io import identity, metadata_cache_ready
     for record in records:
         path = Path(record["path"])
         if (os.environ.get("KATANA_VERIFY_CONTENT") != "1" and path.is_file()
+                and record.get("metadata_cache_ready", False)
                 and record.get("file_identity") == identity(path)
+                and metadata_cache_ready(record["file_identity"])
                 and path.stat().st_size == record.get("size_bytes")):
             continue
         actual = file_record(path)

@@ -40,3 +40,13 @@ The matching container build/installation qualification remains separate.
 The approved seven-chapter report renderer and existing biological results
 were not rerun or changed. New native tests are part of the GitHub workflow;
 the remote CI result must be checked on the pushed commit.
+
+Follow-up: an earlier commit's Windows CI exposed a same-clock-tick file
+identity collision. Fresh Windows change timestamps now trigger content
+verification rather than metadata-only reuse; no production sleep is added.
+Only an already verified stable identity can use the shortcut. Older receipts
+without this marker still load and receive content verification. Tests cover
+stable reuse, rapid same-size edits and a fresh receipt becoming older.
+The follow-up runtime, reuse, storage and execution-option suite passed 65
+checks on Windows. The entrypoint commit's remote native Nextflow CI also
+passed; the follow-up commit receives its own CI run.
