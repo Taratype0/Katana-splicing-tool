@@ -1,6 +1,6 @@
 # Katana
 
-Test-branch entrypoint update: [direct Nextflow run guide](docs/NEXTFLOW_SIMPLE.md) · [complete parameter template](examples/nextflow/params.complete.yaml).
+Direct Nextflow entry: [direct Nextflow run guide](docs/NEXTFLOW_SIMPLE.md) · [complete parameter template](examples/nextflow/params.complete.yaml).
 
 **RNA splicing analysis, co-splicing networks and MotifTrace, with an interactive study report.**
 

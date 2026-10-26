@@ -1,9 +1,9 @@
 # Run Katana with Nextflow
 
-**Test branch: `codex/performance-test-20261026`.** These direct options are not
-yet merged into `main` or included in the older published wheel. Use this
-branch's `pipeline/main.nf` with its matching Katana runtime. Container rebuilds
-and new biological runs are outside this entrypoint change.
+**Current source workflow.** Use this checkout's `pipeline/main.nf` with its
+matching Katana runtime. The older published wheel does not include these
+direct options. Container rebuilds and new biological runs remain separate
+from the entrypoint validation.
 
 Supply samples, the comparisons you want, references, and an output directory.
 Katana generates its internal project template and downstream settings. You do

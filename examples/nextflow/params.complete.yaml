@@ -1,4 +1,4 @@
-# Complete native parameter template for codex/performance-test-20261026.
+# Complete native parameter template for the current source workflow.
 # Edit /data paths, species/build/release and images; this is not real study data.
 # Run: nextflow run pipeline/main.nf -params-file params.complete.yaml
 # Add -profile, -c, -work-dir and -resume on the Nextflow command line.

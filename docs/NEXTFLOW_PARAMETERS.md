@@ -15,7 +15,7 @@ usable because the inference processes use their own pinned RSeQC/gffread images
 
 ## Configuration layers
 
-**Test-branch update:** [direct downstream parameters](NEXTFLOW_SIMPLE.md) now
+**Current-source interface:** [direct downstream parameters](NEXTFLOW_SIMPLE.md) now
 generate internal JSON. See [all native defaults](NEXTFLOW_NATIVE_OPTIONS.md).
 The advanced JSON fields below remain supported; older releases retain their old interface.
 
@@ -29,7 +29,7 @@ The advanced JSON fields below remain supported; older releases retain their old
 | Managed storage runner | `katana-flow run` arguments | `--outdir`, `--run-dir`, `--keep-work`, `--resume`, `--profile`, repeated `--site-config`. |
 | Deep dive | Exported request plus `bindings.json` and target CLI arguments | Chosen source row IDs, target scope, BAM/index locations and worker budget. |
 
-The test branch supports `--deg_fdr`, `--deg_log2fc`, `--das_fdr`, `--das_dpsi`,
+The current source workflow supports `--deg_fdr`, `--deg_log2fc`, `--das_fdr`, `--das_dpsi`,
 `--dtu_fdr`, `--rmats_mode` and `--event_set`. Use `--event_set stable_significant`
 for RS-DAS. There is no `--rs_das` or `--motif_top10` flag; the approved significant-only
 Top 10 presentation is unchanged.

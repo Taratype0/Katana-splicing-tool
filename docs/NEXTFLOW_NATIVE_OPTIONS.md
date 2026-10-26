@@ -1,4 +1,4 @@
-# Native Nextflow options (test branch)
+# Native Nextflow options
 
 All 114 declared options from `pipeline/nextflow.config`.
 Use these as `--name value` or keys in one optional `-params-file`.
@@ -6,7 +6,7 @@ Single-dash launcher options such as `-profile`, `-c`, `-work-dir`, and `-resume
 
 See [run examples and explanations](NEXTFLOW_SIMPLE.md), [scientific parameter details](NEXTFLOW_PARAMETERS.md),
 and [the complete editable template](../examples/nextflow/params.complete.yaml).
-The older wheel and `main` do not yet include the new flat downstream options.
+The older published wheel does not include the new flat downstream options; use a matching current-source runtime.
 
 | Parameter | Declared default |
 | --- | --- |

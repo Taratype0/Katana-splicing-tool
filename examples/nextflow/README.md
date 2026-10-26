@@ -1,6 +1,6 @@
 # Direct Nextflow entry
 
-On `codex/performance-test-20261026`, use [params.complete.yaml](params.complete.yaml)
+From the current source checkout, use [params.complete.yaml](params.complete.yaml)
 with `nextflow run pipeline/main.nf -params-file params.complete.yaml`.
 Sample/contrast CSV and reference/output paths are direct parameters; internal JSON is generated.
 See [the run guide](../../docs/NEXTFLOW_SIMPLE.md) for local, Slurm and Dardel commands.

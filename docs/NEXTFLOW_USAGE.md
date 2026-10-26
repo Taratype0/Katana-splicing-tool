@@ -19,7 +19,7 @@ Options from another pipeline are not automatically Katana options.
 
 ## Direct command-line example (no parameter YAML required)
 
-The test branch now generates project/settings JSON automatically. See the
+The current source workflow generates project/settings JSON automatically. See the
 [direct parameter guide](NEXTFLOW_SIMPLE.md) and [full YAML template](../examples/nextflow/params.complete.yaml).
 Older published wheels still use the explicit configuration examples later in this guide.
 
@@ -74,8 +74,8 @@ uses `--project` for the Slurm account; do not apply it unchanged. This example
 uses `--slurm_account` instead and does not automatically route jobs to memory
 nodes. Queue/account configuration is separate from biological parameters.
 
-`project-template.json` and `flow.json` are now generated internally on the test
-branch. The explicit JSON examples below remain available for advanced settings
+`project-template.json` and `flow.json` are now generated internally by the current
+source workflow. The explicit JSON examples below remain available for advanced settings
 and older releases; they are not additional requirements of the direct route.
 
 ## 1. Choose an entry
