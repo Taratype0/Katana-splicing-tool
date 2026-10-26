@@ -173,6 +173,44 @@ def test_recorded_old_identity_is_readable_but_new_plans_have_neutral_status(stu
                for t in plan["tasks"] if t.get("adapter", "").startswith("network."))
 
 
+def test_two_plus_two_accepts_explicit_minimum_without_changing_default(study):
+    _, manifest = ManifestStore().load(study)
+    contrast = manifest.contrasts[0]
+    contrast = contrast.model_copy(update={name: getattr(contrast, name).model_copy(
+        update={"sample_ids": getattr(contrast, name).sample_ids[:2]})
+        for name in ("numerator", "denominator")})
+    manifest = manifest.model_copy(update={"contrasts": (contrast,)})
+    params = {"network_scope": "contrast", "contrast_ids": [contrast.contrast_id]}
+    with pytest.raises(ValueError, match="at least 6"):
+        network_scope_identity(manifest, params)
+    identity = network_scope_identity(manifest, {**params, "minimum_network_samples": 4})
+    assert identity["n_samples"] == identity["minimum_network_samples"] == 4
+    assert identity["sample_size_status"] == "minimum_met"
+    assert network_scope_identity(manifest, identity) == identity
+
+
+@pytest.mark.parametrize("minimum", [True, False, 0, 2, -1, 4.5, "4", None])
+def test_invalid_user_network_minimum_is_rejected(study, minimum):
+    _, manifest = ManifestStore().load(study)
+    with pytest.raises(ValueError, match="integer of at least 3"):
+        network_scope_identity(manifest, {"network_scope": "contrast",
+            "contrast_ids": [manifest.contrasts[0].contrast_id], "minimum_network_samples": minimum})
+
+
+def test_custom_minimum_reaches_plan_followups_and_engine(study, tmp_path):
+    _, manifest = ManifestStore().load(study)
+    cid = manifest.contrasts[0].contrast_id
+    plan = create_plan(study, {"contrast_ids": [cid], "network": {
+        "parameters": {"minimum_network_samples": 4}}})
+    validate_plan(plan)
+    tasks = [t for t in plan["tasks"] if t.get("adapter", "").startswith("network.")]
+    assert len(tasks) == 3
+    assert all(t["parameters"]["minimum_network_samples"] == 4 for t in tasks)
+    config, _, _ = prepare_project_network(study, tmp_path / "custom-minimum",
+        tasks[0]["parameters"], file_sha256)
+    assert config.network.minimum_network_samples == 4
+
+
 def test_external_config_cannot_hide_foreign_samples_or_source_vectors(study, tmp_path):
     _, manifest = ManifestStore().load(study)
     contrast = manifest.contrasts[0]

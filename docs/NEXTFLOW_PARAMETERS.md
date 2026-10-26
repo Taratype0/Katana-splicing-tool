@@ -307,6 +307,7 @@ Complete raw results and original effects/P/FDR remain available.
 | `network.config` | unset | Optional external engine YAML; must match the actual project/scope. |
 | `network.configs` | `{}` | Optional map from selected contrast IDs to exact scoped YAMLs; incompatible with cohort scope. |
 | `network.bootstrap.enabled` | `false` | Off by default; enable explicitly to schedule real resampling, not just a label. |
+| `network.parameters.minimum_network_samples` | `6` for contrast, `15` for cohort | Configurable integer >=3; total independent samples in the selected network, not per group. Actual n and the requested minimum are recorded. |
 | `network.parameters.rmats_mode` | Explicit request, then project metadata, then unique asset mode | `JC` or `JCEC`; ambiguous dual-mode sources fail rather than silently choose. |
 | `network.parameters.min_module_size` | `20` for generated configuration | Events, not genes. Omitted/null preserves explicit external YAML settings. |
 | `network.parameters.merge_cut_height` | `0.25` for generated configuration | Eigengene-dissimilarity merging; omitted/null preserves explicit external YAML settings. |
@@ -318,8 +319,9 @@ Complete raw results and original effects/P/FDR remain available.
 | `network.parameters.wgcna_timeout_seconds` | Engine `1800` | Native WGCNA subprocess timeout; distinct from scheduler wall time. |
 | `network.parameters.rscript` | Runtime `Rscript` / declared path | Actual executable in the selected environment. |
 
-Generated contrast networks require six distinct independent biological samples;
-cohort scope requires 15. Scope identities and actual sample count are recorded.
+Generated contrast networks default to six distinct independent biological
+samples in total; cohort scope defaults to 15. Both are configurable through
+`network.parameters.minimum_network_samples` (integer >=3). Scope identities and actual sample count are recorded.
 The production engine retains observed-PSI WGCNA/TOM, `bicor`, signed network
 and soft power 6 unless a compatible explicit engine configuration changes
 them. Scientific defaults and full rankings remain separate from optional

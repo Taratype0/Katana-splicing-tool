@@ -21,7 +21,7 @@ from an older installed wheel does not update it. See
 [auto-strandedness requirements and validation](validation/auto-strandedness-20261025.md).
 
 Use the [Nextflow guide](NEXTFLOW_USAGE.md), [complete parameter reference](NEXTFLOW_PARAMETERS.md)
-and [Chinese quick start](NEXTFLOW_QUICKSTART_ZH.md) for sample/contrast formats,
+and [Quick start](QUICKSTART.md) for sample/contrast formats,
 entry points and analysis choices. Copyable sheets are in
 [examples/nextflow](../examples/nextflow/README.md).
 

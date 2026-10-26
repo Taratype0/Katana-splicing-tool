@@ -1,7 +1,7 @@
 # Networks for the selected experimental comparisons
 
 New Katana flow plans use `network.scope: "contrast"`. Each selected comparison
-has its own network discovery, bootstrap, condition association and module
+has its own network discovery, condition association and module
 annotation tasks. Only the samples in that comparison and its matching native
 rMATS result files contribute to its PSI matrix. A third experimental group is
 not pooled into that discovery.
@@ -12,22 +12,25 @@ not pooled into that discovery.
   "contrast_ids": ["KO_vs_CONTROL", "WT_rescue_vs_KO"],
   "network": {
     "scope": "contrast",
-    "parameters": {"rmats_mode": "JCEC", "bootstrap_iterations": 50}
+    "bootstrap": {"enabled": false},
+    "parameters": {"rmats_mode": "JCEC", "minimum_network_samples": 6}
   }
 }
 ```
 
 The two discoveries are independent tasks in the same downstream pipeline.
-Their bootstrap, association and annotation tasks depend on their own completed
+Their association, annotation and optional bootstrap tasks depend on their own completed
 fit. Each task records the comparison, ordered sample and biological sample IDs,
 sample count and scope. These fields participate in plan and task identities;
 an older cohort fit cannot be reused as an independent comparison fit.
 
-At least six independent biological samples are required for this flow mode.
+The default minimum is six independent biological samples in total per comparison.
+Set `network.parameters.minimum_network_samples` to choose a different minimum
+(integer >=3); for example, use `4` for a two-plus-two comparison.
 This is a supported formal execution mode. New task identities record the
 neutral eligibility value `minimum_met` together with the actual sample count;
 they do not classify the analysis as exploratory based on sample count.
-Actual bootstrap diagnostics, continuous membership metrics and native P/FDR
+Bootstrap diagnostics when enabled, continuous membership metrics and native P/FDR
 remain in the outputs. Six samples meeting the execution minimum does not itself
 establish module stability. Technical copies cannot increase biological n.
 The standalone CoSplice default remains 15 samples. No frozen plan is rewritten.
@@ -42,7 +45,7 @@ in that network, including unassigned genes, and the full tested term family.
 The report's significance filter never recalculates FDR on displayed terms.
 
 For a deliberate joint cohort analysis, set `network.scope: "cohort"`. This
-retains the all-sample discovery, requires at least 15 independent samples, and
+retains the all-sample discovery, defaults to a minimum of 15 independent samples, and
 computes only the requested contrasts against its fixed module scores. It is a
 different analysis scope and is never substituted for the contrast default.
 

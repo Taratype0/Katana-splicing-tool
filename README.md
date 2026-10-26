@@ -1,199 +1,100 @@
 # Katana
 
-**RNA splicing analysis, MotifTrace and co-splicing networks.**
+**RNA splicing analysis, co-splicing networks and MotifTrace, with an interactive study report.**
 
-Katana integrates RNA-seq splicing, expression and transcript-usage results to help researchers identify candidate genes and inspect their sequence changes, regulatory context and read support. Analyses can be explored in a browser, run from the command line, or called from Python. Completed results can be assembled into study reports.
+Katana connects RNA-seq processing with expression, splicing, transcript usage and exon usage analysis. Start from bulk FASTQ, genome-aligned BAM, or existing analysis results. Explore the results in a browser and select genes or events for a closer look.
 
-## Inputs
+## Start here
 
-A project records sample groups, biological replicates, donors, reference versions and the comparisons to analyze. Provide the files required by the selected analysis:
-
-| Input | Used for |
+| What do you have? | What to do |
 | --- | --- |
-| rMATS JC or JCEC and compatible DEG, DTU or DEXSeq results | Differential splicing, expression, transcript/exon usage and cross-comparison analysis. |
-| Salmon `quant.sf`, compatible count, PSI or junction matrices | Transcript composition, sample comparisons and eligible statistical or network analyses. |
-| GTF, genome/transcript FASTA and relevant annotation resources | Event and transcript annotation, RNA reconstruction, enrichment, motif and protein-consequence analysis. |
-| BAM files and indexes, when needed | Sashimi, coverage and junction inspection, target-gene checks, and supported network or single-cell counting routes. |
-| Supported processed single-cell/nucleus data, MARVEL or long-read results | The corresponding downstream analyses or completed-result imports. |
+| FASTQ or genome-aligned BAM | Run the [complete workflow](docs/QUICKSTART.md#1-start-from-fastq-or-bam). |
+| Existing RNA-seq/splicing results | [Connect your results](docs/QUICKSTART.md#2-start-from-existing-results) and run the remaining analyses. |
+| Completed Katana results | [Generate or open the report](docs/QUICKSTART.md#3-open-results-or-regenerate-a-report). |
+| Genes or events you want to inspect | [Create a target report](docs/QUICKSTART.md#4-inspect-selected-genes-or-events), including Sashimi when BAMs are available. |
 
-Browsing completed results and assembling their report do not require BAM files. New read-backed calculations, including requested Sashimi, require BAMs and indexes accessible to the execution environment. The independent Katana Nextflow workflow reuses established nf-core modules for upstream processing and connects their outputs with the experimental design. Input schemas and compatible references are specified for each analysis.
+Read the **[quick start](docs/QUICKSTART.md)** for installation, example input tables and commands. The [full usage guide](docs/NEXTFLOW_USAGE.md) and [parameter reference](docs/NEXTFLOW_PARAMETERS.md) cover advanced settings.
 
-## Analysis features
+## What Katana analyzes
 
-| Area | Analyses |
+| Analysis | Results |
 | --- | --- |
-| Samples and experimental design | Check files, sample identities, biological replicates, donors, groups and effect direction; select the comparisons of interest. |
-| Quality and overview | Inspect read support, replicate agreement, coverage bias and uncertainty; explore PSI, event-type distributions, PCA, correlations and heatmaps. |
-| Differential and cross-condition analysis | Integrate DAS, DEG, DTU and DEXSeq while retaining source statistics; compare exact-event overlaps, concordant effects and direction reversals. Additional expression and exon-usage interaction calculations require suitable counts, designs and R tools. |
-| Candidate genes and events | Combine supporting results, browse complete candidate sets, save selections, and inspect gene cards and event details. |
-| Functional enrichment | Analyze declared gene sets against appropriate backgrounds using GO/pathway resources; perform ranked pathway analysis where the design and resources support it. |
-| Transcript and protein consequences | Examine transcript composition and usage changes; inspect annotated ORFs, UTRs, predicted NMD and optional Pfam/domain or protein-feature evidence. |
-| Read validation | Generate replicate-aware Sashimi plots and inspect target-gene coverage, exons, junctions and RNA-level perturbation evidence. |
-| Single-cell/nucleus downstream analysis | For eligible data, aggregate by donor and cell type and analyze splicing measurements, differences, embeddings, networks and transcript usage. Import supported completed MARVEL and long-read results. |
+| Design and quality | Sample groups, selected comparisons, sequencing QC, read support and gene-body coverage. |
+| Splicing landscape | Event-type distributions, PSI heatmaps, PCA, sample patterns and replicate consistency. PSI is the fraction of transcripts including a splice feature. |
+| Molecular differences | Differential gene expression (DEG), alternative splicing (DAS), transcript usage (DTU) and exon usage (DEXSeq), with effects, significance, gene labels and Top 10 tables. |
+| Comparisons and pathways | Event overlaps and directions across selected comparisons; GO/KEGG and other supplied gene sets, with detected-gene backgrounds and contributing genes. Explicit interaction designs support additional fitted models. |
+| Co-splicing networks | An independent network for each comparison: modules, complete gene/event membership, activity, condition associations, network graphs, enrichment and Hub rankings. |
+| MotifTrace and RBP analysis | RBP identity enrichment, splice-boundary motif/CLIP evidence, and motif sites gained, lost or retained in reconstructed RNA forms. |
+| Selected targets | Gene cards, Event cards, transcript and predicted protein consequences, read-backed Sashimi plots and individual HTML reports. |
+| Processed single-cell/nucleus data | Supported donor-aware splicing, transcript, network and visualization workflows, plus compatible MARVEL and long-read result imports. The raw-read pipeline targets bulk RNA-seq. |
 
 ### MotifTrace
 
-MotifTrace links splicing changes to RNA sequence and RBP evidence at three levels:
+For each selected comparison, MotifTrace reconstructs local RNA forms for five splice-event types and scans supplied motif models. It links sites to sequences, genomic positions, events and genes, and calculates the supported matched-background and PSI-weighted analyses. Boundary/CLIP evidence and mature-RNA sequence consequences are shown separately.
 
-1. **RBP identity and target sets:** annotate candidate RBPs, splicing factors and declared target sets.
-2. **Regulatory context around splice events:** examine neighborhood motifs, matched-background enrichment and compatible reference CLIP evidence.
-3. **RNA sequence consequences:** reconstruct local reference RNA forms for SE, A3SS, A5SS, MXE and RI; inspect gained, lost or retained motif sites and new splice junctions, and assess motif availability using PSI.
+The report displays up to ten significant motif models per comparison, including their sequences, original P/FDR and hit-gene links. Full model and site tables remain downloadable. Matching MAPP MAEI inputs can be prepared and fitted in the integrated workflow; compatible completed MAPP results can also be imported.
 
-Browse results by gene, event or motif and export RNA FASTA, site tables, genomic coordinates, statistics and figures. Custom motif libraries are supported. Eligible existing transcript/exon-usage and expression results can also inform motif-availability analysis.
+See [MotifTrace commands and Python API](docs/MOTIFTRACE.md).
 
-MotifTrace supports new sequence analyses and imports of compatible completed sequence or parallel MAPP results. Imported method identities and P/FDR values are retained. The integrated workflow can prepare and fit the original MAPP MAEI model when matching transcript quantities, reference sequences and motif-count inputs are available; it does not substitute PSI for transcript abundance or run all MAPP subworkflows. Local RNA reconstruction and motif predictions do not establish measured RBP binding.
+### Co-splicing networks
 
-The package provides `from katana_motiftrace import MotifTrace`,
-`katana-motiftrace` commands, and a shared MotifTrace mode selector in the
-browser interface. See [MotifTrace inputs, API and commands](docs/MOTIFTRACE.md)
-for the six analysis/import modes, requirements and examples.
+Katana groups events with related PSI patterns using its WGCNA/TOM workflow. Each comparison has its own modules and matched downstream results. The browser provides network graphs, searchable member lists, module activity and significant enrichment with contributing genes.
 
-### Katana-Splice-Network
+Hub ranking uses absolute eigengene membership, `|kME|`, while retaining the signed values and complete ranking. Bootstrap is optional and off by default. Module size, merge height, sample minimum and execution resources are configurable. The current dense network method can require substantial memory for large event sets; see [network settings](docs/NETWORK_EXECUTION.md).
 
-Network analysis accepts eligible rMATS events, competing junctions extracted from BAMs, or external PSI matrices, retaining the units and read evidence of each input route.
+### Reports and browser
 
-The existing WGCNA/TOM route identifies co-splicing modules and produces memberships, sample activity scores, condition associations, hubs and network views. Supporting analyses include bootstrap stability and membership confidence, module function, structural and sensitivity diagnostics, projection onto existing modules, and preservation in independent cohorts. Optional routes, including the original DJExpress author core, require their own inputs.
+The study report has seven sections:
 
-The integrated workflow fits a separate network for each selected comparison, using only that comparison's biological samples. Modules, activities, associations, network figures and enrichment retain the comparison identity. The configured sample minimum and the actual sample count are recorded alongside bootstrap and continuous membership metrics; meeting the sample minimum does not establish network stability. Existing cohort networks can still be imported with their original scope, without being relabeled as independent comparison networks.
+1. Experimental design, references and QC.
+2. Alternative-splicing landscape.
+3. DEG, DAS, DTU and DEXSeq results.
+4. Cross-comparison results.
+5. GO/KEGG and pathway enrichment.
+6. Co-splicing networks.
+7. RBP and MotifTrace.
 
-New integrated runs rank Hub events by absolute module eigengene membership
-`|kME|`, retaining signed kME and complete rankings. Bootstrap is off by default;
-it is an optional stability analysis enabled with `network.bootstrap.enabled`.
-Reports record the choice and do not describe ordinary kME as bootstrap
-confidence. See [network execution and ranking](docs/NETWORK_EXECUTION.md).
+A comparison selector keeps the report focused. Tables link to complete results, and the splicing display can switch between ordinary significant events and read-supported significant events (RS-DAS, the default).
 
-### One-click reports
+The interactive browser adds adjustable thresholds, result filtering, gene/event selection and new analyses through the same Python service used by the command line. Selected-target reports are separate from the seven-section study report. Offline HTML can be shared without installing Katana.
 
-The approved report follows seven sections: design and QC; AS landscape; DEG/DAS/DTU/DEXSeq; cross-comparison results; GO/KEGG and pathways; co-splicing networks; and RBP/MotifTrace. It includes per-comparison Top 10 details, full-result links and a report-wide ordinary DAS / RS-DAS choice, with RS-DAS as the default. See the [approved report specification](docs/REPORT_SPECIFICATION.md).
+## Run a study
 
-The package provides `katana-report` and `from katana_next.reports import build_report` for completed projects, and the same renderer is available as `reports.study` in the application. One report can assemble explicitly declared completed collections, descriptors and views, retaining separate comparison identities and their original statistics. See [report inputs, commands and outputs](docs/REPORTS.md) and [assembling completed sources](docs/EXISTING_RESULTS.md#generate-one-report-from-several-completed-sources).
+After preparing the sample sheet, comparison sheet, reference and analysis-resource configuration, the storage-managed command runs Nextflow and delivers the report plus a reusable analysis project:
 
 ```sh
-katana-report --project results.json --outdir exports/study-report --compact --no-archive
+katana-flow run --mode complete \
+  --input inputs/samples.csv --contrasts inputs/contrasts.csv \
+  --fasta references/genome.fa --gtf references/annotation.gtf \
+  --project_template inputs/project-template.json --flow_config inputs/flow.json \
+  --profile docker --katana_container "$KATANA_IMAGE" \
+  --dexseq_tools_container "$DEXSEQ_IMAGE" --outdir results
 ```
 
-This generates the full offline report directory without an additional ZIP. Use `--archive` to choose a delivery ZIP location; explicit `--path-map` bindings support moved inputs and an optional `--result-store` shares immutable payloads across fresh reports. See [installed-package commands](docs/INSTALL.md#installed-package-report-commands) for matching wheel, container and Conda use. Two additional export routes remain available:
+Use the matching current package, workflow and images described in the [quick start](docs/QUICKSTART.md). The BAM entry uses the same command with a BAM sample sheet. Nextflow schedules dependencies automatically; cluster accounts, partitions and resources belong in your site configuration.
 
-- **Analysis and reproducibility package:** an HTML/PDF summary, figures, parameters, file inventory and ZIP attachments.
-- **Completed study-report import:** package an existing supported report and its attachments while retaining its original scope and results.
+Successful stages hand off their results before temporary work is removed. Failed work stays available for recovery. Add `--keep-work` to retain work for later Nextflow resume. See [storage management](docs/STORAGE_MANAGEMENT.md).
 
-Reports retain significant and non-significant results and document actual filtering and exclusions. Unrun analyses and missing matching downstream results are identified. Report generation reads completed analyses; it does not infer experimental purpose or rescue, generate a validation programme, or rerun upstream processing. Selected gene/event dossiers remain separate interactive analyses.
+## What you receive
 
-### Integrated analysis workflow
+- An offline HTML report and downloadable figures, complete tables and report archive.
+- A reusable analysis project for the Katana browser, CLI and Python API.
+- Comparison-specific network and motif results, including member and hit-gene tables.
+- Method settings, software/reference versions and execution logs.
+- BAM/index resources retained separately for later read-backed target analysis.
 
-The [Nextflow workflow](pipeline/main.nf) connects bulk FASTQ/BAM processing,
-Katana calculations and the fixed seven-section report. Expensive comparisons
-and network stages are separate executor tasks. It supports upstream-only,
-downstream-only and complete execution; completed work is retained with
-`-resume`. The `katana-flow` commands validate resources, prepare independent
-tasks, verify their products and enforce report completion. The existing
-`katana-report` command remains a renderer for already completed results.
+## Installation and current status
 
-For quota-limited runs, `katana-flow run` performs verified upstream and
-downstream handoffs and removes each stage's owned work after success. Final
-results, a reusable analysis project and BAM/index resources remain available;
-failed work is preserved for recovery. See [storage management and commands](docs/STORAGE_MANAGEMENT.md).
+Use the [release installation guide](docs/RELEASE_INSTALL.md) for downloadable packages, or [build from current source](docs/QUICKSTART.md#install). The browser and reporting tools work from the Python package; new native analyses also need the documented R/tools environment. The integrated workflow uses containers, while standalone downstream users can use [Conda](docs/RUNTIME_ENVIRONMENTS.md).
 
-Generated bulk FASTQ/BAM complete execution and all-cached repeats have passed. This is
-not an official nf-core release. A missing required calculation or resource
-blocks a complete report.
-Native MAPP fitting needs explicitly prepared, matching transcript quantities
-and motif-count inputs; these are not substituted with event PSI. See
-[integrated execution and current limits](docs/INTEGRATED_PIPELINE.md).
+The source includes FASTQ/BAM workflows, existing-result adapters, downstream calculations, reports and selected-target commands. The current source has newer storage and configuration changes than the 25 October beta downloads; build matching images to use those changes throughout a run. [Validation records](docs/validation/entrypoints-runtime-20261025.md) and the [current integration review](docs/development/PIPELINE_REVIEW_20261026.md) describe tested routes and remaining work.
 
-### Browser interaction
+Katana is an independently maintained Nextflow workflow that reuses nf-core modules. Official nf-core inclusion is pending. This does not require manual task scheduling: Nextflow manages execution, dependencies and caching.
 
-The browser interface lets users open projects, inspect samples and designs, select comparisons and parameters, follow task status, filter result tables, save candidate genes or events, inspect gene cards and figures, and export results. MotifTrace, networks and reports are accessible through their analysis pages.
+## Documentation
 
-The browser connects to a Katana Python service running locally or on the analysis server. The service accesses project files and runs calculations; the browser displays results and controls jobs. Offline report HTML remains available for reading completed results and does not start new analyses. The CLI and Python interface support scripted and server-side use. [MotifTrace](docs/MOTIFTRACE.md) has dedicated API and command-line examples; other analyses use the shared project workflow commands described in [usage](docs/USAGE.md).
-
-The browser is the current interface and release target. Existing desktop and mode-chooser entry points remain available for compatibility; a new standalone desktop distribution is not planned.
-
-The **Gene / Event workspace** keeps selected targets across result pages and exports a portable request. `katana-targets` reads the same request locally or on an analysis server to create Gene cards, exact Event cards, native Sashimi, independent HTML reports and complete interactive tables. Completed expression, splicing, transcript, network and MotifTrace evidence is reused with its original statistics. BAMs and references are bound separately on the execution machine. See [commands, portable inputs and outputs](docs/TARGET_COMMANDS.md) and [selection and evidence rules](docs/TARGET_REPORTS.md).
-
-## Outputs
-
-Depending on the analysis, Katana produces browsable result tables, interactive views and PNG/SVG/PDF figures. Sequence analyses also export FASTA and site files; network analyses export memberships, activities, associations, hubs and stability results. Reports and ZIP packages retain parameters, methods and input sources.
-
-## Install and use
-
-Download the Python wheel and matching Linux Docker archives from
-[Katana 2.0.0 beta 5](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261025).
-The [release installation guide](docs/RELEASE_INSTALL.md) covers checksums,
-browser/CLI installation, Docker loading and the locked Conda route.
-For analysis inputs and execution, see the [Nextflow usage guide](docs/NEXTFLOW_USAGE.md),
-[parameter reference](docs/NEXTFLOW_PARAMETERS.md) and
-[Chinese quick start](docs/NEXTFLOW_QUICKSTART_ZH.md).
-
-The current `main` workflow also accepts `strandedness=auto` for single-end and
-paired-end bulk FASTQ/BAM input. It measures library orientation before native
-quantification and differential analysis, retaining the requested and resolved
-values. Use the current checkout's `pipeline/main.nf` for this feature; the
-beta 5 downloadable wheel/workflow remains unchanged. See
-[automatic strandedness and validation](docs/validation/auto-strandedness-20261025.md).
-
-The accepted implementation is available on **`main`**. Start with
-[Choose a Katana entry point](docs/ENTRY_POINTS.md), then choose the installation
-that matches how you want to use Katana:
-
-Completed-result reporting has been validated with the installed Windows
-package and matching Linux Conda and Docker environments. This covers the
-seven-section report, complete result links, network browsing and portable
-report refresh. The [current entry/runtime record](docs/validation/entrypoints-runtime-20261025.md)
-identifies matching artifacts and the complete-mode and target checks.
-The released artifacts retain their original accepted versions. The current
-source adds a separately checked auto-strandedness route; its
-[native Nextflow CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40210590441)
-exercises generated alignments, actual tool containers, failure gates and cache
-reuse. [Validation records](docs/validation/auto-strandedness-20261025.md) distinguish
-these checks from the earlier complete-study and runtime checks. Further
-development continues on `codex/package-development`.
-
-| Use | Installation |
-| --- | --- |
-| Run the integrated Nextflow pipeline | A Linux downstream image supplies Katana's Python, R and native tools; upstream nf-core modules keep their own tool images. See [container build/load and pipeline commands](containers/downstream/README.md). |
-| Run downstream analyses directly from Python, CLI or browser | Use the [locked standalone Linux Conda environment](docs/RUNTIME_ENVIRONMENTS.md#standalone-linux-environment). |
-| Browse completed results, generate reports or develop the interface | Use the Python source installation below. Native R and analysis tools are additional requirements for new calculations. |
-
-Raw bulk FASTQ/BAM analysis has [separate execution checks](docs/validation/entrypoints-runtime-20261025.md); completed-result reporting does not rerun those analyses. Use the documented source or local container build below. Katana has not yet been published to PyPI or a container registry.
-
-For the browser and Python/CLI interface, use Python 3.11 or newer in a separate environment:
-
-```sh
-git clone --branch main https://github.com/Taratype0/Katana-splicing-tool.git
-cd Katana-splicing-tool
-python -m venv .venv
-```
-
-Activate the environment with `.venv\Scripts\Activate.ps1` in Windows PowerShell or `. .venv/bin/activate` on Linux. Then install and open the browser interface:
-
-```sh
-python -m pip install -e ".[next,flow,contracts]"
-katana-open --runtime-root ../katana-runtime
-```
-
-`katana-open` opens the browser by default. On a server, add `--no-open` to start or reuse the Python service and print its URL without opening a window; see [server access](docs/INSTALL.md#server-access). Open an existing Katana project or migrate a compatible legacy project, check the samples and inputs, then select the analysis. Explicit `--mode desktop` and `--mode choose` retain the existing compatibility modes. The command line and Python interface call the same analyses; for example, export a reproducibility package from an existing project:
-
-```sh
-python -m katana_next.cli --project path/to/katana.project.json run reports.bundle
-```
-
-Inputs are registered in a project configuration. Raw FASTQ/BAM runs use the documented sample and contrast sheets. Existing nf-core results require explicit file, sample, comparison and reference mappings before downstream execution; an arbitrary output directory is not automatically a complete Katana project. See [installation](docs/INSTALL.md), [entry points](docs/ENTRY_POINTS.md) and [usage](docs/USAGE.md) for formats and commands. References and databases are supplied separately; installing a tool environment does not provide genome or motif resources.
-
-## Validation and release status
-
-The analyses described above are implemented in the existing Katana application and include both new calculations and completed-result imports. The source installation provides interface, CLI and Python access.
-
-The package includes independent installation, input adapters,
-local/server commands and reports. Generated bulk FASTQ/BAM complete execution,
-cache-only repeats, target restore and installed-runtime checks have passed. These software
-checks do not certify arbitrary assays, references or cluster deployments.
-Retained real-study results and their portable report have separate evidence.
-See the [current scope](docs/validation/entrypoints-runtime-20261025.md).
-A published PyPI installation command is not yet provided here.
-
-Further technical details are in [methods](docs/METHODS.md) and [development documentation](docs/development/ARCHITECTURE.md).
+[Quick start](docs/QUICKSTART.md) · [Input and comparison tables](docs/NEXTFLOW_USAGE.md) · [Parameters](docs/NEXTFLOW_PARAMETERS.md) · [Existing results](docs/EXISTING_RESULTS.md) · [Target reports](docs/TARGET_COMMANDS.md) · [Methods](docs/METHODS.md) · [Installation](docs/INSTALL.md)
 
 ## License
 
-Katana's own code uses the [MIT License](LICENSE). Third-party components retain their original licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
+Katana code is available under the [MIT License](LICENSE). Bundled third-party components retain their original licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).

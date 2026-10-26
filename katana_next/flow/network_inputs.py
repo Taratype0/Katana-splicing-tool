@@ -71,9 +71,15 @@ def network_scope_identity(manifest, parameters, *, preserve_recorded_status=Tru
     biological_ids = [s.biological_sample_id for s in samples]
     if len(set(sample_ids)) != len(sample_ids) or len(set(biological_ids)) != len(biological_ids):
         raise ValueError("Network discovery requires distinct independent biological samples; technical records cannot inflate n")
-    minimum = 6 if scope == "contrast" else 15
+    minimum = parameters.get("minimum_network_samples", 6 if scope == "contrast" else 15)
+    if isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 3:
+        raise ValueError("network.parameters.minimum_network_samples must be an integer of at least 3")
     if len(samples) < minimum:
-        raise ValueError(f"{scope} network requires at least {minimum} independent biological samples")
+        raise ValueError(
+            f"{scope} network has {len(samples)} independent biological samples; "
+            f"the configured gate requires at least {minimum}. Set network.parameters.minimum_network_samples "
+            "to your intended minimum (at least 3), or supply more independent samples."
+        )
     legacy_status = "small_sample_exploratory" if len(samples) < 15 else "standard_sample_count"
     recorded_status = parameters.get("sample_size_status")
     # An older sealed task must retain its exact identity for verified reuse.

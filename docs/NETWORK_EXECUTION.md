@@ -5,6 +5,15 @@ Each network uses only the biological samples in that contrast. Its condition
 associations, enrichment and report views must reference that same fit.
 A cohort-wide network is a separate, explicitly selected analysis.
 
+## Sample count
+
+The integrated defaults are six independent samples in total per comparison,
+or 15 for a cohort-wide network. Set `network.parameters.minimum_network_samples`
+in `flow.json` to choose a different minimum, such as `4` for two-plus-two.
+The engine accepts integers >=3. The upstream differential route still needs
+at least two samples per group. Actual sample count and the requested minimum
+are recorded; a computational minimum does not establish statistical power.
+
 ## Membership and optional resampling
 
 New flow plans do not run bootstrap by default. They create an observed fit,
@@ -102,9 +111,12 @@ not changes to the correlation method or module parameters. Serial tree steps
 are not guaranteed to occupy every allocated core. Timestamped stage messages
 allow operators to distinguish matrix work, module fitting and tree cuts.
 
-## Acceptance before scaling out
+## Checking a new deployment
 
-Validate a single real comparison before submitting the remaining comparisons:
+A representative comparison is useful when qualifying a new machine, image or
+resource configuration. This is a deployment check, not a manual gate between
+comparisons in ordinary runs. Nextflow schedules each ready comparison automatically.
+For deployment qualification:
 
 1. Confirm the exact sample IDs, biological units and complete event universe.
 2. Require successful native completion and verified observed modules, activity,

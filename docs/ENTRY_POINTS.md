@@ -7,7 +7,7 @@ different work; successful report assembly does not certify a new raw-data run.
 
 For full input/contrast formats and execution choices, use the
 [Nextflow usage guide](NEXTFLOW_USAGE.md), [parameter reference](NEXTFLOW_PARAMETERS.md)
-or [Chinese quick start](NEXTFLOW_QUICKSTART_ZH.md).
+or [Quick start](QUICKSTART.md).
 
 | Starting material | Command or interface | Work performed |
 | --- | --- | --- |

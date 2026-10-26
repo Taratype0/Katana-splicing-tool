@@ -7,12 +7,12 @@ results can enter reporting directly. Selected genes/events use a separate
 portable target workflow.
 
 Katana is an independent Nextflow DSL2 workflow reusing nf-core modules. It is
-**not an approved `nf-core/katana` release**. The sections below follow the
+maintained separately from official nf-core releases. The sections below follow the
 input, contrasts, references, execution, profiles and resource organization of
 the published nf-core guides, while documenting Katana's actual implementation.
 Options from another pipeline are not automatically Katana options.
 
-- [Chinese quick start](NEXTFLOW_QUICKSTART_ZH.md)
+- [Quick start](QUICKSTART.md)
 - [Complete parameter reference](NEXTFLOW_PARAMETERS.md)
 - [Installation and release assets](RELEASE_INSTALL.md)
 - [Accepted versions and tested boundaries](validation/entrypoints-runtime-20261025.md)
@@ -26,10 +26,10 @@ Options from another pipeline are not automatically Katana options.
 | FASTQ/BAM, requiring only upstream files | `--mode upstream-only` | Native input bundle; no Katana downstream or study report. |
 | Verified Katana upstream bundle | `katana-flow import`, then `--mode downstream-only` | Downstream computations and report; no upstream read-processing rerun. |
 | Existing Katana v2 project with native input assets | `--mode downstream-only` | New selected downstream computations, with readiness checks. |
-| Completed Katana/nf-core-derived result files | Explicit project/source mapping, then reporting or downstream planning | Reuses mapped completed evidence; missing computations require adequate inputs and a new explicit plan. An arbitrary results folder is not a complete manifest. |
+| Completed Katana/nf-core-derived result files | Explicit project/source mapping, then reporting or downstream planning | Reuses mapped completed evidence; missing computations require adequate inputs and a new explicit plan. The mapping step connects each result to its samples and comparison. |
 | Completed flow collection | `katana-flow report` | Strict report assembly; no statistical fits. |
 | Completed report sources or portable report | `katana-report` | Read-only assembly/refresh, with honest missing-result states. |
-| Selected genes/exact events | `katana-targets` or browser target basket | Independent cards, requested Sashimi and portable target reports. |
+| Selected genes/exact events | `katana-targets` or browser gene/event selection | Independent cards, requested Sashimi and portable target reports. |
 
 The raw workflow accepts **bulk RNA-seq**. Declaring `scRNA`/`snRNA` does not
 enable a raw single-cell workflow. Processed single-cell/nucleus inputs have
@@ -268,9 +268,11 @@ between two response estimates is not automatically a fitted interaction.
 
 At least **two independent biological samples per selected arm** are required
 for upstream differential testing. The default complete downstream network
-requires **six independent samples in each selected comparison**. Therefore a
-two-plus-two design can pass the upstream minimum but cannot complete the
-default full report. These minima are execution eligibility, not power estimates.
+defaults to **six independent samples in total per selected comparison**, not
+six per group. Set `network.parameters.minimum_network_samples` explicitly
+(for example, `4` for two-plus-two) to use a different network minimum. Values
+must be integers of at least three. Other analyses keep their own requirements;
+this option is an eligibility setting, not a power estimate. See [small studies](QUICKSTART.md#small-studies).
 
 `--design '~ condition'` is the supported shared complete-route model. Paired,
 batch-adjusted and interaction formulas are rejected rather than silently
