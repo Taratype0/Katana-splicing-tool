@@ -22,7 +22,7 @@ from katana_next.science.motiftrace_budget import (
     estimate_paired_family,
 )
 
-EXECUTION_ADAPTER_VERSION = "1.1.0"
+EXECUTION_ADAPTER_VERSION = "1.2.0"
 
 
 def analyze_consequences(complete, selected_ids, models, fasta, destination, *,
@@ -71,8 +71,10 @@ def analyze_consequences(complete, selected_ids, models, fasta, destination, *,
     budget = {"limits": limits, "estimate": estimate, "checked_before_motif_scoring": True,
               "enforced": False, "capacity_policy": "no_fixed_computation_limits"}
     (destination/"EXECUTION_BUDGET_BEFORE_SCORING.json").write_text(json.dumps(budget, indent=2, allow_nan=False), encoding="utf-8")
-    hits, changes, weighted = trace_instances(rna[rna.role.eq("foreground")], selected, models, check_cancelled=check_cancelled)
-    scores = paired_form_scores(rna[rna.role.eq("foreground")], selected, models, check_cancelled=check_cancelled)
+    from .motiftrace_events import ScoringCache
+    scorer = ScoringCache()
+    hits, changes, weighted = trace_instances(rna[rna.role.eq("foreground")], selected, models, check_cancelled=check_cancelled, scorer=scorer)
+    scores = paired_form_scores(rna[rna.role.eq("foreground")], selected, models, check_cancelled=check_cancelled, scorer=scorer)
     for name, frame in (("ACTUAL_RNA_FORMS", rna), ("ACTUAL_LOCUS_HITS", hits),
                         ("PAIRED_FORM_INSTANCE_CHANGES", changes), ("PER_REPLICATE_SEQUENCE_OPPORTUNITY", weighted),
                         ("PAIRED_FORM_NORMALIZED_SCORES", scores)):
@@ -82,7 +84,7 @@ def analyze_consequences(complete, selected_ids, models, fasta, destination, *,
     with (destination/"ACTUAL_LOCAL_RNA.fa").open("x", encoding="ascii") as stream:
         for i, row in rna.iterrows():
             stream.write(f">rna_{i:06d} event={row.event_id} region={row.region} strand={row.strand} SHA256_DNA={row.sequence_sha256}\n{row.sequence_RNA}\n")
-    datasets, pairs = build_paired_datasets(rna, matching, models, **limits, check_cancelled=check_cancelled)
+    datasets, pairs = build_paired_datasets(rna, matching, models, **limits, check_cancelled=check_cancelled, stream=True, scorer=scorer)
     tests, clusters, null_max = paired_cluster_family(datasets, pairs, permutations=permutations,
         seed=seed, minimum_pairs=20, check_cancelled=check_cancelled)
     if tests.empty:

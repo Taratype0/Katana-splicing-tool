@@ -41,8 +41,7 @@ def _render_case(tmp_path, monkeypatch, *, gaps=(), missing_chapter=False, missi
         manifest = actual_build(*args, **kwargs)
         out = Path(args[1])
         archive = out / "REPORT.zip"
-        assert zipfile.is_zipfile(archive)
-        observed["zip_sha256"] = file_sha256(archive)
+        assert kwargs["create_archive"] is False and not archive.exists()
         observed["rendered_files"] = {
             str(path.relative_to(out)): file_sha256(path)
             for path in out.rglob("*") if path.is_file() and path != archive
@@ -64,6 +63,13 @@ def _render_case(tmp_path, monkeypatch, *, gaps=(), missing_chapter=False, missi
             raise ValueError("Malformed acceptance evidence")
         return list(gaps)
 
+    from katana_next.reports import refresh
+    original_archive = refresh.write_archive
+    def record_archive(*args, **kwargs):
+        result = original_archive(*args, **kwargs)
+        observed["zip_sha256"] = file_sha256(Path(args[0]) / "REPORT.zip")
+        return result
+    monkeypatch.setattr(refresh, "write_archive", record_archive)
     monkeypatch.setattr(reports, "build_report", render)
     monkeypatch.setattr(acceptance, "required_report_gaps", gate)
     return collection, observed
@@ -76,7 +82,7 @@ def _render_case(tmp_path, monkeypatch, *, gaps=(), missing_chapter=False, missi
     ("gate_error", "Malformed acceptance evidence"),
     ("render_error", "Late renderer failure"),
 ])
-def test_real_render_archive_becomes_diagnostic_when_final_gate_fails(tmp_path, monkeypatch, mode, message):
+def test_real_render_is_preserved_without_compressing_failed_report(tmp_path, monkeypatch, mode, message):
     collection, observed = _render_case(
         tmp_path, monkeypatch,
         gaps=[{"component": "network", "reason": "Missing required comparison result"}] if mode == "gap" else [],
@@ -88,13 +94,12 @@ def test_real_render_archive_becomes_diagnostic_when_final_gate_fails(tmp_path, 
     assert not (output / "REPORT.zip").exists()
     assert not (output / "flow.acceptance.json").exists()
     diagnostic = output / "REPORT.diagnostic.zip"
-    assert zipfile.is_zipfile(diagnostic)
-    assert file_sha256(diagnostic) == observed["zip_sha256"]
+    assert not diagnostic.exists() and "zip_sha256" not in observed
     for relative, expected in observed["rendered_files"].items():
         assert file_sha256(output / relative) == expected
     receipt = json.loads((output / "flow.acceptance.failed.json").read_text())
     assert receipt["status"] == "failed" and message in receipt["error"]
-    assert receipt["diagnostic_archive"] == str(diagnostic.resolve())
+    assert receipt["diagnostic_archive"] is None
     before = {p.name: file_sha256(p) for p in output.iterdir() if p.is_file()}
     with pytest.raises(FileExistsError, match="existing report and acceptance evidence"):
         build_complete_report(collection, output)

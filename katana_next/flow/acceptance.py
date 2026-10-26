@@ -6,6 +6,7 @@ All paths below are authenticated inside the portable collection; original
 compute directories need not remain mounted when the report is generated.
 """
 from __future__ import annotations
+from .model import receipt_plan_id
 
 from pathlib import Path
 
@@ -100,7 +101,7 @@ def required_report_gaps(collection, plan, report_manifest, report_dir, *, colle
         value = read_json(path)
         if (file_sha256(path) != record["sha256"] or
             value.get("receipt_sha256") != canonical_hash({k: v for k, v in value.items() if k != "receipt_sha256"}) or
-            value.get("plan_id") != plan["plan_id"] or value.get("task_id") != task["id"] or
+            value.get("plan_id") != receipt_plan_id(plan, task["id"]) or value.get("task_id") != task["id"] or
             value.get("task_contract_sha256") != canonical_hash(task) or
             value.get("source_project_manifest_sha256") != plan["project_manifest_sha256"]):
             raise ValueError("Report task proof does not match its sealed calculation contract")

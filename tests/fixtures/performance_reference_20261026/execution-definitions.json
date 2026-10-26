@@ -1,0 +1,17 @@
+{
+  "definitions": {
+    "motiftrace_events": {
+      "ScoringCache": "d93daf33f0a8b9448968b0d9b12bb9e37a43ff0771d777679a5406005f08caf1",
+      "trace_instances": "4d7fb319e244361143416d57ad8b116e7d768d57e1928732596aee28d6237429",
+      "paired_form_scores": "a575ef70cc81435ab90a0f98be981e04a3a24326eb9b90364883b394e6b70063"
+    },
+    "motiftrace_clusters": {
+      "paired_cluster_family": "827fd9d83ae30efe020f9ff2ac41a82a58eb48a3db40ce84b0841e4d34664bc1",
+      "_profile": "3b9135c0cb14f7562000dd69a15e8ce8f97ca498944bc854272c7109bc935b55",
+      "build_paired_datasets": "8a69976d579eadc25a24e0619d0eb5e12b50c062a5359251a6d23363d12abed4"
+    },
+    "motiftrace_consequences": {
+      "analyze_consequences": "9d7e23bb5b8f1fadd6444e8322b94e1059f9ef338ebda343303f212c272757b3"
+    }
+  }
+}

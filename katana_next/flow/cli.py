@@ -126,13 +126,19 @@ def build_complete_report(collection, outdir):
     outdir.mkdir(parents=True, exist_ok=True)
     required_gaps = []
     try:
-        manifest = build_report(materialize_report_descriptor(collection), outdir, event_set=plan.get("event_set", "stable_significant"))
+        manifest = build_report(materialize_report_descriptor(collection), outdir, event_set=plan.get("event_set", "stable_significant"),
+                                create_archive=False, owned_input_root=collection)
         required_gaps = required_report_gaps(collection, plan, manifest, outdir, collection_receipt=receipt)
         if required_gaps:
             raise ValueError("Required fixed-report analyses are still absent from the rendered result; see flow.acceptance.failed.json")
         chapters = {int(panel["chapter"]) for panel in manifest.get("panels", []) if panel.get("image")}
         if not required_figure_chapters(plan).issubset(chapters):
             raise ValueError("Fixed seven-chapter report is missing rendered figures; collection remains diagnostic")
+        for name in ("REPORT.html", "report-manifest.json"):
+            if not (outdir / name).is_file() or not (outdir / name).stat().st_size:
+                raise ValueError("Incomplete final report artifact: " + name)
+        from katana_next.reports.refresh import write_archive
+        write_archive(outdir)
         for name in ("REPORT.html", "REPORT.zip", "report-manifest.json"):
             if not (outdir / name).is_file() or not (outdir / name).stat().st_size:
                 raise ValueError("Incomplete final report artifact: " + name)

@@ -189,7 +189,7 @@ def test_core_selected_pipeline_reaches_actual_report_acceptance(study, tmp_path
     collection = tmp_path / 'selected-collection'
     collect_results(planned, list(receipts.values()), collection)
     result = build_complete_report(collection, tmp_path / 'selected-report')
-    assert result['status'] == 'completed' and result['verified_calculation_tasks'] == 6
+    assert result['status'] == 'completed' and result['verified_calculation_tasks'] == len(plan['tasks'])
     assert not any(result['analyses'].values())
 
 

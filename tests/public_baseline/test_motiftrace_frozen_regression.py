@@ -58,6 +58,12 @@ def test_packaging_preserves_frozen_numerical_source(module, expected):
         boundary = runpy.run_path(str(Path(__file__).with_name("test_motiftrace_capacity_source_boundary.py")))
         assert boundary["CAPACITY_SOURCES"][module] == expected
         boundary["assert_capacity_only_change"](module, Path(loaded.__file__).read_text("utf-8"))
+    elif module == "motiftrace_consequences":
+        import ast
+        from performance_source_boundary import restore_execution_definitions, SNAPSHOT
+        reference = (SNAPSHOT / (module + ".py")).read_bytes()
+        assert hashlib.sha256(reference).hexdigest() == expected
+        assert ast.dump(ast.parse(restore_execution_definitions(module, Path(loaded.__file__).read_text("utf8")))) == ast.dump(ast.parse(reference.decode("utf8")))
     else:
         assert hashlib.sha256(Path(loaded.__file__).read_bytes()).hexdigest() == expected
 

@@ -70,19 +70,20 @@ def paired_cluster_family(datasets, pair_ids, *, permutations=999, seed=20261015
         raise ValueError("Require at least 99 integer permutations and at least two independent pairs")
     if len(pair_ids) != len(set(pair_ids)):
         raise ValueError("Gene-pair identities must be unique")
-    if any(len(d["differences"]) != len(d["pair_ids"]) for d in datasets):
-        raise ValueError("Pair IDs/matrices disagree")
-    if any(len(d["pair_ids"]) != len(set(d["pair_ids"])) for d in datasets):
-        raise ValueError("Dependent duplicate pairs within a dataset")
-    if not set(p for d in datasets for p in d["pair_ids"]) <= set(pair_ids):
-        raise ValueError("Unknown gene pair in cluster family")
     rng = np.random.default_rng(seed)
     signs = rng.choice(np.array([-1., 1.]), size=(permutations, len(pair_ids)))
     pair_lookup = {key: i for i, key in enumerate(pair_ids)}
     null_max = np.zeros(permutations)
-    windows, clusters = [], []
+    window_frames, clusters = [], []
     for data in datasets:
         check_cancelled()
+        if len(data["differences"]) != len(data["pair_ids"]):
+            raise ValueError("Pair IDs/matrices disagree")
+        if len(data["pair_ids"]) != len(set(data["pair_ids"])):
+            raise ValueError("Dependent duplicate pairs within a dataset")
+        if not set(data["pair_ids"]) <= set(pair_lookup):
+            raise ValueError("Unknown gene pair in cluster family")
+        windows = []
         difference = np.asarray(data["differences"], float)
         if difference.ndim != 2 or len(data["positions"]) != difference.shape[1]:
             raise ValueError("Expected pair x position matrix")
@@ -113,6 +114,7 @@ def paired_cluster_family(datasets, pair_ids, *, permutations=999, seed=20261015
                    "raw_P_new_paired_swaps": (1+exceed[position])/(permutations+1) if np.isfinite(observed[position]) else np.nan,
                    "status": "estimable" if np.isfinite(observed[position]) else "insufficient_independent_pairs"}
             windows.append(row)
+        window_frames.append(pd.DataFrame(windows))
         if not is_scalar:
             for a, b, mass in cluster_runs(observed):
                 contributors = set()
@@ -124,7 +126,7 @@ def paired_cluster_family(datasets, pair_ids, *, permutations=999, seed=20261015
                     "number_correlated_windows": b-a, "cluster_mass": mass,
                     "minimum_matched_pairs_in_cluster": int(n[a:b].min()),
                     "supporting_independent_gene_pairs": len(contributors), "supporting_pair_ids_json": json.dumps(sorted(contributors))})
-    window_table = pd.DataFrame(windows)
+    window_table = pd.concat(window_frames, ignore_index=True) if window_frames else pd.DataFrame()
     if len(window_table):
         p = window_table.raw_P_new_paired_swaps.to_numpy()
         q = np.full(len(p), np.nan)
@@ -139,17 +141,20 @@ def paired_cluster_family(datasets, pair_ids, *, permutations=999, seed=20261015
     return window_table, cluster_table, null_max
 
 
-def _profile(sequence, model, method, width):
-    position, _, motif_width = score_positions(sequence, model)
+def _profile(sequence, model, method, width, *, scorer=None):
+    position, _, motif_width = (scorer or score_positions)(sequence, model)
     span = max(0, len(sequence)-width+1) if width else 1
     output = np.full(span, np.nan)
     pattern = fixed_pattern(model["pattern"])[0] if model["kind"] == "consensus" else ""
+    valid_starts = (np.isfinite(position) if sequence == sequence.upper() and "U" not in sequence else
+                    np.array([set(sequence[a:a+motif_width]) <= set("ACGT")
+                              for a in range(max(0, len(sequence)-motif_width+1))], bool))
     for start in range(span):
         end = start+width if width else len(sequence)
         word = sequence[start:end]
         if len(word) < motif_width:
             continue
-        valid = np.array([set(word[j:j+motif_width]) <= set("ACGT") for j in range(len(word)-motif_width+1)])
+        valid = valid_starts[start:end-motif_width+1]
         if not valid.any():
             continue
         if method == "PWM_mean_odds":
@@ -167,7 +172,8 @@ def _profile(sequence, model, method, width):
 
 
 def build_paired_datasets(rna, matching, models, *, widths=(10, 20, 50),
-                          max_tests=None, max_matrix_cells=None, check_cancelled=lambda: None):
+                          max_tests=None, max_matrix_cells=None, check_cancelled=lambda: None,
+                          stream=False, scorer=None):
     # Obsolete keyword arguments remain accepted; all datasets are retained.
     validate_models(models)
     if not widths or any(not isinstance(w, int) or w < 1 for w in widths):
@@ -180,31 +186,32 @@ def build_paired_datasets(rna, matching, models, *, widths=(10, 20, 50),
     # body/regulatory profiles whose RNA origins differ for short flanks.
     regions = rna[rna.layer.isin(["affected_sequence", "regulatory_pre_mRNA"])]
     lookup = {(r["event_id"], r["region"]): r["sequence"] for r in regions.to_dict("records")}
-    datasets, tests, cells = [], 0, 0
-    for (kind, direction), group in pairs.groupby(["event_type", "direction"], sort=True):
-        for region in sorted(set(regions.loc[regions.event_type.eq(kind), "region"])):
-            seq_pairs = [(lookup.get((r.foreground_event, region), ""), lookup.get((r.background_event, region), "")) for r in group.itertuples()]
-            for token, model in models.items():
-                methods = ("PWM_mean_odds",) if model["kind"] == "PWM" else ("finite_nonoverlap_counts", "overlapping_union_coverage")
-                for width in (0, *sorted(set(widths))):
-                    span = 1 if not width else max([max(0, min(len(a), len(b))-width+1) for a, b in seq_pairs], default=0)
-                    # Keep an explicit NA row when no sequence can hold this window.
-                    span = max(1, span)
-                    for method in methods:
-                        tests += span
-                        cells += len(group)*span
-                        check_cancelled()
-                        diff = np.full((len(group), span), np.nan)
-                        for i, (a, b) in enumerate(seq_pairs):
-                            if not a or not b:
-                                continue
-                            x, y = _profile(a, model, method, width), _profile(b, model, method, width)
-                            if region.endswith("acceptor_intron") and width:
-                                x, y = x[::-1], y[::-1]
-                            n = min(len(x), len(y), span)
-                            diff[i, :n] = x[:n]-y[:n]
-                        datasets.append({"meta": {"event_type": kind, "direction": direction, "model_id": token,
-                            "RBP": model.get("RBPs", ""), "region": region, "method": method, "window_nt": width,
-                            "coordinate_system": "distance upstream from masked acceptor edge (-20nt), 3prime-aligned" if region.endswith("acceptor_intron") else "distance from masked donor edge (+6nt)" if region.endswith("donor_intron") else "affected RNA 5prime-relative"},
-                            "pair_ids": group.pair_id.tolist(), "positions": list(range(span)), "differences": diff})
-    return datasets, pairs.pair_id.tolist()
+    from .motiftrace_events import ScoringCache
+    def iterate():
+        for (kind, direction), group in pairs.groupby(["event_type", "direction"], sort=True):
+            for region in sorted(set(regions.loc[regions.event_type.eq(kind), "region"])):
+                seq_pairs = [(lookup.get((r.foreground_event, region), ""), lookup.get((r.background_event, region), "")) for r in group.itertuples()]
+                for token, model in models.items():
+                    scan = scorer or ScoringCache()
+                    methods = ("PWM_mean_odds",) if model["kind"] == "PWM" else ("finite_nonoverlap_counts", "overlapping_union_coverage")
+                    for width in (0, *sorted(set(widths))):
+                        span = 1 if not width else max([max(0, min(len(a), len(b))-width+1) for a, b in seq_pairs], default=0)
+                        # Keep an explicit NA row when no sequence can hold this window.
+                        span = max(1, span)
+                        for method in methods:
+                            check_cancelled()
+                            diff = np.full((len(group), span), np.nan)
+                            for i, (a, b) in enumerate(seq_pairs):
+                                if not a or not b:
+                                    continue
+                                x, y = _profile(a, model, method, width, scorer=scan), _profile(b, model, method, width, scorer=scan)
+                                if region.endswith("acceptor_intron") and width:
+                                    x, y = x[::-1], y[::-1]
+                                n = min(len(x), len(y), span)
+                                diff[i, :n] = x[:n]-y[:n]
+                            yield {"meta": {"event_type": kind, "direction": direction, "model_id": token,
+                                "RBP": model.get("RBPs", ""), "region": region, "method": method, "window_nt": width,
+                                "coordinate_system": "distance upstream from masked acceptor edge (-20nt), 3prime-aligned" if region.endswith("acceptor_intron") else "distance from masked donor edge (+6nt)" if region.endswith("donor_intron") else "affected RNA 5prime-relative"},
+                                "pair_ids": group.pair_id.tolist(), "positions": list(range(span)), "differences": diff}
+    datasets = iterate()
+    return (datasets if stream else list(datasets)), pairs.pair_id.tolist()

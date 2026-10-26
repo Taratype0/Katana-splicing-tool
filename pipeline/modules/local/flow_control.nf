@@ -55,6 +55,8 @@ process KATANA_FLOW_PLAN {
     val project_filename
     path flow_config, stageAs: 'flow-config'
     val flow_config_filename
+    val configuration_content
+    val project_manifest_content
 
     output:
     path 'plan.json', emit: plan

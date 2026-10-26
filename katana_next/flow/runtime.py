@@ -108,7 +108,8 @@ def load_plan_task(plan_path: str | Path, task_id: str, project_path=None):
         raise ValueError(f"Task is not declared in this plan: {task_id}")
     manifest = Path(project_path or plan["project_manifest"]).expanduser()
     manifest = (manifest if manifest.is_absolute() else path.parent / manifest).resolve()
-    return path, plan, matches[0], manifest
+    from .model import task_execution_plan
+    return path, task_execution_plan(plan, task_id), matches[0], manifest
 
 
 def validate_receipt(path: str | Path, *, plan: dict | None = None,
@@ -122,7 +123,8 @@ def validate_receipt(path: str | Path, *, plan: dict | None = None,
     signed = {k: v for k, v in value.items() if k != "receipt_sha256"}
     if value.get("receipt_sha256") != canonical_hash(signed):
         raise ValueError(f"Task receipt content identity is invalid: {path}")
-    if plan is not None and value.get("plan_id") != plan.get("plan_id"):
+    from .model import receipt_plan_id
+    if plan is not None and value.get("plan_id") != receipt_plan_id(plan, value.get("task_id")):
         raise ValueError("Task receipt belongs to a different execution plan")
     if task is not None and (value.get("task_id") != task.get("id") or
                              value.get("task_contract_sha256") != canonical_hash(task)):
@@ -140,6 +142,7 @@ def validate_receipt(path: str | Path, *, plan: dict | None = None,
 
 
 def _parent_receipts(paths, plan, task, manifest_sha):
+    from .model import receipt_plan_id
     observed = {}
     expected = set(task.get("dependencies", []))
     declared = {row["id"]: row for row in plan["tasks"]}
@@ -149,7 +152,7 @@ def _parent_receipts(paths, plan, task, manifest_sha):
             location /= "task.receipt.json"
         header = read_json(location)
         identity = header.get("task_id")
-        if identity not in declared or header.get("plan_id") != plan.get("plan_id"):
+        if identity not in declared or header.get("plan_id") != receipt_plan_id(plan, identity):
             raise ValueError("Dependency inputs include an unknown task or execution plan")
         # A level-wide Nextflow channel can supply earlier, unrelated receipts.
         # Only the declared parents are consumed or have their large ledgers

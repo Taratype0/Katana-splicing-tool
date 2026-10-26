@@ -1,7 +1,7 @@
 {
   "schema": "katana.motiftrace_integration/v1",
   "scientific_release": "1.0.0-frozen.20261017",
-  "integration_version": "1.0.0.post6",
+  "integration_version": "1.0.0.post7",
   "frozen_source_archive_sha256": "fe3f0220d16940a7d90f06a22320d0dee7aa8ebc3d7186f76a131a6d351a5778",
   "frozen_release_manifest_sha256": "d8329931ecb1f453897cb2f8d157dff4fe046c7746d3e10805cfdc43db98357e",
   "scientific_parameter_changes": false,
@@ -22,9 +22,9 @@
     },
     "katana_next/science/motiftrace_clusters.py": {
       "frozen_sha256": "c4f2937ad5404e6a35990ee7e351bab89ebd36f839f49e001966d00b2d5001e2",
-      "current_sha256": "8d8f765dc17b8826067ffbf47ea909de72507e3b67f738b948ede0e2555ef6bb",
+      "current_sha256": "e21bc6c26dc4530f3766606a53fc5c3b50d76e4f8612a3c508936ad773b28b87",
       "same": false,
-      "change_kind": "execution_capacity_guards_removed",
+      "change_kind": "execution_scoring_reuse_and_streaming",
       "frozen_snapshot": "tests/fixtures/frozen_motiftrace_capacity_20261017/motiftrace_clusters.py"
     },
     "katana_next/science/motiftrace_consequences.html": {
@@ -34,8 +34,9 @@
     },
     "katana_next/science/motiftrace_consequences.py": {
       "frozen_sha256": "7cf122e48e87caf482da542758e625ce69bc23be3d2f16d0af1e03e25f82ccf1",
-      "current_sha256": "7cf122e48e87caf482da542758e625ce69bc23be3d2f16d0af1e03e25f82ccf1",
-      "same": true
+      "current_sha256": "2fa0b75ce8a667782de76bb18c04e052c164425c5971e29d8931947801051886",
+      "same": false,
+      "change_kind": "execution_scoring_reuse_and_streaming"
     },
     "katana_next/science/motiftrace_continuous.py": {
       "frozen_sha256": "24f92d0e356f91d8d0b1bc641318e06273befcbb30e4ff4a2b06088f3254d3c8",
@@ -51,9 +52,9 @@
     },
     "katana_next/science/motiftrace_events.py": {
       "frozen_sha256": "4b85600fa8741133150e50ab35d7976035311ce9d47a9552c9bb391957c90f7e",
-      "current_sha256": "1de1e0882c2729934bb842daba4d3ea7679da79557143d1bfb55a4adb437cc90",
+      "current_sha256": "6fdcab1025a823131112b17a34dfeb472b056d5eb7459e31d9a378cf5087e098",
       "same": false,
-      "change_kind": "execution_capacity_guards_removed",
+      "change_kind": "execution_scoring_reuse_and_streaming",
       "frozen_snapshot": "tests/fixtures/frozen_motiftrace_capacity_20261017/motiftrace_events.py"
     },
     "katana_next/science/motiftrace_exact.py": {
@@ -218,11 +219,45 @@
     "pyproject.toml": "fde863bea07a27c8cff77ba1c2ec186d7b745fbf0a47a0f50c7704bfac534a5d",
     "katana_next/workflows/motiftrace_consequences.py": "0e2b02fc0d0d58f6fbb4cd11915226aa646a905eee71332f1d0b39c4e137715b",
     "katana_next/workflows/rbp_mechanism.py": "f8a149a3cf641c25b30c2808346639afc91d0b0895968d4a0d5e71abbc4cd2ad",
-    "katana_next/science/motiftrace_execution.py": "2d31e648395fe62acf471a78ea7b5a5d2c773f28672402270b0e370d979a61de",
+    "katana_next/science/motiftrace_execution.py": "e4fa92e2f008e0c3c1d3d2d9cacdaf3d1d553907658d1ac73ef79947b7164564",
     "katana_next/science/motiftrace_budget.py": "900b8a0f751f8cc8b3e85964bd0203a1c3f9047b987de5fffc22189628d00534",
     "katana_next/reports/motif_native_index.py": "3c583ec58e00a999d66bdbc742a8fad487e4dd6b6532cd26938c9051551df244"
   },
   "interface_revisions": [
+    {
+      "integration_version": "1.0.0.post7",
+      "revision": "bounded-scoring-cache-streamed-family-20261026",
+      "scientific_release_unchanged": true,
+      "scientific_calculation_changes": false,
+      "scientific_parameter_changes": false,
+      "previous_record_snapshot": "tests/fixtures/performance_reference_20261026/integration.before-performance.json",
+      "previous_integration_record_sha256": "92f62d49ee83d8e17998615103b64f0c9bbcb4e43f39caf45a926761eb83f33b",
+      "reference_sources": "tests/fixtures/performance_reference_20261026/sources.json",
+      "execution_definition_boundary": "tests/fixtures/performance_reference_20261026/execution-definitions.json",
+      "numerical_regression": "tests/public_baseline/test_performance_regression.py",
+      "changes": [
+        {
+          "path": "katana_next/science/motiftrace_events.py",
+          "previous_sha256": "1de1e0882c2729934bb842daba4d3ea7679da79557143d1bfb55a4adb437cc90",
+          "current_sha256": "6fdcab1025a823131112b17a34dfeb472b056d5eb7459e31d9a378cf5087e098"
+        },
+        {
+          "path": "katana_next/science/motiftrace_clusters.py",
+          "previous_sha256": "8d8f765dc17b8826067ffbf47ea909de72507e3b67f738b948ede0e2555ef6bb",
+          "current_sha256": "e21bc6c26dc4530f3766606a53fc5c3b50d76e4f8612a3c508936ad773b28b87"
+        },
+        {
+          "path": "katana_next/science/motiftrace_consequences.py",
+          "previous_sha256": "7cf122e48e87caf482da542758e625ce69bc23be3d2f16d0af1e03e25f82ccf1",
+          "current_sha256": "2fa0b75ce8a667782de76bb18c04e052c164425c5971e29d8931947801051886"
+        },
+        {
+          "path": "katana_next/science/motiftrace_execution.py",
+          "previous_sha256": "2d31e648395fe62acf471a78ea7b5a5d2c773f28672402270b0e370d979a61de",
+          "current_sha256": "e4fa92e2f008e0c3c1d3d2d9cacdaf3d1d553907658d1ac73ef79947b7164564"
+        }
+      ]
+    },
     {
       "integration_version": "1.0.0.post6",
       "revision": "remove-fixed-motiftrace-capacity-limits-20261026",
@@ -471,7 +506,7 @@
     }
   ],
   "execution_adapter": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "scientific_workflow_version": "1.1.0",
     "max_tests_default": null,
     "max_matrix_cells_default": null,

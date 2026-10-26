@@ -226,7 +226,7 @@ class Builder:
         destination = self.output / 'outputs' / prefix / (sha[:12] + '-' + source.name)
         destination.parent.mkdir(parents=True, exist_ok=True)
         from .storage import copy_payload
-        copy_payload(source, destination, store=self.result_store, expected_sha=sha)
+        copy_payload(source, destination, store=self.result_store, expected_sha=sha, owned_root=getattr(self, "owned_input_root", None))
         if source.stat().st_size != before.st_size or source.stat().st_mtime_ns != before.st_mtime_ns or digest(destination) != sha:
             raise RuntimeError('Source changed during report collection: ' + str(source))
         relative = destination.relative_to(self.output).as_posix()
@@ -508,7 +508,7 @@ class Builder:
 
 def build_report(project, output_dir, *, catalog=None, event_set='stable_significant',
                  compact=False, create_archive=True, archive_path=None, result_store=None,
-                 path_mappings=None):
+                 path_mappings=None, owned_input_root=None):
     output = Path(output_dir).expanduser().resolve()
     if output.exists() and any(output.iterdir()):
         raise FileExistsError('Choose a new report output directory; completed reports are preserved.')
@@ -520,6 +520,7 @@ def build_report(project, output_dir, *, catalog=None, event_set='stable_signifi
     output.mkdir(parents=True,exist_ok=True)
     shutil.copytree(ASSET_ROOT,output/'assets',dirs_exist_ok=True)
     builder=Builder(source,output,event_set)
+    builder.owned_input_root = owned_input_root
     builder.create_archive=False
     builder.compact_tables=compact
     if result_store:

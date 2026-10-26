@@ -75,15 +75,29 @@ def create_plan(project, config):
         tasks.append(task)
         return identity
 
-    add("audit", "project.audit")
-    add("quality", "quality.stable_as", ["audit"], {"contrast_ids": contrasts})
+    add("audit", "project.audit", scope={"unit": "project"})
+    molecular = {}
+    qualities = []
+    for cid in contrasts:
+        suffix = "-" + _token(cid) if len(contrasts) > 1 else ""
+        scope = {"contrast_ids": [cid]}
+        quality = add("quality" + suffix, "quality.stable_as", ["audit"], scope, scope)
+        qualities.append(quality)
+        branch = {}
+        for layer in ("as", "deg", "dtu"):
+            branch[layer] = add(layer + suffix, "differential." + layer, [quality], scope, scope)
+        molecular[cid] = branch
+    # Candidate membership contains cross-comparison patterns. Join completed
+    # branches once here; splitting this summary would remove pairwise results.
+    add("evidence", "prioritize.evidence", [molecular[c][layer] for c in contrasts for layer in ("as", "deg", "dtu")],
+        {"contrast_ids": contrasts, "event_set": event_set})
+    for branch in molecular.values():
+        branch["evidence"] = "evidence"
     if enabled["landscape"]:
-        add("landscape", "landscape.bulk", ["quality"], {"contrast_ids": contrasts})
-    for suffix in ("as", "deg", "dtu"):
-        add(suffix, "differential." + suffix, ["quality"], {"contrast_ids": contrasts})
-    add("evidence", "prioritize.evidence", ["as", "deg", "dtu"], {"contrast_ids": contrasts, "event_set": event_set})
+        add("landscape", "landscape.bulk", qualities, {"contrast_ids": contrasts})
     if enabled["cross_comparison"] and len(contrasts) >= 2:
-        add("overlap", "differential.cross_comparison", ["as"], {"contrast_ids": contrasts, "event_set": event_set})
+        add("overlap", "differential.cross_comparison", [molecular[c]["as"] for c in contrasts],
+            {"contrast_ids": contrasts, "event_set": event_set})
     parallel_settings = settings.get("parameters", {}).get("prioritize.motiftrace_parallel", {})
     parallel_requested = bool(parallel_settings.get("parallel_bundle_asset_id")) or any(
         asset.kind == "motiftrace_parallel_results" for asset in manifest.assets)
@@ -92,19 +106,19 @@ def create_plan(project, config):
         selection = {"analysis_id": "differential.as", "name": "Differential AS events",
                      "event_set": "stable_significant", "contrast_ids": [cid], "scope_policy": "RS-DAS required for motif/CLIP"}
         for foreground in (("deg", "das", "dtu", "dexseq") if enabled["enrichment"] else ()):
-            add("enrichment-" + foreground + "-" + token, "prioritize.enrichment", ["evidence"],
+            add("enrichment-" + foreground + "-" + token, "prioritize.enrichment", [molecular[cid]["evidence"]],
                 {"contrast_ids": [cid], "foreground_source": foreground, "background_source": "match_foreground", "event_set": event_set}, scope)
         if enabled["rbp_identity"]:
-            add("rbp-identity-" + token, "prioritize.rbp_support", ["evidence"],
+            add("rbp-identity-" + token, "prioritize.rbp_support", [molecular[cid]["evidence"]],
                 {"contrast_ids": [cid], "foreground_source": "deg", "background_source": "match_foreground", "event_set": event_set}, scope)
         if enabled["motiftrace"]:
-            add("motiftrace-" + token, "prioritize.motiftrace_consequences", ["as"],
+            add("motiftrace-" + token, "prioritize.motiftrace_consequences", [molecular[cid]["as"]],
                 {"contrast_ids": [cid]}, scope, selection=selection)
         if enabled["motif_binding"]:
-            add("motif-boundaries-" + token, "prioritize.rbp_mechanism", ["as"],
+            add("motif-boundaries-" + token, "prioritize.rbp_mechanism", [molecular[cid]["as"]],
                 {"contrast_ids": [cid], "binding_mode": "required"}, scope, selection=selection)
         if enabled["mapp"] and parallel_requested:
-            add("motif-parallel-" + token, "prioritize.motiftrace_parallel", ["as"],
+            add("motif-parallel-" + token, "prioritize.motiftrace_parallel", [molecular[cid]["as"]],
                 {"contrast_ids": [cid]}, scope)
 
     qc = settings.get("qc", {})
@@ -214,7 +228,7 @@ def create_plan(project, config):
                 if contrast.contrast_id not in contrasts:
                     continue
                 sample_ids = list(contrast.numerator.sample_ids) + list(contrast.denominator.sample_ids)
-                prepare = add("mapp-prepare-" + _token(contrast.contrast_id), "flow.mapp.prepare", ["as"],
+                prepare = add("mapp-prepare-" + _token(contrast.contrast_id), "flow.mapp.prepare", [molecular[contrast.contrast_id]["as"]],
                     {**mapp.get("prepare_parameters", {}), "all_windows": True, "sample_ids": sample_ids,
                      "comparison_id": contrast.contrast_id}, {"contrast_ids": [contrast.contrast_id]},
                     adapter="mapp.prepare", inputs={**mapp_inputs, "gtf": str(manifest.annotation.gtf or ""),
@@ -228,7 +242,7 @@ def create_plan(project, config):
     # Bind the code actually imported by this interpreter, including source
     # checkouts that use dependencies from a separately installed distribution.
     from katana_next import __version__ as package_version
-    return seal_plan({"project_manifest": str(project_path), "project_manifest_sha256": file_sha256(project_path),
+    return seal_plan({"task_cache_scope": "ancestry-v1", "project_manifest": str(project_path), "project_manifest_sha256": file_sha256(project_path),
                       "project_id": manifest.project_id, "package_version": package_version,
                       "report_specification": "report-approved-20261022-01", "report_profile": "complete",
                       "contrast_ids": contrasts, "event_set": event_set,

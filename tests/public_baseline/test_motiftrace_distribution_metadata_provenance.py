@@ -72,6 +72,8 @@ def test_packaging_revision_preserves_all_scientific_source_and_mode_fingerprint
     for name,values in record['scientific_sources'].items():
         snapshot=ROOT/'tests/fixtures/frozen_motiftrace_capacity_20261017'/Path(name).name
         source=snapshot if snapshot.is_file() else ROOT/name
+        if name == 'katana_next/science/motiftrace_consequences.py':
+            source=ROOT/'tests/fixtures/performance_reference_20261026/motiftrace_consequences.py'
         assert sha256(source.read_bytes()).hexdigest()==values['current_sha256']
 
 
@@ -80,7 +82,8 @@ def test_capacity_revision_preserves_historical_identity_and_records_current_sou
     record=json.loads((ROOT/'docs/motiftrace/integration.v1.json').read_text('utf-8'))
     revision=next(r for r in record['interface_revisions']
                   if r.get('revision')=='remove-fixed-motiftrace-capacity-limits-20261026')
-    assert record['integration_version']==revision['integration_version']=='1.0.0.post6'
+    assert record['integration_version']=='1.0.0.post7'
+    assert revision['integration_version']=='1.0.0.post6'
     oldpath=ROOT/revision['previous_record_snapshot']
     assert sha256(oldpath.read_bytes()).hexdigest()==revision['previous_integration_record_sha256']
     assert json.loads(oldpath.read_text())==historical

@@ -6,7 +6,7 @@ import tempfile
 from .sources import digest
 
 
-def copy_payload(source, destination, *, store=None, expected_sha=None):
+def copy_payload(source, destination, *, store=None, expected_sha=None, owned_root=None):
     source, destination = Path(source), Path(destination)
     identity = expected_sha or digest(source)
     before = source.stat()
@@ -45,6 +45,10 @@ def copy_payload(source, destination, *, store=None, expected_sha=None):
             shutil.copyfile(canonical,destination)
             os.utime(destination, ns=(before.st_atime_ns, before.st_mtime_ns))
             mode = 'store_copy'
+    elif owned_root is not None and source.resolve().is_relative_to(Path(owned_root).resolve()) and not source.is_symlink():
+        from katana_next.flow.file_io import retain_owned_file
+        retain_owned_file(source, destination)
+        mode = 'owned_hardlink_or_copy'
     else:
         shutil.copyfile(source,destination)
         os.utime(destination, ns=(before.st_atime_ns, before.st_mtime_ns))

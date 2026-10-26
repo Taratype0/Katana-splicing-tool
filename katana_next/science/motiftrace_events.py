@@ -197,7 +197,31 @@ def score_positions(sequence, model, background=(.25, .25, .25, .25)):
     return scores, candidate, width
 
 
-def trace_instances(rna, events, models, *, check_cancelled=lambda: None):
+class ScoringCache:
+    """Per-analysis bounded memoization; eviction never removes scientific tests."""
+    def __init__(self, max_bytes=32 * 1024 * 1024):
+        from collections import OrderedDict
+        self.values = OrderedDict()
+        self.bytes = 0
+        self.max_bytes = max_bytes
+
+    def __call__(self, sequence, model):
+        key = (sequence, json.dumps(model, sort_keys=True, separators=(',', ':')))
+        if key in self.values:
+            self.values.move_to_end(key)
+            return self.values[key][0]
+        value = score_positions(sequence, model)
+        size = value[0].nbytes + value[1].nbytes + len(sequence) + len(key[1])
+        if size <= self.max_bytes:
+            while self.values and self.bytes + size > self.max_bytes:
+                _, (_, removed) = self.values.popitem(last=False)
+                self.bytes -= removed
+            self.values[key] = (value, size)
+            self.bytes += size
+        return value
+
+
+def trace_instances(rna, events, models, *, check_cancelled=lambda: None, scorer=None):
     """Identify loci, not net hit-count changes; PWM candidates are not P-values."""
     validate_models(models)
     records, changes, weighted = [], [], []
@@ -208,7 +232,7 @@ def trace_instances(rna, events, models, *, check_cancelled=lambda: None):
         for token, model in models.items():
             loci = {}
             for form in group.to_dict("records"):
-                scores, candidate, width = score_positions(form["sequence"], model)
+                scores, candidate, width = (scorer or score_positions)(form["sequence"], model)
                 for start in np.flatnonzero(candidate):
                     start = int(start)
                     blocks = coalesce(mapped_blocks(json.loads(form["blocks_json"]), form["strand"], start, start+width), form["strand"])
@@ -262,7 +286,7 @@ def psi_values(row):
     return output
 
 
-def paired_form_scores(rna, events, models, *, check_cancelled=lambda: None):
+def paired_form_scores(rna, events, models, *, check_cancelled=lambda: None, scorer=None):
     """Descriptive opportunity-normalized form scores, including zero-hit events."""
     rows = []
     event_lookup = events.set_index("event_id")
@@ -275,7 +299,7 @@ def paired_form_scores(rna, events, models, *, check_cancelled=lambda: None):
                 "score_definition": "mean odds over valid starts" if model["kind"] == "PWM" else "overlapping hits per valid motif start",
                 "interpretation": "descriptive local-form sequence score, not binding or a per-event statistical test"}
             for form in group.to_dict("records"):
-                positions, _, _ = score_positions(form["sequence"], model)
+                positions, _, _ = (scorer or score_positions)(form["sequence"], model)
                 valid = np.isfinite(positions)
                 record[form["region"]+"_valid_starts"] = int(valid.sum())
                 record[form["region"]+"_normalized_score"] = float(np.mean(positions[valid])) if valid.any() else np.nan

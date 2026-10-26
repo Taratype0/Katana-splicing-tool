@@ -1,5 +1,6 @@
 """Collect independently completed task products for the fixed report renderer."""
 from __future__ import annotations
+from .model import receipt_plan_id
 
 import copy
 from datetime import datetime, timezone
@@ -69,7 +70,7 @@ def validate_collection(path):
         if (proof.get("receipt_sha256") != canonical_hash(unsigned) or
             proof.get("receipt_sha256") != recorded[task_id].get("receipt_sha256") or
             proof.get("task_contract_sha256") != canonical_hash(spec) or
-            proof.get("plan_id") != plan["plan_id"] or
+            proof.get("plan_id") != receipt_plan_id(plan, task_id) or
             proof.get("status") != recorded[task_id].get("status") or
             proof.get("status") not in {"completed", "reused", "not_applicable"} or
             proof.get("source_project_manifest_sha256") != value.get("source_project_manifest_sha256")):

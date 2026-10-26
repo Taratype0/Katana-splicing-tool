@@ -58,6 +58,8 @@ def assign_levels(tasks):
 def seal_plan(payload):
     payload = {**payload, "schema": PLAN_SCHEMA, "tasks": assign_levels(payload["tasks"])}
     payload.pop("plan_id", None)
+    if payload.get("task_cache_scope") == "ancestry-v1":
+        payload["execution_plans"] = {t["id"]: task_execution_plan(payload, t["id"]) for t in payload["tasks"]}
     return {**payload, "plan_id": canonical_hash(payload)}
 
 
@@ -82,3 +84,27 @@ def validate_plan(plan):
 def load_plan(path):
     return validate_plan(read_json(path))
 
+
+
+def task_execution_plan(plan, task_id):
+    """Bind a task to its own unchanged ancestry, not unrelated report options."""
+    if plan.get("task_cache_scope") not in {"ancestry-v1", "projection-v1"}:
+        return plan
+    by_id = {t["id"]: t for t in plan["tasks"]}
+    if task_id not in by_id:
+        raise ValueError("Unknown task in execution-plan receipt: " + str(task_id))
+    needed = set()
+    def visit(key):
+        if key in needed:
+            return
+        needed.add(key)
+        for parent in by_id[key].get("dependencies", []):
+            visit(parent)
+    visit(task_id)
+    payload = {key: plan[key] for key in ("project_manifest", "project_manifest_sha256", "project_id", "package_version") if key in plan}
+    payload.update(task_cache_scope="projection-v1", tasks=[t for t in plan["tasks"] if t["id"] in needed])
+    return seal_plan(payload)
+
+
+def receipt_plan_id(plan, task_id):
+    return task_execution_plan(plan, task_id)["plan_id"]

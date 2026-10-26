@@ -9,7 +9,7 @@ import json
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 
-from .model import load_plan
+from .model import load_plan, receipt_plan_id
 from .runtime import canonical_hash, file_hash, file_record, read_json, write_json
 
 
@@ -70,7 +70,7 @@ def _task_proof(root, record, plan):
     value = read_json(path)
     if (value.get("schema") != "katana.flow.task_receipt/v1" or
         value.get("status") not in {"completed", "reused"} or
-        value.get("plan_id") != plan["plan_id"] or
+        value.get("plan_id") != receipt_plan_id(plan, value.get("task_id")) or
         value.get("receipt_sha256") != canonical_hash({k: v for k, v in value.items() if k != "receipt_sha256"})):
         raise ValueError("Presentation requires an actually completed flow task")
     task = next((item for item in plan["tasks"] if item["id"] == value.get("task_id")), None)

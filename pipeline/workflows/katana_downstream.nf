@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
 
 include { KATANA_FLOW_PLAN; KATANA_FLOW_VALIDATE_PLAN; KATANA_FLOW_COLLECT; KATANA_FLOW_REPORT } from '../modules/local/flow_control'
 include { KATANA_FLOW_TASK as AUDIT } from '../modules/local/flow_task'
@@ -42,7 +43,7 @@ def tasksForGroup(planFile, group) {
             }
         }
     }
-    plan.tasks.findAll { it.execution_group == group }.collect { tuple(it, planFile) }
+    plan.tasks.findAll { it.execution_group == group }.collect { tuple(it, JsonOutput.toJson(plan.execution_plans ? plan.execution_plans[it.id] : plan)) }
 }
 
 def readyTasks(plan, group, completed) {
@@ -82,7 +83,12 @@ workflow KATANA_DOWNSTREAM {
         plan = original_plan.combine(KATANA_FLOW_VALIDATE_PLAN.out.receipt)
             .map { original, checked -> original }
     } else {
-        KATANA_FLOW_PLAN(project_root, project_filename, flow_config, flow_config_filename)
+        // Directory metadata alone does not bind edits inside a configuration directory.
+        // These small content inputs invalidate planning, while workers consume only their ancestry.
+        configuration_content = flow_config.map { it.resolve(flow_config_filename).text }
+        project_manifest_content = project_root.map { it.resolve(project_filename).text }
+        KATANA_FLOW_PLAN(project_root, project_filename, flow_config, flow_config_filename,
+            configuration_content, project_manifest_content)
         plan = KATANA_FLOW_PLAN.out.plan
     }
 

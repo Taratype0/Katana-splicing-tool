@@ -23,7 +23,9 @@ def write_archive(output, archive_path=None):
                          compresslevel=6, strict_timestamps=False) as archive:
         for path in sorted(output.rglob('*')):
             if path.is_file() and path != archive_path:
-                archive.write(path, path.relative_to(output).as_posix())
+                compressed = path.suffix.lower() in {'.gz', '.zip', '.png', '.jpg', '.jpeg', '.webp', '.parquet'}
+                archive.write(path, path.relative_to(output).as_posix(),
+                              compress_type=zipfile.ZIP_STORED if compressed else zipfile.ZIP_DEFLATED)
     return archive_path
 
 

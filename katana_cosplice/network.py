@@ -1445,22 +1445,6 @@ def fit_network(
             if reliability is not None
             else None
         )
-        (
-            correlation,
-            adjacency,
-            tom,
-            linkage_matrix,
-            base_as_adjacency,
-            gene_prior_values,
-        ) = _tom_hierarchy(
-            selected,
-            settings,
-            event_reliability=selected_reliability,
-            reliability_power=reliability_power,
-            gene_prior=gene_prior,
-            gene_prior_weight=gene_prior_weight,
-            precomputed_correlation=precomputed_correlation,
-        )
         if settings.module_detection == "wgcna_blockwise":
             from katana_cosplice.r_wgcna import exact_wgcna_labels
 
@@ -1483,6 +1467,24 @@ def fit_network(
                 reliability_power=reliability_power,
                 precomputed_correlation=precomputed_correlation,
             )
+            raw_labels = None
+        (
+            correlation,
+            adjacency,
+            tom,
+            linkage_matrix,
+            base_as_adjacency,
+            gene_prior_values,
+        ) = _tom_hierarchy(
+            selected,
+            settings,
+            event_reliability=selected_reliability,
+            reliability_power=reliability_power,
+            gene_prior=gene_prior,
+            gene_prior_weight=gene_prior_weight,
+            precomputed_correlation=precomputed_correlation,
+        )
+        if settings.module_detection == "wgcna_blockwise":
             raw_labels = None
         elif settings.module_detection == "dynamic_tree_cut":
             distance = np.clip(1.0 - tom, 0.0, 1.0)

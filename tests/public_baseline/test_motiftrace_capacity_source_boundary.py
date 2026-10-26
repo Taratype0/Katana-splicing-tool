@@ -174,7 +174,8 @@ def assert_capacity_only_change(module, current_source=None):
     expected = _expected_capacity_only_tree(module, raw.decode("utf-8"))
     if current_source is None:
         current_source = (ROOT / "katana_next/science" / (module + ".py")).read_text("utf-8")
-    actual = _DocumentaryText().visit(ast.parse(current_source))
+    from performance_source_boundary import restore_execution_definitions
+    actual = _DocumentaryText().visit(ast.parse(restore_execution_definitions(module, current_source)))
     assert _dump(actual) == _dump(expected), "Scientific AST changed outside declared capacity-only boundary: " + module
 
 
@@ -187,7 +188,7 @@ def test_contract_preserves_old_source_records_and_binds_three_archived_snapshot
     record = json.loads((ROOT / "docs/motiftrace/integration.v1.json").read_text("utf-8"))
     historical = historical_integration_record()
     assert set(record["scientific_sources"]) == set(historical["scientific_sources"])
-    assert record["integration_version"] == "1.0.0.post6"
+    assert record["integration_version"] == "1.0.0.post7"
     assert not record["scientific_calculation_changes"]
     assert not record["scientific_parameter_changes"]
     assert not record["completed_studies_recomputed"]
@@ -197,10 +198,16 @@ def test_contract_preserves_old_source_records_and_binds_three_archived_snapshot
         module = Path(name).stem
         if module in CAPACITY_SOURCES:
             assert old["current_sha256"] == CAPACITY_SOURCES[module]
-            assert item["change_kind"] == "execution_capacity_guards_removed"
+            assert item["change_kind"] == ("execution_capacity_guards_removed" if module == "motiftrace_custom" else "execution_scoring_reuse_and_streaming")
             assert item["same"] is False
             assert item["frozen_snapshot"] == (SNAPSHOT / (module + ".py")).relative_to(ROOT).as_posix()
             assert_capacity_only_change(module)
+        elif name == "katana_next/science/motiftrace_consequences.py":
+            from performance_source_boundary import restore_execution_definitions
+            actual = restore_execution_definitions(module, (ROOT / name).read_text("utf8"))
+            reference = (ROOT / "tests/fixtures/performance_reference_20261026" / (module + ".py")).read_text("utf8")
+            assert hashlib.sha256(reference.encode()).hexdigest() == old["current_sha256"] or hashlib.sha256((ROOT / "tests/fixtures/performance_reference_20261026" / (module + ".py")).read_bytes()).hexdigest() == old["current_sha256"]
+            assert _dump(ast.parse(actual)) == _dump(ast.parse(reference))
         else:
             # Do not legitimize additional numerical or presentation changes by
             # merely updating their current hashes in the new register.

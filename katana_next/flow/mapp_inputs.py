@@ -161,6 +161,44 @@ def prepare_shared(inputs, parameters):
             "comparison": comparison, "included": included, "skipped": skipped, "quantities": quantities}
 
 
+def prepare_event_quantities(shared, parameters):
+    """Window-independent eligibility and TPM sums, preserving original order."""
+    samples = list(parameters["sample_ids"])
+    minimum = float(parameters.get("min_total_tpm", 1.0))
+    min_length = int(parameters.get("min_exon_length", 100))
+    max_length = int(parameters.get("max_exon_length", 1000000))
+    signature = (tuple(samples), minimum, min_length, max_length)
+    if shared.get("event_quantity_signature") == signature:
+        return shared["event_quantities"]
+    included, skipped, quantities = (shared[k] for k in ("included", "skipped", "quantities"))
+    quantified_ids = {sample: set(quantities[sample].index) for sample in samples}
+    rows = []
+    for row in shared["events"].to_dict("records"):
+        i, t = {}, {}
+        key = (row["gene_id"], str(row["chr"]), row["strand"], int(row["upstreamEE"]),
+               int(row["exonStart_0base"]), int(row["exonEnd"]), int(row["downstreamES"]))
+        inc = included.get(key,set())
+        exc = skipped.get((key[0],key[1],key[2],key[3],key[6]),set()) - inc
+        total = inc | exc
+        status = "eligible"
+        if not inc or not exc:
+            status = "no_exact_annotated_included_or_skipped_transcript"
+        elif not min_length <= key[5]-key[4] <= max_length:
+            status = "outside_native_exon_length_range"
+        elif any(not total <= quantified_ids[sample] for sample in samples):
+            status = "missing_quantified_transcript_no_zero_filling"
+        if status == "eligible":
+            i = {s: float(quantities[s].loc[sorted(inc)].sum()) for s in samples}
+            t = {s: float(quantities[s].loc[sorted(total)].sum()) for s in samples}
+            if any(t[s] < minimum for s in samples):
+                status = "native_min_total_TPM_in_every_sample"
+            elif all(i[s] < .00001 for s in samples) or all(t[s]-i[s] < .00001 for s in samples):
+                status = "native_uninformative_exon_in_all_samples"
+        rows.append((row, key, inc, exc, status, i, t))
+    shared.update(event_quantity_signature=signature, event_quantities=rows)
+    return rows
+
+
 def prepare_comparison(spec, out, *, run, sha, executable):
     shared = prepare_shared(spec["inputs"], spec["parameters"])
     windows, outputs = {}, []
@@ -206,26 +244,8 @@ def prepare_inputs(spec, out, *, run, sha, executable, shared=None):
     min_length = int(parameters.get("min_exon_length", 100))
     max_length = int(parameters.get("max_exon_length", 1000000))
     with fasta.fasta.open("rb") as stream:
-        for row in events.to_dict("records"):
-            key = (row["gene_id"], str(row["chr"]), row["strand"], int(row["upstreamEE"]),
-                   int(row["exonStart_0base"]), int(row["exonEnd"]), int(row["downstreamES"]))
-            inc = included.get(key,set())
-            exc = skipped.get((key[0],key[1],key[2],key[3],key[6]),set()) - inc
-            total = inc | exc
-            status = "eligible"
-            if not inc or not exc:
-                status = "no_exact_annotated_included_or_skipped_transcript"
-            elif not min_length <= key[5]-key[4] <= max_length:
-                status = "outside_native_exon_length_range"
-            elif any(not total <= set(quantities[sample].index) for sample in samples):
-                status = "missing_quantified_transcript_no_zero_filling"
-            if status == "eligible":
-                i = {s: float(quantities[s].loc[sorted(inc)].sum()) for s in samples}
-                t = {s: float(quantities[s].loc[sorted(total)].sum()) for s in samples}
-                if any(t[s] < minimum for s in samples):
-                    status = "native_min_total_TPM_in_every_sample"
-                elif all(i[s] < .00001 for s in samples) or all(t[s]-i[s] < .00001 for s in samples):
-                    status = "native_uninformative_exon_in_all_samples"
+        for row, key, inc, exc, base_status, i, t in prepare_event_quantities(shared, parameters):
+            status = base_status
             if status == "eligible":
                 at = (key[4] if key[2] == "+" else key[5]-1) if site == "3ss" else (key[5]-1 if key[2] == "+" else key[4])
                 a,b = (at+start,at+end) if key[2] == "+" else (at+1-end,at+1-start)

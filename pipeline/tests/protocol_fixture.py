@@ -48,7 +48,17 @@ def main() -> None:
     if args.command == "plan":
         document = json.loads(args.config.read_text())
         assert args.project.is_file()
-        write(args.out, {"schema": "test.nextflow_transport/v1", "tasks": document["tasks"]})
+        planned = {"schema": "test.nextflow_transport/v1", "tasks": document["tasks"]}
+        if document.get("task_cache_scope") == "ancestry-v1":
+            import importlib.util
+            source = Path(__file__).resolve().parents[2] / "katana_next/flow/model.py"
+            spec = importlib.util.spec_from_file_location("fixture_plan_model", source)
+            model = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(model)
+            planned = model.seal_plan({**planned, "task_cache_scope": "ancestry-v1",
+                "project_manifest": "project.json", "project_manifest_sha256": "generated-fixture",
+                "report_options": document.get("report_options", {})})
+        write(args.out, planned)
     elif args.command == "runtime-check":
         spec = next(item for item in json.loads(args.plan.read_text())["tasks"] if item["id"] == args.task_id)
         write(args.out, {"task_id": args.task_id, "runtime_label": args.runtime_label,

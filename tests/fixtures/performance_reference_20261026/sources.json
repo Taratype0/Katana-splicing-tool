@@ -1,0 +1,11 @@
+{
+  "commit": "04941d6e9805f48134955275ac9a20ba06b09af6",
+  "sources": {
+    "katana_next/science/motiftrace_events.py": "1de1e0882c2729934bb842daba4d3ea7679da79557143d1bfb55a4adb437cc90",
+    "katana_next/science/motiftrace_clusters.py": "8d8f765dc17b8826067ffbf47ea909de72507e3b67f738b948ede0e2555ef6bb",
+    "katana_next/science/motiftrace_consequences.py": "7cf122e48e87caf482da542758e625ce69bc23be3d2f16d0af1e03e25f82ccf1",
+    "katana_next/flow/mapp_inputs.py": "aa609e9ffd0bfa5a0247405380c5788bec1267556d849a744a6cade80a987b91",
+    "katana_cosplice/network.py": "91ec51d4190fb87f52bb2a6bf4a9aedbc2b1e103fa802898159a54d39049131f",
+    "katana_next/flow/planner.py": "16f0c4af8a87573e41a7dbaf3e7535cd63b07894e768049edccd635fbe9041ac"
+  }
+}
