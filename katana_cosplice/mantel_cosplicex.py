@@ -223,7 +223,7 @@ write.csv(
             ],
             capture_output=True,
             text=True,
-            timeout=1800,
+            timeout=None,
             check=False,
             env=_r_subprocess_env(rscript),
         )

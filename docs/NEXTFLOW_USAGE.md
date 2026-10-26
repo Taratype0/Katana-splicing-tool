@@ -715,3 +715,7 @@ Structure and terminology were checked against official
 on 25 October 2026. Katana formats/defaults above are defined by this release's
 own validator, workflow, importer, planner and CLI, not copied from those tools'
 current options. See [NEXTFLOW_PARAMETERS.md](NEXTFLOW_PARAMETERS.md).
+
+## Selecting analyses and recovering a run
+
+The default runs the complete report. See [analysis and execution options](ANALYSIS_AND_EXECUTION_OPTIONS.md) for per-module opt-outs, resource-only resume, shared MAPP preparation and storage behaviour.

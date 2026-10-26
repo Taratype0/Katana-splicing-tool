@@ -251,7 +251,7 @@ def run_formal_preservation(
             ],
             capture_output=True,
             text=True,
-            timeout=7_200,
+            timeout=None,
             check=False,
             env=_r_subprocess_env(str(executable)),
             cwd=temp,

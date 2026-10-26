@@ -72,22 +72,9 @@ def window_id(start, end):
     return f"u{-start}to0.d0to{end}"
 
 
-def prepare_inputs(spec, out, *, run, sha, executable):
-    """Build one comparison/window using all measurable, exactly mapped SEs."""
-    inputs, parameters = spec["inputs"], spec.get("parameters") or {}
+def prepare_shared(inputs, parameters):
+    """Read GTF/TPM and map transcripts once per comparison, not per window."""
     samples = list(parameters["sample_ids"])
-    if len(samples) < 4 or len(set(samples)) != len(samples):
-        raise ValueError("Native MAEI needs at least four distinct declared biological samples")
-    if set(samples) != set(inputs["quantification"]):
-        raise ValueError("Declare exactly one existing transcript quantification file per selected sample")
-    start, end = int(parameters["window_start"]), int(parameters["window_end"])
-    name = window_id(start, end)
-    site = parameters["site"]
-    if site not in {"3ss", "5ss"}:
-        raise ValueError("Native MAEI site must be 3ss or 5ss")
-    native_counter = Path(inputs["native_root"]) / COUNTER
-    if sha(native_counter) != inputs["counter_sha256"]:
-        raise ValueError("Official MAPP kmer counter source changed")
     event_path = Path(inputs["events"])
     events = pd.read_parquet(event_path) if event_path.suffix == ".parquet" else pd.read_csv(event_path, sep="\t")
     source_event_rows = len(events)
@@ -169,6 +156,47 @@ def prepare_inputs(spec, out, *, run, sha, executable):
                 if re.search(r"\.\d+$", raw_id) and re.search(r"\.\d+$", annotated) and raw_id != annotated:
                     raise ValueError(f"{sample}: transcript quantification/GTF version mismatch: {raw_id} / {annotated}")
         quantities[sample] = pd.Series(values.to_numpy(), index=keys)
+    return {"events": events, "event_path": event_path, "gtf": gtf,
+            "source_event_rows": source_event_rows, "comparison_event_rows": comparison_event_rows,
+            "comparison": comparison, "included": included, "skipped": skipped, "quantities": quantities}
+
+
+def prepare_comparison(spec, out, *, run, sha, executable):
+    shared = prepare_shared(spec["inputs"], spec["parameters"])
+    windows, outputs = {}, []
+    for window in native_windows():
+        key = window["site"] + ":" + window_id(window["window_start"], window["window_end"])
+        child = out / key.replace(":", "-")
+        child.mkdir()
+        task = {**spec, "parameters": {**spec["parameters"], **window}}
+        evidence, paths = prepare_inputs(task, child, run=run, sha=sha, executable=executable, shared=shared)
+        windows[key] = evidence["maei_inputs"]
+        outputs.extend(paths)
+    return {"maei_windows": windows, "shared_preparation_count": 1,
+            "comparison_id": spec["parameters"]["comparison_id"], "window_count": len(windows)}, outputs
+
+
+def prepare_inputs(spec, out, *, run, sha, executable, shared=None):
+    """Build one comparison/window using all measurable, exactly mapped SEs."""
+    inputs, parameters = spec["inputs"], spec.get("parameters") or {}
+    samples = list(parameters["sample_ids"])
+    if len(samples) < 4 or len(set(samples)) != len(samples):
+        raise ValueError("Native MAEI needs at least four distinct declared biological samples")
+    if set(samples) != set(inputs["quantification"]):
+        raise ValueError("Declare exactly one existing transcript quantification file per selected sample")
+    start, end = int(parameters["window_start"]), int(parameters["window_end"])
+    name = window_id(start, end)
+    site = parameters["site"]
+    if site not in {"3ss", "5ss"}:
+        raise ValueError("Native MAEI site must be 3ss or 5ss")
+    native_counter = Path(inputs["native_root"]) / COUNTER
+    if sha(native_counter) != inputs["counter_sha256"]:
+        raise ValueError("Official MAPP kmer counter source changed")
+    shared = shared if shared is not None else prepare_shared(inputs, parameters)
+    events, event_path, gtf = (shared[k] for k in ("events", "event_path", "gtf"))
+    source_event_rows, comparison_event_rows, comparison = (shared[k] for k in
+        ("source_event_rows", "comparison_event_rows", "comparison"))
+    included, skipped, quantities = (shared[k] for k in ("included", "skipped", "quantities"))
     fasta = IndexedFasta(Path(inputs["genome_fasta"]))
     if not fasta.index or any(length < 1 or offset < 0 or bases < 1 or width < bases
                               for length,offset,bases,width in fasta.index.values()):

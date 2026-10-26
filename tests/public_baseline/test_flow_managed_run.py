@@ -22,6 +22,7 @@ def lifecycle(tmp_path, monkeypatch):
     inputs.mkdir()
     for name in ("samples.csv", "contrasts.csv", "genome.fa", "annotation.gtf", "template.json", "flow.json", "project.json"):
         (inputs / name).write_text("generated input\n")
+    write_json(inputs / 'flow.json', {})
     calls, fail = [], {"downstream": False, "acceptance": False}
     monkeypatch.setattr(managed, "_software_identity", lambda _: "generated-code-identity")
     monkeypatch.setattr(collect, "validate_collection", lambda _: {"plan_id": "generated-plan"})
@@ -110,7 +111,8 @@ def test_two_handoffs_delete_only_registered_work_and_keep_full_delivery(lifecyc
     assert (out / "pipeline_info" / "trace.tsv").is_file()
     assert (out / "report" / "plot.svg").is_file()
     assert (scope / "logs" / "upstream.log").is_file()
-    assert all(path.read_text() == "generated input\n" for path in inputs.iterdir())
+    assert all(path.read_text() == "generated input\n" for path in inputs.iterdir() if path.name != 'flow.json')
+    assert read_json(inputs / 'flow.json') == {}
     assert managed.run(managed.parser().parse_args([*command, "--resume"]))["status"] == "completed"
     assert len(calls) == 2
 

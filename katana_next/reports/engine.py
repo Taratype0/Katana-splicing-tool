@@ -53,6 +53,8 @@ class Builder:
     def __init__(self, source, output, event_set):
         from katana_next.science.das_selection import normalize_event_set
         self.source, self.output = source, Path(output).expanduser().resolve()
+        from katana_next.flow.selection import analysis_selection
+        self.analyses = analysis_selection({"analyses": source.get("report_analyses", {})})
         self.event_set = normalize_event_set(event_set)
         self.panels, self.tables, self.audit, self._copies = [], [], [], {}
         self.top10, self.policy_data, self.derived_audits = [], {}, []
@@ -322,6 +324,10 @@ class Builder:
         return record
 
     def collect(self):
+        from katana_next.flow.selection import artifact_enabled
+        for source in [self.source, *self.source.get("supplemental", [])]:
+            for key in ("artifacts", "extra_assets"):
+                source[key] = [r for r in source.get(key, []) if artifact_enabled(r, self.analyses)]
         collections = [('native', self.source['artifacts']), ('extra', self.source.get('extra_assets', []))]
         for origin, artifact in [(origin, {**raw, 'report_origin': origin}) for origin, records in collections for raw in records]:
             path = Path(artifact['path'])
@@ -351,9 +357,11 @@ class Builder:
                     self.table({**artifact, 'chapter': chapter_for(artifact.get('analysis_id', ''))})
             self.collect_rich(supplemental)
         from .landscape import build_landscape_views
-        self.add_views(build_landscape_views(self.source['project'], self.source['artifacts'], self.output/'outputs/landscape'))
+        if self.analyses['landscape']:
+            self.add_views(build_landscape_views(self.source['project'], self.source['artifacts'], self.output/'outputs/landscape'))
         from .comparisons import build_comparison_views
-        self.add_views(build_comparison_views(self.source['project'], self.source['artifacts'], self.output, event_set=self.event_set))
+        if self.analyses['cross_comparison']:
+            self.add_views(build_comparison_views(self.source['project'], self.source['artifacts'], self.output, event_set=self.event_set))
         for views in self.source.get('extra_views', []):
             if isinstance(views, str):
                 views = json.loads(Path(views).read_text('utf-8-sig'))
@@ -376,7 +384,10 @@ class Builder:
     def collect_rich(self, source):
         from .rich_results import collect_rich_results
         rich = collect_rich_results(source['artifacts'], search_roots=[Path(p) for p in source.get('search_roots', [])])
+        from katana_next.flow.selection import artifact_enabled
         for asset in rich:
+            if not artifact_enabled(asset, self.analyses):
+                continue
             if asset.get('status') == 'not_computed':
                 self.exclusions.append(asset)
                 continue
@@ -417,7 +428,10 @@ class Builder:
                 self.derived_audits.append(receipt)
 
     def add_views(self, results):
+        from katana_next.flow.selection import artifact_enabled
         for raw in results.get('panels', []):
+            if not artifact_enabled(raw, self.analyses):
+                continue
             panel = dict(raw)
             from .mapp_catalogs import prepare_portable_mapp_panel
             panel, mapp_audit = prepare_portable_mapp_panel(panel, report_root=self.output, copy_file=self.copy)
@@ -434,6 +448,8 @@ class Builder:
             if svg.is_file(): panel['svg'] = svg.relative_to(self.output).as_posix() if svg.is_relative_to(self.output) else self.copy(svg, prefix='figures')
             self.panels.append(panel)
         for raw in results.get('tables', []):
+            if not artifact_enabled(raw, self.analyses):
+                continue
             record = dict(raw)
             path = Path(record.pop('path', record.get('source', '')))
             if not path.is_absolute(): path = self.output/path
@@ -455,6 +471,8 @@ class Builder:
             self.top10.append(record)
         self.policy_data.update(results.get('policy_data', {}))
         for raw in results.get('motif_summaries', []):
+            if not self.analyses['motiftrace']:
+                continue
             summary = copy.deepcopy(raw)
             if summary.get('ranking_path'):
                 ranking = Path(summary['ranking_path'])
@@ -464,7 +482,7 @@ class Builder:
             self.motif_summaries.append(summary)
         if results.get('gene_sets'):
             (self.output/'gene-set-inputs.json').write_text(json.dumps(results['gene_sets'], indent=2), encoding='utf-8')
-        self.exclusions.extend(results.get('unavailable', []))
+        self.exclusions.extend(row for row in results.get('unavailable', []) if artifact_enabled(row, self.analyses))
         if results.get('audit'): self.derived_audits.append(results['audit'])
 
     def write(self):

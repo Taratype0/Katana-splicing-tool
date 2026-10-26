@@ -122,8 +122,10 @@ def _network_browser(record):
 def render(builder):
     source, output = builder.source, builder.output
     project = source['project']
+    from katana_next.flow.selection import active_chapters
+    chapters = {n: v for n, v in CHAPTERS.items() if n in active_chapters(builder.analyses)}
     sections = []
-    for number, (title, note) in CHAPTERS.items():
+    for number, (title, note) in chapters.items():
         blocks = []
         if number == 6:
             blocks.extend(_network_browser(r) for r in builder.network_browsers)
@@ -184,7 +186,7 @@ def render(builder):
     annotation = project.get('annotation', {})
     design = '<h3>Samples and declared comparisons</h3><p>Effects follow the explicitly recorded numerator / denominator. Independent biological units are recorded per sample; no pairing is inferred from replicate numbers.</p><details><summary>All biological samples ('+str(len(project.get('samples', [])))+')</summary><table class="metadata"><tr><th>Sample</th><th>Biological unit</th><th>Condition</th></tr>'+sample_rows+'</table></details><details open><summary>Declared comparisons ('+str(len(contrasts))+')</summary><div class="table-scroll"><table class="metadata"><tr><th>Comparison</th><th>Numerator</th><th>Denominator</th><th>n / n</th></tr>'+contrast_rows+'</table></div></details><p>Reference: '+esc(annotation.get('genome_build', 'Not recorded'))+' · '+esc(project.get('metadata', {}).get('annotation_release', 'Annotation release not recorded'))+'. Reference file identities and actual method parameters are in provenance.</p>'
     sections[0] = sections[0].replace('<div class="figure-grid">', design+'<div class="figure-grid">', 1)
-    toc = ''.join('<a href="#chapter-'+str(n)+'"><b>'+str(n).zfill(2)+'</b>'+esc(value[0])+'</a>' for n, value in CHAPTERS.items())
+    toc = ''.join('<a href="#chapter-'+str(n)+'"><b>'+str(n).zfill(2)+'</b>'+esc(value[0])+'</a>' for n, value in chapters.items())
     options = ''.join('<option value="'+esc(c['contrast_id'])+'">'+esc(c.get('label', c['contrast_id']))+'</option>' for c in contrasts)
     footnote = project.get('metadata', {}).get('gene_filter_policy', {}).get('footnote_en', 'Actual source filtering and fitting scope are retained in provenance. Missing filtering records are not inferred.')
     appendix = '<section class="chapter" id="appendix"><div class="chapter-head"><span class="chapter-number">A</span><h2>Methods, parameters and complete results</h2></div><p>'+esc(footnote)+'</p><p>RS-DAS: native caller FDR/effect criteria plus IJC + SJC ≥ 10 in every declared biological sample in both contrast arms. Ordinary DAS: the same native caller criteria without the read-support gate. Original caller P/FDR and effects are preserved. Historical analyses with another measurement policy are retained as fixed completed outputs and never silently relabelled.</p><p>Top 10: native FDR ascending, absolute native effect descending when available, stable object identity. Missing effect sizes remain unavailable; transcript, exon and gene units are separate.</p><p>Networks require their declared measurable PSI population, not just significant DAS. Motif occurrences, group enrichment, window statistics and CLIP binding evidence retain separate meanings.</p><p>'+_link('outputs/index.html', 'Complete results')+' · '+_link('provenance.json', 'Actual parameters and provenance')+' · '+_link('REPORT.zip', 'Download report package')+'</p><p>Katana Splicing Tool · '+_link('https://github.com/Taratype0/Katana-splicing-tool', 'Software and citation information')+'. No publication DOI is claimed.</p></section>'
@@ -201,6 +203,7 @@ def render(builder):
     from .presentation import portable_display_project
     payload['display_project'] = portable_display_project(project)
     payload['mode'] = source['mode']
+    payload['analyses'] = {key: ('selected' if value else 'not_selected') for key, value in builder.analyses.items()}
     payload['motif_summaries'] = builder.motif_summaries
     payload['network_browsers'] = builder.network_browsers
     payload['presentation'] = {'default_comparison': contrasts[0]['contrast_id'] if contrasts else 'all',
@@ -216,7 +219,7 @@ def render(builder):
                         'parameters': [{'analysis_id': r.get('analysis_id'), 'artifact_id': r.get('artifact_id'), 'parameters': r.get('parameters', {}), 'method_metadata': r.get('metadata', {})} for r in group['artifacts']]})
     if hasattr(builder, 'preserved_source_projects'): sources = builder.preserved_source_projects
     provenance = {'schema': 'katana.report_provenance/v1', 'source_files': builder.audit, 'source_projects': sources,
-                  'report_parameters': {'event_set': builder.event_set}, 'derived_views': builder.derived_audits,
+                  'report_parameters': {'event_set': builder.event_set, 'analyses': payload['analyses']}, 'derived_views': builder.derived_audits,
                   'no_upstream_rerun': True, 'no_source_statistics_refit': True}
     provenance['figure_data_links'] = builder.figure_data_coverage()
     provenance['report_selection'] = source.get('report_selection', {'applied': False})
@@ -231,7 +234,10 @@ def render(builder):
 def _outputs(builder):
     output = builder.output
     groups = []
+    from katana_next.flow.selection import active_chapters
     for number, (title, _) in CHAPTERS.items():
+        if number not in active_chapters(builder.analyses):
+            continue
         tables = [t for t in builder.tables if t.get('chapter') == number or (not t.get('chapter') and chapter_for(t.get('analysis_id', '')) == number)]
         rows = ''.join('<tr><td>'+esc(t['name'])+'</td><td>'+esc(t.get('rows', ''))+'</td><td>'+_link('../'+t.get('view', t['source']), 'Full table / browser')+' '+_link('../'+t['source'], 'Complete source')+'</td></tr>' for t in tables)
         figures = ''.join('<details><summary>'+esc(p['title'])+'</summary><p>'+esc(p.get('caption', ''))+'</p>'+_link('../'+p['image'], 'Figure')+_data_links(p, '../')+'<img loading="lazy" style="max-width:100%" src="../'+esc(p['image'])+'" alt="'+esc(p['title'])+'"></details>' for p in builder.panels if p['chapter'] == number)

@@ -41,33 +41,16 @@ retain their recorded behavior and composite ranking unless explicitly migrated.
 ## Full event sets and execution limits
 
 The network includes all events passing the configured measurable-PSI checks.
-The execution limit is a guard against an unbudgeted dense matrix allocation;
-it is not a filter that retains the first or most variable events. When the
-event count exceeds the guard, execution fails rather than reducing the input.
+The legacy event-count guards and internal R timeout are no longer enforced.
+All eligible events reach the selected algorithm unless the user explicitly
+requests an event selection. The old guard fields remain readable for project
+compatibility but do not impose a calculation limit.
 
-For an existing-results flow, explicit execution settings belong in
-`network.parameters` in the flow configuration, for example:
-
-```json
-{
-  "network": {
-    "scope": "contrast",
-    "bootstrap": {"enabled": false},
-    "parameters": {
-      "tom_dense_max_events": 65000,
-      "consensus_dense_max_events": 65000,
-      "wgcna_timeout_seconds": 86400,
-      "hub_metric": "abs_kME"
-    }
-  }
-}
-```
-
-These example limits require a separately sized scheduler memory/time request.
-They do not allocate memory themselves. Both event guards and the R timeout are
-carried into the observed fit and its bootstrap continuation and recorded in the
-resolved configuration. Defaults remain conservative; do not raise the guards
-without measuring a representative fit's peak memory and runtime.
+Resource allocation belongs to Nextflow and the scheduler. No task switches
+automatically to a `memory` queue. See [resource settings and recovery](ANALYSIS_AND_EXECUTION_OPTIONS.md)
+for task defaults, queue selection and changes during resume. The integrated
+network continues to use `abs_kME` for Hub ranking and disables bootstrap by
+default; these choices do not remove the module-discovery computation.
 
 The current `tom_hierarchical` / `wgcna_blockwise` implementation uses a full
 event-by-event TOM. The WGCNA function name does **not** mean that memory is

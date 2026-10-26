@@ -44,6 +44,8 @@ Hub ranking uses absolute eigengene membership, `|kME|`, while retaining the sig
 
 ### Reports and browser
 
+The default runs the full report. [Choose which optional analyses to run](docs/ANALYSIS_AND_EXECUTION_OPTIONS.md); disabled modules require no calculation or dedicated resources.
+
 The study report has seven sections:
 
 1. Experimental design, references and QC.

@@ -175,8 +175,10 @@ filesystem/project quota; retained hard links are not counted as freed space.
 
 Repeat the same managed command with `--resume` and the same `--run-dir` after
 resolving an observed failure. Inputs, software, parameters, configuration
-identities and the original cleanup choice must still match. Changed settings
-require a new run directory rather than editing an old completion record.
+identities and the original cleanup choice must still match. A separate
+`--resource-config resources.json` may change execution resources on resume;
+each revision is recorded. Other changed settings require a new run directory.
+See [analysis and execution options](ANALYSIS_AND_EXECUTION_OPTIONS.md).
 
 A verified completed handoff is reused. If the affected native work remains,
 Nextflow can reuse eligible matching completed tasks with its normal `-resume`

@@ -59,7 +59,10 @@ def test_export_ties_are_deterministic_without_dropping_network_events():
     np.testing.assert_array_equal(matrix, np.ones((55,55)))
 
 
-def test_unapproved_dense_universe_still_fails_before_computation():
-    matrix = pd.DataFrame(np.ones((41, 6)))
-    with pytest.raises(ValueError, match='tom_dense_max_events=40'):
-        _tom_hierarchy(matrix, replace(NetworkConfig(), tom_dense_max_events=40))
+def test_legacy_event_cap_does_not_truncate_or_reject_the_universe():
+    matrix = pd.DataFrame(np.random.default_rng(17).uniform(size=(41, 6)))
+    actual = _tom_hierarchy(matrix, replace(NetworkConfig(), tom_dense_max_events=1))
+    reference = _tom_hierarchy(matrix, NetworkConfig())
+    for observed, expected in zip(actual[:5], reference[:5]):
+        np.testing.assert_array_equal(observed, expected)
+    assert actual[0].shape == (41, 41)

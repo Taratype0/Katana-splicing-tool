@@ -315,8 +315,8 @@ Complete raw results and original effects/P/FDR remain available.
 | `network.parameters.apply_threshold_labels` | `false` | Opt-in descriptive labels only; no threshold-based member deletion/refit. |
 | `network.parameters.max_events` | `0` | All eligible events. Positive cap is an explicit variance-ranked subset; not the default. |
 | `network.parameters.bootstrap_iterations` | `50` only when enabled | Integer at least 2 for an explicitly enabled bootstrap. No default bootstrap work when disabled. |
-| `network.parameters.tom_dense_max_events` | Engine `3000` | Positive integer computation/storage strategy limit; not a significant-event threshold. |
-| `network.parameters.wgcna_timeout_seconds` | Engine `1800` | Native WGCNA subprocess timeout; distinct from scheduler wall time. |
+| `network.parameters.tom_dense_max_events` | `null` | Legacy compatibility field; no event-count protection is enforced. |
+| `network.parameters.wgcna_timeout_seconds` | `null` | Legacy compatibility field; no internal R-WGCNA timeout. Scheduler time remains user-configurable. |
 | `network.parameters.rscript` | Runtime `Rscript` / declared path | Actual executable in the selected environment. |
 
 Generated contrast networks default to six distinct independent biological
@@ -458,3 +458,15 @@ Official documentation structure and input conventions were checked against
 [rnasplice parameters](https://nf-co.re/rnasplice/parameters), and
 [differentialabundance](https://nf-co.re/differentialabundance/usage).
 Their complete current parameter lists are not interchangeable with Katana's.
+
+## Optional downstream analyses and resource-only resume
+
+`flow.json` accepts `analyses` with boolean switches for `landscape`,
+`cross_comparison`, `enrichment`, `rbp_identity`, `motiftrace`, `motif_binding`,
+`mapp`, `coverage`, `sequencing_qc`, `network` and `interaction`. Every switch defaults to `true`.
+A `false` value omits its tasks and report content. Core design/QC and molecular
+results remain. See [selection, resource and resume examples](ANALYSIS_AND_EXECUTION_OPTIONS.md).
+
+The managed `katana-flow run` command accepts `--resource-config FILE.json`.
+This execution-only file can change during `--resume`; scientific configuration,
+inputs and arbitrary site configurations retain their normal identity checks.

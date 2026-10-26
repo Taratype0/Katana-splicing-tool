@@ -188,7 +188,8 @@ def collect_results(plan_path, task_results, output_dir, *, project_path=None):
             raise ValueError("Internal catalogue files are not report products")
         destination = directory / "products" / _safe(owner) / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, destination)
+        from .file_io import retain_owned_file
+        retain_owned_file(path, destination)
         if file_hash(destination) != item["sha256"]:
             raise ValueError("Copied scientific product differs from its completed task")
         mapping[source_name] = destination.relative_to(directory).as_posix()
@@ -242,6 +243,7 @@ def collect_results(plan_path, task_results, output_dir, *, project_path=None):
             descriptor[key] = report[key]
         elif key in plan:
             descriptor[key] = plan[key]
+    descriptor["report_analyses"] = plan.get("configuration", {}).get("analyses", {})
     descriptor_file = write_json(directory / "report-project.json", descriptor)
     provenance_file = write_json(directory / "transport-provenance.json", {"products": provenance})
     plan_file = write_json(directory / "plan.json", plan)
@@ -249,7 +251,8 @@ def collect_results(plan_path, task_results, output_dir, *, project_path=None):
     for key, (path, _raw) in receipts.items():
         destination = directory / "evidence" / _safe(key) / "task.receipt.json"
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, destination)
+        from .file_io import retain_owned_file
+        retain_owned_file(path, destination)
         evidence.append(destination)
     from .presentation import build_presentation_assets
     rendered = build_presentation_assets(directory, plan, receipts, provenance)

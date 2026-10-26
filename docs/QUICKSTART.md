@@ -72,8 +72,9 @@ need a separate compatible analysis route. See [experimental design](NEXTFLOW_US
 
 Prepare the [project resource template and analysis settings](NEXTFLOW_USAGE.md#6-downstream-analysis-configuration).
 These identify the organism, reference, motif/pathway/CLIP resources and
-analysis parameters. This resource setup is currently required for the complete
-report; downloading FASTQ alone does not provide it.
+analysis parameters. The full default report uses these resources; downloading
+FASTQ alone does not provide them. You can [turn off selected analyses](ANALYSIS_AND_EXECUTION_OPTIONS.md)
+and omit their calculation and dedicated resource requirements.
 
 ```sh
 katana-flow run --mode complete \
@@ -182,7 +183,9 @@ differential analyses are reused. See [bindings and target commands](TARGET_COMM
 
 Keep its run directory. Fix the reported input or environment problem and
 check [recovery rules](STORAGE_MANAGEMENT.md) before `--resume`: the managed
-runner currently requires the same configuration and source identity.
+runner preserves the scientific configuration and source identity. Execution-only
+CPU/memory/time/queue changes can be supplied through `--resource-config`; see
+[analysis and recovery options](ANALYSIS_AND_EXECUTION_OPTIONS.md).
 Native Nextflow `-resume` is available for direct runs with their work retained.
 Removing work saves storage but removes that work's native resume cache.
 

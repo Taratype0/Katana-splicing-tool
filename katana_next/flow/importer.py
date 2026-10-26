@@ -37,8 +37,12 @@ def _upstream_metadata(source, paths):
     return result, next(iter(builds), "")
 
 
-def import_bundle(bundle, project_template, outdir, *, owned_link_root=None):
+def import_bundle(bundle, project_template, outdir, *, owned_link_root=None, analysis_configuration=None):
     from katana_next.domain.models import ProjectManifest
+    from .selection import resource_kinds
+    selected_resources = resource_kinds(analysis_configuration or {})
+    optional_resources = resource_kinds({})
+    skipped_resources = []
     bundle = Path(bundle).resolve()
     template_path = Path(project_template).resolve()
     template = read_json(template_path)
@@ -193,6 +197,9 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None):
                 metadata["reverse_direction"] = row["deg_target"] != row["treatment"]
         assets.append({"asset_id": f"native-{index}", "kind": mapped, "path": asset_relative, "required": True, "metadata": metadata})
     for asset in template.get("assets", []):
+        if asset.get("kind") in optional_resources - selected_resources:
+            skipped_resources.append(asset["asset_id"])
+            continue
         asset = copy.deepcopy(asset)
         path = Path(asset["path"])
         path = path if path.is_absolute() else template_path.parent / path
@@ -234,6 +241,7 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None):
                "source_manifest_sha256": file_sha256(bundle / "manifest.json"), "samples": len(samples),
                "comparisons": len(comparisons), "files_verified": len(paths), "mode": chosen_mode,
                "source_statistics_refitted": False,
+               "not_selected_resource_ids": skipped_resources,
                "format_projections": [{"path": relative, "sha256": file_sha256(out / "bundle" / relative)}
                                       for relative in normalized_members]})
     return out / "project.json"

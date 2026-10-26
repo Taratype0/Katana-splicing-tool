@@ -75,7 +75,8 @@ def _copy_verified_tree(source, destination):
     if any(path.is_symlink() for path in members):
         raise ValueError("Final delivery must not depend on symbolic links")
     pending = destination.with_name("." + destination.name + ".pending-" + uuid4().hex)
-    shutil.copytree(source, pending)
+    from .file_io import retain_owned_file
+    shutil.copytree(source, pending, copy_function=retain_owned_file)
     for path in members:
         if path.is_file() and file_sha256(path) != file_sha256(pending / path.relative_to(source)):
             raise ValueError("Final delivery copy failed content verification")
@@ -229,6 +230,7 @@ def parser():
     p.add_argument("--pipeline", type=Path, help="Optional explicit main.nf; default uses the installed pipeline")
     p.add_argument("--nextflow-command-json", default='["nextflow"]', help="Native executable prefix as a JSON string list")
     p.add_argument("--profile", default="local")
+    p.add_argument("--resource-config", type=Path, help="Execution-only resource JSON; may change with --resume")
     p.add_argument("--site-config", action="append", default=[], type=Path)
     for key in ("input", "contrasts", "fasta", "gtf", "project_template", "flow_config", "project", "flow_plan"):
         p.add_argument("--" + key, type=Path)
@@ -260,9 +262,12 @@ def run(args):
         if getattr(args, key) is not None:
             setattr(args, key, getattr(args, key).expanduser().resolve(strict=True))
     args.site_config = [v.expanduser().resolve(strict=True) for v in args.site_config]
+    from .resources import render_resources
+    resources = read_json(args.resource_config) if args.resource_config else {}
+    resource_text = render_resources(resources)
     pipeline = _pipeline_source(args.pipeline)
     request = {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()
-               if key not in {"resume", "run_dir", "site_config"}}
+               if key not in {"resume", "run_dir", "site_config", "resource_config"}}
     request.update(pipeline=str(pipeline), site_config=[str(v) for v in args.site_config])
     small = [getattr(args, key) for key in path_fields if key not in {"fasta", "gtf"} and getattr(args, key)]
     request["configuration_sha256"] = {str(p): file_sha256(p) for p in [*small, *args.site_config]}
@@ -307,6 +312,17 @@ def run(args):
         common = [*prefix, "run", str(pipeline), "-profile", args.profile, "-ansi-log", "false"]
         for config in args.site_config:
             common.extend(["-c", str(config)])
+        if resources:
+            resource_id = canonical_hash(resources)
+            resource_path = scope / ("resources-" + resource_id + ".config")
+            if not resource_path.exists():
+                resource_path.write_text(resource_text, encoding="utf-8")
+            elif resource_path.read_text(encoding="utf-8") != resource_text:
+                raise ValueError("Recorded execution configuration changed")
+            state.setdefault("execution_history", []).append({"resource_id": resource_id, "resources": resources,
+                "recorded_at": datetime.now(timezone.utc).isoformat()})
+            write_json(state_file, state)
+            common.extend(["-c", str(resource_path)])
         if args.params_file:
             common.extend(["-params-file", str(args.params_file)])
         for key in ("katana_container", "dexseq_tools_container", "flow_executable"):
@@ -343,7 +359,7 @@ def run(args):
                             raise ValueError("The imported project changed after downstream execution; work retained")
                         project = down_work / ("project-import-" + uuid4().hex) / "project.json"
                     import_bundle(bundle, args.project_template, project.parent,
-                                  owned_link_root=down_work)
+                                  owned_link_root=down_work, analysis_configuration=read_json(args.flow_config))
                     state["working_project"] = str(project)
                     write_json(state_file, state)
             else:
@@ -366,7 +382,7 @@ def run(args):
                 retain_collection_project(phase_outputs / "collection", project, staging_project, owned_scope=scope)
                 staging_project.rename(out / "project")
             if args.mode == "complete" and not (out / "upstream-support").exists():
-                support = down_work / "upstream-support"
+                support = out / (".upstream-support-pending-" + uuid4().hex)
                 support.mkdir(exist_ok=True)
                 for path in (down_work / "upstream-output").iterdir():
                     if path.name in {"katana_bundle", "reference_index"}:
@@ -376,10 +392,11 @@ def run(args):
                     if path.is_dir():
                         _copy_verified_tree(path, support / path.name)
                     else:
-                        shutil.copyfile(path, support / path.name)
+                        from .file_io import retain_owned_file
+                        retain_owned_file(path, support / path.name)
                         if file_sha256(path) != file_sha256(support / path.name):
                             raise ValueError("Upstream provenance copy changed")
-                _copy_verified_tree(support, out / "upstream-support")
+                support.rename(out / "upstream-support")
             if not (out / "report").exists():
                 _copy_verified_tree(phase_outputs / "report", out / "report")
             if (phase_outputs / "pipeline_info").exists() and not (out / "pipeline_info").exists():

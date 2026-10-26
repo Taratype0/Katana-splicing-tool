@@ -56,7 +56,7 @@ def _threaded_r_env(executable: Path, threads: int) -> dict[str, str]:
     return environment
 
 
-def _run_wgcna(command: list[str], *, environment: dict[str, str], timeout: int) -> tuple[int, str]:
+def _run_wgcna(command: list[str], *, environment: dict[str, str], timeout: int | None) -> tuple[int, str]:
     """Stream progress to the job log while retaining a bounded failure tail."""
     tail: deque[str] = deque(maxlen=100)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -102,7 +102,7 @@ def exact_wgcna_labels(
     reliability_power: float = 0.5,
     precomputed_correlation: np.ndarray | None = None,
     return_tom: bool = False,
-    timeout_seconds: int = 1800,
+    timeout_seconds: int | None = None,
     threads: int | None = None,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Run official WGCNA with the declared correlation and network signedness."""
@@ -137,8 +137,8 @@ def exact_wgcna_labels(
         raise ValueError("WGCNA requires a nonempty matrix with unique event IDs.")
     if reliability_power < 0:
         raise ValueError("reliability_power must be nonnegative.")
-    if timeout_seconds <= 0:
-        raise ValueError("timeout_seconds must be positive.")
+    # Kept for config/API compatibility; wall time is owned by the executor.
+    timeout_seconds = None
     if return_tom and event_reliability is None:
         event_reliability = pd.Series(1.0, index=matrix.index)
     thread_count = allocated_wgcna_threads(threads)

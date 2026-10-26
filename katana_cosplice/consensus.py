@@ -1564,11 +1564,6 @@ def build_bootstrap_coassignment_consensus(
 ) -> ConsensusResult:
     if matrix.empty:
         raise ValueError("Cannot build consensus modules from an empty event matrix.")
-    if len(matrix) > settings.dense_max_events:
-        raise ValueError(
-            f"Consensus matrix requires {len(matrix)} events, exceeding consensus.dense_max_events="
-            f"{settings.dense_max_events}. Increase the explicit memory cap or use a smaller stable-AS universe."
-        )
     if not matrix.index.is_unique or not matrix.columns.is_unique:
         raise ValueError("Consensus input event and sample labels must be unique.")
     posterior_bootstrap = posterior_alpha is not None or posterior_beta is not None

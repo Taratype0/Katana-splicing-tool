@@ -225,11 +225,6 @@ def evaluate_external_module_preservation(
                 }
             )
             continue
-        if len(shared) > settings.dense_max_events:
-            raise ValueError(
-                f"External cohort {cohort.name} has {len(shared)} shared events, exceeding "
-                f"preservation.dense_max_events={settings.dense_max_events}."
-            )
         reference_values = _standardize_rows(reference_matrix.reindex(shared))
         target_values = _standardize_rows(target.reindex(shared))
         reference_corr = _correlation_matrix(reference_values)

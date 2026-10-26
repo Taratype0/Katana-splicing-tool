@@ -122,8 +122,10 @@ def required_report_gaps(collection, plan, report_manifest, report_dir, *, colle
     def missing(component, reason, **details):
         gaps.append({"component": component, "reason": reason, **details})
 
+    from .selection import analysis_selection, component_enabled
+    enabled = analysis_selection(plan.get("configuration", {}))
     native_tasks = [task for task in plan["tasks"] if task.get("adapter") == "mapp.maei"]
-    if not native_tasks:
+    if enabled["mapp"] and not native_tasks:
         missing("mapp_native", "The complete profile has no planned native MAEI calculation")
     for task in native_tasks:
         receipt = receipts[task["id"]]
@@ -202,7 +204,7 @@ def required_report_gaps(collection, plan, report_manifest, report_dir, *, colle
     parallel_assets = [asset for asset in project.get("assets", []) if asset.get("kind") == "motiftrace_parallel_results"]
     requested_id = plan.get("configuration", {}).get("parameters", {}).get("prioritize.motiftrace_parallel", {}).get("parallel_bundle_asset_id")
     parallel_tasks = [task for task in plan["tasks"] if task.get("workflow_id") == "prioritize.motiftrace_parallel"]
-    parallel_required = bool(parallel_assets or requested_id or parallel_tasks)
+    parallel_required = enabled["mapp"] and bool(parallel_assets or requested_id or parallel_tasks)
     if parallel_required and not parallel_tasks:
         missing("mapp_parallel", "An explicitly supplied/requested calibrated parallel collection has no planned import")
     for task in parallel_tasks:
@@ -234,6 +236,8 @@ def required_report_gaps(collection, plan, report_manifest, report_dir, *, colle
         required.add("mapp_parallel")
     for gap in report_manifest.get("unavailable", []):
         component = _component(gap)
+        if not component_enabled(component, enabled):
+            continue
         if component == "mapp_native" and (gap.get("task_id") in native_not_applicable or
                                             len(native_not_applicable) == len(native_tasks)):
             continue
@@ -244,10 +248,12 @@ def required_report_gaps(collection, plan, report_manifest, report_dir, *, colle
         if component in required or gap.get("required") is True:
             gaps.append({**gap, "component": component})
     from .network_acceptance import network_report_gaps
-    gaps.extend(network_report_gaps(root, plan, report_manifest, report_dir))
+    if enabled["network"]:
+        gaps.extend(network_report_gaps(root, plan, report_manifest, report_dir))
     from .motif_acceptance import required_motif_report_gaps
-    gaps.extend(required_motif_report_gaps(
-        root, plan, report_manifest, report_dir,
-        project=project, receipts=receipts, transported=transported,
-    ))
+    if enabled["motiftrace"]:
+        gaps.extend(required_motif_report_gaps(
+            root, plan, report_manifest, report_dir,
+            project=project, receipts=receipts, transported=transported,
+        ))
     return gaps

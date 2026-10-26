@@ -5,8 +5,8 @@ import hashlib, json
 
 
 def digest(path):
-    with Path(path).open('rb') as handle:
-        return hashlib.file_digest(handle, 'sha256').hexdigest()
+    from katana_next.flow.file_io import digest as cached_digest
+    return cached_digest(path)
 
 
 def _absolute_path(value, base, mapper=None):
@@ -268,6 +268,7 @@ def _load_source(project, catalog=None, *, inline_base, mapper=None):
         display_project['report_contrast_groups'] = selection['groups']
         display_project['report_native_contrast_ids'] = selection['native_contrast_ids']
     return {'project': display_project, 'native_project': native, 'native_project_manifest_sha256': manifest_identity,
+            'report_analyses': value.get('report_analyses', {}),
             'report_selection': selection, 'artifacts': artifacts, 'supplemental': supplemental, 'extra_assets': extras, 'extra_views': views, 'dummy': synthetic,
             'report_native_figures_in_main': bool(value.get('report_native_figures_in_main', True)),
             'report_require_plot_data': bool(value.get('report_require_plot_data', False)),

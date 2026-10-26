@@ -187,13 +187,7 @@ def _tom_hierarchy(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Fit the signed soft-adjacency/TOM backbone without truncating events."""
 
-    if len(matrix) > settings.tom_dense_max_events:
-        raise ValueError(
-            f"TOM network requires {len(matrix)} events, exceeding "
-            f"network.tom_dense_max_events={settings.tom_dense_max_events}. "
-            "Raise the explicit audited memory cap or use exact R blockwise WGCNA; "
-            "CoSplice will not silently select a top-N subset."
-        )
+    # Legacy event-cap field is recorded only; the executor owns resources.
     correlation = (
         _network_phase_call("correlation", correlation_matrix, matrix, settings.method,
                             blas=True)
@@ -1275,7 +1269,7 @@ def discover_module_labels(
                 cor_type=settings.method,
                 signed=settings.signed,
                 rscript=settings.wgcna_rscript,
-                timeout_seconds=settings.wgcna_timeout_seconds,
+                timeout_seconds=None,
                 event_reliability=event_reliability,
                 reliability_power=reliability_power,
             )
@@ -1480,7 +1474,7 @@ def fit_network(
                 cor_type=settings.method,
                 signed=settings.signed,
                 rscript=settings.wgcna_rscript,
-                timeout_seconds=settings.wgcna_timeout_seconds,
+                timeout_seconds=None,
                 event_reliability=(
                     reliability.reindex(selected.index)
                     if reliability is not None

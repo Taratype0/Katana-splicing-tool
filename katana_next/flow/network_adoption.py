@@ -94,8 +94,6 @@ def prepare_plan(*, config: str | Path, matrix: str | Path,
         raise ValueError("Observed matrix contains nonfinite values")
     if assigned.event_key.duplicated().any() or set(assigned.event_key) != set(psi.index):
         raise ValueError("Observed assignments do not exactly cover matrix events")
-    if len(psi) > cfg.consensus.dense_max_events:
-        raise ValueError("Explicit consensus memory capacity is smaller than observed universe")
     resampling = bootstrap_plan(metadata, psi.columns)
     resampling.require_resampleable()
     rng = np.random.default_rng(cfg.consensus.random_seed)

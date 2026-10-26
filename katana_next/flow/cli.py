@@ -23,20 +23,26 @@ def template_preflight(template_path, config_path):
     base = Path(template_path).resolve().parent
     assets = template.get("assets", [])
     errors = []
-    required = {"gene_sets_gmt", "rbp_gene_sets", "rbp_motif_database", "fimo_runtime", "rbp_binding_peaks"}
+    from .selection import analysis_selection, resource_kinds
+    enabled = analysis_selection(config)
+    required = resource_kinds(config)
     for kind in required - {a.get("kind") for a in assets}:
         errors.append(f"Missing fixed-report resource kind: {kind}")
     for asset in assets:
+        if asset.get("kind") not in required:
+            continue
         path = Path(asset["path"]).expanduser()
         path = path if path.is_absolute() else base / path
         if not path.is_file():
             errors.append(f"Missing configured resource: {asset['asset_id']}")
-    if not template.get("metadata", {}).get("species"):
+    if (enabled["motiftrace"] or enabled["motif_binding"]) and not template.get("metadata", {}).get("species"):
         errors.append("Explicit project species is required")
     config_base = Path(config_path).resolve().parent
     from .stages import readiness
     for adapter, options in (("network.fit", config.get("network", {})),
                              (config.get("mapp", {}).get("adapter", "mapp.maei"), config.get("mapp", {}))):
+        if not enabled["network" if adapter == "network.fit" else "mapp"]:
+            continue
         inputs = options.get("inputs", {})
         if adapter in {"mapp.prepare", "mapp.maei"}:
             from .bundled_runtime import mapp_input_defaults
@@ -64,22 +70,27 @@ def template_preflight(template_path, config_path):
             if isinstance(issues, dict):
                 issues = issues.get("errors", issues.get("issues", []))
             errors.extend(str(issue) for issue in issues)
-    qc = config.get("qc", {})
-    bed = Path(qc.get("reference_bed", ""))
-    bed = bed if bed.is_absolute() else config_base / bed
-    if qc.get("reference_bed") and not bed.is_file():
-        errors.append("Gene-body QC requires a reference BED matching the declared annotation")
-    import shutil
-    executable = qc.get("rseqc_executable", "geneBody_coverage.py")
-    if not shutil.which(executable) and not Path(executable).is_file():
-        errors.append("Missing RSeQC executable: " + executable)
+    if enabled["coverage"]:
+        qc = config.get("qc", {})
+        bed = Path(qc.get("reference_bed", ""))
+        bed = bed if bed.is_absolute() else config_base / bed
+        if qc.get("reference_bed") and not bed.is_file():
+            errors.append("Gene-body QC requires a reference BED matching the declared annotation")
+        import shutil
+        executable = qc.get("rseqc_executable", "geneBody_coverage.py")
+        if not shutil.which(executable) and not Path(executable).is_file():
+            errors.append("Missing RSeQC executable: " + executable)
     return {"schema": "katana.flow.template_preflight/v1", "ready": not errors, "errors": errors,
             "scope": "Resource/runtime readiness before upstream. Native project and calculation acceptance follow upstream export."}
 
 
 def required_figure_chapters(plan):
     """Keep all seven sections; a declared single contrast has no overlap plot."""
-    required = set(range(1, 8))
+    from .selection import analysis_selection, active_chapters
+    enabled = analysis_selection(plan.get("configuration", {}))
+    required = active_chapters(enabled)
+    if not enabled["sequencing_qc"] and not enabled["coverage"]:
+        required.discard(1)
     contrasts = plan.get("contrast_ids", [])
     applicability = plan.get("applicability", {}).get("cross_comparison", {})
     configuration = plan.get("configuration", {})
@@ -87,7 +98,7 @@ def required_figure_chapters(plan):
             and applicability.get("contrast_ids") == contrasts
             and not configuration.get("interactions")
             and len(configuration.get("design_factors", [])) < 2):
-        required.remove(4)
+        required.discard(4)
     return required
 
 
@@ -128,7 +139,8 @@ def build_complete_report(collection, outdir):
         from .model import file_sha256
         import os
         result = {"schema": "katana.flow.report_acceptance/v1", "status": "completed", "plan_id": plan["plan_id"],
-                  "verified_calculation_tasks": len(plan["tasks"]), "seven_chapter_specification": plan["report_specification"],
+                  "verified_calculation_tasks": len(plan["tasks"]),
+                  "analyses": plan.get("configuration", {}).get("analyses", {}), "seven_chapter_specification": plan["report_specification"],
                   "report": str(outdir / "REPORT.html"), "archive": str(outdir / "REPORT.zip"),
                   "archive_sha256": file_sha256(outdir / "REPORT.zip")}
         pending = outdir / ".flow.acceptance.pending.json"
@@ -202,6 +214,7 @@ def main(argv=None):
     command = sub.add_parser("import")
     command.add_argument("--bundle", required=True, type=Path)
     command.add_argument("--project-template", required=True, type=Path)
+    command.add_argument("--config", type=Path, help="Analysis switches for optional template resources")
     command.add_argument("--outdir", required=True, type=Path)
     command = sub.add_parser("validate-plan", help="Validate an existing sealed plan without replanning or changing its path")
     command.add_argument("--plan", required=True, type=Path)
@@ -279,7 +292,8 @@ def main(argv=None):
                     write_json(args.out, result)
             elif args.action == "import":
                 from .importer import import_bundle
-                result = {"project": str(import_bundle(args.bundle, args.project_template, args.outdir))}
+                result = {"project": str(import_bundle(args.bundle, args.project_template, args.outdir,
+                    analysis_configuration=read_json(args.config) if args.config else None))}
             elif args.action == "validate-plan":
                 from .plan_reuse import validate_existing_plan
                 if args.out.exists():

@@ -92,7 +92,7 @@ class NetworkConfig:
     module_cut_height: float = 0.80
     min_module_size: int = 20
     max_events: int | None = None
-    tom_dense_max_events: int = 3_000
+    tom_dense_max_events: int | None = None
     tom_cut_heights: list[float] = field(
         default_factory=lambda: [0.70, 0.75, 0.80, 0.85, 0.90]
     )
@@ -102,7 +102,7 @@ class NetworkConfig:
     dynamic_deep_splits: list[int] = field(default_factory=lambda: [1, 2, 3, 4])
     dynamic_pam_respects_dendro: bool = False
     wgcna_rscript: str | None = None
-    wgcna_timeout_seconds: int = 1800
+    wgcna_timeout_seconds: int | None = None
     wgcna_merge_cut_height: float = 0.25
     knn_neighbors: int = 50
     edge_smoothing: str = "shared_neighbor"
@@ -240,7 +240,7 @@ class ConsensusConfig:
     peripheral_kme_sign_consistency_min: float = 0.70
     max_grey_fraction: float = 0.25
     max_largest_module_fraction: float = 0.60
-    dense_max_events: int = 8_000
+    dense_max_events: int | None = None
     output_edge_threshold: float = 0.50
     max_output_edges: int = 200_000
     random_seed: int = 37
@@ -343,7 +343,7 @@ class FactorContrastConfig:
 class PreservationConfig:
     permutations: int = 100
     min_shared_events: int = 20
-    dense_max_events: int = 8_000
+    dense_max_events: int | None = None
     preserved_zsummary: float = 10.0
     partial_zsummary: float = 2.0
     random_seed: int = 43
@@ -531,16 +531,8 @@ class CoSpliceConfig:
             raise ValueError("network.soft_power must be positive")
         if self.network.min_module_size < 2:
             raise ValueError("network.min_module_size must be at least 2")
-        if self.network.engine == "exact_hierarchical" and self.network.max_events is None:
-            raise ValueError("exact_hierarchical requires an explicit network.max_events memory cap")
         if self.network.max_events is not None and self.network.max_events < self.network.min_module_size * 2:
             raise ValueError("network.max_events must be at least twice min_module_size")
-        if self.network.tom_dense_max_events < self.network.min_module_size * 2:
-            raise ValueError(
-                "network.tom_dense_max_events must be at least twice min_module_size"
-            )
-        if self.network.wgcna_timeout_seconds <= 0:
-            raise ValueError("network.wgcna_timeout_seconds must be positive")
         if not self.network.tom_cut_heights or any(
             not 0.0 < value < 1.0 for value in self.network.tom_cut_heights
         ):
@@ -846,8 +838,6 @@ class CoSpliceConfig:
             raise ValueError("consensus.max_grey_fraction must be within [0, 1)")
         if not 0.0 < self.consensus.max_largest_module_fraction <= 1.0:
             raise ValueError("consensus.max_largest_module_fraction must be within (0, 1]")
-        if self.consensus.dense_max_events < 2:
-            raise ValueError("consensus.dense_max_events must be at least 2")
         if not 0.0 <= self.consensus.output_edge_threshold <= 1.0:
             raise ValueError("consensus.output_edge_threshold must be within [0, 1]")
         if self.consensus.max_output_edges < 1:
@@ -934,8 +924,6 @@ class CoSpliceConfig:
             raise ValueError("preservation.permutations must be at least 10")
         if self.preservation.min_shared_events < 3:
             raise ValueError("preservation.min_shared_events must be at least 3")
-        if self.preservation.dense_max_events < self.preservation.min_shared_events:
-            raise ValueError("preservation.dense_max_events must be >= min_shared_events")
         if self.preservation.partial_zsummary >= self.preservation.preserved_zsummary:
             raise ValueError("preservation partial_zsummary must be lower than preserved_zsummary")
         if self.hybrid_programs.matrix_source not in {"auto", "observed", "residual"}:

@@ -113,7 +113,7 @@ Required calculations are verified before the fixed seven-section report is acce
             }
             KATANA_PIPELINE(samples, contrasts, fasta, gtf)
             if (params.mode == 'complete') {
-                KATANA_FLOW_IMPORT(KATANA_PIPELINE.out.bundle, template, template_file.name)
+                KATANA_FLOW_IMPORT(KATANA_PIPELINE.out.bundle, template, template_file.name, config, config_file.name)
                 KATANA_DOWNSTREAM(KATANA_FLOW_IMPORT.out.workspace.first(), 'project.json', config, config_file.name)
             }
         }

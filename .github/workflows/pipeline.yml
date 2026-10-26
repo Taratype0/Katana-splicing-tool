@@ -66,3 +66,7 @@ jobs:
           python -B pipeline/tools/check_managed_storage.py \
             --nextflow-command-json "$runtime_command" \
             --outdir "$RUNNER_TEMP/katana-managed-storage"
+          printf '%s\n' "$runtime_command" > "$RUNNER_TEMP/nextflow-command.json"
+          python -B pipeline/tools/check_resource_resume.py \
+            --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
+            --outdir "$RUNNER_TEMP/katana-resource-resume"

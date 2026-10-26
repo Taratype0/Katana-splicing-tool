@@ -37,11 +37,8 @@ _MAPP_SCRIPTS = (
 
 
 def _sha(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    from .file_io import digest
+    return digest(path)
 
 
 def _executable(value: Any, default: str) -> str:
@@ -242,6 +239,8 @@ def readiness(spec: dict) -> list[str]:
                 if all(inputs.get(k) and Path(inputs[k]).is_file() for k in ("inclusion_table", "sitecount_matrix", "design")):
                     _maei_tables(inputs)
         if adapter == "mapp.prepare":
+            if parameters.get("all_windows"):
+                deferred_parameters = set(deferred_parameters) | {"site", "window_start", "window_end"}
             from .mapp_inputs import window_id
             _executable(parameters.get("python"), sys.executable)
             if not inputs.get("counter_sha256"):
@@ -377,7 +376,11 @@ def execute_stage(spec: dict, output_dir: str | Path) -> dict:
     if _adapter(spec) == "qc.sequencing":
         from .sequencing import execute_stage as sequence_stage
         return sequence_stage(spec,output_dir)
-    problems = readiness(spec)
+    readiness_spec = spec
+    if _adapter(spec) == "mapp.prepare" and spec.get("parameters", {}).get("all_windows"):
+        from .mapp_inputs import native_windows
+        readiness_spec = {**spec, "parameters": {**spec["parameters"], **native_windows()[0]}}
+    problems = readiness(readiness_spec)
     if problems:
         raise ValueError("; ".join(problems))
     out = Path(output_dir).resolve()
@@ -397,8 +400,9 @@ def execute_stage(spec: dict, output_dir: str | Path) -> dict:
     elif adapter.startswith("network."):
         evidence, paths = _network(spec, out)
     elif adapter == "mapp.prepare":
-        from .mapp_inputs import prepare_inputs
-        evidence, paths = prepare_inputs(spec, out, run=_run, sha=_sha, executable=_executable)
+        from .mapp_inputs import prepare_inputs, prepare_comparison
+        prepare = prepare_comparison if spec.get("parameters", {}).get("all_windows") else prepare_inputs
+        evidence, paths = prepare(spec, out, run=_run, sha=_sha, executable=_executable)
     elif adapter == "mapp.maei":
         if spec.get("inputs", {}).get("applicability_proof"):
             from .mapp_inputs import validate_inapplicability
@@ -740,8 +744,7 @@ def _network(spec: dict, out: Path) -> tuple[dict, list[Path]]:
     ):
         if key in parameters:
             value = parameters[key]
-            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-                raise ValueError(f"{key} must be an explicit positive integer")
+            # Legacy execution fields are metadata only; scheduler owns limits.
             setattr(target, attribute, value)
     if identity:
         config.network.minimum_network_samples = identity["minimum_network_samples"]

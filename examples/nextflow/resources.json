@@ -1,0 +1,12 @@
+{
+  "defaults": {
+    "queue": "main",
+    "account": "YOUR_ACCOUNT"
+  },
+  "processes": {
+    "NETWORK_FIT": {"cpus": 12, "memory": "72 GB", "time": "16h"},
+    "MOTIFTRACE": {"cpus": 6, "memory": "36 GB", "time": "8h"},
+    "MAPP_PREPARE": {"cpus": 6, "memory": "36 GB", "time": "8h"},
+    "MAPP": {"cpus": 6, "memory": "36 GB", "time": "8h"}
+  }
+}

@@ -324,7 +324,7 @@ write.csv(data.frame(event_key=colnames(dat), raw_module=net$colors), args[2], r
             ],
             capture_output=True,
             text=True,
-            timeout=1800,
+            timeout=None,
             check=False,
             env=_r_subprocess_env(executable),
         )

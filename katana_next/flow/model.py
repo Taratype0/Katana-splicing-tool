@@ -27,8 +27,8 @@ def write_json(path, value):
 
 
 def file_sha256(path):
-    with Path(path).open("rb") as handle:
-        return hashlib.file_digest(handle, "sha256").hexdigest()
+    from .file_io import digest
+    return digest(path)
 
 
 def assign_levels(tasks):

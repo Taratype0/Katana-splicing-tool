@@ -49,8 +49,8 @@ def canonical_hash(value: Any) -> str:
 
 
 def file_hash(path: str | Path) -> str:
-    with Path(path).open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+    from .file_io import digest
+    return digest(path)
 
 
 def read_json(path: str | Path) -> dict:
@@ -74,17 +74,24 @@ def file_record(path: str | Path) -> dict:
     path = Path(path).resolve()
     if not path.is_file():
         raise FileNotFoundError(path)
-    before = path.stat()
+    from .file_io import identity
+    before = identity(path)
     digest = file_hash(path)
-    after = path.stat()
-    if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+    after = identity(path)
+    if before != after:
         raise ValueError(f"File changed while its content was verified: {path}")
-    return {"path": str(path), "size_bytes": after.st_size, "sha256": digest}
+    return {"path": str(path), "size_bytes": after[2], "sha256": digest, "file_identity": after}
 
 
 def verify_files(records: list[dict]) -> None:
+    from .file_io import identity
     for record in records:
-        actual = file_record(record["path"])
+        path = Path(record["path"])
+        if (os.environ.get("KATANA_VERIFY_CONTENT") != "1" and path.is_file()
+                and record.get("file_identity") == identity(path)
+                and path.stat().st_size == record.get("size_bytes")):
+            continue
+        actual = file_record(path)
         if actual["size_bytes"] != record.get("size_bytes") or actual["sha256"] != record.get("sha256"):
             raise ValueError(f"Verified content changed: {record['path']}")
 
@@ -550,6 +557,13 @@ def execute_task(plan_path: str | Path, task_id: str, output_dir: str | Path,
                     prepared = [parent.get("execution_evidence", {}).get("maei_inputs")
                                 for _path, parent in parents.values()
                                 if parent.get("execution_evidence", {}).get("maei_inputs")]
+                    for _path, parent in parents.values():
+                        windows = parent.get("execution_evidence", {}).get("maei_windows")
+                        if windows:
+                            from .mapp_inputs import window_id
+                            scope = effective_task["scope"]
+                            key = scope["site"] + ":" + window_id(scope["window_start"], scope["window_end"])
+                            prepared.append(windows[key])
                     if prepared:
                         if len(prepared) != 1:
                             raise ValueError("Native MAPP fit needs one verified prepared quantity family")

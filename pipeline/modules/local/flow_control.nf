@@ -30,6 +30,8 @@ process KATANA_FLOW_IMPORT {
     path bundle
     path project_template_root, stageAs: 'project-template'
     val project_template_filename
+    path flow_config, stageAs: 'flow-config'
+    val flow_config_filename
 
     output:
     path 'workspace', emit: workspace
@@ -39,7 +41,8 @@ process KATANA_FLOW_IMPORT {
     """
     ${containerRuntimePrelude(workflow.containerEngine)}
     ${quote(params.flow_executable)} import --bundle ${quote(bundle)} \\
-        --project-template ${quote(project_template_root.resolve(project_template_filename))} --outdir workspace
+        --project-template ${quote(project_template_root.resolve(project_template_filename))} \\
+        --config ${quote(flow_config.resolve(flow_config_filename))} --outdir workspace
     test -s workspace/project.json
     """
 }
