@@ -71,6 +71,10 @@ jobs:
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-resource-resume"
 
+          python -B pipeline/tools/check_resource_policy.py \
+            --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
+            --outdir "$RUNNER_TEMP/katana-resource-policy"
+
           python -B pipeline/tools/check_native_cache_scope.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-cache-scope"

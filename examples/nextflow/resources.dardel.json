@@ -1,0 +1,17 @@
+{
+  "defaults": {
+    "queue": "shared",
+    "account": "YOUR_ACCOUNT"
+  },
+  "processes": {
+    "QC": {
+      "queue": "shared"
+    },
+    "RSEQC_INFEREXPERIMENT": {
+      "queue": "shared"
+    },
+    "GFFREAD_STRAND_MODELS": {
+      "queue": "shared"
+    }
+  }
+}

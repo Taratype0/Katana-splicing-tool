@@ -29,19 +29,36 @@ def _directives(values):
 
 
 def render_resources(value):
-    if not isinstance(value, dict) or set(value) - {"defaults", "processes"}:
-        raise ValueError("Resource configuration accepts defaults and processes only; scientific parameters belong in flow_config")
+    if not isinstance(value, dict) or set(value) - {"defaults", "labels", "processes"}:
+        raise ValueError("Resource configuration accepts defaults, labels and processes only; scientific parameters belong in flow_config")
     lines = ["// Generated execution-only settings. No scientific parameter overrides.", "process {"]
     if not isinstance(value.get("defaults", {}), dict) or set(value.get("defaults", {})) - {"queue", "account"}:
         raise ValueError("defaults accepts queue/account; set CPU, memory and time under exact process names")
     lines += ["    " + line for line in _directives(value.get("defaults", {}))]
+    labels = value.get("labels", {})
+    if not isinstance(labels, dict):
+        raise ValueError("labels must map Nextflow process labels to resource settings")
+    for name, options in labels.items():
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+            raise ValueError("Use an exact lowercase Nextflow process label")
+        directives = _directives(options)
+        if not directives:
+            continue
+        lines.append(f"    withLabel: '{name}' {{")
+        lines += ["        " + line for line in directives]
+        lines.append("    }")
     processes = value.get("processes", {})
     if not isinstance(processes, dict):
         raise ValueError("processes must map process names to resource settings")
     for name, options in processes.items():
-        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", name):
+        if not isinstance(name, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]*", name):
             raise ValueError("Use the exact uppercase Nextflow process alias")
+        directives = _directives(options)
+        if not directives:
+            continue
         lines.append(f"    withName: '(^|.*:){name}' {{")
-        lines += ["        " + line for line in _directives(options)]
+        lines += ["        " + line for line in directives]
         lines.append("    }")
+    if len(lines) == 2:
+        return lines[0] + "\n"
     return "\n".join([*lines, "}", ""])

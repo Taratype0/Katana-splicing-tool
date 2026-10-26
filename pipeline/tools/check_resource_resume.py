@@ -41,7 +41,7 @@ def main():
     failed = [r for r in first if r['status'] == 'FAILED']
     assert len(failed) == 1 and failed[0]['exit'] == '137'
     retry = next(r for r in first if r['attempt'] == '2')
-    assert retry['cpus'] == '2' and retry['memory'] == '32 MB'
+    assert retry['cpus'] == '1' and retry['memory'] == '32 MB'
     assert len(resumed) == 2 and all(r['status'] == 'CACHED' for r in resumed)
     proof = {'status': 'passed', 'scope': 'generated resource and resume tasks, not scientific validation',
              'completed': 2, 'failed_attempts': 1, 'actual_retry_memory': retry['memory'], 'cached_after_resource_change': 2}

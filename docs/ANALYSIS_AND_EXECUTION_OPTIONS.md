@@ -53,11 +53,14 @@ and [nf-core/rnasplice](https://github.com/nf-core/rnasplice/blob/master/conf/ba
 |---|---:|---:|---:|
 | Network fit | 12 | 72 GB | 16 h |
 | MotifTrace, MAPP preparation and MAPP fit | 6 | 36 GB | 8 h |
+| RSeQC gene-body coverage (one BAM per task) | 1 | 4 GB | 12 h |
+| Sequencing-QC collection, reference BED and project audit | 1 | 4 GB | 2 h |
 | Other downstream analysis tasks | 2 | 12 GB | 4 h |
 
 These are starting requests, not dataset-size estimates or guarantees of fit.
 Selected resource/signal terminations receive one retry, with the default
-requests doubled. Other errors finish with failure so they can be diagnosed.
+memory and time requests doubled. CPU count stays fixed: more threads do not
+help a serial scan. Other errors finish with failure so they can be diagnosed.
 Optional native `max_cpus`, `max_memory` and `max_time` settings bound requests.
 No resource value causes a switch to a `memory` partition. The user/site selects
 the queue; Slurm controls admission and actual concurrency.
@@ -72,13 +75,85 @@ katana-flow run --mode downstream-only \
   --resource-config resources.json --outdir results
 ```
 
-Copy [resources.json](../examples/nextflow/resources.json), replace the account
-and queue, and select appropriate task requests. `defaults` sets queue/account;
-`processes` sets exact uppercase Nextflow aliases. Explicit resource values
+Copy [resources.json](../examples/nextflow/resources.json) and select appropriate
+task requests. The generic example does not choose a queue or account.
+`defaults` optionally sets queue/account; `labels` overrides a Nextflow process
+label; `processes` overrides exact uppercase Nextflow aliases, with higher
+priority than label/default settings. Explicit resource values
 are fixed overrides; default automatic scaling does not change those explicit
 values. An optional `maxRetries` value changes the retry count for that alias.
 The `account` field generates Slurm's `--account`; configure other schedulers
 with their native site configuration instead.
+
+## Configure your own cluster once
+
+The pipeline declares CPU, memory and wall-time requests. The site configuration
+chooses an executor and containers; the resource file chooses queues if needed.
+There are no built-in `main`, `memory` or `shared` queue names, automatic queue
+switches, exclusive-node requests or manual dependency-submission loops.
+Nextflow submits ready tasks and monitors completion; the scheduler allocates
+resources. Keep `--slurm_partition` unset when using per-task queue mappings.
+A global partition selection intentionally applies to everything without a more
+specific override.
+
+For Dardel, copy [resources.dardel.json](../examples/nextflow/resources.dardel.json),
+replace `YOUR_ACCOUNT`, and use it with `--profile slurm,apptainer`. It requests
+`shared` by default, including RSeQC and light processing. It does not force even
+threaded tasks onto whole nodes. If a particular task requires a different
+partition under your allocation, add that exact alias to `processes`. Confirm
+partition limits with the site; no universal CPU/memory threshold identifies a
+shared partition across clusters.
+
+For another Slurm cluster, replace the queue and account names. For local use,
+use `--profile local,docker` and the queue-free generic example. PBS/SGE/cloud
+users can set `process.executor` and scheduler-specific options in a standard
+Nextflow `--site-config`; the JSON `account` convenience is Slurm-specific.
+Do not copy Slurm account directives into other executors.
+
+For example, a site with queues named `short` and `compute` can use:
+
+```json
+{
+  "defaults": {"queue": "short"},
+  "labels": {"process_high": {"queue": "compute"}},
+  "processes": {
+    "QC": {"queue": "short", "time": "24h"},
+    "NETWORK_FIT": {"queue": "compute", "memory": "96 GB"}
+  }
+}
+```
+
+These names are examples, not built-in partitions. `QC` includes per-sample
+RSeQC coverage and sequencing-summary collection; their native time defaults
+are different. A `QC` override deliberately applies to both. For finer control,
+use a dynamic selector in your site config keyed by `spec.workflow_id`.
+
+Upstream DEXSeq counting/annotation, FASTQ staging, reference preparation and
+FASTA indexing also request one CPU for their current serial commands. Their
+existing memory/time defaults remain intact; parallel aligners, quantifiers and
+model fits retain their tool-specific allocations.
+
+RSeQC `geneBody_coverage.py` scans alignments for each transcript and has no
+thread-count argument in this adapter. Its initial request is now one CPU and
+4 GB, with 12 hours for the potentially long scan. This allocation reduces wasted
+reservation; it does not make a serial algorithm faster. Different samples are
+independent tasks. Large BAMs or annotations may need more memory/time, configured
+without changing the measurement or forcing a different queue.
+
+Review `pipeline_info/trace-*.tsv`, execution reports and your scheduler's usage
+statistics before adjusting resources. CPU budgets are passed to the Katana
+worker/BLAS environment; a budget is a ceiling, not a promise of full utilization
+in every phase. Defaults for network/MotifTrace/MAPP remain initial requests,
+not a claim of measured efficiency on every dataset.
+
+Reuse completed QC through existing task receipts/cache when inputs, annotation,
+method/version and parameters match. A historical Qualimap coverage result does
+not automatically replace an RSeQC gene-body profile: their measurements differ.
+This resource update neither reruns nor relabels existing study results.
+
+References: [Nextflow resource allocation and retry](https://training.nextflow.io/latest/config_exec/02_resources_and_retries/),
+[Nextflow site configuration](https://www.nextflow.io/docs/latest/config.html),
+and [RSeQC gene-body coverage](https://rseqc.sourceforge.net/#genebody-coverage-py).
 
 ## Resume without repeating completed calculations
 
