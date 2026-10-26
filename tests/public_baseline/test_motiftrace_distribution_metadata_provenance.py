@@ -13,7 +13,9 @@ MODES='82f67e45f464c98276868e2b15b25fb9ec683f4bc0c67611d507eeb5284d105b'
 
 
 def _record():
-    value=json.loads((ROOT/'docs/motiftrace/integration.v1.json').read_text('utf-8'))
+    # Preserve the exact historical metadata proof after the explicit execution
+    # capacity revision; do not relabel new source bytes as an old release.
+    value=json.loads((ROOT/'tests/fixtures/frozen_motiftrace_capacity_20261017/integration.before-capacity-removal.json').read_text('utf-8'))
     revision=next(row for row in value['interface_revisions']
                   if row.get('revision')=='distribution-version-metadata-20261025')
     return value,revision
@@ -40,7 +42,7 @@ def test_metadata_revision_records_both_exact_interface_identities_and_history()
 def test_only_declared_distribution_version_reconstructs_the_previous_exact_bytes():
     _,revision=_record()
     change=revision['changes'][0]
-    current=(ROOT/'pyproject.toml').read_bytes()
+    current=(ROOT/'tests/fixtures/frozen_motiftrace_capacity_20261017/pyproject.before-capacity-removal.toml').read_bytes()
     old_token=('version = "'+change['previous_distribution_version']+'"').encode()
     new_token=('version = "'+change['current_distribution_version']+'"').encode()
     assert current.count(new_token)==1
@@ -68,4 +70,27 @@ def test_packaging_revision_preserves_all_scientific_source_and_mode_fingerprint
     assert len(record['modes'])==6
     assert _canonical(record['modes'])==revision['workflow_modes_manifest_sha256']==MODES
     for name,values in record['scientific_sources'].items():
-        assert sha256((ROOT/name).read_bytes()).hexdigest()==values['current_sha256']
+        snapshot=ROOT/'tests/fixtures/frozen_motiftrace_capacity_20261017'/Path(name).name
+        source=snapshot if snapshot.is_file() else ROOT/name
+        assert sha256(source.read_bytes()).hexdigest()==values['current_sha256']
+
+
+def test_capacity_revision_preserves_historical_identity_and_records_current_sources():
+    historical,_=_record()
+    record=json.loads((ROOT/'docs/motiftrace/integration.v1.json').read_text('utf-8'))
+    revision=next(r for r in record['interface_revisions']
+                  if r.get('revision')=='remove-fixed-motiftrace-capacity-limits-20261026')
+    assert record['integration_version']==revision['integration_version']=='1.0.0.post6'
+    oldpath=ROOT/revision['previous_record_snapshot']
+    assert sha256(oldpath.read_bytes()).hexdigest()==revision['previous_integration_record_sha256']
+    assert json.loads(oldpath.read_text())==historical
+    old_toml=ROOT/'tests/fixtures/frozen_motiftrace_capacity_20261017/pyproject.before-capacity-removal.toml'
+    changes={r['path']:r for r in revision['changes']}
+    assert changes['pyproject.toml']['previous_sha256']==sha256(old_toml.read_bytes()).hexdigest()
+    assert changes['pyproject.toml']['current_sha256']==sha256((ROOT/'pyproject.toml').read_bytes()).hexdigest()
+    assert tomllib.loads((ROOT/'pyproject.toml').read_text())['project']['version']=='2.0.0b5.dev20261026'
+    assert record['execution_adapter']['fixed_capacity_limits_enforced'] is False
+    assert record['execution_adapter']['max_tests_default'] is None
+    assert record['execution_adapter']['max_matrix_cells_default'] is None
+    for name,value in record['scientific_sources'].items():
+        assert sha256((ROOT/name).read_bytes()).hexdigest()==value['current_sha256']

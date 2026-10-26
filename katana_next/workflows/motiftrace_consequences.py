@@ -15,7 +15,7 @@ from katana_next.workflows.sources import selected_source, selection_rows
 
 
 class MotifTraceConsequencesWorkflow(WorkflowBase):
-    version = "1.0.1"
+    version = "1.1.0"
     definition = WorkflowDefinition(
         workflow_id="prioritize.motiftrace_consequences", workspace_id="prioritize",
         label="Katana MotifTrace: paired RNA and region statistics",
@@ -27,10 +27,8 @@ class MotifTraceConsequencesWorkflow(WorkflowBase):
         parameters=(
             ParameterDefinition("selection_id", "Existing supported DAS events", "selection", "", "One comparison from its full measured catalog; all five rMATS event types supported. Successful quantification is never rerun."),
             ParameterDefinition("custom_motif_path", "User motif library (optional)", "text", "", "Species-matched consensus TSV or Minimal MEME plus metadata. Otherwise use registered verified public motif databases."),
-            ParameterDefinition("model_ids", "Explicit model IDs (optional)", "text", "", "Comma-separated native IDs or exact model hashes. Empty means all supplied models, up to 256, subject to explicit execution budgets; never silently truncate or select by significance."),
-            ParameterDefinition("cluster_permutations", "Whole-pair permutations", "number", 999, "Fixed before scanning; shared swaps across all models, methods and regions. Cluster P is FWER, not FDR.", minimum=99, maximum=9999),
-            ParameterDefinition("max_tests", "Maximum complete-family tests", "number", 1000000, "Execution budget, not a scientific filter. Exact scalar/window count is checked before motif scoring. All models and windows remain in one family; exceeding this value fails without truncation.", minimum=1),
-            ParameterDefinition("max_matrix_cells", "Maximum paired-matrix cells", "number", 8000000, "Execution memory budget, checked before scoring. Float64 cells use 8 bytes each; tables and permutation arrays require additional memory. Never remove matched pairs to fit this budget.", minimum=1),
+            ParameterDefinition("model_ids", "Explicit model IDs (optional)", "text", "", "Comma-separated native IDs or exact model hashes. Empty means all supplied models; never silently truncate or select by significance."),
+            ParameterDefinition("cluster_permutations", "Whole-pair permutations", "number", 999, "Fixed before scanning; shared swaps across all models, methods and regions. Cluster P is FWER, not FDR. No fixed upper computation limit.", minimum=99),
         ),
         presentation_role="advanced",
         limitations="Local reference forms are not phased complete transcripts. Motif availability/PSI weighting is not measured occupancy or causality. PWM candidate positions have no calibrated site P. Matching exchangeability is an assumption; fewer than 20 independent pairs yields NA. No HPC, CLIP, read quantification or source-result mutation.",
@@ -123,7 +121,7 @@ class MotifTraceConsequencesWorkflow(WorkflowBase):
         summary = analyze_consequences(complete, set(selected.event_id), library["models"],
             context.manifest.annotation.genome_fasta, writer.directory/"event_consequences",
             permutations=parameters["cluster_permutations"], check_cancelled=job.check_cancelled,
-            max_tests=parameters["max_tests"], max_matrix_cells=parameters["max_matrix_cells"],
+            max_tests=parameters.get("max_tests"), max_matrix_cells=parameters.get("max_matrix_cells"),
             provenance={"source_artifact_id": source.artifact_id, "source_table_SHA256": digest(source.path),
                 "genome_build": context.manifest.annotation.genome_build, "species": context.manifest.metadata["species"],
                 "genome_FASTA": str(context.manifest.annotation.genome_fasta), "motif_inputs": library["inputs"],

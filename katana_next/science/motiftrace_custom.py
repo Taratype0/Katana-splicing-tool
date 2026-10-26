@@ -1,4 +1,4 @@
-"""Bounded user motif libraries and separate, explicit cached-RNA analyses."""
+"""User motif libraries and separate, explicit cached-RNA analyses."""
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +17,8 @@ from katana_next.science.rbp_short_extension import (
 )
 
 NAME = "Katana MotifTrace"
-MAX_MODELS = 256
+# Kept as an import-compatible marker; custom libraries have no model-count cap.
+MAX_MODELS = None
 FIELDS = ("motif_id", "RBP", "species", "evidence", "source")
 EVIDENCE = {"direct_experiment", "homology_inferred", "model_prediction", "user_defined", "unknown"}
 IUPAC = dict(zip("ACGTURYSWKMBDHVN", ("A", "C", "G", "T", "T", "AG", "CT", "CG", "AT", "GT", "AC", "CGT", "AGT", "ACT", "ACG", "ACGT")))
@@ -32,8 +33,6 @@ def _file(path):
     raw = Path(path).expanduser()
     if not raw.is_absolute() or raw.is_symlink() or not raw.is_file():
         raise ValueError("Custom motif input must be an existing absolute regular local file")
-    if raw.stat().st_size > 16 * 1024 ** 2:
-        raise ValueError("Custom library exceeds the explicit 16MiB local input budget")
     return raw.resolve(strict=True)
 
 
@@ -96,8 +95,8 @@ def load_custom_library(path, *, species):
             raise ValueError("Custom consensus TSV needs a motif column")
     else:
         raise ValueError("Use consensus .tsv or Minimal MEME .meme plus .metadata.tsv")
-    if not set(FIELDS).issubset(table) or table.empty or len(table) > 1024:
-        raise ValueError("Require 1-1024 source rows with motif_id/RBP/species/evidence/source")
+    if not set(FIELDS).issubset(table) or table.empty:
+        raise ValueError("Require source rows with motif_id/RBP/species/evidence/source")
     if table[list(FIELDS)].apply(lambda column: column.str.strip().eq("")).any().any() or table.motif_id.duplicated().any():
         raise ValueError("Custom source metadata cannot be missing or have duplicate motif IDs")
     if not table.species.eq(species).all():
@@ -119,8 +118,6 @@ def load_custom_library(path, *, species):
         models.setdefault(key, {**model, "origin": "user_custom", "model_SHA256": fingerprint})
         sources.setdefault(key, []).append({"model_id": key, "native_id": row["motif_id"], "RBP": row["RBP"],
             "species": row["species"], "evidence": "user_declared_" + row["evidence"], "source": row["source"]})
-    if len(models) > MAX_MODELS:
-        raise ValueError(f"Custom job exceeds the explicit {MAX_MODELS}-model budget; never silently truncate a library")
     for token, model in models.items():
         model.update(RBPs=";".join(sorted({row["RBP"] for row in sources[token]})),
                      native_ids=";".join(sorted({row["native_id"] for row in sources[token]})),
@@ -172,8 +169,6 @@ def add_custom_results(payload, library, *, mode, output, check_cancelled=lambda
                         and any(((length >= a+width) & (roles == group)).sum() >= 20 for group in ("up", "dn"))]
             span = max(eligible)+1 if eligible else 0
             windows[width] = (span, window_validity(sequences["cassette_exon"], width, span))
-        if len(library["models"]) * (14 + 2 * sum(span for span, _ in windows.values())) > 1_000_000:
-            raise ValueError("Custom analysis exceeds one million planned tests per contrast; preserve inputs and use an explicitly budgeted job")
         for token, model in library["models"].items():
             check_cancelled()
             current = {}

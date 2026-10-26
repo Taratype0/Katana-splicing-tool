@@ -1,7 +1,7 @@
 """Versioned execution adapter around the frozen MotifTrace kernels.
 
-Only execution budgeting differs from frozen analyze_consequences: exact
-pre-scoring dimensions and explicitly bounded allocation. Models, matching,
+The adapter records exact pre-scoring dimensions without capacity ceilings.
+Legacy budget options are recorded but ignored. Models, matching,
 statistics, permutations and the complete correction family are unchanged.
 """
 from __future__ import annotations
@@ -19,10 +19,10 @@ from katana_next.science.motiftrace_consequences import (
 from katana_next.reports.motif_native_index import render_budgeted_consequences as render_consequences
 from katana_next.science.motiftrace_budget import (
     DEFAULT_MAX_TESTS, DEFAULT_MAX_MATRIX_CELLS, execution_limits,
-    estimate_paired_family, enforce_paired_budget,
+    estimate_paired_family,
 )
 
-EXECUTION_ADAPTER_VERSION = "1.0.1"
+EXECUTION_ADAPTER_VERSION = "1.1.0"
 
 
 def analyze_consequences(complete, selected_ids, models, fasta, destination, *,
@@ -50,7 +50,8 @@ def analyze_consequences(complete, selected_ids, models, fasta, destination, *,
             "comparison_id": str(complete.comparison_id.iloc[0]), "permutations": permutations,
             "seed": seed, "minimum_independent_gene_pairs": 20, "window_nt": [10, 20, 50], "step": 1,
             "selected_event_ids": sorted(selected_ids), "models": models, "provenance": provenance or {},
-            "execution_budget": limits, "execution_adapter_version": EXECUTION_ADAPTER_VERSION, "statistical_family_split": False,
+            "execution_budget": limits, "execution_limits_enforced": False,
+            "execution_adapter_version": EXECUTION_ADAPTER_VERSION, "statistical_family_split": False,
             "external_exon_anchor_nt": 100, "regulatory_intron_nt": 200,
             "input_event_table_sha256": hashlib.sha256(complete.to_json(orient="split", double_precision=15).encode()).hexdigest()}
     (destination/"ANALYSIS_PLAN_BEFORE_SCORING.json").write_text(json.dumps(plan, indent=2, allow_nan=False), encoding="utf-8")
@@ -67,9 +68,9 @@ def analyze_consequences(complete, selected_ids, models, fasta, destination, *,
     used["role"] = np.where(used.event_id.isin(selected_ids), "foreground", "background")
     rna = extract_event_rna(used, fasta, check_cancelled=check_cancelled)
     estimate = estimate_paired_family(rna, matching, models)
-    budget = {"limits": limits, "estimate": estimate, "checked_before_motif_scoring": True}
+    budget = {"limits": limits, "estimate": estimate, "checked_before_motif_scoring": True,
+              "enforced": False, "capacity_policy": "no_fixed_computation_limits"}
     (destination/"EXECUTION_BUDGET_BEFORE_SCORING.json").write_text(json.dumps(budget, indent=2, allow_nan=False), encoding="utf-8")
-    enforce_paired_budget(estimate, limits, permutations=permutations)
     hits, changes, weighted = trace_instances(rna[rna.role.eq("foreground")], selected, models, check_cancelled=check_cancelled)
     scores = paired_form_scores(rna[rna.role.eq("foreground")], selected, models, check_cancelled=check_cancelled)
     for name, frame in (("ACTUAL_RNA_FORMS", rna), ("ACTUAL_LOCUS_HITS", hits),

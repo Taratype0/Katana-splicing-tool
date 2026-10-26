@@ -1,20 +1,28 @@
-"""Execution-only bounds for the complete, unchanged MotifTrace test family.
+"""Size estimates and legacy configuration for the complete MotifTrace family.
 
 No sequence scores or significance results are computed here. Counts follow
 the existing paired-dataset dimensions, including explicit unavailable windows.
 """
 from __future__ import annotations
 
-DEFAULT_MAX_TESTS = 1_000_000
-DEFAULT_MAX_MATRIX_CELLS = 8_000_000
+DEFAULT_MAX_TESTS = None
+DEFAULT_MAX_MATRIX_CELLS = None
 
 
 def execution_limits(max_tests=DEFAULT_MAX_TESTS, max_matrix_cells=DEFAULT_MAX_MATRIX_CELLS):
+    """Record obsolete options without imposing a computation ceiling.
+
+    Positive integer values remain readable from existing request files and
+    historical recovery records. Neither option limits a new computation.
+    """
+    import math
     values = {"max_tests": max_tests, "max_matrix_cells": max_matrix_cells}
     for name, value in values.items():
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 1 or not float(value).is_integer():
-            raise ValueError(f"{name} must be a finite positive integer execution budget")
-    return {key: int(value) for key, value in values.items()}
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 1 or not float(value).is_integer():
+            raise ValueError(f"{name} must be null or a positive integer legacy value")
+    return {key: int(value) if value is not None else None for key, value in values.items()}
 
 
 def estimate_paired_family(rna, matching, models, *, widths=(10, 20, 50)):
@@ -49,10 +57,5 @@ def estimate_paired_family(rna, matching, models, *, widths=(10, 20, 50)):
 
 
 def enforce_paired_budget(estimate, limits, *, permutations):
-    for count, limit in (("scalar_and_window_tests", "max_tests"), ("paired_matrix_cells", "max_matrix_cells")):
-        if estimate[count] > limits[limit]:
-            raise ValueError(f"MotifTrace pre-scoring execution budget exceeded: {count}={estimate[count]} > "
-                             f"{limit}={limits[limit]}. Configure a sufficient execution budget; "
-                             "no models, windows, events or statistical families were truncated or scored.")
-    if permutations * estimate["matched_gene_pairs"] > 8_000_000:
-        raise ValueError("MotifTrace pre-scoring whole-pair permutation memory budget exceeded")
+    """Backward-compatible no-op: estimates never reject a complete family."""
+    execution_limits(**limits)

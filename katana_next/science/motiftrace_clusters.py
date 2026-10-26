@@ -65,12 +65,11 @@ def _signed_ranks(differences, minimum):
 def paired_cluster_family(datasets, pair_ids, *, permutations=999, seed=20261015,
                            minimum_pairs=20, check_cancelled=lambda: None):
     """Input datasets carry complete pair x ordered-position matrices and metadata."""
-    if not 99 <= permutations <= 9999 or minimum_pairs < 2:
-        raise ValueError("Require 99-9999 fixed permutations and at least two independent pairs")
+    if (isinstance(permutations, bool) or not isinstance(permutations, (int, np.integer))
+            or permutations < 99 or minimum_pairs < 2):
+        raise ValueError("Require at least 99 integer permutations and at least two independent pairs")
     if len(pair_ids) != len(set(pair_ids)):
         raise ValueError("Gene-pair identities must be unique")
-    if permutations*len(pair_ids) > 8_000_000:
-        raise ValueError("Explicit whole-pair permutation memory budget exceeded")
     if any(len(d["differences"]) != len(d["pair_ids"]) for d in datasets):
         raise ValueError("Pair IDs/matrices disagree")
     if any(len(d["pair_ids"]) != len(set(d["pair_ids"])) for d in datasets):
@@ -168,7 +167,8 @@ def _profile(sequence, model, method, width):
 
 
 def build_paired_datasets(rna, matching, models, *, widths=(10, 20, 50),
-                          max_tests=100_000, max_matrix_cells=8_000_000, check_cancelled=lambda: None):
+                          max_tests=None, max_matrix_cells=None, check_cancelled=lambda: None):
+    # Obsolete keyword arguments remain accepted; all datasets are retained.
     validate_models(models)
     if not widths or any(not isinstance(w, int) or w < 1 for w in widths):
         raise ValueError("Explicit positive integer window widths required")
@@ -193,10 +193,6 @@ def build_paired_datasets(rna, matching, models, *, widths=(10, 20, 50),
                     for method in methods:
                         tests += span
                         cells += len(group)*span
-                        if tests > max_tests:
-                            raise ValueError("Explicit new-test budget exceeded; no models/windows are silently dropped")
-                        if cells > max_matrix_cells:
-                            raise ValueError("Explicit paired-matrix memory budget exceeded; no gene pairs silently dropped")
                         check_cancelled()
                         diff = np.full((len(group), span), np.nan)
                         for i, (a, b) in enumerate(seq_pairs):

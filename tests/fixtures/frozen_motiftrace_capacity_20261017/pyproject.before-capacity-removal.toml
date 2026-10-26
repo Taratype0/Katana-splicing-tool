@@ -1,0 +1,143 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "katana-splicing-tool"
+version = "2.0.0b5.dev20261025"
+description = "Artifact-driven bulk and single-cell RNA splicing evidence workspace."
+readme = "README.md"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "pipeline/UPSTREAM_LICENSE", "THIRD_PARTY_LICENSES/*"]
+requires-python = ">=3.11"
+dependencies = [
+  "matplotlib>=3.8",
+  "bamnostic>=1.3",
+  "numpy>=1.26,<3",
+  "biopython>=1.84,<2",
+  "pandas>=2.2,<3",
+  "PyYAML>=6.0",
+  "seaborn>=0.13",
+  "scipy>=1.11,<2",
+  "scikit-learn>=1.4",
+  "threadpoolctl>=3.1",
+  "networkx>=3.2",
+  "igraph>=1.0",
+  "leidenalg>=0.12",
+  "statsmodels>=0.14",
+  "dynamicTreeCut==0.1.1",
+  "umap-learn>=0.5.7",
+]
+
+[project.scripts]
+katana-open = "katana_next.launcher:main"
+katana-next = "katana_next.cli:main"
+katana-motiftrace = "katana_motiftrace.cli:main"
+katana-report = "katana_next.reports.cli:main"
+katana-targets = "katana_next.targets.cli:main"
+katana-flow = "katana_next.flow.cli:main"
+katana-contracts = "katana_next.contracts.cli:main"
+katana-cosplice = "katana_cosplice.cli:main"
+katana-splice = "katana_cosplice.cli:main"
+katana-splice-network = "katana_cosplice.cli:main"
+katana-cosplice-publication-benchmark = "katana_cosplice.publication_benchmark:main"
+katana-cosplice-input-benchmark = "katana_cosplice.input_mode_benchmark:main"
+katana-cosplice-locked-ablation = "scripts.run_locked_three_arm_ablation:main"
+katana-cosplice-locked-panel-report = "katana_cosplice.locked_panel_report:main"
+katana-cosplice-real-count-ablation = "scripts.run_real_count_four_arm_ablation:main"
+katana-cosplice-membership-validation = "scripts.validate_membership_confidence_panel:main"
+katana-next-api = "katana_next.api.main:main"
+katana-next-desktop = "katana_next.desktop:main"
+katana-next-fixture = "katana_next.fixtures:main"
+katana-next-full-fixture = "katana_next.full_fixture:main"
+katana-next-migrate = "katana_next.migration:main"
+katana-next-acceptance = "scripts.run_v2_acceptance:main"
+
+[project.optional-dependencies]
+desktop = ["PySide6>=6.6"]
+standalone = [
+  "pydantic>=2.9,<3",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "pysam>=0.22,<1; sys_platform != 'win32'",
+  "vl-convert-python>=1.8,<2",
+  "beautifulsoup4>=4.12,<5",
+  "requests>=2.32,<3",
+  "jsonschema>=4.18,<5",
+  "fastapi>=0.115",
+  "reportlab>=4.2",
+  "matplotlib-venn>=1.1,<2",
+  "uvicorn[standard]>=0.30",
+  "pymemesuite==0.1.0a4; sys_platform != 'win32'",
+  "pyhmmer>=0.11,<1; sys_platform != 'win32'",
+]
+flow = [
+  "pydantic>=2.9,<3",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "pysam>=0.22,<1; sys_platform != 'win32'",
+  "vl-convert-python>=1.8,<2",
+  "beautifulsoup4>=4.12,<5",
+  "requests>=2.32,<3",
+]
+targets = [
+  "pydantic>=2.9,<3",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+]
+report = [
+  "pydantic>=2.9,<3",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "vl-convert-python>=1.8,<2",
+]
+motiftrace = [
+  "pydantic>=2.9,<3",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "beautifulsoup4>=4.12,<5",
+  "requests>=2.32,<3",
+  "vl-convert-python>=1.8,<2",
+]
+contracts = [
+  "jsonschema>=4.18,<5",
+  "pydantic>=2.9,<3",
+]
+next = [
+  "beautifulsoup4>=4.12,<5",
+  "requests>=2.32,<3",
+  "duckdb>=1.1",
+  "fastapi>=0.115",
+  "pydantic>=2.9",
+  "pyarrow>=17",
+  "reportlab>=4.2",
+  "vl-convert-python>=1.8,<2",
+  "matplotlib-venn>=1.1,<2",
+  "uvicorn[standard]>=0.30",
+]
+next-dev = [
+  "httpx>=0.27",
+  "pytest>=8.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app", "app.*", "katana_cosplice", "katana_cosplice.*", "katana_motiftrace", "katana_motiftrace.*", "katana_next", "katana_next.*", "scripts", "src", "src.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"katana_next.science" = ["rbp_sequence_browser.html", "motiftrace_windows.html", "motiftrace_consequences.html", "motiftrace_parallel.html", "rbp_evidence_layers.json", "*.R"]
+"katana_next" = ["vendor/DJExpress_SOURCE_SHA256.json", "vendor/DJExpress/*", "vendor/DJExpress/R/*.R", "vendor/MAPP/SOURCE.json", "vendor/MAPP/LICENSE", "vendor/MAPP/COPYING*", "vendor/MAPP/modules/*/scripts/*"]
+"katana_next.contracts" = ["schemas/*.json", "data/*.json"]
+"katana_next.reports" = ["assets/*", "assets/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [
+  ".git",
+  ".venv",
+  "build",
+  "dist",
+  "katana_output",
+  "software",
+]
+python_files = ["test_*.py"]

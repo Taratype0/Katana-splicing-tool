@@ -289,17 +289,25 @@ descriptive labels. Resolved engine configuration is the authoritative record.
 
 | Runtime field | Default | Purpose |
 | --- | --- | --- |
-| `parameters.prioritize.motiftrace_consequences.model_ids` | empty | All supplied models; optional predeclared native IDs/hashes. Up to 256 models under the accepted implementation; no silent first-model selection. |
+| `parameters.prioritize.motiftrace_consequences.model_ids` | empty | All supplied models; optional predeclared native IDs/hashes. No fixed model-count cap or silent first-model selection. |
 | `...custom_motif_path` | empty | Optional species-matched consensus TSV/Minimal MEME with required metadata, replacing the public library for that calculation. |
-| `...cluster_permutations` | `999` | Whole-pair swaps; allowed 99–9999. Maximum-cluster P is FWER, not enrichment FDR. |
-| `...max_tests` | `1000000` | Complete-family computation budget; exceeding it fails without truncation. |
-| `...max_matrix_cells` | `8000000` | Paired float64 matrix budget; no removal of matched pairs to fit it. |
+| `...cluster_permutations` | `999` | Whole-pair swaps; integer >=99, with no fixed upper count. Maximum-cluster P is FWER, not enrichment FDR. |
+| `...max_tests` | `null` | Deprecated compatibility field for older parameter files; does not limit the number of tests. Omit from new configurations. |
+| `...max_matrix_cells` | `null` | Deprecated compatibility field for older parameter files; does not limit paired-matrix elements. Omit from new configurations. |
 | `parameters.prioritize.rbp_mechanism.sequence_scope` | `boundary_association` | Retained boundary analysis mode; completed-map/parallel/consequence modes have separate inputs and contracts. |
 | `...window_bp` | `100` | Bases on each side of the splice boundary, same convention for matched foreground/background; allowed 10–1000. |
 | `...site_pvalue` | `0.0001` | FIMO site screening, not enrichment FDR; allowed `1e-8`–`0.01`. |
 | `...motif_evidence` | `all_evidence_separate` | Direct, homology and predicted evidence retained separately; `direct_experiment` selects the direct evidence subset. |
 | `...binding_mode` | Planner forces `required` | Strict flow requires supplied matched CLIP evidence; standalone workflow default `if_configured` is not the complete-flow setting. |
 | `parameters.prioritize.motiftrace_parallel.parallel_bundle_asset_id` | empty | Optional exact completed/calibrated parallel-family asset; no new calibration inferred from native MAPP output alone. |
+
+MotifTrace has no fixed application cap on model counts, RNA size,
+custom-library file size/row counts, test counts, paired-matrix elements,
+or permutation-by-gene-pair elements. Workload estimates are informational.
+Configure actual CPU, memory and wall-time requests through the executor/site
+configuration; the legacy fields above do not allocate resources. Complete
+event/model/window families and the established P/FDR/FWER calculations are
+retained.
 
 `...` means the same workflow prefix as the preceding full field, not a JSON
 key. Use actual nested keys as shown in the

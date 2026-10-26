@@ -84,10 +84,10 @@ def test_wrong_alternative_site_geometry_fails(kind, strand):
         event_forms(row)
 
 
-def test_no_silent_coordinate_or_budget_truncation(tmp_path):
+def test_no_silent_coordinate_or_legacy_budget_truncation(tmp_path):
     fasta, _ = reference(tmp_path)
-    with pytest.raises(ValueError, match="budget"):
-        extract_event_rna(pd.DataFrame([event()]), fasta, max_total_bases=10)
+    expected = extract_event_rna(pd.DataFrame([event()]), fasta)
+    pd.testing.assert_frame_equal(expected, extract_event_rna(pd.DataFrame([event()]), fasta, max_total_bases=10))
     with pytest.raises(ValueError):
         event_forms(event(exonEnd=100.5))
     with pytest.raises(ValueError, match="RI"):

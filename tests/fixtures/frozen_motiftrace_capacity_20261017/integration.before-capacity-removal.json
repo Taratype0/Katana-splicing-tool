@@ -1,0 +1,397 @@
+{
+  "schema": "katana.motiftrace_integration/v1",
+  "scientific_release": "1.0.0-frozen.20261017",
+  "integration_version": "1.0.0.post5",
+  "frozen_source_archive_sha256": "fe3f0220d16940a7d90f06a22320d0dee7aa8ebc3d7186f76a131a6d351a5778",
+  "frozen_release_manifest_sha256": "d8329931ecb1f453897cb2f8d157dff4fe046c7746d3e10805cfdc43db98357e",
+  "scientific_parameter_changes": false,
+  "scientific_calculation_changes": false,
+  "completed_studies_recomputed": false,
+  "presentation_changes_preexisting": "Approved English-only report/template cleanup; no numeric engine changes.",
+  "description_scope": {
+    "descriptive_models": 5712,
+    "calibrated_common_literal_motifs": 706,
+    "calibrated_windows": 14,
+    "calibration_applies_to_all_descriptive_models": false
+  },
+  "scientific_sources": {
+    "katana_next/science/motif_significance.py": {
+      "frozen_sha256": "bd4a460a0d37986331e1feba3bdfef49c52ba1b3f39d6285cc9a5cacbfa5aa37",
+      "current_sha256": "bd4a460a0d37986331e1feba3bdfef49c52ba1b3f39d6285cc9a5cacbfa5aa37",
+      "same": true
+    },
+    "katana_next/science/motiftrace_clusters.py": {
+      "frozen_sha256": "c4f2937ad5404e6a35990ee7e351bab89ebd36f839f49e001966d00b2d5001e2",
+      "current_sha256": "c4f2937ad5404e6a35990ee7e351bab89ebd36f839f49e001966d00b2d5001e2",
+      "same": true
+    },
+    "katana_next/science/motiftrace_consequences.html": {
+      "frozen_sha256": "7a26572abe84b91b7614d5389b684aa5243190e7d97ab2f4dcd2509b3a271897",
+      "current_sha256": "7a26572abe84b91b7614d5389b684aa5243190e7d97ab2f4dcd2509b3a271897",
+      "same": true
+    },
+    "katana_next/science/motiftrace_consequences.py": {
+      "frozen_sha256": "7cf122e48e87caf482da542758e625ce69bc23be3d2f16d0af1e03e25f82ccf1",
+      "current_sha256": "7cf122e48e87caf482da542758e625ce69bc23be3d2f16d0af1e03e25f82ccf1",
+      "same": true
+    },
+    "katana_next/science/motiftrace_continuous.py": {
+      "frozen_sha256": "24f92d0e356f91d8d0b1bc641318e06273befcbb30e4ff4a2b06088f3254d3c8",
+      "current_sha256": "24f92d0e356f91d8d0b1bc641318e06273befcbb30e4ff4a2b06088f3254d3c8",
+      "same": true
+    },
+    "katana_next/science/motiftrace_custom.py": {
+      "frozen_sha256": "56bf46ba62ea90f77d5d0d75cc71756ff81e149c9b768191213425c79fd8dd8c",
+      "current_sha256": "56bf46ba62ea90f77d5d0d75cc71756ff81e149c9b768191213425c79fd8dd8c",
+      "same": true
+    },
+    "katana_next/science/motiftrace_events.py": {
+      "frozen_sha256": "4b85600fa8741133150e50ab35d7976035311ce9d47a9552c9bb391957c90f7e",
+      "current_sha256": "4b85600fa8741133150e50ab35d7976035311ce9d47a9552c9bb391957c90f7e",
+      "same": true
+    },
+    "katana_next/science/motiftrace_exact.py": {
+      "frozen_sha256": "dd5cc3fce9f7fa94f753fa479cb6f5c81e34da342a1e5266023b7cd641be49be",
+      "current_sha256": "dd5cc3fce9f7fa94f753fa479cb6f5c81e34da342a1e5266023b7cd641be49be",
+      "same": true
+    },
+    "katana_next/science/motiftrace_external.py": {
+      "frozen_sha256": "989ee1d68a555bbce8a1d274f1a012ad41267b042f2d361a41db53717b47b672",
+      "current_sha256": "989ee1d68a555bbce8a1d274f1a012ad41267b042f2d361a41db53717b47b672",
+      "same": true
+    },
+    "katana_next/science/motiftrace_full_execution.py": {
+      "frozen_sha256": "f9a657f1ce22cce866857999a8aa69864124b987d0a141b12af820ab8da12545",
+      "current_sha256": "f9a657f1ce22cce866857999a8aa69864124b987d0a141b12af820ab8da12545",
+      "same": true
+    },
+    "katana_next/science/motiftrace_library_execution.py": {
+      "frozen_sha256": "7d7c816decbb2097b111702ee8e75c17d648bda5716654d389408cf310a9b509",
+      "current_sha256": "7d7c816decbb2097b111702ee8e75c17d648bda5716654d389408cf310a9b509",
+      "same": true
+    },
+    "katana_next/science/motiftrace_parallel.html": {
+      "frozen_sha256": "efd2c71564b69a6ee9ebb5cfbb849e18f32a16bf92a2af979d95c6a30158bd7d",
+      "current_sha256": "efd2c71564b69a6ee9ebb5cfbb849e18f32a16bf92a2af979d95c6a30158bd7d",
+      "same": true
+    },
+    "katana_next/science/motiftrace_parallel.py": {
+      "frozen_sha256": "73b4aa75ce81c128ebbb1a4dd4be0e04aed37e48ab1e7c8352e6ae19c54320a8",
+      "current_sha256": "73b4aa75ce81c128ebbb1a4dd4be0e04aed37e48ab1e7c8352e6ae19c54320a8",
+      "same": true
+    },
+    "katana_next/science/motiftrace_reference_overlap.py": {
+      "frozen_sha256": "cf60fe9c0317ebc9dd38f39db556788e19a6a1b0e8eaefc02f8e5cf19fcad869",
+      "current_sha256": "cf60fe9c0317ebc9dd38f39db556788e19a6a1b0e8eaefc02f8e5cf19fcad869",
+      "same": true
+    },
+    "katana_next/science/motiftrace_usage.py": {
+      "frozen_sha256": "e26db6e87d6ce6c5ca14d405aa249c8dbaecf96d7e064f97e73a1dc58f3c39e0",
+      "current_sha256": "e26db6e87d6ce6c5ca14d405aa249c8dbaecf96d7e064f97e73a1dc58f3c39e0",
+      "same": true
+    },
+    "katana_next/science/motiftrace_usage_report.py": {
+      "frozen_sha256": "0c4098e9c9a4e1edce4434f6aa5dcf43d702bc31f206da81e5d99e405a7cf711",
+      "current_sha256": "c4210ff5a9b397661f5ecf3d004d2f6a1417844844523e6aa55251223902108e",
+      "same": false
+    },
+    "katana_next/science/motiftrace_windows.html": {
+      "frozen_sha256": "e144788b04f9885fa64c61d72b4dffa25cf3b45825db3a36dcb6ab315e6fd855",
+      "current_sha256": "3557d2671f67eaa2a99af2163c7c9b177f14f9bb806d64ff4625ebd4e57a2aa0",
+      "same": false
+    },
+    "katana_next/science/motiftrace_windows.py": {
+      "frozen_sha256": "fec10019bef1e9ed396c6568d77af52f4dedfeb3f3b7b259ba2e1174473ddeec",
+      "current_sha256": "fec10019bef1e9ed396c6568d77af52f4dedfeb3f3b7b259ba2e1174473ddeec",
+      "same": true
+    },
+    "katana_next/science/rbp_sequence_results.py": {
+      "frozen_sha256": "565b32b6e4b84323f8c95df8853d61d32bcaabf3102e34cb4402e0407a52e19e",
+      "current_sha256": "565b32b6e4b84323f8c95df8853d61d32bcaabf3102e34cb4402e0407a52e19e",
+      "same": true
+    },
+    "katana_next/science/se_rbp.py": {
+      "frozen_sha256": "559156c7c55251b153f8b8e1db1ff7211a0e7b763110517f873030543bdc7601",
+      "current_sha256": "559156c7c55251b153f8b8e1db1ff7211a0e7b763110517f873030543bdc7601",
+      "same": true
+    },
+    "katana_next/science/se_rbp_density.py": {
+      "frozen_sha256": "42466d0f4f7bdb3bb1f63d1de27260cd94f1492a0419731beba5b30438a22cef",
+      "current_sha256": "42466d0f4f7bdb3bb1f63d1de27260cd94f1492a0419731beba5b30438a22cef",
+      "same": true
+    },
+    "katana_next/science/se_rbp_density_report.py": {
+      "frozen_sha256": "7874b1232079ae164a895ed38c23836726827269c5fba88794f112a6ec03e271",
+      "current_sha256": "f446aec7326c6e310a51de73e2baa7e31a1826130c195d11c9166d4823969d9c",
+      "same": false
+    },
+    "katana_next/science/se_rbp_report.py": {
+      "frozen_sha256": "0f375c900d1cad50bafceea9a1434dfac77a006929e7569ee397367ac0a2855a",
+      "current_sha256": "0f375c900d1cad50bafceea9a1434dfac77a006929e7569ee397367ac0a2855a",
+      "same": true
+    }
+  },
+  "modes": [
+    {
+      "mode_id": "boundary",
+      "label": "Boundary motifs and reference binding",
+      "workflow_id": "prioritize.rbp_mechanism",
+      "fixed_parameters": {
+        "sequence_scope": "boundary_association"
+      },
+      "description": "Selected DAS boundary motifs and configured reference CLIP evidence; their statistics stay separate.",
+      "operation": "new_analysis",
+      "requires_selection": true,
+      "workflow_version": "1.6.1",
+      "parameter_definitions_sha256": "556ade71869b1e13ad9087406dc46db7b5b2777c7572013f77c8f19a2bb41bf7"
+    },
+    {
+      "mode_id": "se_impact",
+      "label": "SE fixed-site sequence analysis",
+      "workflow_id": "prioritize.se_rbp_impact",
+      "fixed_parameters": {},
+      "description": "Existing SE sequence-impact method with matched controls, native FIMO and split genomic coordinates.",
+      "operation": "new_analysis",
+      "requires_selection": true,
+      "workflow_version": "1.0.1",
+      "parameter_definitions_sha256": "b7d61e2bf5ed502af063ec6974630ffc38f31c5206cc7f7522490007a254052f"
+    },
+    {
+      "mode_id": "completed_maps",
+      "label": "Completed sequence maps",
+      "workflow_id": "prioritize.rbp_sequence_results",
+      "fixed_parameters": {},
+      "description": "Verify and browse completed SE evidence, short RNA and original model/window statistics; no native refit.",
+      "operation": "completed_result_import",
+      "requires_selection": true,
+      "workflow_version": "1.2.0",
+      "parameter_definitions_sha256": "751d1127c01c6eef3388327d852ea5f2da4cbe7ac7629983e069a499ac00b620"
+    },
+    {
+      "mode_id": "consequences",
+      "label": "Five-event RNA consequences",
+      "workflow_id": "prioritize.motiftrace_consequences",
+      "fixed_parameters": {},
+      "description": "SE, A3SS, A5SS, MXE and RI local RNA forms, motif changes and the existing paired-window/region tests.",
+      "operation": "new_analysis",
+      "requires_selection": true,
+      "workflow_version": "1.0.1",
+      "parameter_definitions_sha256": "7c4d2955fc2bc550f5717edea8cd652fecafd26dd8eb972f2f878a438189da39"
+    },
+    {
+      "mode_id": "usage",
+      "label": "Transcript and exon usage to motifs",
+      "workflow_id": "prioritize.motiftrace_usage",
+      "fixed_parameters": {},
+      "description": "Reuse existing DTU, DEXSeq, DEG, abundance and sequence evidence; no implicit quantification or new single-case motif P.",
+      "operation": "existing_result_integration",
+      "requires_selection": false,
+      "workflow_version": "1.0.0+english.20261021",
+      "parameter_definitions_sha256": "80e1c89b4d1ae2471efef4387de7f9c5bd674215c55b99918b596b9011f65510"
+    },
+    {
+      "mode_id": "parallel",
+      "label": "Completed MAPP and MotifTrace",
+      "workflow_id": "prioritize.motiftrace_parallel",
+      "fixed_parameters": {},
+      "description": "Read a verified completed parallel-model bundle; retain original methods, test families and native P values separately.",
+      "operation": "completed_result_import",
+      "requires_selection": false,
+      "workflow_version": "1.0.0",
+      "parameter_definitions_sha256": "1db195a4cd66327e63b564c4165dfeab98dbf9592cc045f2f0e1f95961bc0790"
+    }
+  ],
+  "interface_source_sha256": {
+    "katana_motiftrace/__init__.py": "de5fd8779e211db599cc0950b970f2c98743a07a0335802dcf2f202e32f2f788",
+    "katana_motiftrace/catalog.py": "0a7df6c2c484695818b77be8a35b9e6700efb10f7b7a08d2b1a223c51f2c06ed",
+    "katana_motiftrace/api.py": "52c420283b1a6e9263e2e4aa11e44f0d64b31db39de32931d07ba067359f8bee",
+    "katana_motiftrace/cli.py": "1a8f1e400892a8cf2a4fa5454e49cb39fdc0ef6f670c8cc20048c61e741cfd00",
+    "katana_motiftrace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+    "katana_next/client.py": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
+    "katana_next/services/selection_routes.py": "f84bae21e008589ed1af1afcc7409b90ec1757dcc18675d98e29659630732da1",
+    "pyproject.toml": "8d441a2bec5274e14334b2ee129bea2ca900930dd91fc0e62af6ee4f8555a0e8",
+    "katana_next/workflows/motiftrace_consequences.py": "a9fe2cdf0e2dc14e5903a18a28b08035e29ecf691453bd1d93b1833b95d2026f",
+    "katana_next/workflows/rbp_mechanism.py": "a9d1f69ae0d1416775bb8914bc49bfee58bde5f0c69a5aa1035a585ba31aacd2",
+    "katana_next/science/motiftrace_execution.py": "cf501a906d296e5236fbcf46aea3ffbd5e8631418aabe109ca2778291a43c28b",
+    "katana_next/science/motiftrace_budget.py": "01ddf8e42f97aea3b109311ff014985d924c8912c4faa07e5768bb0314a62f5f",
+    "katana_next/reports/motif_native_index.py": "b49e13270cf1fcfbd61af2e244b57f448da95e8248dbecfb102fefbf0f2e58e9"
+  },
+  "interface_revisions": [
+    {
+      "integration_version": "1.0.0.post5",
+      "revision": "distribution-version-metadata-20261025",
+      "scientific_release_unchanged": true,
+      "scientific_calculation_changes": false,
+      "scientific_parameter_changes": false,
+      "scientific_sources_manifest_sha256": "a4bd76153a3975213c0994e004d65d7785113a2adef3ade86ecb46e7f289a7ed",
+      "workflow_modes_manifest_sha256": "82f67e45f464c98276868e2b15b25fb9ec683f4bc0c67611d507eeb5284d105b",
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "cd24246b872984e6dffbe35cfcd28f6787aa3fe4c066c6c265006052898fd419",
+          "current_sha256": "8d441a2bec5274e14334b2ee129bea2ca900930dd91fc0e62af6ee4f8555a0e8",
+          "change_kind": "distribution_version_only",
+          "previous_distribution_version": "2.0.0b5.dev20261023",
+          "current_distribution_version": "2.0.0b5.dev20261025",
+          "previous_source_commit": "5ca65332cb5c0c3c7faca7485d00d301afa29cce",
+          "current_source_commit": "766c71f52523dc65ae85d10239114f4bd6b66b60",
+          "changed_toml_fields": [
+            "project.version"
+          ],
+          "reason": "Distribution version metadata only, from 2.0.0b5.dev20261023 to 2.0.0b5.dev20261025. Replacing that one version string exactly reconstructs the recorded previous file SHA256. Dependencies, entry points and packaged-resource declarations are unchanged. The 23 scientific-source records, six workflow modes, scientific versions, parameter definitions, inference families and completed results are unchanged. This audit revision does not change the MotifTrace facade or scientific release."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post4",
+      "revision": "explicit-network-threadpool-runtime-dependency-20261024",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "09d78b161fe8a3beb58033365dc32b905092b91831ff1ec9f44fcfc7060f3cd9",
+          "current_sha256": "cd24246b872984e6dffbe35cfcd28f6787aa3fe4c066c6c265006052898fd419",
+          "reason": "Declare threadpoolctl>=3.1 as a direct dependency for bounded network BLAS execution. This package was already present in the locked runtime through scikit-learn; MotifTrace scientific sources, parameter definitions, inference families and completed results are unchanged."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post3",
+      "revision": "locked-downstream-runtime-20261023",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "8dfc6a0363775bac9d774844eceb5e8799976ce1de9b11d88c21e5acab1a55b7",
+          "current_sha256": "09d78b161fe8a3beb58033365dc32b905092b91831ff1ec9f44fcfc7060f3cd9",
+          "reason": "Package the tested standalone/native dependencies, optional Qt desktop extra, R and author-source resources, and license files. MotifTrace scientific kernels, parameter definitions and inference families are unchanged."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post3",
+      "revision": "portable-target-entrypoint-20261023",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "bfdc20d0616f53aa8d17d78eb6e2a0b1b012d9dbf09261e2ad758ee52fe566e5",
+          "current_sha256": "7c2386a14fc59cab173246c4d77a6866473d5e8b16f3a5e5802dce7a358a9bdf",
+          "reason": "Add portable katana-targets console entry and targets storage dependencies; package version 2.0.0b4.dev20261023. Target reports subset completed MotifTrace evidence; no frozen scientific source, parameter or test family changes."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post2",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "katana_next/client.py",
+          "previous_sha256": "6245ac6a22865a49f964b94ad9f83c3b6b4a00ad0701d2da424d9e88b4bcdbdb",
+          "current_sha256": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
+          "reason": "Approved downstream DAS/RS-DAS selection adapter; no MotifTrace scientific kernel or parameter change."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post3",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "f7d82ce351b1e0c69cb7de70a55ccbb0252a4de8e4801125c3c8ea5ebfc0fa90",
+          "current_sha256": "b1f271b170c1ba76a7579d67ea979cdc653228f3aaeb84abcb21813d38d253b8",
+          "reason": "Approved public read-only seven-section report CLI and packaged HTML/CSS/JS resources; no MotifTrace numerical change."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post3",
+      "revision": "package-version-20261023",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "b1f271b170c1ba76a7579d67ea979cdc653228f3aaeb84abcb21813d38d253b8",
+          "current_sha256": "bfdc20d0616f53aa8d17d78eb6e2a0b1b012d9dbf09261e2ad758ee52fe566e5",
+          "reason": "Package version metadata only: 2.0.0b3.dev20261022 to 2.0.0b3.dev20261023. Dependencies, entry points, scientific kernels and parameter definitions are unchanged."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post3",
+      "revision": "integrated-execution-20261023",
+      "scientific_release_unchanged": true,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "7c2386a14fc59cab173246c4d77a6866473d5e8b16f3a5e5802dce7a358a9bdf",
+          "current_sha256": "8dfc6a0363775bac9d774844eceb5e8799976ce1de9b11d88c21e5acab1a55b7",
+          "reason": "Add isolated katana-flow execution entrypoint and native-flow dependencies; increment development package to b5. Frozen scientific kernels and parameter definitions unchanged."
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post4",
+      "revision": "bounded-complete-family-execution-20261023",
+      "scientific_release_unchanged": true,
+      "reason": "Explicit execution budgets and exact pre-scoring allocation check. Frozen numerical source and scientific thresholds unchanged; adapter AST and numerical equivalence tested. No completed study recomputation.",
+      "changes": [
+        {
+          "workflow_id": "prioritize.rbp_mechanism",
+          "previous_parameter_definitions_sha256": "991b99ba4ccd4e6e04c1604aef45b2d98f26780d474308d444042f74b8db7c44",
+          "current_parameter_definitions_sha256": "556ade71869b1e13ad9087406dc46db7b5b2777c7572013f77c8f19a2bb41bf7"
+        },
+        {
+          "workflow_id": "prioritize.motiftrace_consequences",
+          "previous_parameter_definitions_sha256": "55a2bea1d9d641e08a017b4827befe3436f0a902db7c63fb0912a49a921d7f35",
+          "current_parameter_definitions_sha256": "7c4d2955fc2bc550f5717edea8cd652fecafd26dd8eb972f2f878a438189da39"
+        },
+        {
+          "path": "katana_next/workflows/motiftrace_consequences.py",
+          "previous_sha256": null,
+          "current_sha256": "ca246a8c918158a4e03f814223de95709b74147b412c42add677f4ca339962d7"
+        },
+        {
+          "path": "katana_next/workflows/rbp_mechanism.py",
+          "previous_sha256": null,
+          "current_sha256": "a9d1f69ae0d1416775bb8914bc49bfee58bde5f0c69a5aa1035a585ba31aacd2"
+        },
+        {
+          "path": "katana_next/science/motiftrace_execution.py",
+          "previous_sha256": null,
+          "current_sha256": "4144e1c079cc7c89b59c8eb49a57736fa769720172386372518826a283310ea1"
+        },
+        {
+          "path": "katana_next/science/motiftrace_budget.py",
+          "previous_sha256": null,
+          "current_sha256": "01ddf8e42f97aea3b109311ff014985d924c8912c4faa07e5768bb0314a62f5f"
+        }
+      ]
+    },
+    {
+      "integration_version": "1.0.0.post4",
+      "revision": "bounded-native-display-recovery-20261023",
+      "scientific_release_unchanged": true,
+      "reason": "Full-file auxiliary HTML for actual frozen 64MiB limit; recovery validates complete recorded scientific outputs and request without rescoring. Frozen renderer and seven-chapter format unchanged.",
+      "interface_source_sha256": {
+        "katana_next/workflows/motiftrace_consequences.py": "a9fe2cdf0e2dc14e5903a18a28b08035e29ecf691453bd1d93b1833b95d2026f",
+        "katana_next/science/motiftrace_execution.py": "cf501a906d296e5236fbcf46aea3ffbd5e8631418aabe109ca2778291a43c28b",
+        "katana_next/reports/motif_native_index.py": "b49e13270cf1fcfbd61af2e244b57f448da95e8248dbecfb102fefbf0f2e58e9"
+      }
+    }
+  ],
+  "execution_adapter": {
+    "version": "1.0.1",
+    "scientific_workflow_version": "1.0.1",
+    "max_tests_default": 1000000,
+    "max_matrix_cells_default": 8000000,
+    "pre_scoring_exact_family_estimate": true,
+    "family_split": false,
+    "models_windows_pairs_truncated": false,
+    "scientific_kernel_changes": false,
+    "implementation": "katana_next/science/motiftrace_execution.py",
+    "large_native_display": "Full unchanged files index only when frozen inline HTML exceeds 64 MiB; frozen renderer unchanged.",
+    "presentation_recovery": "New failed-task-bound lifecycle; strict scientific request validation; no numerical recomputation."
+  }
+}

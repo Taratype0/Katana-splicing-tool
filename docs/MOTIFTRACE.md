@@ -3,8 +3,9 @@
 MotifTrace connects splice-event sequences, motif sites and compatible RBP
 evidence. Its Python, command-line and interactive interfaces use the same
 Katana workflow service, parameter definitions, input checks and result cache.
-This integration uses the approved `1.0.0-frozen.20261017` scientific methods;
-the interface version is recorded separately as `1.0.0.post1`.
+This integration retains the approved `1.0.0-frozen.20261017` scoring and
+statistical methods. The package's interface and execution-policy revisions
+are recorded separately in [the integration record](motiftrace/integration.v1.json).
 
 ## Install
 
@@ -125,6 +126,38 @@ the run plan, then explicitly run. Selecting a mode does not launch work.
 Completed tables, figures and HTML browsers use the existing result viewers.
 The selector, Python API and CLI share one mode catalog; advanced controls
 continue to expose the underlying established workflows.
+
+## Computational resources
+
+MotifTrace does not reject valid sequence calculations because a fixed motif
+count, RNA size, custom-library file size/row count, test count, paired-matrix
+size or permutation-by-gene-pair count has been exceeded. All selected events,
+requested motif models and eligible windows remain in their complete
+statistical family. The whole-pair permutation default remains `999`, with an
+integer minimum of `99` and no fixed upper count.
+
+The older `max_tests` and `max_matrix_cells` fields are accepted for
+configuration compatibility but no longer restrict a calculation. Omit them
+from new parameter files. Changing their values does not allocate memory or
+CPU resources.
+
+On a cluster, request CPU, memory and wall time through the Nextflow executor
+and site configuration. For local use, the operating system supplies the
+available resources. Large requests can still exceed those resources; removing
+an application limit does not guarantee that every calculation fits in memory.
+Recorded dimension estimates describe the complete workload, rather than
+serving as rejection thresholds. No events, models or windows are discarded to
+make a calculation fit.
+
+Motif-format validation, supported motif widths of 1–25 nucleotides, matching
+rules and the minimum of 20 independent matched gene pairs for consequence
+inference remain unchanged. These determine whether the input and statistical
+analysis are valid; they are separate from computational capacity. Report
+Top 10 presentation and full-table attachments also remain unchanged.
+
+This execution policy applies to the updated source and packages or containers
+built from that source. Previously built wheels, container images and running
+jobs retain their original behavior until their runtime is replaced.
 
 ## Methods and interpretation
 

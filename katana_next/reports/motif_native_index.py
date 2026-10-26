@@ -74,7 +74,7 @@ def render_budgeted_consequences(rna, changes, tests, clusters, summary, destina
 
 def validate_recorded_consequences_inputs(source, complete, selected_ids, models, fasta, *,
         failure_receipt, permutations=999, seed=20261015, provenance=None,
-        max_tests=1_000_000, max_matrix_cells=8_000_000):
+        max_tests=None, max_matrix_cells=None):
     """Bind a presentation-only recovery to the current scientific request.
 
     Execution adapter source hashes may change to repair presentation. Every
@@ -92,7 +92,9 @@ def validate_recorded_consequences_inputs(source, complete, selected_ids, models
         canonical_hash(models) != canonical_hash(plan["models"]) or permutations != plan["permutations"] or seed != plan["seed"] or
         plan.get("window_nt") != [10, 20, 50] or plan.get("step") != 1 or plan.get("minimum_independent_gene_pairs") != 20):
         raise ValueError("Presentation recovery request changes the completed scientific inputs or parameters")
-    if execution_limits(max_tests, max_matrix_cells) != plan.get("execution_budget"):
+    requested_budget = (plan.get("execution_budget") if max_tests is None and max_matrix_cells is None
+                        else execution_limits(max_tests, max_matrix_cells))
+    if requested_budget != plan.get("execution_budget"):
         raise ValueError("Presentation recovery must retain the recorded execution budgets")
     old, current = plan.get("provenance", {}), provenance or {}
     special = {"implementation_SHA256", "genome_FASTA", "flow_execution_adapter_sha256"}

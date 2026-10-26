@@ -103,10 +103,11 @@ def event_forms(row, anchor_nt=100):
 
 
 def extract_event_rna(events, fasta_path, *, anchor_nt=100, intron_nt=200,
-                      max_total_bases=20_000_000, feature_only=False, check_cancelled=lambda: None):
+                      max_total_bases=None, feature_only=False, check_cancelled=lambda: None):
+    """Reconstruct every requested local RNA; the legacy base-budget argument is ignored."""
     if events.empty or events.event_id.duplicated().any() or events.comparison_id.nunique() != 1:
         raise ValueError("One nonempty comparison with unique event IDs is required")
-    fasta, rows, total = IndexedFasta(Path(fasta_path)), [], 0
+    fasta, rows = IndexedFasta(Path(fasta_path)), []
     with fasta.fasta.open("rb") as stream:
         for row in events.sort_values("event_id").to_dict("records"):
             check_cancelled()
@@ -131,9 +132,6 @@ def extract_event_rna(events, fasta_path, *, anchor_nt=100, intron_nt=200,
             for region, blocks, layer in specs:
                 if not blocks:
                     continue
-                total += sum(b-a for a, b in blocks)
-                if total > max_total_bases:
-                    raise ValueError("Explicit local RNA base budget exceeded; nothing is silently truncated")
                 sequence = sequence_from_blocks(fasta, stream, chrom, strand, blocks)
                 joins = np.cumsum([b-a for a, b in blocks])[:-1].tolist()
                 rows.append({"event_id": str(row["event_id"]), "gene_id": str(row["gene_id"]),
@@ -148,8 +146,8 @@ def extract_event_rna(events, fasta_path, *, anchor_nt=100, intron_nt=200,
 
 
 def validate_models(models):
-    if not models or len(models) > 256:
-        raise ValueError("Require 1-256 explicitly selected models; no silent library truncation")
+    if not models:
+        raise ValueError("Require at least one explicitly selected model; no silent library truncation")
     for model in models.values():
         if model.get("kind") == "consensus":
             _, width = fixed_pattern(model["pattern"])
@@ -202,8 +200,6 @@ def score_positions(sequence, model, background=(.25, .25, .25, .25)):
 def trace_instances(rna, events, models, *, check_cancelled=lambda: None):
     """Identify loci, not net hit-count changes; PWM candidates are not P-values."""
     validate_models(models)
-    if rna.loc[rna.layer.eq("mature_local_form"), "length"].sum()*len(models) > 25_000_000:
-        raise ValueError("Explicit motif-by-local-RNA budget exceeded; no silent model/event truncation")
     records, changes, weighted = [], [], []
     lookup = events.set_index("event_id")
     for event_id, group in rna[rna.layer.eq("mature_local_form")].groupby("event_id", sort=False):

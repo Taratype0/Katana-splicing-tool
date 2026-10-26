@@ -63,9 +63,9 @@ for entry in INVENTORY["workflows"]:
             "foreground_source": "candidate_union", "background_source": "match_foreground",
         })
     elif entry["workflow_id"] in {"prioritize.motiftrace_consequences", "prioritize.rbp_mechanism"}:
-        # Explicit execution-only allocation limits; the preserved numerical
-        # sources, statistical parameters and historical inventories do not change.
-        entry["parameter_defaults"].update({"max_tests": 1000000, "max_matrix_cells": 8000000})
+        # Approved execution-capacity revision: no budget controls in new UIs.
+        entry["version"] = {"prioritize.motiftrace_consequences": "1.1.0",
+                            "prioritize.rbp_mechanism": "1.7.0"}[entry["workflow_id"]]
 
 
 def test_workflows_match_approved_all_sample_policy_and_retained_other_methods():
@@ -118,10 +118,9 @@ def test_only_approved_input_module_and_label_workflows_changed_from_preserved_b
             "foreground_source": "candidate_union", "background_source": "match_foreground",
         }
     for key in ("prioritize.motiftrace_consequences", "prioritize.rbp_mechanism"):
-        assert current[key]["version"] == old[key]["version"]
-        assert current[key]["parameter_defaults"] == {
-            **old[key]["parameter_defaults"], "max_tests": 1000000, "max_matrix_cells": 8000000,
-        }
+        assert current[key]["version"] == {"prioritize.motiftrace_consequences": "1.1.0",
+                                          "prioritize.rbp_mechanism": "1.7.0"}[key]
+        assert current[key]["parameter_defaults"] == old[key]["parameter_defaults"]
 
 
 @pytest.mark.parametrize("workflow_id", [

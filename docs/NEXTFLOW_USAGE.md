@@ -374,10 +374,11 @@ See [thresholds and their basis](THRESHOLDS.md).
 
 Each selected comparison gets independent network discovery/followups and
 MotifTrace tasks, using only its own samples. Bootstrap is off; Hub ranking uses
-`|kME|`. MotifTrace analyzes all supplied/requested models within declared
-budgets, while the report shows up to ten significant models and keeps complete
-families in outputs. No significant model produces a concise non-significance
-notice, not a fabricated sequence result.
+`|kME|`. MotifTrace analyzes the supplied/requested models without fixed
+model-count, test-count or matrix-element caps, while the report shows up to
+ten significant models and keeps complete families in outputs. No significant
+model produces a concise non-significance notice, not a fabricated sequence
+result.
 
 MAPP uses the packaged hash-bound author implementation and prepares the
 14-window MAEI family from actual transcript quantification and matching

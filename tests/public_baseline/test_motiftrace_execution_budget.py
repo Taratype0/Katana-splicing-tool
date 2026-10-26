@@ -1,4 +1,4 @@
-"""Generated-data execution-budget guards; frozen statistical kernels stay byte-identical."""
+"""Complete-family estimates and uncapped execution preserve numerical results."""
 import ast
 import copy
 import inspect
@@ -57,7 +57,7 @@ def test_adapter_ast_diff_is_execution_budget_only():
     actual.body = nodes
     for node in ast.walk(actual):
         if isinstance(node, ast.Dict):
-            remove = {"execution_budget", "execution_adapter_version", "statistical_family_split"}
+            remove = {"execution_budget", "execution_limits_enforced", "execution_adapter_version", "statistical_family_split"}
             pairs = [(k,v) for k,v in zip(node.keys, node.values) if not isinstance(k, ast.Constant) or k.value not in remove]
             node.keys, node.values = [p[0] for p in pairs], [p[1] for p in pairs]
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "build_paired_datasets":
@@ -72,20 +72,18 @@ def test_invalid_execution_budgets_rejected(value):
         execution_limits(value, 8_000_000)
 
 
-def test_preflight_counts_exact_full_family_and_fails_before_scoring(tmp_path, monkeypatch):
+def test_preflight_counts_exact_full_family_without_imposing_a_limit(tmp_path):
     frame, ids, models, fasta = _generated(tmp_path)
-    def forbidden(*args, **kwargs):
-        pytest.fail("Motif scoring began before insufficient-budget rejection")
-    monkeypatch.setattr(adapter, "trace_instances", forbidden)
-    with pytest.raises(ValueError, match="pre-scoring execution budget exceeded"):
-        adapter.analyze_consequences(frame, ids, models, fasta, tmp_path / "rejected", max_tests=1, permutations=99)
-    root = tmp_path / "rejected"
+    root = tmp_path / "complete"
+    adapter.analyze_consequences(frame, ids, models, fasta, root,
+                                 max_tests=1, max_matrix_cells=1, permutations=99)
     budget = json.loads((root / "EXECUTION_BUDGET_BEFORE_SCORING.json").read_text())
     assert budget["estimate"]["models"] == 2
     assert budget["estimate"]["matched_gene_pairs"] == 24
     assert budget["estimate"]["scalar_and_window_tests"] > 1
-    assert not (root / "ACTUAL_LOCUS_HITS.tsv.gz").exists()
-    assert not (root / "COMPLETE.json").exists()
+    assert budget["enforced"] is False
+    assert (root / "ACTUAL_LOCUS_HITS.tsv.gz").exists()
+    assert (root / "COMPLETE.json").exists()
     matching = pd.read_csv(root / "MATCHING_ALL_SELECTED_WITH_LOSSES.tsv", sep="\t")
     rna = frozen.extract_event_rna(frame, fasta)
     datasets, _ = build_paired_datasets(rna, matching, models)
@@ -96,12 +94,12 @@ def test_preflight_counts_exact_full_family_and_fails_before_scoring(tmp_path, m
     assert estimate["scalar_and_window_tests"] == sum(len(d["positions"]) for d in datasets)
 
 
-def test_two_sufficient_budgets_preserve_frozen_numeric_results(tmp_path):
+def test_no_limit_and_tiny_legacy_values_preserve_frozen_numeric_results(tmp_path):
     frame, ids, models, fasta = _generated(tmp_path)
     roots = [tmp_path / name for name in ("frozen", "bounded", "larger")]
     frozen.analyze_consequences(frame, ids, models, fasta, roots[0], permutations=99)
-    adapter.analyze_consequences(frame, ids, models, fasta, roots[1], permutations=99, max_tests=100_000)
-    adapter.analyze_consequences(frame, ids, models, fasta, roots[2], permutations=99, max_tests=1_000_000, max_matrix_cells=9_000_000)
+    adapter.analyze_consequences(frame, ids, models, fasta, roots[1], permutations=99)
+    adapter.analyze_consequences(frame, ids, models, fasta, roots[2], permutations=99, max_tests=1, max_matrix_cells=1)
     for source in roots[0].iterdir():
         if source.name.endswith((".tsv", ".tsv.gz")):
             expected = pd.read_csv(source, sep="\t", float_precision="round_trip")
@@ -112,13 +110,47 @@ def test_two_sufficient_budgets_preserve_frozen_numeric_results(tmp_path):
     tests = pd.read_csv(roots[1]/"NEW_WINDOW_AND_FULL_SEQUENCE_TESTS.tsv.gz", sep="\t")
     assert tests.raw_P_new_paired_swaps.notna().any()
     assert set(tests.model_id) == set(models)
-    assert json.loads((roots[1]/"ANALYSIS_PLAN_BEFORE_SCORING.json").read_text())["execution_budget"]["max_tests"] == 100_000
+    plan = json.loads((roots[1]/"ANALYSIS_PLAN_BEFORE_SCORING.json").read_text())
+    assert plan["execution_budget"] == {"max_tests": None, "max_matrix_cells": None}
+    assert plan["execution_limits_enforced"] is False
 
 
-def test_workflow_and_rbp_entry_expose_budget_api_parameters():
+def test_workflow_and_rbp_hide_retired_limits_but_accept_old_requests():
     from katana_next.workflows.registry import WorkflowRegistry
     for identity in ("prioritize.motiftrace_consequences", "prioritize.rbp_mechanism"):
         workflow = WorkflowRegistry().get(identity)
-        assert workflow.normalize_parameters({})["max_tests"] == 1_000_000
+        assert "max_tests" not in {p.key for p in workflow.definition.parameters}
+        assert "max_matrix_cells" not in {p.key for p in workflow.definition.parameters}
+        assert workflow.normalize_parameters({}).get("max_tests") is None
         custom = workflow.normalize_parameters({"max_tests": 200_000, "max_matrix_cells": 2_000_000})
         assert custom["max_tests"] == 200_000 and custom["max_matrix_cells"] == 2_000_000
+        assert workflow.normalize_parameters({"cluster_permutations": 10000})["cluster_permutations"] == 10000
+
+
+def test_oversized_count_report_does_not_reject_or_allocate_the_reported_matrix(tmp_path, monkeypatch):
+    frame, ids, models, fasta = _generated(tmp_path)
+    estimate = adapter.estimate_paired_family
+    def realistic_counts(*args, **kwargs):
+        return {**estimate(*args, **kwargs), "scalar_and_window_tests": 2_780_000,
+                "paired_matrix_cells": 194_000_000, "paired_matrix_float64_bytes": 1_552_000_000}
+    monkeypatch.setattr(adapter, "estimate_paired_family", realistic_counts)
+    root = tmp_path / "large-reported-small-allocated"
+    adapter.analyze_consequences(frame, ids, models, fasta, root, permutations=99)
+    assert json.loads((root / "COMPLETE.json").read_text())["complete"] is True
+    budget = json.loads((root / "EXECUTION_BUDGET_BEFORE_SCORING.json").read_text())
+    assert budget["estimate"]["paired_matrix_cells"] == 194_000_000 and budget["enforced"] is False
+
+
+def test_legacy_guard_no_longer_rejects_counts_or_pair_permutation_product():
+    from katana_next.science.motiftrace_budget import enforce_paired_budget
+    assert enforce_paired_budget({"scalar_and_window_tests": 10**12,
+        "paired_matrix_cells": 10**12, "matched_gene_pairs": 100000},
+        execution_limits(1, 1), permutations=999) is None
+
+
+def test_more_than_old_pair_permutation_capacity_is_computed():
+    from katana_next.science.motiftrace_clusters import paired_cluster_family
+    pair_ids = [str(i) for i in range(801)]
+    # No datasets: exercises the real >8M sign allocation without RNA scanning.
+    tests, clusters, null = paired_cluster_family([], pair_ids, permutations=10000)
+    assert tests.empty and clusters.empty and null.shape == (10000,)

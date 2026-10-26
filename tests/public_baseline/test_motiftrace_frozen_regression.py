@@ -1,8 +1,9 @@
 """Public, data-free guard for the accepted MotifTrace scientific release.
 
 Digests originate from the accepted 1.0.0-frozen.20261017 source archive.
-Changing one requires a separately versioned scientific release, rather than
-silently changing calculations while adding packaging or presentation adapters.
+Unchanged sources retain strict digest checks. Three explicitly archived
+sources have a separately recorded execution-capacity-only revision; a strict
+AST boundary proves their scoring and statistical calculations remain intact.
 No local study files, paths, sequences, or completed-result bundles are needed.
 """
 import hashlib
@@ -10,6 +11,7 @@ import importlib
 import json
 from pathlib import Path
 import re
+import runpy
 
 import pandas as pd
 import pytest
@@ -52,7 +54,12 @@ def test_integration_record_binds_existing_versions_parameters_and_sources():
 @pytest.mark.parametrize("module,expected", FROZEN_NUMERICAL_SHA256.items())
 def test_packaging_preserves_frozen_numerical_source(module, expected):
     loaded = importlib.import_module("katana_next.science." + module)
-    assert hashlib.sha256(Path(loaded.__file__).read_bytes()).hexdigest() == expected
+    if module in {"motiftrace_events", "motiftrace_custom", "motiftrace_clusters"}:
+        boundary = runpy.run_path(str(Path(__file__).with_name("test_motiftrace_capacity_source_boundary.py")))
+        assert boundary["CAPACITY_SOURCES"][module] == expected
+        boundary["assert_capacity_only_change"](module, Path(loaded.__file__).read_text("utf-8"))
+    else:
+        assert hashlib.sha256(Path(loaded.__file__).read_bytes()).hexdigest() == expected
 
 
 def test_parallel_records_preserve_native_extreme_P_NA_and_direction():

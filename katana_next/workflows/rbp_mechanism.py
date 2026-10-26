@@ -22,7 +22,7 @@ class _StageProgress:
 
 
 class RbpMechanismWorkflow(WorkflowBase):
-    version = "1.6.1"
+    version = "1.7.0"
     definition = WorkflowDefinition(
         "prioritize.rbp_mechanism", "prioritize", "Katana MotifTrace: event motifs and known binding sites",
         "Do the selected DAS events share RBP sequence motifs or overlap experimentally measured RBP binding sites?",
@@ -37,9 +37,7 @@ class RbpMechanismWorkflow(WorkflowBase):
             ParameterDefinition("sequence_scope", "RNA sequence analysis", "select", "boundary_association", "completed_parallel_models reuses original MAPP sample fits and MotifTrace calibration with separate P values and real RNA/usage evidence. No fits or quantification. Other modes remain unchanged.", ("boundary_association", "se_sequence_impact", "completed_sequence_maps", "event_consequences", "completed_parallel_models")),
             ParameterDefinition("parallel_bundle_asset_id", "Completed MAPP / MotifTrace bundle", "text", "", "Parallel mode only: registered SHA-bound result bundle. Choose one original contrast, not a new selected-event background."),
             ParameterDefinition("model_ids", "Consequence mode: explicit motif IDs", "text", "", "Optional native model IDs or hashes, comma-separated; selected before scanning, never by significance."),
-            ParameterDefinition("cluster_permutations", "Consequence mode: paired permutations", "number", 999, "New cluster FWER and window BH families; original P/FDR unchanged.", minimum=99, maximum=9999),
-            ParameterDefinition("max_tests", "Consequence mode: maximum complete-family tests", "number", 1000000, "Execution budget checked before scoring; never truncate models or windows and never split the statistical family.", minimum=1),
-            ParameterDefinition("max_matrix_cells", "Consequence mode: maximum paired-matrix cells", "number", 8000000, "Execution memory budget checked before scoring; 8 bytes per float64 cell plus tables and permutation arrays.", minimum=1),
+            ParameterDefinition("cluster_permutations", "Consequence mode: paired permutations", "number", 999, "New cluster FWER and window BH families; original P/FDR unchanged. No fixed upper computation limit.", minimum=99),
             ParameterDefinition("bundle_asset_id", "Completed result asset ID", "text", "", "Completed maps only: empty selects the unique registered completed RBP bundle."),
             ParameterDefinition("window_bundle_asset_id", "Matched count / coverage result asset ID (optional)", "text", "", "Completed maps only: registered original count and coverage windows, with separate P/FDR and external-support labels; no rescoring."),
             ParameterDefinition("view_scope", "Display comparisons", "select", "selected_comparison", "Completed maps only; original multi-comparison FDR is not recalculated.", ("selected_comparison", "all_frozen_comparisons")),
