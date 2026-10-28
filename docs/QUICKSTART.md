@@ -6,11 +6,10 @@ Katana does not generate every possible group combination.
 
 ## Install
 
-For the downloadable beta, follow [release installation](RELEASE_INSTALL.md).
-For current source features, including automatic stage cleanup and the
-configurable integrated-network sample minimum, install current `main` and
-build a matching downstream image. The older beta downloads keep their
-original behavior.
+For the downloadable beta, follow [independent runtime installation](INDEPENDENT_RUNTIME.md).
+The 28 October assets include the portable controller, matching containers,
+paired contrasts and automatic stage cleanup. Earlier downloads keep their
+original behavior. A source installation is also available below.
 
 For the Python commands and browser, with Python 3.11 or newer:
 
@@ -29,9 +28,9 @@ The Python installation alone supports browsing/reporting; new analyses use
 the [downstream container](../containers/downstream/README.md) or the
 [standalone Conda environment](RUNTIME_ENVIRONMENTS.md).
 
-For the full container workflow, build the downstream image from this checkout
-and the [DEXSeq tools image](../containers/dexseq-tools/README.md). Set
-`KATANA_IMAGE` and `DEXSEQ_IMAGE` to the resulting image names or SIF paths.
+For the full container workflow, download the matching release images, or build
+the downstream image and [DEXSeq tools image](../containers/dexseq-tools/README.md).
+Set `KATANA_IMAGE` and `DEXSEQ_IMAGE` to their image names or SIF paths.
 The upstream modules supply their other tool images automatically.
 References and organism-specific analysis databases are configured separately.
 

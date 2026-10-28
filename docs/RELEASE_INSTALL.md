@@ -1,5 +1,12 @@
 # Install the downloadable Katana release
 
+For the matching 28 October package, portable controller and containers, use
+the **[independent runtime installation guide](INDEPENDENT_RUNTIME.md)**.
+It covers fresh installations, paired FASTQ/BAM runs, local Docker and browser use.
+
+The remainder of this page documents the **archived 25 October release** and
+the transition before the independent runtime was published.
+
 [Katana 2.0.0 beta 5, 25 October 2026](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261025)
 provides the accepted Python wheel, Linux Docker images, exported Nextflow
 workflow and native dependency locks. This is a beta release. The wheel and

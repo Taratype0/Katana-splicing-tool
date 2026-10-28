@@ -21,7 +21,8 @@ Options from another pipeline are not automatically Katana options.
 
 The current source workflow generates project/settings JSON automatically. See the
 [direct parameter guide](NEXTFLOW_SIMPLE.md) and [full YAML template](../examples/nextflow/params.complete.yaml).
-Older published wheels still use the explicit configuration examples later in this guide.
+The 28 October release includes this interface; older 25 October wheels use
+the explicit configuration examples later in this guide.
 
 `-params-file` is an optional, standard Nextflow way to load YAML/JSON values.
 `study.yml` is not a required Katana file or a reserved filename. All native

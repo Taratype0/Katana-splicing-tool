@@ -1,9 +1,8 @@
 # Run Katana with Nextflow
 
-**Current source workflow.** Use this checkout's `pipeline/main.nf` with its
-matching Katana runtime. The older published wheel does not include these
-direct options. Container rebuilds and new biological runs remain separate
-from the entrypoint validation.
+Use the [matching package, controller and containers](INDEPENDENT_RUNTIME.md).
+The 28 October release includes these direct options. The older 25 October
+downloads retain their previous interface.
 
 Supply samples, the comparisons you want, references, and an output directory.
 Katana generates its internal project template and downstream settings. You do
