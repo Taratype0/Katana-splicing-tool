@@ -103,7 +103,7 @@ def test_capacity_revision_preserves_historical_identity_and_records_current_sou
     assert old_doc['project'].pop('version') == packaging['previous_distribution_version']
     assert new_doc['project'].pop('version') == packaging['current_distribution_version']
     assert old_doc == new_doc
-    assert tomllib.loads((ROOT/'pyproject.toml').read_text())['project']['version']=='2.0.0b5.dev20261026'
+    assert tomllib.loads((ROOT/'pyproject.toml').read_text())['project']['version']=='2.0.0b5.dev20261028'
     assert record['execution_adapter']['fixed_capacity_limits_enforced'] is False
     assert record['execution_adapter']['max_tests_default'] is None
     assert record['execution_adapter']['max_matrix_cells_default'] is None
