@@ -6,19 +6,49 @@ workflow and native dependency locks. This is a beta release. The wheel and
 images retain their tested identities; publishing them does not rebuild the
 software or recompute studies.
 
-The current `main` source also supports `strandedness=auto`. That addition is
-not in these frozen beta 5 wheel/workflow downloads. For auto inference, keep
-the matching downloaded downstream images but run the current source workflow:
+## Current main versus the downloadable release
+
+Current `main` includes automatic strandedness, the simplified parameter entry,
+stage cleanup and matched-subject comparisons. The frozen 25 October downloads
+do not include all of these updates. For these features, use a current installed
+package, its workflow and a matching downstream image together. Updating a Git
+checkout does not update an installed wheel, exported workflow or container.
+
+The paired implementation and matching HPC image have passed the checks in
+[paired-entry validation](validation/paired-entry-20261028.md). That image has
+not yet been published as a new downloadable release; the release linked above
+still provides the older artifacts.
+
+Install the current controller in a fresh environment on the Linux execution
+host (Python 3.11 or newer, plus native Nextflow/Java and the container engine):
 
 ```sh
 git clone --branch main --single-branch https://github.com/Taratype0/Katana-splicing-tool.git tools/katana-source
-nextflow run tools/katana-source/pipeline/main.nf --help
+python3 -m venv tools/katana-controller
+. tools/katana-controller/bin/activate
+export PYTHONNOUSERSITE=1
+python -m pip install 'tools/katana-source[flow]'
+python -m pip check
+katana-flow export-pipeline --outdir tools/katana-pipeline
+katana-flow run --help
 ```
 
-Use that `pipeline/main.nf` path in the complete FASTQ/BAM command below.
-RSeQC/gffread use their own declared upstream environments. Exporting a workflow
-from an older installed wheel does not update it. See
-[auto-strandedness requirements and validation](validation/auto-strandedness-20261025.md).
+The controller launches Nextflow and manages completed output handoffs; task
+containers supply the scientific Python/R tools. This installation does not
+depend on an older Katana study directory. Avoid `--system-site-packages` when
+the goal is an independent installation: it makes the new environment depend
+on the base environment. Keep reference and database paths separate from both.
+
+Build a matching image using the [container build instructions](../containers/downstream/README.md)
+or, when the native and pip dependency locks are unchanged, the
+[verified-release SIF update](validation/paired-entry-20261028.md#updating-an-hpc-application-image).
+Pass the new image using `--katana_container` and the matching site configuration
+with `-c`. The standard `--input`, `--contrasts`, reference and `--outdir`
+arguments are unchanged. Matched animals share `subject` in the samplesheet;
+their contrast selects `paired=true` as described in the
+[contrast guide](NEXTFLOW_USAGE.md#4-contrastsheet-input-and-direction).
+
+The installation sections below describe the frozen downloadable release.
 
 Use the [Nextflow guide](NEXTFLOW_USAGE.md), [complete parameter reference](NEXTFLOW_PARAMETERS.md)
 and [Quick start](QUICKSTART.md) for sample/contrast formats,
