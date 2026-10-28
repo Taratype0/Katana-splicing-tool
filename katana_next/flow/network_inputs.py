@@ -70,7 +70,7 @@ def network_scope_identity(manifest, parameters, *, preserve_recorded_status=Tru
     sample_ids = [s.sample_id for s in samples]
     biological_ids = [s.biological_sample_id for s in samples]
     repeated = len(set(biological_ids)) != len(biological_ids)
-    declared = manifest.metadata.get("comparison_designs", {}).get(contrasts[0], {}) if scope == "contrast" else {}
+    declared = (getattr(manifest, "metadata", None) or {}).get("comparison_designs", {}).get(contrasts[0], {}) if scope == "contrast" else {}
     paired = declared.get("paired") is True
     if len(set(sample_ids)) != len(sample_ids) or (repeated and not paired):
         raise ValueError("Network discovery requires distinct independent biological samples; technical records cannot inflate n")
