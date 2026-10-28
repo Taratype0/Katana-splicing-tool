@@ -5,6 +5,12 @@ with `nextflow run pipeline/main.nf -params-file params.complete.yaml`.
 Sample/contrast CSV and reference/output paths are direct parameters; internal JSON is generated.
 See [the run guide](../../docs/NEXTFLOW_SIMPLE.md) for local, Slurm and Dardel commands.
 
+For automatic stage cleanup, pass the same file to
+`katana-flow run -params-file params.complete.yaml`. Scientific flags and their
+defaults are shared with the native entry; CLI overrides the file.
+[run-managed-kth.sh](run-managed-kth.sh) is the Dardel/shared example; retain
+[run-kth.sh](run-kth.sh) for direct Nextflow and ordinary work caching.
+
 # Raw-entry sheet templates
 
 These CSV files are format templates, not sequencing data or completed results.

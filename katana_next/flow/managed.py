@@ -124,6 +124,8 @@ def _software_identity(pipeline):
     native = [pipeline]
     if (pipeline.parent / "nextflow.config").is_file():
         native.append(pipeline.parent / "nextflow.config")
+    if (pipeline.parent / "public_parameters.json").is_file():
+        native.append(pipeline.parent / "public_parameters.json")
     # Visit only code directories, never a neighbouring study's work/results.
     for name in ("modules", "workflows", "subworkflows", "conf", "bin", "lib"):
         folder = pipeline.parent / name
@@ -221,23 +223,25 @@ def _pipeline_source(explicit=None):
 
 
 def parser():
-    p = argparse.ArgumentParser(description=__doc__)
+    from .managed_parameters import PublicParser, add_native_parameters
+    p = PublicParser(description=__doc__, allow_abbrev=False)
     p.add_argument("--mode", choices=("complete", "downstream-only"), default="complete")
-    p.add_argument("--outdir", required=True, type=Path)
+    p.add_argument("--outdir", type=Path)
     p.add_argument("--run-dir", type=Path, help="New private run directory; defaults to a sibling of outdir")
-    p.add_argument("--resume", action="store_true", help="Resume this exact managed run; completed handoffs are reused")
+    p.add_argument("--resume", "-resume", action="store_true", help="Resume this exact managed run; completed handoffs are reused")
     p.add_argument("--keep-work", action="store_true", help="Retain work even after success for native -resume")
     p.add_argument("--pipeline", type=Path, help="Optional explicit main.nf; default uses the installed pipeline")
     p.add_argument("--nextflow-command-json", default='["nextflow"]', help="Native executable prefix as a JSON string list")
-    p.add_argument("--profile", default="local")
+    p.add_argument("--profile", "-profile", default="local")
     p.add_argument("--resource-config", type=Path, help="Execution-only resource JSON; may change with --resume")
-    p.add_argument("--site-config", action="append", default=[], type=Path)
+    p.add_argument("--site-config", "-c", action="append", default=[], type=Path)
     for key in ("input", "contrasts", "fasta", "gtf", "project_template", "flow_config", "project", "flow_plan"):
         p.add_argument("--" + key, type=Path)
     p.add_argument("--katana_container")
     p.add_argument("--dexseq_tools_container")
     p.add_argument("--flow_executable", default="katana-flow")
-    p.add_argument("--params-file", type=Path, help="Native Nextflow scientific/resource parameter file; managed routing overrides are reserved")
+    p.add_argument("--params-file", "-params-file", type=Path, help="Same public YAML/JSON parameters as nextflow run; CLI values take precedence")
+    add_native_parameters(p)
     return p
 
 
@@ -249,9 +253,10 @@ def run(args):
     prefix = json.loads(args.nextflow_command_json)
     if not isinstance(prefix, list) or not prefix or any(not isinstance(v, str) or not v for v in prefix):
         raise ValueError("--nextflow-command-json must be a nonempty list of executable arguments")
-    needed = ["project"] if args.mode == "downstream-only" else ["input", "contrasts", "fasta", "gtf", "project_template"]
-    if not args.flow_plan:
-        needed.append("flow_config")
+    from .managed_parameters import native_paths
+    needed = ["project"] if args.mode == "downstream-only" else ["input", "contrasts", "fasta", "gtf"]
+    if args.mode == 'complete' and bool(args.project_template) != bool(args.flow_config):
+        raise ValueError('Advanced configuration needs both --project_template and --flow_config; otherwise omit both')
     if args.mode == "complete" and args.flow_plan:
         raise ValueError("--flow_plan is only valid with --mode downstream-only")
     for key in needed:
@@ -262,15 +267,16 @@ def run(args):
         if getattr(args, key) is not None:
             setattr(args, key, getattr(args, key).expanduser().resolve(strict=True))
     args.site_config = [v.expanduser().resolve(strict=True) for v in args.site_config]
+    external_paths = native_paths(args.native_parameters)
     from .resources import render_resources
     resources = read_json(args.resource_config) if args.resource_config else {}
     resource_text = render_resources(resources)
     pipeline = _pipeline_source(args.pipeline)
     request = {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()
-               if key not in {"resume", "run_dir", "site_config", "resource_config"}}
+               if key not in {"resume", "run_dir", "site_config", "resource_config", "storage_mode", "publish_dir_mode"}}
     request.update(pipeline=str(pipeline), site_config=[str(v) for v in args.site_config])
     small = [getattr(args, key) for key in path_fields if key not in {"fasta", "gtf"} and getattr(args, key)]
-    request["configuration_sha256"] = {str(p): file_sha256(p) for p in [*small, *args.site_config]}
+    request["configuration_sha256"] = {str(p): file_sha256(p) for p in [*small, *args.site_config, *external_paths] if p.is_file()}
     request["reference_metadata"] = {str(p): [p.stat().st_size, p.stat().st_mtime_ns]
                                      for p in (args.fasta, args.gtf) if p}
     request["software_identity"] = _software_identity(pipeline)
@@ -283,7 +289,7 @@ def run(args):
     else:
         if out.exists() and any(out.iterdir()):
             raise FileExistsError("Choose a new final output directory")
-        create_managed_scope(scope, protected_roots=[out, pipeline, *[getattr(args, k) for k in path_fields if getattr(args, k)]])
+        create_managed_scope(scope, protected_roots=[out, pipeline, *external_paths, *[getattr(args, k) for k in path_fields if getattr(args, k)]])
         state = {"schema": "katana.flow.managed_run/v1", "request_id": request_id, "request": request,
                  "status": "running", "stages": {}}
         write_json(state_file, state)
@@ -323,8 +329,15 @@ def run(args):
                 "recorded_at": datetime.now(timezone.utc).isoformat()})
             write_json(state_file, state)
             common.extend(["-c", str(resource_path)])
-        if args.params_file:
-            common.extend(["-params-file", str(args.params_file)])
+        # Forward resolved scientific options only: routing is explicit below,
+        # so a complete-mode YAML cannot silently change the downstream stage.
+        native_parameters = scope / 'native-parameters.json'
+        if native_parameters.exists():
+            if read_json(native_parameters) != args.native_parameters:
+                raise ValueError('Recorded native parameters changed')
+        else:
+            write_json(native_parameters, args.native_parameters)
+        common.extend(['-params-file', str(native_parameters)])
         for key in ("katana_container", "dexseq_tools_container", "flow_executable"):
             if getattr(args, key):
                 common.extend(["--" + key, getattr(args, key)])
@@ -336,8 +349,9 @@ def run(args):
                 if "upstream" not in state["stages"]:
                     register_stage(scope, "upstream", scope / "work" / "upstream")
                     up_work = scope / "work" / "upstream"
-                    command = [*common, "--mode", "upstream-only", "--outdir", str(bundle.parent), "--managed_preflight", "true",
-                               "--project_template", str(args.project_template), "--flow_config", str(args.flow_config)]
+                    command = [*common, "--mode", "upstream-only", "--outdir", str(bundle.parent), "--managed_preflight", "true"]
+                    if args.project_template:
+                        command += ['--project_template', str(args.project_template), '--flow_config', str(args.flow_config)]
                     for key in ("input", "contrasts", "fasta", "gtf"):
                         command.extend(["--" + key, str(getattr(args, key))])
                     native = _native_phase(command, up_work, scope, "upstream", resume=args.resume)
@@ -348,6 +362,19 @@ def run(args):
                     verified = verify_upstream_bundle(bundle)
                     if verified != state["stages"]["upstream"]["checkpoint"]:
                         raise ValueError("The successful upstream handoff has changed")
+                # The same native CONFIGURE process publishes its small output
+                # outside upstream work. Reuse it for import and downstream.
+                configuration = bundle.parent / 'pipeline_info' / 'configuration'
+                template_file = args.project_template or configuration / 'project-template.json'
+                config_file = args.flow_config or configuration / 'flow.json'
+                for filename in (template_file, config_file):
+                    if not filename.is_file():
+                        raise ValueError('Missing published native configuration: ' + str(filename))
+                current_config = {str(p): file_sha256(p) for p in (template_file, config_file)}
+                if state.get('configuration_sha256', current_config) != current_config:
+                    raise ValueError('Published native configuration changed; work retained')
+                state['configuration_sha256'] = current_config
+                write_json(state_file, state)
                 if not args.keep_work:
                     _check_tool_cache_locations(scope / "work" / "upstream")
                     cleanup_stage(scope, "upstream", native_status=state["stages"]["upstream"]["native"],
@@ -358,18 +385,20 @@ def run(args):
                         if list((scope / "logs").glob("downstream-*.native.json")):
                             raise ValueError("The imported project changed after downstream execution; work retained")
                         project = down_work / ("project-import-" + uuid4().hex) / "project.json"
-                    import_bundle(bundle, args.project_template, project.parent,
-                                  owned_link_root=down_work, analysis_configuration=read_json(args.flow_config))
+                    import_bundle(bundle, template_file, project.parent,
+                                  owned_link_root=down_work, analysis_configuration=read_json(config_file))
                     state["working_project"] = str(project)
                     write_json(state_file, state)
             else:
                 project = args.project
+                config_file = args.flow_config
             phase_outputs = down_work / "outputs"
             if "downstream" not in state["stages"]:
                 command = [*common, "--mode", "downstream-only", "--project", str(project), "--outdir", str(phase_outputs)]
-                for key in ("flow_config", "flow_plan"):
-                    if getattr(args, key):
-                        command.extend(["--" + key, str(getattr(args, key))])
+                if config_file:
+                    command += ['--flow_config', str(config_file)]
+                if args.flow_plan:
+                    command += ['--flow_plan', str(args.flow_plan)]
                 native = _native_phase(command, down_work, scope, "downstream", resume=args.resume)
                 proof = verify_report(phase_outputs / "report", phase_outputs / "collection")
                 state["stages"]["downstream"] = {"native": native, "checkpoint": proof}

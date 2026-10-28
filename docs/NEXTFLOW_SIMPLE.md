@@ -9,6 +9,22 @@ Supply samples, the comparisons you want, references, and an output directory.
 Katana generates its internal project template and downstream settings. You do
 not need to create `study.yml`, `project-template.json` or `flow.json`.
 
+For one command that also removes completed temporary work, use the installed
+`katana-flow run` launcher with the **same scientific parameters**:
+
+```bash
+katana-flow run -params-file examples/nextflow/params.complete.yaml \
+  -profile slurm,apptainer -c examples/nextflow/kth.config \
+  --slurm_account YOUR_ALLOCATION --outdir /data/study/results
+```
+
+Edit the template paths first. The launcher calls the native Nextflow workflow
+in two stages, retains results and target-analysis inputs, then cleans only
+completed stage work. Failed work remains available; repeat with `-resume`.
+Use `--keep-work` to retain caches or `--run-dir` to choose their managed root.
+The direct Nextflow command below uses the same parameters but retains work.
+Both routes require a matching updated installation/runtime.
+
 ## 1. FASTQ or BAM to analysis and report
 
 From the repository checkout:

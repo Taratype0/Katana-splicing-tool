@@ -1,6 +1,8 @@
 # Complete native parameter template for the current source workflow.
 # Edit /data paths, species/build/release and images; this is not real study data.
 # Run: nextflow run pipeline/main.nf -params-file params.complete.yaml
+# With automatic stage cleanup: katana-flow run -params-file params.complete.yaml
+# The managed launcher uses lean publication; add --keep-work to retain its work.
 # Add -profile, -c, -work-dir and -resume on the Nextflow command line.
 # JSON project/settings transport files are generated internally.
 # null leaves an optional value unset; skip switches are false by default.

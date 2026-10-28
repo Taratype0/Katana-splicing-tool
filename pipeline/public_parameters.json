@@ -1,0 +1,338 @@
+{
+  "mode": {
+    "type": "string"
+  },
+  "input": {
+    "type": "path"
+  },
+  "contrasts": {
+    "type": "path"
+  },
+  "fasta": {
+    "type": "path"
+  },
+  "gtf": {
+    "type": "path"
+  },
+  "project": {
+    "type": "path"
+  },
+  "project_template": {
+    "type": "path"
+  },
+  "flow_config": {
+    "type": "path"
+  },
+  "flow_plan": {
+    "type": "path"
+  },
+  "flow_report_revision": {
+    "type": "string"
+  },
+  "flow_executable": {
+    "type": "string"
+  },
+  "katana_container": {
+    "type": "string"
+  },
+  "dexseq_tools_container": {
+    "type": "string"
+  },
+  "katana_stage_containers": {
+    "type": "map"
+  },
+  "outdir": {
+    "type": "path"
+  },
+  "publish_dir_mode": {
+    "type": "string"
+  },
+  "storage_mode": {
+    "type": "string"
+  },
+  "study_name": {
+    "type": "string"
+  },
+  "species": {
+    "type": "string"
+  },
+  "gene_sets": {
+    "type": "path"
+  },
+  "rbp_gene_sets": {
+    "type": "path"
+  },
+  "motif_database": {
+    "type": "path"
+  },
+  "clip_peaks": {
+    "type": "path"
+  },
+  "fimo_runtime": {
+    "type": "path"
+  },
+  "resource_metadata": {
+    "type": "map"
+  },
+  "contrast_ids": {
+    "type": "selection"
+  },
+  "rmats_mode": {
+    "type": "string"
+  },
+  "event_set": {
+    "type": "string"
+  },
+  "deg_fdr": {
+    "type": "number"
+  },
+  "deg_log2fc": {
+    "type": "number"
+  },
+  "das_fdr": {
+    "type": "number"
+  },
+  "das_dpsi": {
+    "type": "number"
+  },
+  "dtu_fdr": {
+    "type": "number"
+  },
+  "network_min_module_size": {
+    "type": "int"
+  },
+  "network_merge_cut_height": {
+    "type": "number"
+  },
+  "skip_landscape": {
+    "type": "bool"
+  },
+  "skip_cross_comparison": {
+    "type": "bool"
+  },
+  "skip_enrichment": {
+    "type": "bool"
+  },
+  "skip_rbp_identity": {
+    "type": "bool"
+  },
+  "skip_motiftrace": {
+    "type": "bool"
+  },
+  "skip_motif_binding": {
+    "type": "bool"
+  },
+  "skip_mapp": {
+    "type": "bool"
+  },
+  "skip_network": {
+    "type": "bool"
+  },
+  "skip_interaction": {
+    "type": "bool"
+  },
+  "skip_sequencing_qc": {
+    "type": "bool"
+  },
+  "with_genebody_coverage": {
+    "type": "bool"
+  },
+  "with_network_bootstrap": {
+    "type": "bool"
+  },
+  "genome": {
+    "type": "string"
+  },
+  "reference_build": {
+    "type": "string"
+  },
+  "annotation_release": {
+    "type": "string"
+  },
+  "read_length": {
+    "type": "int"
+  },
+  "allow_variable_read_length": {
+    "type": "bool"
+  },
+  "stranded_threshold": {
+    "type": "number"
+  },
+  "unstranded_threshold": {
+    "type": "number"
+  },
+  "strandedness_sample_size": {
+    "type": "int"
+  },
+  "strandedness_mapq": {
+    "type": "int"
+  },
+  "design": {
+    "type": "string"
+  },
+  "analysis_purpose": {
+    "type": "string"
+  },
+  "skip_trimming": {
+    "type": "bool"
+  },
+  "skip_fastqc": {
+    "type": "bool"
+  },
+  "star_index": {
+    "type": "path"
+  },
+  "star_sjdb_overhang": {
+    "type": "int"
+  },
+  "star_genome_sa_index_nbases": {
+    "type": "int"
+  },
+  "salmon_archive": {
+    "type": "string"
+  },
+  "salmon_archive_sha256": {
+    "type": "string"
+  },
+  "salmon_seq_bias": {
+    "type": "bool"
+  },
+  "salmon_gc_bias": {
+    "type": "bool"
+  },
+  "alignment_quality": {
+    "type": "int"
+  },
+  "aggregation": {
+    "type": "bool"
+  },
+  "n_dexseq_plot": {
+    "type": "int"
+  },
+  "min_samps_feature_expr": {
+    "type": "int"
+  },
+  "min_samps_feature_prop": {
+    "type": "int"
+  },
+  "min_samps_gene_expr": {
+    "type": "int"
+  },
+  "min_feature_expr": {
+    "type": "int"
+  },
+  "min_feature_prop": {
+    "type": "number"
+  },
+  "min_gene_expr": {
+    "type": "int"
+  },
+  "rmats_splice_diff_cutoff": {
+    "type": "number"
+  },
+  "rmats_novel_splice_site": {
+    "type": "bool"
+  },
+  "rmats_min_intron_len": {
+    "type": "int"
+  },
+  "rmats_max_exon_len": {
+    "type": "int"
+  },
+  "suppa_per_local_event": {
+    "type": "bool"
+  },
+  "suppa_per_isoform": {
+    "type": "bool"
+  },
+  "generateevents_pool_genes": {
+    "type": "bool"
+  },
+  "generateevents_event_type": {
+    "type": "string"
+  },
+  "generateevents_boundary": {
+    "type": "string"
+  },
+  "generateevents_threshold": {
+    "type": "int"
+  },
+  "generateevents_exon_length": {
+    "type": "int"
+  },
+  "psiperevent_total_filter": {
+    "type": "int"
+  },
+  "diffsplice_local_event": {
+    "type": "bool"
+  },
+  "diffsplice_isoform": {
+    "type": "bool"
+  },
+  "diffsplice_method": {
+    "type": "string"
+  },
+  "diffsplice_area": {
+    "type": "int"
+  },
+  "diffsplice_lower_bound": {
+    "type": "int"
+  },
+  "diffsplice_gene_correction": {
+    "type": "bool"
+  },
+  "diffsplice_alpha": {
+    "type": "number"
+  },
+  "diffsplice_median": {
+    "type": "bool"
+  },
+  "diffsplice_tpm_threshold": {
+    "type": "int"
+  },
+  "diffsplice_nan_threshold": {
+    "type": "int"
+  },
+  "clusterevents_local_event": {
+    "type": "bool"
+  },
+  "clusterevents_isoform": {
+    "type": "bool"
+  },
+  "clusterevents_sigthreshold": {
+    "type": "number"
+  },
+  "clusterevents_dpsithreshold": {
+    "type": "number"
+  },
+  "clusterevents_eps": {
+    "type": "number"
+  },
+  "clusterevents_metric": {
+    "type": "string"
+  },
+  "clusterevents_separation": {
+    "type": "string"
+  },
+  "clusterevents_min_pts": {
+    "type": "int"
+  },
+  "clusterevents_method": {
+    "type": "string"
+  },
+  "slurm_account": {
+    "type": "string"
+  },
+  "slurm_partition": {
+    "type": "string"
+  },
+  "max_cpus": {
+    "type": "int"
+  },
+  "max_memory": {
+    "type": "string"
+  },
+  "max_time": {
+    "type": "string"
+  }
+}

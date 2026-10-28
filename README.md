@@ -64,13 +64,15 @@ The interactive browser adds adjustable thresholds, result filtering, gene/event
 
 ## Run a study
 
-After preparing the sample sheet, comparison sheet, reference and analysis-resource configuration, the storage-managed command runs Nextflow and delivers the report plus a reusable analysis project:
+Supply the sample sheet, comparison sheet, references and analysis resources. One command runs Nextflow, delivers the report and reusable project, and removes completed temporary work. Internal configuration files are generated automatically:
 
 ```sh
 katana-flow run --mode complete \
   --input inputs/samples.csv --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
-  --project_template inputs/project-template.json --flow_config inputs/flow.json \
+  --species 'Mus musculus' --reference_build GRCm39 \
+  --gene_sets resources/pathways.gmt --rbp_gene_sets resources/rbps.gmt \
+  --motif_database resources/motifs.json --clip_peaks resources/clip.tsv \
   --profile docker --katana_container "$KATANA_IMAGE" \
   --dexseq_tools_container "$DEXSEQ_IMAGE" --outdir results
 ```
@@ -78,6 +80,12 @@ katana-flow run --mode complete \
 Use the matching current package, workflow and images described in the [quick start](docs/QUICKSTART.md). The BAM entry uses the same command with a BAM sample sheet. Nextflow schedules dependencies automatically; cluster accounts, partitions and resources belong in your site configuration.
 
 Successful stages hand off their results before temporary work is removed. Failed work stays available for recovery. Add `--keep-work` to retain work for later Nextflow resume. See [storage management](docs/STORAGE_MANAGEMENT.md).
+
+The same [parameter template](examples/nextflow/params.complete.yaml) also works
+with `katana-flow run -params-file params.yaml -profile slurm,apptainer -c site.config`.
+Explicit command-line parameters override the file. Use `-resume` to recover
+the same run. Direct `nextflow run pipeline/main.nf` remains available with the
+same scientific parameters and ordinary Nextflow work retention.
 
 ## What you receive
 

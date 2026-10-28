@@ -28,8 +28,9 @@ scientific settings as the [Nextflow usage guide](NEXTFLOW_USAGE.md):
 katana-flow run --mode complete \
   --input inputs/samples.csv --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
-  --project_template inputs/project-template.json \
-  --flow_config inputs/flow.json \
+  --species 'Mus musculus' --reference_build GRCm39 \
+  --gene_sets resources/pathways.gmt --rbp_gene_sets resources/rbps.gmt \
+  --motif_database resources/motifs.json --clip_peaks resources/clip.tsv \
   --outdir results \
   --profile slurm,apptainer --site-config site.config \
   --katana_container "$KATANA_IMAGE" \
@@ -46,7 +47,7 @@ An existing prepared project can enter downstream analysis directly:
 
 ```sh
 katana-flow run --mode downstream-only \
-  --project inputs/project.json --flow_config inputs/flow.json \
+  --project inputs/project.json \
   --outdir downstream-results \
   --profile slurm,apptainer --site-config site.config \
   --katana_container "$KATANA_IMAGE"
@@ -62,11 +63,34 @@ another run still need their supported import/adoption or project mapping.
 directories separate from both output and run directories. New runs do not
 overwrite nonempty completed deliveries.
 
-Use `--params-file inputs/scientific-params.yaml` for supported native
-Nextflow scientific/resource parameters. Keep managed routing fields, output
-locations and cleanup policy in the `katana-flow run` arguments. A scientific
-params file for this command is not the complete mode/input/output params file
-shown for a direct `nextflow run` invocation.
+Use the same complete YAML/JSON parameter file as direct Nextflow:
+
+```sh
+katana-flow run -params-file inputs/params.yaml \
+  -profile slurm,apptainer -c site.config
+```
+
+`input`, `contrasts`, references, resources, `outdir`, analysis switches and
+thresholds can all come from this file. Explicit CLI values take precedence.
+Relative input paths are resolved against the command's launch directory.
+`-profile`, `-c`, `-params-file` and `-resume` are supported aliases. Use
+`--run-dir` to choose the managed work root; native `-work-dir` remains an
+option of direct Nextflow. Analysis parameters in `-c` files are not imported
+by the launcher: keep scientific settings in CLI/params, and use `-c` for
+executor and process resources.
+
+No handwritten `project-template.json` or `flow.json` is required. Complete
+mode uses the same native configuration task as direct Nextflow and reuses its
+published configuration across the cleanup handoff. Existing-project mode
+uses its recorded resources and generates downstream settings automatically.
+Advanced explicit JSON remains supported; it takes precedence over flat
+downstream selections. Do not mix these two ways to specify downstream settings.
+
+Managed execution always uses lean publication and its registered stage work;
+`storage_mode`/`publish_dir_mode` from a shared native template do not override
+this storage policy. Use `--keep-work` to disable automatic work deletion.
+Automatic cleanup supports complete and downstream-only modes. For an
+upstream-only run, use direct Nextflow with the same input parameters.
 
 ## What is deleted, and when
 

@@ -82,3 +82,6 @@ jobs:
           python -B pipeline/tools/check_native_parameters.py \
             --nextflow-command-json "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-flat-parameters"
+          python -B pipeline/tools/check_unified_cleanup.py \
+            --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
+            --outdir "$RUNNER_TEMP/katana-unified-cleanup"

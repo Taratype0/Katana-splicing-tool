@@ -73,12 +73,19 @@ nextflow run tools/katana-pipeline/main.nf -profile docker \
   --mode complete --input inputs/samples.csv \
   --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
-  --project_template inputs/project-template.json \
-  --flow_config inputs/flow.json \
+  --species 'Mus musculus' --reference_build GRCm39 \
+  --gene_sets resources/pathways.gmt --rbp_gene_sets resources/rbps.gmt \
+  --motif_database resources/motifs.json --clip_peaks resources/clip.tsv \
   --katana_container "$KATANA_IMAGE" \
   --dexseq_tools_container "$DEXSEQ_IMAGE" \
   --outdir results -work-dir work
 ```
+
+For automatic stage cleanup, use `katana-flow run` with the same scientific
+flags (or the same `-params-file`), omit `-work-dir`, and optionally select a
+private `--run-dir`. Both routes generate their internal JSON automatically.
+Use a matching current-source installation; frozen older downloads retain
+their original interface. See [storage management](STORAGE_MANAGEMENT.md).
 
 The raw-entry sheet requires unique sample IDs, `condition` and `strandedness`,
 plus `fastq_1`/optional `fastq_2` **or** `genome_bam`. Supply a

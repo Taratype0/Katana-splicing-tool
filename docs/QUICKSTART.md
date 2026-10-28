@@ -70,9 +70,9 @@ Effects follow treatment relative to control. The raw-data route currently
 supports independent groups with `~ condition`; paired/batch-adjusted models
 need a separate compatible analysis route. See [experimental design](NEXTFLOW_USAGE.md#4-contrastsheet-input-and-direction).
 
-Prepare the [project resource template and analysis settings](NEXTFLOW_USAGE.md#6-downstream-analysis-configuration).
-These identify the organism, reference, motif/pathway/CLIP resources and
-analysis parameters. The full default report uses these resources; downloading
+Supply [resource paths and analysis parameters](NEXTFLOW_SIMPLE.md) directly,
+or in the shared parameter template. Internal project/settings JSON is generated.
+The full default report uses these resources; downloading
 FASTQ alone does not provide them. You can [turn off selected analyses](ANALYSIS_AND_EXECUTION_OPTIONS.md)
 and omit their calculation and dedicated resource requirements.
 
@@ -80,7 +80,9 @@ and omit their calculation and dedicated resource requirements.
 katana-flow run --mode complete \
   --input inputs/samples.csv --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
-  --project_template inputs/project-template.json --flow_config inputs/flow.json \
+  --species 'Mus musculus' --reference_build GRCm39 \
+  --gene_sets resources/pathways.gmt --rbp_gene_sets resources/rbps.gmt \
+  --motif_database resources/motifs.json --clip_peaks resources/clip.tsv \
   --profile docker --katana_container "$KATANA_IMAGE" \
   --dexseq_tools_container "$DEXSEQ_IMAGE" --outdir results
 ```
@@ -125,7 +127,7 @@ For a Katana upstream results bundle:
 katana-flow import --bundle upstream-results/katana_bundle \
   --project-template inputs/project-template.json --outdir imported-project
 katana-flow run --mode downstream-only \
-  --project imported-project/project.json --flow_config inputs/flow.json \
+  --project imported-project/project.json \
   --profile docker --katana_container "$KATANA_IMAGE" --outdir results
 ```
 

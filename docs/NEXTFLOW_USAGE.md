@@ -725,7 +725,11 @@ directory. Katana does not automatically submit to every cluster scheduler.
 ## 13. Resume, updates and storage
 
 For automatic cleanup after verified stage handoffs, use
-[`katana-flow run`](STORAGE_MANAGEMENT.md). It runs the same native upstream
+[`katana-flow run`](STORAGE_MANAGEMENT.md) with the same public parameters or
+`-params-file`. It generates configuration automatically; handwritten JSON is
+not required. `-profile`, `-c` and `-resume` are supported aliases. Choose
+`--run-dir` instead of native `-work-dir` for managed stage work.
+It runs the same native upstream
 and downstream methods, retains a complete reusable analysis project and the
 fixed report, then removes only its owned completed stage work. Add
 `--keep-work` to retain native caches; `katana-flow clean-run --run-dir
