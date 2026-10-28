@@ -38,8 +38,19 @@ contradictory design flags and undeclared shared subjects are rejected.
   reference fit. Dardel job 27023715 completed with exit 0 on 28 October 2026,
   using DEXSeq 1.52.0 / DESeq2 1.46.0. No study data were used.
 - CI additionally runs that fixture in the pinned upstream DEXSeq 1.36.0 image.
-  Its result must be checked on the exact candidate commit; adding the test is
-  not evidence that this second runtime has passed.
+  Native integration run 40731043403 passed on execution commit
+  `984386ab5ab829b961a0eecea83935b139217aca`. Subsequent candidate changes through
+  `e934881d8a5599221747a533814601c8a500f59b` only corrected a distribution-version
+  regression test; execution code and environments were unchanged. Software CI
+  run 40731253022 passed on that candidate (Windows, Linux, wheel and browser).
+- Dardel job 27025513 ran native rMATS 4.1.2 `--task stat --paired-stats`
+  with generated counts for three matched subjects. Both JC and JCEC produced
+  16 event rows with finite P values and FDR. This validates the installed
+  PAIRADISE statistical path; it does not replace BAM/FASTQ end-to-end validation.
+- Dardel job 27025413 completed with exit 0: matching application-image
+  installation checks, generated paired R fits and the DEXSeq counting runtime.
+  All 16 upstream task-image availability checks also passed, including the
+  case-sensitive R package name `PAIRADISE`.
 - Matching application-image deployment and complete study execution are
   separate checks. No four-study FASTQ run has been submitted by these tests.
 
@@ -58,3 +69,10 @@ is unchanged. The build receipt identifies both the base and the new wheel.
 Run `scripts/check_downstream_environment.py` in the new image before use;
 `status=built` alone does not establish installation acceptance. A changed
 dependency lock requires a full environment build instead.
+
+Read-only SIF installations need a writable Numba cache when importing UMAP.
+Choose an owned cache directory and pass it explicitly, for example
+`singularity exec --env NUMBA_CACHE_DIR=/data/cache/numba --bind /data ...`.
+Apply the same setting in the site's `singularity.runOptions` so installation
+checks and actual Nextflow tasks use the same environment. Do not modify the
+read-only image or redirect scientific outputs into a tool cache.
