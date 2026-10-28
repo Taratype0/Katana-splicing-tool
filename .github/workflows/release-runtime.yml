@@ -1,0 +1,77 @@
+name: Validate release runtime
+
+on:
+  push:
+    branches: ['codex/independent-runtime-release-20261028']
+    paths: ['.github/workflows/release-runtime.yml']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release containing the accepted wheel
+        required: true
+      wheel_sha256:
+        description: Accepted wheel SHA256
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  docker-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag || 'v2.0.0-beta.5.dev20261028' }}
+      WHEEL_SHA: ${{ inputs.wheel_sha256 || '32e7c17842ad5f448c6b12cc71a8f686c9f01ceb0a359d2efe0adf4a84769651' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check draft and obtain verified inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          mkdir -p "$RUNNER_TEMP/katana-release/context" "$RUNNER_TEMP/katana-release/output"
+          cd "$RUNNER_TEMP/katana-release"
+          gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" -p '*.whl' -D context
+          test "$(find context -name '*.whl' | wc -l)" = 1
+          printf '%s  %s\n' "$WHEEL_SHA" "$(find context -name '*.whl')" | sha256sum --check --strict
+          gh release download v2.0.0-beta.5.dev20261025 -R "$GITHUB_REPOSITORY" \
+            -p katana-downstream-2.0.0b5.dev20261025-linux-amd64.docker.tar.gz
+          echo '238e4eeba8bc3571e5413f7f64973ce375a76a63bf7b58c6e9dc71dd869a1402  katana-downstream-2.0.0b5.dev20261025-linux-amd64.docker.tar.gz' | sha256sum --check --strict
+          echo 'cc6b9d9c17b98fdcbf59b0dfffe77c20356b786830c7dc503ac2dc5f4b434b99  environments/locks/linux-64.explicit.txt' | (cd "$GITHUB_WORKSPACE"; sha256sum --check --strict)
+          echo '4bbfdd6b3510821fce032d52d42a52bef1313238fad82b7c2d831adda5cb87f1  environments/locks/pip-linux-64.lock' | (cd "$GITHUB_WORKSPACE"; sha256sum --check --strict)
+          docker load -i katana-downstream-2.0.0b5.dev20261025-linux-amd64.docker.tar.gz
+          docker tag sha256:619b6ace665b686c2c5703098a8ccc1989f424060901cb2c9bfe2d7b1f7d6222 katana-runtime-base:verified
+      - name: Install accepted wheel and validate container
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/katana-release"
+          cat > context/Dockerfile <<'DOCKER'
+          FROM katana-runtime-base:verified
+          COPY *.whl /tmp/katana-wheel/
+          RUN python -m pip install --no-cache-dir --no-deps --force-reinstall /tmp/katana-wheel/*.whl && python -m pip check && rm -rf /tmp/katana-wheel
+          DOCKER
+          docker build --network=none -t katana-downstream:2.0.0b5.dev20261028 context
+          docker run --rm --network=none --user "$(id -u):$(id -g)" \
+            -e NUMBA_CACHE_DIR=/tmp/numba -v "$PWD/output:/acceptance" \
+            katana-downstream:2.0.0b5.dev20261028 \
+            python /opt/katana/check_downstream_environment.py --out /acceptance/environment
+          docker run --rm --network=none katana-downstream:2.0.0b5.dev20261028 katana-flow run --help > output/run-help.txt
+          docker inspect katana-downstream:2.0.0b5.dev20261028 > output/image-inspect.json
+          docker save katana-downstream:2.0.0b5.dev20261028 | gzip -1 > output/katana-downstream-2.0.0b5.dev20261028-linux-amd64.docker.tar.gz
+          cd output
+          sha256sum *.docker.tar.gz > docker-SHA256SUMS
+          tar -czf docker-validation.tar.gz environment run-help.txt image-inspect.json
+          test "$(gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+          gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" \
+            *.docker.tar.gz docker-SHA256SUMS docker-validation.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-runtime-checks
+          path: |
+            ${{ runner.temp }}/katana-release/output/environment
+            ${{ runner.temp }}/katana-release/output/*SUMS
+            ${{ runner.temp }}/katana-release/output/image-inspect.json
