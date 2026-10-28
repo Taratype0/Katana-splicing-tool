@@ -90,7 +90,19 @@ def test_capacity_revision_preserves_historical_identity_and_records_current_sou
     old_toml=ROOT/'tests/fixtures/frozen_motiftrace_capacity_20261017/pyproject.before-capacity-removal.toml'
     changes={r['path']:r for r in revision['changes']}
     assert changes['pyproject.toml']['previous_sha256']==sha256(old_toml.read_bytes()).hexdigest()
-    assert changes['pyproject.toml']['current_sha256']==sha256((ROOT/'pyproject.toml').read_bytes()).hexdigest()
+    packaging = next(r for r in record['interface_revisions']
+                     if r.get('revision') == 'distribution-version-metadata-20261028')['changes'][0]
+    current = (ROOT/'pyproject.toml').read_bytes()
+    old_token = ('version = "'+packaging['previous_distribution_version']+'"').encode()
+    new_token = ('version = "'+packaging['current_distribution_version']+'"').encode()
+    assert current.count(new_token) == 1
+    previous = current.replace(new_token, old_token, 1)
+    assert changes['pyproject.toml']['current_sha256'] == packaging['previous_sha256'] == sha256(previous).hexdigest()
+    assert packaging['current_sha256'] == record['interface_source_sha256']['pyproject.toml'] == sha256(current).hexdigest()
+    old_doc, new_doc = tomllib.loads(previous.decode()), tomllib.loads(current.decode())
+    assert old_doc['project'].pop('version') == packaging['previous_distribution_version']
+    assert new_doc['project'].pop('version') == packaging['current_distribution_version']
+    assert old_doc == new_doc
     assert tomllib.loads((ROOT/'pyproject.toml').read_text())['project']['version']=='2.0.0b5.dev20261026'
     assert record['execution_adapter']['fixed_capacity_limits_enforced'] is False
     assert record['execution_adapter']['max_tests_default'] is None
