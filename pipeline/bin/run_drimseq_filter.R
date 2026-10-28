@@ -53,6 +53,7 @@ if (!c("sample") %in% colnames(samps) | !c("condition") %in% colnames(samps)) {
 }
 
 # Take only sample and condition columns
+subject_metadata <- samps[, intersect(c("sample", "subject"), names(samps)), drop=FALSE]
 samps <- samps[,c("sample", "condition")]
 
 # filter for unique rows based on sample name
@@ -106,6 +107,8 @@ d <- DRIMSeq::dmFilter(d,
 
 # Take pre-filtered sample data from DRIMSeq object
 sample.data <- DRIMSeq::samples(d)
+if ("subject" %in% names(subject_metadata))
+    sample.data$subject <- subject_metadata$subject[match(sample.data$sample_id, subject_metadata$sample)]
 
 # Take count data
 d.counts <- counts(d)

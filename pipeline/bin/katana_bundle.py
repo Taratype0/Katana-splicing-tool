@@ -246,6 +246,8 @@ def export_bundle(source_map_path: Path, output_dir: Path, samples_path: Path, c
             raise ValueError(f"Contrast refers to invalid conditions: {contrast}")
         override = overrides.get(comparison_id, {})
         comparison = {"comparison_id": comparison_id, "treatment": treatment, "control": control,
+                      "paired": str(contrast.get("paired", "false")).lower() in {"true", "1", "yes"},
+                      "design": contrast.get("design") or "~ condition",
                       "rmats_group1": override.get("rmats_group1", treatment), "rmats_group2": override.get("rmats_group2", control),
                       "deg_target": override.get("deg_target", treatment), "deg_reference": override.get("deg_reference", control)}
         if {comparison["rmats_group1"], comparison["rmats_group2"]} != {treatment, control} or {comparison["deg_target"], comparison["deg_reference"]} != {treatment, control}:

@@ -103,6 +103,7 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None, ana
                         "condition": group, "batch": row.get("batch") or None, "attributes": attributes, "assets": {}})
     by_sample = {s["sample_id"]: s for s in samples}
     comparisons, contrast_index = [], {}
+    project_metadata["comparison_designs"] = {}
     for row in source["comparisons"]:
         cid, numerator, denominator = row["comparison_id"], row["treatment"], row["control"]
         if cid in contrast_index or numerator not in groups or denominator not in groups:
@@ -112,6 +113,9 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None, ana
                       "denominator": {"label": denominator, "sample_ids": groups[denominator]}}
         comparisons.append(comparison)
         contrast_index[cid] = row
+        project_metadata["comparison_designs"][cid] = {
+            "paired": row.get("paired", False), "formula": row.get("design", "~ condition"),
+            "blocking_column": "biological_sample_id" if row.get("paired", False) else None}
     annotation, assets = {"genome_build": genome_build}, []
     normalized_members = {}
     stage_r_contrasts = {item.get("comparison_id") for item in artifacts

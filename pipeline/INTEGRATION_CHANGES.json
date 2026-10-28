@@ -6,7 +6,15 @@
     {
       "path": "bin/katana_bundle.py",
       "snapshot_sha256": "c63b8681f0253cc3c0ca24ea8c75e8083fec8951254f8384c07ba450be8e1f15",
-      "integrated_sha256": "6b753545089ad3641f12f51ddce225402b968e996e26124abac3a13971846f84"
+      "integrated_sha256": "68898422ccd46993a6a0340056986017444ae10e69788f3735803b4380a3db8f",
+      "integration_revisions": [
+        {
+          "revision": "paired-design-20261028",
+          "previous_integrated_sha256": "6b753545089ad3641f12f51ddce225402b968e996e26124abac3a13971846f84",
+          "integrated_sha256": "68898422ccd46993a6a0340056986017444ae10e69788f3735803b4380a3db8f",
+          "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        }
+      ]
     },
     {
       "path": "conf/upstream_modules.config",
@@ -101,7 +109,15 @@
     {
       "path": "modules/local/rmats_post.nf",
       "snapshot_sha256": "25fac904356724b4e29eb05f1e64650818a6e1e66e09da05ed5168711e223ace",
-      "integrated_sha256": "825d24ea2e017f57854e6e475bec02d9c81d11f194d20501e60506dcf3ffd871"
+      "integrated_sha256": "8d21bff21d0c586e796cd2bb12af0f553f50c15b0046e1d8a0c4eb549c1d8acc",
+      "integration_revisions": [
+        {
+          "revision": "paired-design-20261028",
+          "previous_integrated_sha256": "825d24ea2e017f57854e6e475bec02d9c81d11f194d20501e60506dcf3ffd871",
+          "integrated_sha256": "8d21bff21d0c586e796cd2bb12af0f553f50c15b0046e1d8a0c4eb549c1d8acc",
+          "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        }
+      ]
     },
     {
       "path": "modules/local/rmats_post_single.nf",
@@ -136,7 +152,15 @@
     {
       "path": "modules/local/suppa_diffsplice.nf",
       "snapshot_sha256": "449ed8b6a5c97cdd0ebfa5a2456809c2c7424653fe23c930d3ab955d28aa8650",
-      "integrated_sha256": "0a09b855a9d2168b021375315a9f88d44f96344bf30234f28add55899246f6e2"
+      "integrated_sha256": "50790912d8b317a51c94f975ba67387b0a4b61c776c7e7b3416484cb8af2d167",
+      "integration_revisions": [
+        {
+          "revision": "paired-design-20261028",
+          "previous_integrated_sha256": "0a09b855a9d2168b021375315a9f88d44f96344bf30234f28add55899246f6e2",
+          "integrated_sha256": "50790912d8b317a51c94f975ba67387b0a4b61c776c7e7b3416484cb8af2d167",
+          "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        }
+      ]
     },
     {
       "path": "modules/local/suppa_generateevents.nf",
@@ -201,12 +225,67 @@
     {
       "path": "workflows/katana_core.nf",
       "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
-      "integrated_sha256": "b961acf64724f34754acd7d36ed7a4ad01cc8c1bc9f6cf69a24ffc4ca4bef999"
+      "integrated_sha256": "f057e2c6e671881e9a866e69f6a625976737d486b5d718e8e8ca44f3b2de2ae6",
+      "integration_revisions": [
+        {
+          "revision": "paired-design-20261028",
+          "previous_integrated_sha256": "b961acf64724f34754acd7d36ed7a4ad01cc8c1bc9f6cf69a24ffc4ca4bef999",
+          "integrated_sha256": "f057e2c6e671881e9a866e69f6a625976737d486b5d718e8e8ca44f3b2de2ae6",
+          "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        }
+      ]
     },
     {
       "path": "bin/katana_validate_inputs.py",
       "snapshot_sha256": "0d679b57d85dc61863ca509ed57932469e07137bd815b02e1330260f6f493195",
-      "integrated_sha256": "7f6ec50f870697573fb5b47993028a4d1c76f486a52c3467019d0a7fbece5920"
+      "integrated_sha256": "60a4c2c586db76cc6cf6b803fc2ffe7c02dc9acdd652acedb2f5f7a57c30bbeb",
+      "integration_revisions": [
+        {
+          "revision": "paired-design-20261028",
+          "previous_integrated_sha256": "7f6ec50f870697573fb5b47993028a4d1c76f486a52c3467019d0a7fbece5920",
+          "integrated_sha256": "60a4c2c586db76cc6cf6b803fc2ffe7c02dc9acdd652acedb2f5f7a57c30bbeb",
+          "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        }
+      ]
+    },
+    {
+      "path": "bin/run_dexseq_dtu.R",
+      "snapshot_sha256": "3e47b62506218201558bd0c50354ae5103bebc8a75031ff05763f17f04ead5fc",
+      "integrated_sha256": "2613f7e53650fcaa29a34427ba5c0b9cd576812b28c81b959fa21081d792bc30",
+      "integration_revisions": [
+        {
+          "revision": "paired-design-20261028",
+          "previous_integrated_sha256": "3e47b62506218201558bd0c50354ae5103bebc8a75031ff05763f17f04ead5fc",
+          "integrated_sha256": "2613f7e53650fcaa29a34427ba5c0b9cd576812b28c81b959fa21081d792bc30",
+          "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        }
+      ]
+    },
+    {
+      "path": "bin/run_dexseq_exon.R",
+      "snapshot_sha256": "8cac8e8c316837c9daf36ddd2add6e7792592e5192e0bf62a734c74088219053",
+      "integrated_sha256": "9810c9ad83e48d582e03292f8d34ee3e7dc8460da607adb2246bc54a8bf5b1e8",
+      "integration_revisions": [
+        {
+          "revision": "paired-design-20261028",
+          "previous_integrated_sha256": "8cac8e8c316837c9daf36ddd2add6e7792592e5192e0bf62a734c74088219053",
+          "integrated_sha256": "9810c9ad83e48d582e03292f8d34ee3e7dc8460da607adb2246bc54a8bf5b1e8",
+          "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        }
+      ]
+    },
+    {
+      "path": "bin/run_drimseq_filter.R",
+      "snapshot_sha256": "8c8de738b61f60cc45e5d3b28368ebac40190ff1d2a216ad18f618d5f3101130",
+      "integrated_sha256": "24ce9c53e2c4da6d671f067be3581c6da1135d972ee9f26ea785291fe9c6d67f",
+      "integration_revisions": [
+        {
+          "revision": "paired-design-20261028",
+          "previous_integrated_sha256": "8c8de738b61f60cc45e5d3b28368ebac40190ff1d2a216ad18f618d5f3101130",
+          "integrated_sha256": "24ce9c53e2c4da6d671f067be3581c6da1135d972ee9f26ea785291fe9c6d67f",
+          "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        }
+      ]
     }
   ],
   "purpose": [

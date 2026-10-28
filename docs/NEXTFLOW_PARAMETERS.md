@@ -136,13 +136,12 @@ Windows users may use an already configured WSL/Linux execution environment.
 | `--annotation_release` | unset | Declared annotation release recorded with reference provenance. |
 | `--read_length` | unset | Positive nominal length fallback for a sample without its own value. All study rows must resolve to one nominal length. |
 | `--allow_variable_read_length` | `true` | BAM audit permits observed positive primary lengths no greater than the declared nominal length; `false` requires exact equality. It does not allow mixed nominal study lengths. |
-| `--design` | `~ condition` | Only this independent two-level model is wired across the complete bundle. Paired, blocking, batch-adjusted and interaction formulas are rejected. |
+| `--design` | `~ condition` | Default independent model. `~ subject + condition` is supported for complete matched pairs; per-contrast `paired`/`design` can select it. Other raw-entry formulas remain unsupported. |
 | `--analysis_purpose` | `analysis` | `analysis` or `engine_smoke`. `engine_smoke` is for explicitly non-biological engine fixtures; it cannot establish valid replication or release scientific results. Use `analysis` for research. |
 
-`subject`/`batch` may record information without fitting it. Repeated subjects
-across arms do not silently enable pairing. An extended metadata adapter or an
-already fitted imported model has a separate contract; it does not expand the
-raw complete route. See [design support](development/contracts/selected-contrasts-v1.md).
+`subject` identifies the biological unit. A paired contrast explicitly adjusts
+for subject; a `batch` column alone does not add batch adjustment. Complete pairs
+are aligned by identity, not row order. See [paired model details](validation/paired-entry-20261028.md).
 
 The upstream analysis-reference policy excludes annotated pseudogenes and
 mitochondrial-encoded genes before fitting, preserving the full original
@@ -319,7 +318,7 @@ Complete raw results and original effects/P/FDR remain available.
 | `network.config` | unset | Optional external engine YAML; must match the actual project/scope. |
 | `network.configs` | `{}` | Optional map from selected contrast IDs to exact scoped YAMLs; incompatible with cohort scope. |
 | `network.bootstrap.enabled` | `false` | Off by default; enable explicitly to schedule real resampling, not just a label. |
-| `network.parameters.minimum_network_samples` | `6` for contrast, `15` for cohort | Configurable integer >=3; total independent samples in the selected network, not per group. Actual n and the requested minimum are recorded. |
+| `network.parameters.minimum_network_samples` | `6` for contrast, `15` for cohort | Configurable integer >=3; observations in the selected network, not per group; independent units are recorded separately for explicit matched pairs. |
 | `network.parameters.rmats_mode` | Explicit request, then project metadata, then unique asset mode | `JC` or `JCEC`; ambiguous dual-mode sources fail rather than silently choose. |
 | `network.parameters.min_module_size` | `20` for generated configuration | Events, not genes. Omitted/null preserves explicit external YAML settings. |
 | `network.parameters.merge_cut_height` | `0.25` for generated configuration | Eigengene-dissimilarity merging; omitted/null preserves explicit external YAML settings. |
@@ -331,8 +330,9 @@ Complete raw results and original effects/P/FDR remain available.
 | `network.parameters.wgcna_timeout_seconds` | `null` | Legacy compatibility field; no internal R-WGCNA timeout. Scheduler time remains user-configurable. |
 | `network.parameters.rscript` | Runtime `Rscript` / declared path | Actual executable in the selected environment. |
 
-Generated contrast networks default to six distinct independent biological
-samples in total; cohort scope defaults to 15. Both are configurable through
+Generated contrast networks default to six observations in total; independent
+designs require distinct biological units. Explicit paired contrasts require at
+least three complete subject pairs and record both counts. Cohort scope defaults to 15 independent samples. Both are configurable through
 `network.parameters.minimum_network_samples` (integer >=3). Scope identities and actual sample count are recorded.
 The production engine retains observed-PSI WGCNA/TOM, `bicor`, signed network
 and soft power 6 unless a compatible explicit engine configuration changes

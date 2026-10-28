@@ -23,6 +23,8 @@ ntop <- as.integer(argv[4])
 library(BiocParallel)
 
 library(DEXSeq)
+script_path <- sub("^--file=", "", grep("^--file=", commandArgs(), value=TRUE)[1])
+source(file.path(dirname(normalizePath(script_path)), "katana_dexseq_design.R"))
 
 workers <- Sys.getenv("R_BIOC_WORKERS", "")
 if (nzchar(workers)) {
@@ -86,14 +88,14 @@ vectorToDataFrame <- function(x) {
 
 samples <- read.delim(samples, stringsAsFactors = TRUE, check.names = FALSE)
 
-colnames(samples) <- c("sample", "condition")
+colnames(samples)[colnames(samples) == "sample_id"] <- "sample"
 
 
 # Read contrasts table
 
 contrasts <- read.csv(contrasts, check.names = FALSE)
 
-contrasts <- contrasts[, c("contrast", "treatment", "control"), drop = FALSE]
+contrasts <- contrasts[, intersect(c("contrast", "treatment", "control", "paired", "design"), names(contrasts)), drop = FALSE]
 if (Sys.getenv("KANATA_SINGLE_CONTRAST", "") == "1" && nrow(contrasts) != 1L)
     stop("One contrast is required per Nextflow task")
 
@@ -137,6 +139,7 @@ object <- DEXSeqDataSet(
 
 groups <- levels(colData(object)$condition)
 
+contrast_records <- contrasts
 contrasts <- data.frame(A = contrasts$treatment, B = contrasts$control)
 
 contrasts <- contrasts[contrasts$A != contrasts$B, , drop = FALSE]
@@ -158,7 +161,7 @@ objects <- mapply(
 
 # Run DEXSeq workflow
 
-objects <- lapply(objects, DEXSeq)
+objects <- lapply(seq_along(objects), function(i) katana_dexseq_fit(objects[[i]], contrast_records[i, , drop=FALSE]))
 
 names(objects) <- names
 

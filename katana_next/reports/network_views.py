@@ -172,6 +172,18 @@ def matched_module_associations(scores, samples, contrasts):
                     raise ValueError("Frozen adapter did not return one numerator Welch row per module")
                 selected.append(chosen)
                 audit["signed_effect_status"] = "available"
+            elif result.audit.get("repeated_units") and not item.get("batch_column"):
+                # The existing donor-fixed binary F-test is the paired test.
+                # Its P/FDR family is unchanged. Add the directly measured,
+                # signed within-pair mean difference for this report view.
+                chosen = frame.copy()
+                chosen["contrast"] = "numerator_vs_rest"
+                chosen["level"] = "numerator"
+                chosen["effect"] = chosen["module"].map(
+                    frozen_scores.loc[a].mean() - frozen_scores.loc[b].mean())
+                chosen["test"] = "subject-fixed condition F-test; effect=mean paired module-score difference"
+                selected.append(chosen)
+                audit["signed_effect_status"] = "available: complete-pair mean difference; original blocked P/FDR"
             else:
                 audit["signed_effect_status"] = "not_computed: frozen blocked model emits omnibus terms only"
             for kind, extra in (("nuisance", result.nuisance_tests), ("coefficient", result.coefficients)):

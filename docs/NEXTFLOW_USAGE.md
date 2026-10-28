@@ -292,9 +292,9 @@ Treated_vs_Control,Treated,Control
 | `treatment` | Target/numerator level from `samples.csv:condition`. |
 | `control` | Reference/denominator level; must differ from treatment. |
 | `description` | Optional human-readable explanation; no statistical effect. |
-| `paired` | Optional; only false/0/no or blank is supported by the complete route. |
-| `blocking` | Optional header, but nonblank models are rejected by the complete route. |
-| `design` / `formula` | Optional; only blank or `~ condition` is accepted here. |
+| `paired` | Optional `true`/`false` (also 1/0, yes/no); true selects matched-subject analysis. |
+| `blocking` | Optional `subject` for a paired comparison; otherwise leave blank. |
+| `design` / `formula` | Optional `~ condition` or `~ subject + condition`; must agree with `paired`. |
 
 Use `contrast,treatment,control` as the first three columns for compatibility.
 Unknown extra columns, duplicate contrast IDs, repeated directional treatment/
@@ -335,11 +335,29 @@ six per group. Set `network.parameters.minimum_network_samples` explicitly
 must be integers of at least three. Other analyses keep their own requirements;
 this option is an eligibility setting, not a power estimate. See [small studies](QUICKSTART.md#small-studies).
 
-`--design '~ condition'` is the supported shared complete-route model. Paired,
-batch-adjusted and interaction formulas are rejected rather than silently
-replaced. Repeated subjects across comparison arms require a compatible paired
-adapter. Additional design checks and import provenance are described in the
-[selected-contrast contract](development/contracts/selected-contrasts-v1.md).
+The default model is `~ condition`. For matched samples, give each animal the
+same `subject` value in both conditions, and set `paired=true` in the contrast:
+
+```csv
+contrast,treatment,control,paired
+Treated_vs_Control,Treated,Control,true
+```
+
+Every selected subject must occur exactly once in each arm. The workflow aligns
+both arms by subject identity, including rMATS BAM lists and SUPPA columns;
+CSV row order does not establish pairing. Independent animals need different
+subject IDs. Batch-adjusted and interaction formulas remain separate supported
+analyses, not implicit extensions of this raw-input model.
+
+DEG uses `~ subject + condition`; rMATS enables native `--paired-stats`;
+SUPPA enables native `-pa`. DEXSeq exon usage and transcript usage include
+`subject:exon` in both likelihood-ratio models, testing `condition:exon`.
+DEXSeq's native fold-change summary remains a descriptive condition estimate;
+its P/FDR are from the subject-adjusted test. A paired network retains the
+observed-PSI discovery/kME algorithm and uses subject-blocked module association.
+Its record distinguishes observations from independent subjects (for example,
+six observations from three complete pairs). Paired module association needs
+at least three complete pairs. See [paired implementation and tests](validation/paired-entry-20261028.md).
 
 Effect directions retain the native methods:
 

@@ -143,8 +143,9 @@ def validate_contrasts(rows: list[dict[str, str]], samples: list[dict[str, str]]
     unknown_columns = sorted({column for row in rows for column in row} - SUPPORTED_CONTRAST_COLUMNS)
     if unknown_columns:
         raise InputError(f"Unsupported contrastsheet columns: {', '.join(unknown_columns)}. Supported columns are contrast,treatment,control,paired,blocking,design,formula,description; unsupported models, aliases and sample selections are not silently ignored.")
-    if re.sub(r"\s+", "", design) != "~condition":
-        raise InputError("Complete-bundle v1 supports design '~ condition'. Paired/batch/interaction designs need method-specific models and are not silently substituted.")
+    supported = {"~condition": False, "~subject+condition": True}
+    if re.sub(r"\s+", "", design) not in supported:
+        raise InputError("Complete entry supports '~ condition' or '~ subject + condition'; other models need method-specific support")
     groups: dict[str, list[dict[str, str]]] = {}
     for row in samples:
         groups.setdefault(row["condition"], []).append(row)
@@ -164,10 +165,19 @@ def validate_contrasts(rows: list[dict[str, str]], samples: list[dict[str, str]]
         if pair in seen_pairs:
             raise InputError(f"{name}: repeated treatment/control pair {treatment}/{control} already declared as {seen_pairs[pair]}; use one contrast ID per directional comparison")
         seen_pairs[pair] = name
-        for field in ("paired", "blocking", "design", "formula"):
-            value = row.get(field, "")
-            if value and not (field == "paired" and value.lower() in {"false", "0", "no"}) and not (field in {"design", "formula"} and re.sub(r"\s+", "", value) == "~condition"):
-                raise InputError(f"{name}: unsupported complete-bundle design field {field}={value!r}")
+        declared = [re.sub(r"\s+", "", row[field]) for field in ("design", "formula") if row.get(field)]
+        if len(set(declared)) > 1 or any(value not in supported for value in declared):
+            raise InputError(f"{name}: conflicting or unsupported design/formula")
+        flag = row.get("paired", "").strip().lower()
+        if flag not in {"", "true", "1", "yes", "false", "0", "no"}:
+            raise InputError(f"{name}: paired must be true or false")
+        model = declared[0] if declared else ("~subject+condition" if flag in {"true", "1", "yes"} else re.sub(r"\s+", "", design))
+        paired = supported[model]
+        if flag and paired != (flag in {"true", "1", "yes"}):
+            raise InputError(f"{name}: paired flag conflicts with design")
+        if row.get("blocking") and (not paired or row["blocking"] != "subject"):
+            raise InputError(f"{name}: the supported paired blocking column is subject")
+        row.update(paired="true" if paired else "false", design="~ subject + condition" if paired else "~ condition")
         selection = groups[treatment] + groups[control]
         selected_subjects = [member["subject"] for member in selection]
         if any(selected_subjects) and not all(selected_subjects):
@@ -188,14 +198,22 @@ def validate_contrasts(rows: list[dict[str, str]], samples: list[dict[str, str]]
                 raise InputError(f"{name}: mixed {field} is unsupported in the shared rMATS complete-bundle route")
         left_subjects = {member["subject"] for member in groups[treatment] if member["subject"]}
         right_subjects = {member["subject"] for member in groups[control] if member["subject"]}
-        if analysis_purpose == "analysis" and left_subjects & right_subjects:
-            raise InputError(f"{name}: shared subjects across conditions require paired models; complete-bundle v1 does not yet implement these")
+        if paired:
+            if not all(selected_subjects) or left_subjects != right_subjects:
+                raise InputError(f"{name}: paired analysis requires complete treatment/control subject pairs")
+            if len(left_subjects) != len(groups[treatment]) or len(right_subjects) != len(groups[control]):
+                raise InputError(f"{name}: paired analysis requires exactly one sample per subject per condition")
+        elif analysis_purpose == "analysis" and left_subjects & right_subjects:
+            raise InputError(f"{name}: shared subjects across conditions require an explicit paired design")
+        ordered = {condition: sorted(groups[condition], key=lambda member: member["subject"]) if paired else groups[condition]
+                   for condition in (treatment, control)}
         validated.append(row)
         audit.append({"contrast": name, "treatment": treatment, "control": control,
-                      "rmats_group1_samples": [member["sample"] for member in groups[treatment]],
-                      "rmats_group2_samples": [member["sample"] for member in groups[control]],
-                      "effect_direction": "treatment_minus_control", "design": design,
-                      "covariates_adjusted": [], "analysis_purpose": analysis_purpose})
+                      "rmats_group1_samples": [member["sample"] for member in ordered[treatment]],
+                      "rmats_group2_samples": [member["sample"] for member in ordered[control]],
+                      "effect_direction": "treatment_minus_control", "design": row["design"], "paired": paired,
+                      "pair_ids": sorted(left_subjects) if paired else [],
+                      "covariates_adjusted": ["subject"] if paired else [], "analysis_purpose": analysis_purpose})
     return validated, audit
 
 
@@ -226,6 +244,15 @@ def main(argv: list[str] | None = None) -> int:
         samplesheet_base = args.samplesheet_base.expanduser().resolve() if args.samplesheet_base else args.samplesheet.resolve().parent
         samples = validate_samples(samples, samplesheet_base, check=not args.skip_file_check, read_length=args.read_length)
         contrasts, comparisons = validate_contrasts(contrasts, samples, design=args.design, analysis_purpose=args.analysis_purpose)
+        # One deterministic subject order feeds BAM lists, SUPPA columns and
+        # exported PSI identities. Keep conditions contiguous for native ranges.
+        paired_groups = {c[key] for c in comparisons if c["paired"] for key in ("treatment", "control")}
+        if paired_groups:
+            groups = list(dict.fromkeys(row["condition"] for row in samples))
+            positions = {row["sample"]: i for i, row in enumerate(samples)}
+            samples.sort(key=lambda row: (groups.index(row["condition"]),
+                         row["subject"] if row["condition"] in paired_groups else str(positions[row["sample"]]).zfill(12)))
+            contrasts, comparisons = validate_contrasts(contrasts, samples, design=args.design, analysis_purpose=args.analysis_purpose)
         references = {}
         for kind, value in (("fasta", args.fasta), ("gtf", args.gtf)):
             resolved = input_path(value, Path.cwd(), check=not args.skip_file_check, context=kind)
@@ -234,10 +261,10 @@ def main(argv: list[str] | None = None) -> int:
                 references[kind]["sha256"] = digest(Path(resolved))
         args.outdir.mkdir(parents=True, exist_ok=True)
         write_sheet(args.outdir / "samplesheet.valid.csv", SAMPLE_COLUMNS, sample_fields, samples)
-        write_sheet(args.outdir / "contrastsheet.valid.csv", CONTRAST_COLUMNS, contrast_fields, contrasts)
+        write_sheet(args.outdir / "contrastsheet.valid.csv", CONTRAST_COLUMNS + ["paired", "design"], contrast_fields, contrasts)
         audit = {"schema_version": "1.0", "status": "metadata_validated", "analysis_purpose": args.analysis_purpose,
                  "assay_contract": {"supported_assay": "bulk_rna_seq", "label_origin": "user_declared_when_supplied_otherwise_default", "identity_verification": "not_inferred_from_input_files"},
-                 "biological_validity": "not_established_by_metadata_validation", "experimental_unit_assumption": "one independent biological sample per row, unless engine_smoke",
+                 "biological_validity": "not_established_by_metadata_validation", "experimental_unit_assumption": "one sample per subject and condition; paired contrasts use subject blocks",
                  "smoke_test_only": args.analysis_purpose == "engine_smoke",
                  "file_existence_checked": not args.skip_file_check, "bam_content_audit_pending": any(row["source"] == "genome_bam" for row in samples),
                  "references": references, "samples": samples, "comparisons": comparisons,

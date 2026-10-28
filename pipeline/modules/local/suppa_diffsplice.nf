@@ -33,7 +33,9 @@ process DIFFSPLICE {
     script: //  Calculate differential analysis between conditions
 
     def gc     = diffsplice_gene_correction ? "-gc" : ''
-    def pa     = diffsplice_paired ? "-pa" : ''
+    def is_paired = diffsplice_paired instanceof Map ? diffsplice_paired[cond1 + '\t' + cond2] : diffsplice_paired
+    if (is_paired == null) error("Missing paired-model declaration for ${cond1}-${cond2}")
+    def pa     = is_paired ? "-pa" : ''
     def median = diffsplice_median ? "-me" : ''
 
     """

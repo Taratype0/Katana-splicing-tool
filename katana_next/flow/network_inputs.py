@@ -69,14 +69,24 @@ def network_scope_identity(manifest, parameters, *, preserve_recorded_status=Tru
         samples = list(manifest.samples)
     sample_ids = [s.sample_id for s in samples]
     biological_ids = [s.biological_sample_id for s in samples]
-    if len(set(sample_ids)) != len(sample_ids) or len(set(biological_ids)) != len(biological_ids):
+    repeated = len(set(biological_ids)) != len(biological_ids)
+    declared = manifest.metadata.get("comparison_designs", {}).get(contrasts[0], {}) if scope == "contrast" else {}
+    paired = declared.get("paired") is True
+    if len(set(sample_ids)) != len(sample_ids) or (repeated and not paired):
         raise ValueError("Network discovery requires distinct independent biological samples; technical records cannot inflate n")
+    if paired:
+        arms = [[s.biological_sample_id for s in samples if s.sample_id in arm.sample_ids]
+                for arm in (contrast.numerator, contrast.denominator)]
+        if not repeated or len(set(arms[0])) != len(arms[0]) or len(set(arms[1])) != len(arms[1]) or set(arms[0]) != set(arms[1]):
+            raise ValueError("Paired contrast network requires exactly one sample per subject in each arm")
+        if len(set(biological_ids)) < 3:
+            raise ValueError("Paired module association requires at least three complete subject pairs")
     minimum = parameters.get("minimum_network_samples", 6 if scope == "contrast" else 15)
     if isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 3:
         raise ValueError("network.parameters.minimum_network_samples must be an integer of at least 3")
     if len(samples) < minimum:
         raise ValueError(
-            f"{scope} network has {len(samples)} independent biological samples; "
+            f"{scope} network has {len(samples)} sample observations; "
             f"the configured gate requires at least {minimum}. Set network.parameters.minimum_network_samples "
             "to your intended minimum (at least 3), or supply more independent samples."
         )
@@ -89,6 +99,11 @@ def network_scope_identity(manifest, parameters, *, preserve_recorded_status=Tru
                 "sample_ids": sample_ids, "biological_sample_ids": biological_ids,
                 "n_samples": len(samples), "minimum_network_samples": minimum,
                 "sample_size_status": status}
+    if paired:
+        identity.update(paired=True, n_independent_units=len(set(biological_ids)),
+                        correlation_observations=len(samples),
+                        association_model="subject-blocked frozen module scores",
+                        discovery_inference="observed correlation and descriptive kME; observations include repeated subjects")
     for key, value in identity.items():
         if key == "sample_size_status" and not preserve_recorded_status and recorded_status == legacy_status:
             continue

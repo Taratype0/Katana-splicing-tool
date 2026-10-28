@@ -48,7 +48,12 @@ process RMATS_POST {
 
     // User defined label if samples are paired and paired stats required
     // Rmats uses bioconductor-pairadise Rscript downstream
-    def paired_stats = rmats_paired_stats ? '--paired-stats' : ''
+    def is_paired = rmats_paired_stats instanceof Map ? rmats_paired_stats[contrast] : rmats_paired_stats
+    if (is_paired == null) error("Missing paired-model declaration for ${contrast}")
+    if (is_paired && meta1.collect { it.subject } != meta2.collect { it.subject }) {
+        error("rMATS subject order differs between paired arms: ${contrast}")
+    }
+    def paired_stats = is_paired ? '--paired-stats' : ''
 
     // Whether user wants to run with novel splice sites flag
     def novel_splice_sites = rmats_novel_splice_site ? '--novelSS' : ''

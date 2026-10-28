@@ -85,3 +85,26 @@ jobs:
           python -B pipeline/tools/check_unified_cleanup.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-unified-cleanup"
+          python -B pipeline/tools/check_paired_transport.py \
+            --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
+            --outdir "$RUNNER_TEMP/katana-paired-transport"
+
+  paired-native-models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fit generated paired counts in the upstream DEXSeq runtime
+        run: |
+          mkdir -p "$RUNNER_TEMP/paired-models"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp -e R_BIOC_WORKERS=1 -e OMP_NUM_THREADS=1 -e OPENBLAS_NUM_THREADS=1 \
+            -v "$PWD/pipeline:/pipeline:ro" -v "$RUNNER_TEMP/paired-models:/output" \
+            quay.io/biocontainers/bioconductor-dexseq:1.36.0--r40_0 \
+            Rscript /pipeline/tests/paired_models.R /pipeline/bin /output/models
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paired-native-models
+          path: ${{ runner.temp }}/paired-models
+          retention-days: 7

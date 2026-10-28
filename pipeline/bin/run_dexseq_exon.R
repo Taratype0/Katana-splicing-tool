@@ -28,6 +28,8 @@ ntop <- as.integer(argv[5])
 library(BiocParallel)
 
 library(DEXSeq)
+script_path <- sub("^--file=", "", grep("^--file=", commandArgs(), value=TRUE)[1])
+source(file.path(dirname(normalizePath(script_path)), "katana_dexseq_design.R"))
 
 workers <- Sys.getenv("R_BIOC_WORKERS", "")
 if (nzchar(workers)) {
@@ -108,7 +110,7 @@ write.plotDEXSeq <- function(x, file, ntop = 10) {
 
 samples <- read.csv(samples, stringsAsFactors = TRUE, check.names = FALSE)
 
-samples <- samples[, c("sample", "condition"), drop = FALSE]
+samples <- samples[, intersect(c("sample", "condition", "subject"), names(samples)), drop = FALSE]
 
 samples <- unique(samples)
 
@@ -116,7 +118,7 @@ samples <- unique(samples)
 
 contrasts <- read.csv(contrasts, check.names = FALSE)
 
-contrasts <- contrasts[, c("contrast", "treatment", "control"), drop = FALSE]
+contrasts <- contrasts[, intersect(c("contrast", "treatment", "control", "paired", "design"), names(contrasts)), drop = FALSE]
 
 contrasts <- unique(contrasts)
 if (Sys.getenv("KANATA_SINGLE_CONTRAST", "") == "1" && nrow(contrasts) != 1L)
@@ -143,6 +145,7 @@ groups <- levels(colData(object)$condition)
 
 names <- contrasts$contrast
 
+contrast_records <- contrasts
 contrasts <- data.frame(A = contrasts$treatment, B = contrasts$control)
 
 contrasts <- contrasts[contrasts$A != contrasts$B, , drop = FALSE]
@@ -162,7 +165,7 @@ objects <- mapply(
 
 # Run DEXSeq workflow
 
-objects <- lapply(objects, DEXSeq)
+objects <- lapply(seq_along(objects), function(i) katana_dexseq_fit(objects[[i]], contrast_records[i, , drop=FALSE]))
 
 names(objects) <- names
 

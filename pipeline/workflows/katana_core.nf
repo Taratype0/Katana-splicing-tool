@@ -110,6 +110,9 @@ workflow KATANA_PIPELINE {
     }
     ch_rows_container = ch_rows.map { [records: it] }
     ch_contrasts_container = ch_contrasts.map { [records: it] }
+    ch_rmats_pairing = ch_contrasts.map { rows -> rows.collectEntries { [(it.contrast): it.paired.toBoolean()] } }.first()
+    // SUPPA input order is control then treatment for treatment-minus-control.
+    ch_suppa_pairing = ch_contrasts.map { rows -> rows.collectEntries { [(it.control + '\t' + it.treatment): it.paired.toBoolean()] } }.first()
     ch_rmats_read_length = ch_rows.map { rows ->
         def values = rows.collect { it.read_length as int }.unique()
         if (values.size() != 1) error('Complete mode currently requires a single declared read_length across the study')
@@ -228,7 +231,7 @@ workflow KATANA_PIPELINE {
         }
     RMATS(VALIDATE_INPUTS.out.contrasts, ch_genome_conditions, FILTER_ANALYSIS_GTF.out.gtf,
         false, ch_rmats_read_length, params.rmats_splice_diff_cutoff,
-        params.rmats_novel_splice_site, params.rmats_min_intron_len, params.rmats_max_exon_len, false)
+        params.rmats_novel_splice_site, params.rmats_min_intron_len, params.rmats_max_exon_len, ch_rmats_pairing)
     ch_versions = ch_versions.mix(RMATS.out.versions)
 
     ADAPT_SUPPA_CONTRASTS(VALIDATE_INPUTS.out.contrasts)
@@ -239,7 +242,7 @@ workflow KATANA_PIPELINE {
         params.psiperevent_total_filter, params.diffsplice_local_event, params.diffsplice_method,
         params.diffsplice_area, params.diffsplice_lower_bound, params.diffsplice_alpha,
         params.diffsplice_tpm_threshold, params.diffsplice_nan_threshold, params.diffsplice_gene_correction,
-        false, params.diffsplice_median, params.clusterevents_local_event, params.clusterevents_dpsithreshold,
+        ch_suppa_pairing, params.diffsplice_median, params.clusterevents_local_event, params.clusterevents_dpsithreshold,
         params.clusterevents_eps, params.clusterevents_metric, params.clusterevents_min_pts,
         params.clusterevents_method, params.clusterevents_sigthreshold ?: false,
         params.clusterevents_separation ?: false, params.suppa_per_isoform)
@@ -376,10 +379,11 @@ workflow KATANA_PIPELINE {
                 mil: params.rmats_novel_splice_site ? params.rmats_min_intron_len : null,
                 mel: params.rmats_novel_splice_site ? params.rmats_max_exon_len : null,
                 readLength: rows[0].read_length as int, variable_read_length: true,
-                allow_clipping: true, paired_stats: false],
+                allow_clipping: true, paired_stats: contrasts.collectEntries { [(it.contrast): it.paired.toBoolean()] }],
             dexseq_native_fold_change_direction: 'control_over_treatment_native_header_authoritative; gene/stageR q-values have no direction',
             rmats_sample_order: rows.groupBy { it.condition }.collectEntries { condition, values -> [(condition): values.collect { it.sample }] },
             comparisons: contrasts.collect { [comparison_id: it.contrast, treatment: it.treatment, control: it.control,
+                paired: it.paired.toBoolean(), design: it.design,
                 rmats_group1: it.treatment, rmats_group2: it.control, deg_target: it.treatment, deg_reference: it.control,
                 suppa_input1: it.control, suppa_input2: it.treatment, suppa_direction: 'treatment_minus_control'] }]
     }
