@@ -2,5 +2,6 @@ recursive-include apps/web/dist *
 recursive-include pipeline *.nf *.config *.json *.py *.R *.awk *.md *.yml *.yaml
 include THIRD_PARTY_NOTICES.md
 include pipeline/UPSTREAM_LICENSE
+include katana_build.py
 recursive-include environments *.yml *.txt *.lock *.py
 recursive-include containers Dockerfile *.md *.json

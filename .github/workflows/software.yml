@@ -102,6 +102,72 @@ jobs:
           cp tests/public_baseline/test_flow_distribution.py "$RUNNER_TEMP/test_flow_distribution.py"
           cd "$RUNNER_TEMP"
           python -I -m pytest -q test_motiftrace_distribution.py test_report_distribution.py test_target_distribution.py test_flow_distribution.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-wheel-linux
+          path: dist/*.whl
+
+  windows-wheel:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build wheel with Windows filesystem metadata
+        run: |
+          python -m pip install build
+          python -m build --wheel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-wheel-windows
+          path: dist/*.whl
+
+  installed-native-import:
+    needs: [package-wheel, windows-wheel]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        build-os: [linux, windows]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        with:
+          name: public-wheel-${{ matrix.build-os }}
+          path: dist
+      - name: Build an independent controller from the unchanged wheel
+        run: |
+          python tools/runtime/build_portable_controller.py --wheel dist/*.whl --constraints environments/locks/pip-linux-64.lock --outdir "$RUNNER_TEMP/controller-build"
+          mkdir "$RUNNER_TEMP/relocated"
+          tar xzf "$RUNNER_TEMP"/controller-build/*.tar.gz -C "$RUNNER_TEMP/relocated"
+      - name: Test installed scripts, production R modules and native resume
+        run: |
+          bundle="$RUNNER_TEMP/relocated/katana-controller"
+          "$bundle/python/bin/python3" -I tools/runtime/check_portable_controller.py "$bundle" "$RUNNER_TEMP/handoff"
+          command=$(python -c 'import json,os; print(json.dumps([os.environ["RUNNER_TEMP"]+"/relocated/katana-controller/bin/nextflow"]))')
+          "$bundle/python/bin/python3" -I tools/runtime/check_installed_pipeline.py --outdir "$RUNNER_TEMP/installed-import" --nextflow-command-json "$command"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installed-native-${{ matrix.build-os }}
+          path: |
+            ${{ runner.temp }}/controller-build/*
+            ${{ runner.temp }}/handoff/*.json
+            ${{ runner.temp }}/handoff/*.tsv
+            ${{ runner.temp }}/installed-import/*.json
+            ${{ runner.temp }}/installed-import/*.log
+            ${{ runner.temp }}/installed-import/*.tsv
+            ${{ runner.temp }}/installed-import/work/**/.command.*
+          include-hidden-files: true
 
   interface:
     runs-on: ubuntu-latest

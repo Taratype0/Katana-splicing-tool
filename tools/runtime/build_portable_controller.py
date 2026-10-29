@@ -62,6 +62,8 @@ def main():
         run([python, '-I', '-m', 'pip', 'install', '--no-compile', '--no-cache-dir',
              '--constraint', constraints, str(wheel) + '[flow]'])
         run([python, '-I', '-m', 'pip', 'check'])
+        # Validate the actual managed entry before export can repair permissions.
+        run([python, '-I', '-c', 'from katana_next.flow.managed import _pipeline_source; print(_pipeline_source())'])
         (bundle / 'bin').mkdir()
         (bundle / 'lib').mkdir()
         download(NEXTFLOW_URL, bundle / 'lib/nextflow-25.10.4-dist', NEXTFLOW_SHA)
@@ -119,6 +121,7 @@ def main():
         bundle.rename(relocated)
         with (out / 'validation.log').open('w') as log:
             for command in ([relocated / 'python/bin/python3', '-I', '-m', 'pip', 'check'],
+                            [relocated / 'python/bin/python3', '-I', '-c', 'from katana_next.flow.managed import _pipeline_source; print(_pipeline_source())'],
                             [relocated / 'bin/katana-flow', 'run', '--help'],
                             [relocated / 'bin/nextflow', '-version']):
                 run(command, stdout=log, stderr=subprocess.STDOUT)

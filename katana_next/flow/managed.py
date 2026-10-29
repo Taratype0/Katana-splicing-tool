@@ -219,6 +219,8 @@ def _pipeline_source(explicit=None):
             candidate = package.parents[1] / "pipeline" / "main.nf"
     if not candidate.is_file():
         raise FileNotFoundError("Installed Nextflow pipeline is missing")
+    from .distribution import validate_pipeline_executables
+    validate_pipeline_executables(candidate.parent)
     return candidate
 
 

@@ -1,6 +1,6 @@
 # Install the independent Katana runtime
 
-Use matching assets from the [28 October release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261028).
+Use the launcher and wheel from the [29 October permission-fix release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261029).
 This beta includes paired comparisons, automatic strandedness, direct Nextflow
 parameters and managed cleanup. The older downloads remain available for
 reproducing earlier installations.
@@ -14,11 +14,14 @@ a Conda environment or your Python user-site packages. The host supplies
 modules before running. Scientific tasks use containers; references and
 databases are separate inputs.
 
-Download these release assets:
+Download the controller from the new release. Reuse the unchanged scientific
+images from the [28 October release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261028); their exact hashes are also listed in the new manifest. This patch changes installation and launch validation, not scientific methods or image dependencies.
+
+Required assets:
 
 | Asset | Purpose |
 | --- | --- |
-| `katana-controller-2.0.0b5.dev20261028-linux-x86_64.tar.gz` | Portable launcher, Python and Nextflow |
+| `katana-controller-2.0.0b5.dev20261029-linux-x86_64.tar.gz` | Portable launcher, Python and Nextflow |
 | `katana-downstream-2.0.0b5.dev20261028-linux-amd64.sif` | Matching Katana scientific runtime |
 | `kanata-dexseq-tools-20261024-linux-amd64.sif` | Unchanged DEXSeq counting runtime |
 | `SHA256SUMS`, `RELEASE_MANIFEST.json` | Checksums and tested versions |
@@ -26,7 +29,7 @@ Download these release assets:
 ```bash
 sha256sum --ignore-missing --check SHA256SUMS
 mkdir -p tools
-tar -xzf katana-controller-2.0.0b5.dev20261028-linux-x86_64.tar.gz -C tools
+tar -xzf katana-controller-2.0.0b5.dev20261029-linux-x86_64.tar.gz -C tools
 export PATH="$PWD/tools/katana-controller/bin:$PATH"
 katana-flow run --help
 nextflow -version
@@ -96,7 +99,7 @@ have switches; supply resources for the analyses you enable.
 
 ## Docker workstation
 
-Load the new downstream archive and unchanged DEXSeq tools archive:
+Load the unchanged 28 October downstream archive and DEXSeq tools archive:
 
 ```bash
 docker load -i katana-downstream-2.0.0b5.dev20261028-linux-amd64.docker.tar.gz
@@ -117,7 +120,7 @@ Install the release wheel in a fresh Python 3.11+ environment:
 python -m venv .venv
 # Linux: source .venv/bin/activate
 # Windows PowerShell: .\.venv\Scripts\Activate.ps1
-python -m pip install './katana_splicing_tool-2.0.0b5.dev20261028-py3-none-any.whl[standalone]'
+python -m pip install './katana_splicing_tool-2.0.0b5.dev20261029-py3-none-any.whl[standalone]'
 python -m pip check
 katana-open --help
 katana-report --help
@@ -135,7 +138,12 @@ completed collections can generate reports directly. Gene/event deep dives use
 
 ## Validation and updates
 
-The release manifest records hashes, CI and native runtime checks. Checks use
+The release manifest records hashes, CI and native runtime checks. Wheels built
+on both Windows and Linux are installed on Linux and tested by directly running
+the packaged gene-import and transcript-import R modules through Nextflow,
+including a cached second run. This catches executable-bit loss that an exported
+pipeline or `--help` check would miss. The launcher checks packaged script
+permissions before submitting work, without modifying the installation. Checks use
 installed commands, generated paired counts and generated Nextflow tasks;
 they do not imply every study or cluster has been run. The approved seven-section
 report format is unchanged.

@@ -2,9 +2,12 @@
 from pathlib import Path
 import os
 import shutil
+import runpy
 
 from setuptools import setup
 from setuptools.command.build_py import build_py
+from setuptools.command.bdist_wheel import bdist_wheel
+normalize_pipeline_permissions = runpy.run_path(str(Path(__file__).parent / "katana_build.py"))["normalize_pipeline_permissions"]
 
 
 class BuildWithBrowser(build_py):
@@ -27,4 +30,12 @@ class BuildWithBrowser(build_py):
         shutil.copytree(source, destination)
 
 
-setup(cmdclass={"build_py": BuildWithBrowser})
+class BuildPortableWheel(bdist_wheel):
+    def run(self):
+        super().run()
+        for command, _, filename in self.distribution.dist_files:
+            if command == 'bdist_wheel':
+                normalize_pipeline_permissions(filename)
+
+
+setup(cmdclass={"build_py": BuildWithBrowser, "bdist_wheel": BuildPortableWheel})

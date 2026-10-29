@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from importlib.metadata import version
 
 from katana_next.flow.managed import _native_phase
 from katana_next.flow.storage import create_managed_scope, register_stage, managed_run_lock
@@ -54,7 +55,7 @@ assert (root / 'outputs/done.txt').read_text() == 'generated runtime check\n'
 assert Path(sys.executable).is_relative_to(bundle)
 assert all(Path(p).resolve().is_relative_to(bundle) for p in sys.path)
 subprocess.run([str(bundle / 'bin/katana-flow'), 'run', '--help'], check=True, stdout=subprocess.DEVNULL)
-receipt = dict(status='passed', software_version='2.0.0b5.dev20261028',
+receipt = dict(status='passed', software_version=version('katana-splicing-tool'),
                native_generated_tasks_completed=2, native_cached_tasks=2,
                installed_managed_implementation=True, relocated_python=True,
                old_environment_dependency=False, scientific_data_used=False,
