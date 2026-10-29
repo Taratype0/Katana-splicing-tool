@@ -59,8 +59,15 @@ def main():
         with tarfile.open(archive) as tf:
             tf.extractall(bundle, filter='data')
         python = bundle / 'python/bin/python3'
+        # The public lock records platform-specific wheel hashes. The portable
+        # controller uses CPython 3.12, which may select a different ABI wheel.
+        # Retain exact versions and record the actual downloaded distributions.
+        version_constraints = work / 'controller-versions.txt'
+        version_constraints.write_text('\n'.join(
+            line.split(' --hash=', 1)[0] for line in constraints.read_text().splitlines()
+            if line.strip() and not line.lstrip().startswith('#')) + '\n')
         run([python, '-I', '-m', 'pip', 'install', '--no-compile', '--no-cache-dir',
-             '--constraint', constraints, str(wheel) + '[flow]'])
+             '--constraint', version_constraints, '--report', bundle / 'installation-report.json', str(wheel) + '[flow]'])
         run([python, '-I', '-m', 'pip', 'check'])
         # Validate the actual managed entry before export can repair permissions.
         run([python, '-I', '-c', 'from katana_next.flow.managed import _pipeline_source; print(_pipeline_source())'])
@@ -112,6 +119,8 @@ def main():
                         wheel_sha256=sha(wheel), python_url=PYTHON_URL, python_sha256=PYTHON_SHA,
                         nextflow_url=NEXTFLOW_URL, nextflow_sha256=NEXTFLOW_SHA,
                         constraints_sha256=sha(constraints), host_dependencies=['Java 17+', 'scheduler and container engine for the selected profile'],
+                        resolved_version_constraints_sha256=sha(version_constraints),
+                        dependency_hashes='installation-report.json records the actual platform distributions',
                         scientific_environment='Matching task containers', science_data_used=False)
         (bundle / 'CONTROLLER_MANIFEST.json').write_text(json.dumps(metadata, indent=2) + '\n')
         # Move the installed tree before verifying: stale absolute shebangs,
