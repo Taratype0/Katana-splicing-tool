@@ -216,7 +216,7 @@
     "katana_motiftrace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
     "katana_next/client.py": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
     "katana_next/services/selection_routes.py": "f84bae21e008589ed1af1afcc7409b90ec1757dcc18675d98e29659630732da1",
-    "pyproject.toml": "c83bcc565a7f3451474dde8b32c5c264ece0e59780977d70d1a7ebbad05b2e8a",
+    "pyproject.toml": "57918bf17dc31e35a4ed329954668ecda997b3e7d6bb062bf39de02393c30b74",
     "katana_next/workflows/motiftrace_consequences.py": "0e2b02fc0d0d58f6fbb4cd11915226aa646a905eee71332f1d0b39c4e137715b",
     "katana_next/workflows/rbp_mechanism.py": "f8a149a3cf641c25b30c2808346639afc91d0b0895968d4a0d5e71abbc4cd2ad",
     "katana_next/science/motiftrace_execution.py": "e4fa92e2f008e0c3c1d3d2d9cacdaf3d1d553907658d1ac73ef79947b7164564",
@@ -517,6 +517,26 @@
           "current_sha256": "c83bcc565a7f3451474dde8b32c5c264ece0e59780977d70d1a7ebbad05b2e8a",
           "previous_distribution_version": "2.0.0b5.dev20261026",
           "current_distribution_version": "2.0.0b5.dev20261028",
+          "change_kind": "distribution_version_only",
+          "changed_toml_fields": [
+            "project.version"
+          ]
+        }
+      ]
+    },
+    {
+      "revision": "distribution-version-metadata-20261029",
+      "integration_version": "1.0.0.post7",
+      "scientific_release_unchanged": true,
+      "scientific_calculation_changes": false,
+      "scientific_parameter_changes": false,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "c83bcc565a7f3451474dde8b32c5c264ece0e59780977d70d1a7ebbad05b2e8a",
+          "current_sha256": "57918bf17dc31e35a4ed329954668ecda997b3e7d6bb062bf39de02393c30b74",
+          "previous_distribution_version": "2.0.0b5.dev20261028",
+          "current_distribution_version": "2.0.0b5.dev20261029",
           "change_kind": "distribution_version_only",
           "changed_toml_fields": [
             "project.version"
