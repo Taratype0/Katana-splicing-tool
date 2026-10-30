@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import hashlib
 import json
@@ -10,7 +11,7 @@ import re
 import sys
 from pathlib import Path
 
-SAMPLE_COLUMNS = ["sample", "condition", "source", "assay", "fastq_1", "fastq_2", "genome_bam", "transcriptome_bam", "strandedness", "single_end", "read_length", "subject", "batch"]
+SAMPLE_COLUMNS = ["sample", "condition", "source", "assay", "fastq_1", "fastq_2", "genome_bam", "transcriptome_bam", "strandedness", "single_end", "read_length", "subject", "batch", "fastq_lanes"]
 CONTRAST_COLUMNS = ["contrast", "treatment", "control"]
 SUPPORTED_CONTRAST_COLUMNS = frozenset(CONTRAST_COLUMNS + ["paired", "blocking", "design", "formula", "description"])
 SAFE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
@@ -82,7 +83,7 @@ def validate_samples(rows: list[dict[str, str]], base: Path, *, check: bool, rea
         sample = row["sample"]
         if row.get("transcriptome_bam"):
             raise InputError(f"{sample}: v1 quantifies a genome BAM using Salmon genome projection; transcriptome_bam is not a supported input")
-        if not SAFE_ID.fullmatch(sample) or sample in seen:
+        if not SAFE_ID.fullmatch(sample) or (sample in seen and not row.get("lane")):
             raise InputError(f"Invalid or duplicate sample ID {sample!r}; use unique filesystem-safe IDs")
         if not SAFE_CONDITION.fullmatch(row["condition"]):
             raise InputError(f"{sample}: condition must start with a letter and contain letters, digits or underscores")
@@ -133,10 +134,37 @@ def validate_samples(rows: list[dict[str, str]], base: Path, *, check: bool, rea
                 observed_paths[row[field]] = sample
         for field in ("subject", "batch"):
             row.setdefault(field, "")
+        # This field is generated here; users supply one CSV row per lane.
+        row["fastq_lanes"] = ""
         result.append(row)
     if len({row["read_length"] for row in result}) > 1:
         raise InputError("Complete mode requires a single declared read_length across the study, including samples in different contrasts")
-    return result
+    grouped: dict[str, list[dict[str, str]]] = {}
+    for row in result:
+        grouped.setdefault(row["sample"], []).append(row)
+    collapsed = []
+    for sample, lanes in grouped.items():
+        if len(lanes) == 1:
+            collapsed.append(lanes[0])
+            continue
+        lane_ids = [row.get("lane", "") for row in lanes]
+        if not all(lane_ids) or len(set(lane_ids)) != len(lane_ids):
+            raise InputError(f"{sample}: repeated sample rows require distinct nonempty lane IDs")
+        if any(row["source"] != "fastq" for row in lanes):
+            raise InputError(f"{sample}: lane merging is supported for FASTQ inputs only")
+        ignored = {"fastq_1", "fastq_2", "lane", "fastq_lanes"}
+        metadata = [{k: v for k, v in row.items() if k not in ignored} for row in lanes]
+        if any(row != metadata[0] for row in metadata[1:]):
+            raise InputError(f"{sample}: lane rows must have identical biological metadata, pairing and library settings")
+        lanes = sorted(lanes, key=lambda row: row["lane"])
+        row = dict(lanes[0])
+        row["fastq_lanes"] = base64.b64encode(json.dumps([
+            [lane["fastq_1"], lane["fastq_2"]] if lane["fastq_2"] else [lane["fastq_1"]]
+            for lane in lanes
+        ]).encode()).decode('ascii')
+        row["lane"] = ";".join(lane["lane"] for lane in lanes)
+        collapsed.append(row)
+    return collapsed
 
 
 def validate_contrasts(rows: list[dict[str, str]], samples: list[dict[str, str]], *, design: str, analysis_purpose: str) -> tuple[list[dict[str, str]], list[dict]]:

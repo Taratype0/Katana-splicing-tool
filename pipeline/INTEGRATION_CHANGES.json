@@ -225,26 +225,38 @@
     {
       "path": "workflows/katana_core.nf",
       "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
-      "integrated_sha256": "f057e2c6e671881e9a866e69f6a625976737d486b5d718e8e8ca44f3b2de2ae6",
+      "integrated_sha256": "6233799132810e70ef69bc375f1f7d78437ed67d23f2cb79ec004e50c5f490f1",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
           "previous_integrated_sha256": "b961acf64724f34754acd7d36ed7a4ad01cc8c1bc9f6cf69a24ffc4ca4bef999",
           "integrated_sha256": "f057e2c6e671881e9a866e69f6a625976737d486b5d718e8e8ca44f3b2de2ae6",
           "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        },
+        {
+          "revision": "native-lanes-20261030",
+          "previous_integrated_sha256": "f057e2c6e671881e9a866e69f6a625976737d486b5d718e8e8ca44f3b2de2ae6",
+          "integrated_sha256": "6233799132810e70ef69bc375f1f7d78437ed67d23f2cb79ec004e50c5f490f1",
+          "scope": "Group explicit lane rows into one biological sample and concatenate gzip members per mate in a native Nextflow task. Scientific models and paired identities unchanged."
         }
       ]
     },
     {
       "path": "bin/katana_validate_inputs.py",
       "snapshot_sha256": "0d679b57d85dc61863ca509ed57932469e07137bd815b02e1330260f6f493195",
-      "integrated_sha256": "60a4c2c586db76cc6cf6b803fc2ffe7c02dc9acdd652acedb2f5f7a57c30bbeb",
+      "integrated_sha256": "3e25d3334b34a97f7117d18a1f77aad0b3c5fb3b6ef9269470b3c611b57ad40e",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
           "previous_integrated_sha256": "7f6ec50f870697573fb5b47993028a4d1c76f486a52c3467019d0a7fbece5920",
           "integrated_sha256": "60a4c2c586db76cc6cf6b803fc2ffe7c02dc9acdd652acedb2f5f7a57c30bbeb",
           "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        },
+        {
+          "revision": "native-lanes-20261030",
+          "previous_integrated_sha256": "60a4c2c586db76cc6cf6b803fc2ffe7c02dc9acdd652acedb2f5f7a57c30bbeb",
+          "integrated_sha256": "3e25d3334b34a97f7117d18a1f77aad0b3c5fb3b6ef9269470b3c611b57ad40e",
+          "scope": "Group explicit lane rows into one biological sample and concatenate gzip members per mate in a native Nextflow task. Scientific models and paired identities unchanged."
         }
       ]
     },
@@ -284,6 +296,32 @@
           "previous_integrated_sha256": "8c8de738b61f60cc45e5d3b28368ebac40190ff1d2a216ad18f618d5f3101130",
           "integrated_sha256": "24ce9c53e2c4da6d671f067be3581c6da1135d972ee9f26ea785291fe9c6d67f",
           "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        }
+      ]
+    },
+    {
+      "path": "bin/kanata_stage_fastq.py",
+      "snapshot_sha256": "2c1febc473ac4801b52f658e3e978aa8ca2f96f9a9f7c283e33eaa51ba84c90f",
+      "integrated_sha256": "f01e27c20090f001aa89c30c938becba1bb692ceb0aea32ff54477fcd3b67501",
+      "integration_revisions": [
+        {
+          "revision": "native-lanes-20261030",
+          "previous_integrated_sha256": "2c1febc473ac4801b52f658e3e978aa8ca2f96f9a9f7c283e33eaa51ba84c90f",
+          "integrated_sha256": "f01e27c20090f001aa89c30c938becba1bb692ceb0aea32ff54477fcd3b67501",
+          "scope": "Group explicit lane rows into one biological sample and concatenate gzip members per mate in a native Nextflow task. Scientific models and paired identities unchanged."
+        }
+      ]
+    },
+    {
+      "path": "modules/local/stage_fastq.nf",
+      "snapshot_sha256": "4452cc7f98fca12d053a13af481d928197e8342ff4b945e1b092d789ad03930b",
+      "integrated_sha256": "d812476cb4cad04bf3d3056d7f3a423b53e0a985e01be2c5ab0b7362aac5535e",
+      "integration_revisions": [
+        {
+          "revision": "native-lanes-20261030",
+          "previous_integrated_sha256": "4452cc7f98fca12d053a13af481d928197e8342ff4b945e1b092d789ad03930b",
+          "integrated_sha256": "d812476cb4cad04bf3d3056d7f3a423b53e0a985e01be2c5ab0b7362aac5535e",
+          "scope": "Group explicit lane rows into one biological sample and concatenate gzip members per mate in a native Nextflow task. Scientific models and paired identities unchanged."
         }
       ]
     }

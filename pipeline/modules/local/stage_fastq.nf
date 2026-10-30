@@ -16,7 +16,7 @@ process STAGE_FASTQ {
         error('Invalid sample ID for FASTQ staging')
     }
     def ordered_reads = reads instanceof List ? reads : [reads]
-    def request = groovy.json.JsonOutput.toJson([reads: ordered_reads.collect { it.toString() }, single_end: meta.single_end])
+    def request = groovy.json.JsonOutput.toJson([reads: ordered_reads.collect { it.toString() }, single_end: meta.single_end, lane_count: meta.lane_count ?: 1])
     """
     cat > reads.json <<'KANATA_FASTQ_REQUEST'
     ${request}
