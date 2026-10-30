@@ -67,6 +67,12 @@ def nativeDtuArtifacts(files, kind, directory, pattern, contrasts) {
     }
 }
 
+def fastqLaneInputs(row) {
+    def lanes = row.fastq_lanes ? new groovy.json.JsonSlurper().parseText(new String(row.fastq_lanes.decodeBase64(), 'UTF-8')) :
+        [row.fastq_2 ? [row.fastq_1, row.fastq_2] : [row.fastq_1]]
+    [lane_count: lanes.size(), reads: lanes.flatten().collect { file(it, checkIfExists: true) }]
+}
+
 workflow KATANA_PIPELINE {
     take:
     ch_samplesheet
@@ -124,7 +130,8 @@ workflow KATANA_PIPELINE {
             read_length: row.read_length as int, order_index: row.order_index,
             subject: row.subject ?: '', batch: row.batch ?: '']
         if (row.source == 'fastq') {
-            tuple(meta, row.fastq_2 ? [file(row.fastq_1), file(row.fastq_2)] : [file(row.fastq_1)])
+            def laneInputs = fastqLaneInputs(row)
+            tuple(meta + [lane_count: laneInputs.lane_count], laneInputs.reads)
         } else {
             if (!row.genome_bam) error("Sample ${row.sample} lacks a genome BAM; transcriptome BAM alone cannot support a complete bundle")
             tuple(meta, file(row.genome_bam))

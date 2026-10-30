@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Name staged gzip FASTQs safely without modifying or copying raw read data.
+"""Stage one lane by symlink, or concatenate compressed lanes per sample.
 
 The first 100 records are a bounded format/pair probe, not a full FASTQ audit.
 """
@@ -10,6 +10,7 @@ import gzip
 import json
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -74,44 +75,64 @@ def stage_reads(request: dict, *, sample: str, output_dir: Path) -> dict:
     if not isinstance(reads, list) or not all(isinstance(value, str) and value for value in reads):
         raise StagingError("FASTQ request must contain a reads list of nonempty paths")
     expected = 1 if request["single_end"] else 2
-    if len(reads) != expected:
-        raise StagingError(f"single_end={request['single_end']} requires {expected} FASTQ file(s)")
+    lane_count = request.get("lane_count", 1)
+    if type(lane_count) is not int or lane_count < 1:
+        raise StagingError("lane_count must be a positive integer")
+    if len(reads) != expected * lane_count:
+        raise StagingError(f"single_end={request['single_end']} requires {expected} FASTQ file(s) per lane")
     sources = [Path(os.path.abspath(value)) for value in reads]
     if len({path.resolve() for path in sources}) != len(sources):
         raise StagingError("The same FASTQ cannot be assigned to both mates")
     output_dir = output_dir.resolve()
     outputs = [output_dir / f"{sample}_R{number}.fastq.gz" for number in range(1, expected + 1)]
     audit_path = output_dir / "fastq_staging_audit.json"
-    for destination in outputs + [audit_path]:
+    temporary = [path.with_suffix(path.suffix + '.partial') for path in outputs]
+    for destination in outputs + temporary + [audit_path]:
         if os.path.lexists(destination):
             raise StagingError(f"Refusing to overwrite existing staging output: {destination}")
     probes = [probe_fastq(path) for path in sources]
-    if expected == 2 and probes[0]["identifiers"] != probes[1]["identifiers"]:
-        raise StagingError("Mate identifiers or record counts differ within the bounded FASTQ prefix")
+    for lane in range(lane_count):
+        offset = lane * expected
+        if expected == 2 and probes[offset]["identifiers"] != probes[offset + 1]["identifiers"]:
+            raise StagingError(f"Mate identifiers or record counts differ within the bounded FASTQ prefix for lane {lane + 1}")
     audit = {
         "schema_version": "kanata.fastq_staging.v1",
         "status": "staged", "sample": sample, "single_end": request["single_end"],
-        "operation": "relative_symlinks_without_raw_data_copy",
+        "operation": "relative_symlinks_without_raw_data_copy" if lane_count == 1 else "concatenate_gzip_members_in_lane_order",
+        "lane_count": lane_count,
         "probe_scope": "bounded_not_full", "probe_limit_records": PROBE_RECORDS,
         "full_fastq_integrity": "not_established", "full_mate_matching": "not_established",
         "reads": [
-            {"mate_number": number, "staged_source_path": str(source),
+            {"mate_number": number % expected + 1, "lane_number": number // expected + 1, "staged_source_path": str(source),
              "resolved_source_path": str(source.resolve()), "source_size_bytes": source.stat().st_size,
-             "canonical_filename": destination.name, "records_probed": probe["records_probed"],
+             "canonical_filename": outputs[number % expected].name, "records_probed": probe["records_probed"],
              "observed_prefix_sequence_lengths": probe["sequence_lengths"]}
-            for number, (source, destination, probe) in enumerate(zip(sources, outputs, probes), start=1)
+            for number, (source, probe) in enumerate(zip(sources, probes))
         ],
     }
     output_dir.mkdir(parents=True, exist_ok=True)
     created: list[Path] = []
     try:
-        for source, destination in zip(sources, outputs):
-            destination.symlink_to(os.path.relpath(source, output_dir))
-            created.append(destination)
+        for mate, destination in enumerate(outputs):
+            if lane_count == 1:
+                destination.symlink_to(os.path.relpath(sources[mate], output_dir))
+                created.append(destination)
+            else:
+                part = temporary[mate]
+                with part.open('xb') as output:
+                    created.append(part)
+                    for source in sources[mate::expected]:
+                        with source.open('rb') as handle:
+                            shutil.copyfileobj(handle, output, length=8 * 1024 * 1024)
+                if part.stat().st_size != sum(source.stat().st_size for source in sources[mate::expected]):
+                    raise StagingError('Lane inputs changed size while merging')
+                part.rename(destination)
+                created.remove(part)
+                created.append(destination)
         with audit_path.open("x", encoding="utf-8") as handle:
             created.append(audit_path)
             handle.write(json.dumps(audit, ensure_ascii=False, indent=2) + "\n")
-    except OSError:
+    except (OSError, StagingError):
         for destination in reversed(created):
             destination.unlink()
         raise

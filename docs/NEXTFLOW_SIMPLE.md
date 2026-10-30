@@ -78,7 +78,9 @@ treated_1,TREATED,genome_bam,/data/bam/treated_1.bam,auto,false,150
 
 These two-row fragments illustrate columns, not an adequate replicated study.
 Use one biological sample identity across its lanes, and distinct identities
-for independent samples. Complete six-sample examples are in
+for independent samples. For multiple lanes, repeat the sample row with a
+distinct `lane` column and the original FASTQ paths; Nextflow merges the lanes
+automatically before QC. Complete six-sample examples are in
 [samples_fastq.csv](../examples/nextflow/samples_fastq.csv) and
 [samples_bam.csv](../examples/nextflow/samples_bam.csv). Detailed lane, batch and
 donor rules remain in [the input guide](NEXTFLOW_USAGE.md).

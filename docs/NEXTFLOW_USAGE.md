@@ -200,16 +200,24 @@ metadata is not a claim of equally complete single-end qualification.
 
 ### Multiple lanes and technical replicates
 
-The published `nf-core/rnaseq` samplesheet permits repeated sample rows for
-multiple runs. **This Katana raw entry currently requires one canonical row
-and one file/pair per sample.** Repeated sample IDs are rejected. Consolidate
-compatible lanes upstream, preserving mate order and library identity, or reuse
-an already consolidated BAM. Retain a lane-to-sample provenance sidecar.
+For multiple lanes, repeat the biological sample's row and add a distinct
+`lane` value for each row. Supply the original gzip FASTQs directly:
 
-Katana's sample-identity metadata validator can check lane/technical-unit
-relationships; that validator does not merge reads and does not change this
-raw execution requirement. A lane or repeated library must never become a
-new biological replicate. See the
+```csv
+sample,lane,condition,fastq_1,fastq_2,strandedness,read_length,subject
+Control_1,L1,Control,/data/c1_L1_R1.fq.gz,/data/c1_L1_R2.fq.gz,auto,150,mouse01
+Control_1,L2,Control,/data/c1_L2_R1.fq.gz,/data/c1_L2_R2.fq.gz,auto,150,mouse01
+```
+
+Nextflow groups lanes into one biological sample and runs one `STAGE_FASTQ`
+task per sample. That task concatenates gzip members in sorted lane order,
+using exactly the same order for both mates, before QC and alignment. Single
+lanes remain symlinks. No separate lane-preparation command is needed.
+All biological metadata and library settings must agree across lanes; reused
+files and repeated/missing lane identifiers are rejected. Source files are
+unchanged. Lane paths and ordering are recorded in the staging audit. Its
+first-100-record probe is not a full-file integrity or read-pair audit.
+A lane must never become a new biological replicate. See the
 [sample-identity examples](../examples/contracts/sample-identity-v1/README.md).
 
 ### Genome-aligned BAM
