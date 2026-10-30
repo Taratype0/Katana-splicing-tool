@@ -148,7 +148,7 @@ def test_complete_yaml_covers_every_public_native_option():
     import yaml
     configuration = (ROOT / "pipeline/nextflow.config").read_text().split("params {", 1)[1].split("\n}\n", 1)[0]
     names = set(re.findall(r"^\s*(\w+)\s*=", configuration, flags=re.MULTILINE))
-    internal = {"project_template", "flow_config", "flow_plan", "flow_executable", "flow_report_revision", "managed_preflight", "help"}
+    internal = {"project_template", "flow_config", "flow_plan", "flow_executable", "flow_report_revision", "managed_preflight", "help", "output_layout", "native_delivery"}
     template = yaml.safe_load((ROOT / "examples/nextflow/params.complete.yaml").read_text())
     assert set(template) == names - internal
     assert template["with_genebody_coverage"] is False

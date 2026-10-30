@@ -245,7 +245,7 @@ workflow {
                         "'\nprocess {\n withLabel: katana_control { memory='64 MB'; time='2m' }\n" +
                         " withLabel: katana_report { cpus=1; memory='64 MB'; time='2m' }\n}\n", encoding="utf-8")
                     result = subprocess.run([*command, "-c", str(PIPELINE / "nextflow.config"), "-c", str(overlay),
-                                             "run", "main.nf", "-ansi-log", "false", "-work-dir", "work"],
+                                             "run", "main.nf", "--output_layout", "legacy", "--native_delivery", "false", "-ansi-log", "false", "-work-dir", "work"],
                                             cwd=root, capture_output=True, text=True, timeout=240)
                     self.assertEqual(result.returncode, 0, result.stdout[-6000:] + result.stderr[-6000:])
                     self.assertEqual((output / "report/fixture-report.txt").read_text(),
@@ -276,7 +276,7 @@ workflow {
             overlay = root / "override.config"
             overlay.write_text("params.storage_mode = 'lean'\nparams.outdir = '" + output.as_posix() +
                                "'\nparams.publish_dir_mode = 'symlink'\n", encoding="utf-8")
-            result = subprocess.run([*command, "-c", str(overlay), "run", "main.nf", "-ansi-log", "false",
+            result = subprocess.run([*command, "-c", str(overlay), "run", "main.nf", "--output_layout", "legacy", "--native_delivery", "false", "-ansi-log", "false",
                                      "-work-dir", "work"], cwd=root, capture_output=True, text=True, timeout=240)
             self.assertEqual(result.returncode, 0, result.stdout[-6000:] + result.stderr[-6000:])
             for member in ("katana_bundle/manifest.json", "katana_bundle/bam/S1.bam", "katana_bundle/bam/S1.bam.bai",
@@ -309,7 +309,7 @@ workflow {
                 with self.subTest(mode=mode):
                     root = parent / mode
                     _fixture(root, mode)
-                    result = subprocess.run([*command, "run", "main.nf", "-ansi-log", "false", "-work-dir", "work"],
+                    result = subprocess.run([*command, "run", "main.nf", "--output_layout", "legacy", "--native_delivery", "false", "-ansi-log", "false", "-work-dir", "work"],
                                             cwd=root, capture_output=True, text=True, timeout=240)
                     self.assertEqual(result.returncode, 0, result.stdout[-6000:] + result.stderr[-6000:])
                     output = root / "results"

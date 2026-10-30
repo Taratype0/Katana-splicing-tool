@@ -155,6 +155,15 @@ jobs:
           "$bundle/python/bin/python3" -I tools/runtime/check_portable_controller.py "$bundle" "$RUNNER_TEMP/handoff"
           command=$(python -c 'import json,os; print(json.dumps([os.environ["RUNNER_TEMP"]+"/relocated/katana-controller/bin/nextflow"]))')
           "$bundle/python/bin/python3" -I tools/runtime/check_installed_pipeline.py --outdir "$RUNNER_TEMP/installed-import" --nextflow-command-json "$command"
+      - name: Verify installed single-session delivery and cache reuse
+        run: |
+          bundle="$RUNNER_TEMP/relocated/katana-controller"
+          export PATH="$bundle/bin:$bundle/python/bin:$PATH"
+          command=$(python -c 'import json,os; print(json.dumps([os.environ["RUNNER_TEMP"]+"/relocated/katana-controller/bin/nextflow"]))')
+          printf '%s\n' "$command" > "$RUNNER_TEMP/delivery-nextflow.json"
+          "$bundle/python/bin/python3" -I pipeline/tools/check_native_delivery.py \
+            --pipeline "$bundle/pipeline" --nextflow-command-file "$RUNNER_TEMP/delivery-nextflow.json" \
+            --outdir "$RUNNER_TEMP/native-delivery"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -167,6 +176,9 @@ jobs:
             ${{ runner.temp }}/installed-import/*.log
             ${{ runner.temp }}/installed-import/*.tsv
             ${{ runner.temp }}/installed-import/work/**/.command.*
+            ${{ runner.temp }}/native-delivery/*.json
+            ${{ runner.temp }}/native-delivery/*.log
+            ${{ runner.temp }}/native-delivery/*.tsv
           include-hidden-files: true
 
   interface:

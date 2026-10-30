@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One parameter file, native Slurm tasks, automatic successful-stage cleanup.
+# Historical managed-run compatibility only. New studies use run-kth.sh.
 # Use the matching installed Katana package. This does not install environments.
 set -euo pipefail
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)

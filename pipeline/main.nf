@@ -9,7 +9,7 @@ include { KATANA_FLOW_CONFIGURE; KATANA_FLOW_PREFLIGHT; KATANA_FLOW_IMPORT } fro
 // native path inputs so container mounts and Nextflow invalidation see them.
 def automaticConfiguration() {
     def keys = ['mode', 'study_name', 'species', 'reference_build', 'annotation_release',
-                'event_set', 'rmats_mode', 'contrast_ids', 'resource_metadata',
+                'event_set', 'rmats_mode', 'contrast_ids', 'resource_metadata', 'design_factors',
                 'deg_fdr', 'deg_log2fc', 'das_fdr', 'das_dpsi', 'dtu_fdr',
                 'network_min_module_size', 'network_merge_cut_height',
                 'with_genebody_coverage', 'with_network_bootstrap']
@@ -69,6 +69,7 @@ workflow {
                           --dexseq_tools_container <built-image-or-SIF>
   --mode upstream-only    --input samples.csv --contrasts contrasts.csv --fasta genome.fa --gtf annotation.gtf
   --mode downstream-only  --project project.json
+  --mode downstream-only  --bundle /data/completed/katana_bundle
   --mode downstream-only  --project project.json --flow_plan /absolute/original/plan.json -resume
   --outdir results        -profile local|slurm,docker|singularity|apptainer
 Existing completed analysis: use downstream-only. Use -resume for this run's Nextflow cache.
@@ -84,6 +85,13 @@ Required calculations are verified before the fixed seven-section report is acce
     } else {
         if (!(params.mode in ['complete', 'upstream-only', 'downstream-only'])) error('Invalid --mode')
         if (!(params.storage_mode in ['retain', 'lean'])) error('Invalid --storage_mode; use retain or lean')
+        if (!(params.output_layout in ['standard', 'legacy'])) error('Invalid --output_layout')
+        if (params.clean_work && (params.output_layout != 'standard' || !params.native_delivery || params.publish_dir_mode != 'copy')) {
+            error('--clean_work requires standard copied outputs and native delivery verification')
+        }
+        if (params.bundle && (params.mode != 'downstream-only' || params.project || params.flow_plan)) {
+            error('--bundle selects completed upstream results; use downstream-only without --project or --flow_plan')
+        }
         if (params.flow_plan && params.mode != 'downstream-only') error('--flow_plan reuses completed downstream work and requires --mode downstream-only')
         if (!(params.katana_stage_containers instanceof Map)) error('--katana_stage_containers must be a map of execution groups to images')
         def groups = ['control', 'report', 'audit', 'quality', 'as', 'deg', 'dtu', 'landscape', 'evidence',
@@ -101,7 +109,29 @@ Required calculations are verified before the fixed seven-section report is acce
         if ((params.mode == 'complete' || params.managed_preflight) && params.skip_fastqc && !params.skip_sequencing_qc) {
             error('Complete fixed-report mode requires native sequencing FastQC. Use upstream-only for an explicitly skipped QC stage.')
         }
-        if (params.mode == 'downstream-only') {
+        if (params.mode == 'downstream-only' && params.bundle) {
+            completed_bundle = Channel.value(inputDirectory(file(params.bundle, checkIfExists: true)))
+            runtime_resources = []
+            if (params.project_template || params.flow_config) {
+                requireParameters(['project_template', 'flow_config'])
+                template_file = file(params.project_template, checkIfExists: true)
+                config_file = file(params.flow_config, checkIfExists: true)
+                template = Channel.value(inputDirectory(template_file.parent))
+                config = Channel.value(inputDirectory(config_file.parent))
+                template_name = template_file.name
+                config_name = config_file.name
+            } else {
+                def automatic = automaticConfiguration()
+                runtime_resources = automatic[1]
+                KATANA_FLOW_CONFIGURE(automatic[0], runtime_resources, file("${projectDir}/bin/katana_configure.py"))
+                template = KATANA_FLOW_CONFIGURE.out.configuration.first()
+                config = template
+                template_name = 'project-template.json'
+                config_name = 'flow.json'
+            }
+            KATANA_FLOW_IMPORT(completed_bundle, template, template_name, config, config_name, runtime_resources)
+            KATANA_DOWNSTREAM(KATANA_FLOW_IMPORT.out.workspace.first(), 'project.json', config, config_name)
+        } else if (params.mode == 'downstream-only') {
             requireParameters(['project'])
             project = file(params.project, checkIfExists: true)
             if (params.flow_plan) {

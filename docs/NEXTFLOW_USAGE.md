@@ -743,21 +743,18 @@ directory. Katana does not automatically submit to every cluster scheduler.
 
 ## 13. Resume, updates and storage
 
-For automatic cleanup after verified stage handoffs, use
-[`katana-flow run`](STORAGE_MANAGEMENT.md) with the same public parameters or
-`-params-file`. It generates configuration automatically; handwritten JSON is
-not required. `-profile`, `-c` and `-resume` are supported aliases. Choose
-`--run-dir` instead of native `-work-dir` for managed stage work.
-It runs the same native upstream
-and downstream methods, retains a complete reusable analysis project and the
-fixed report, then removes only its owned completed stage work. Add
-`--keep-work` to retain native caches; `katana-flow clean-run --run-dir
-results.run` previews later cleanup of a completed managed run. The
-[storage guide](STORAGE_MANAGEMENT.md) covers commands, retained native
-statistics, failure recovery, tool caches and the exact deletion boundaries.
+New runs use the single Nextflow entry above. Configuration, upstream models,
+Katana analysis, report generation, project retention and delivery verification
+are tasks in the same DAG. See [output directories](NATIVE_OUTPUTS.md).
+Add `--clean_work` for native cleanup after successful delivery. Nextflow keeps
+work referenced by other resumed runs; `nextflow clean <run-name> -n` previews
+cleanup for a completed run. Failed work remains available for recovery.
+`--storage_mode lean` reduces optional publication, independently of cleanup.
 
-The commands below describe direct Nextflow execution. `--storage_mode lean`
-can reduce duplicate publication there, but does not enable automatic cleanup.
+The earlier `katana-flow run` launcher remains for historical runs only. Its
+[managed storage guide](STORAGE_MANAGEMENT.md) describes that compatibility route.
+Keep an active historical run on its original software and paths to preserve
+cache identity; do not replace it just to change output directory names.
 
 Repeat an unchanged Nextflow command from the original launch directory with
 `-resume`; retain `.nextflow/`, original work files and input identities.

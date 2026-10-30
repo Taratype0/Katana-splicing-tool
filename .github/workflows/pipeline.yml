@@ -20,7 +20,7 @@ on:
 jobs:
   native-transport:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -63,6 +63,8 @@ jobs:
             --outdir "$RUNNER_TEMP/katana-auto-strandedness"
           KATANA_NEXTFLOW_COMMAND_JSON="$runtime_command" python -B -m unittest discover \
             -s pipeline/tests -p test_storage_publish.py -v
+          KATANA_NEXTFLOW_COMMAND_JSON="$runtime_command" python -B -m unittest discover \
+            -s pipeline/tests -p test_standard_outputs.py -v
           python -B pipeline/tools/check_managed_storage.py \
             --nextflow-command-json "$runtime_command" \
             --outdir "$RUNNER_TEMP/katana-managed-storage"
@@ -88,6 +90,9 @@ jobs:
           python -B pipeline/tools/check_paired_transport.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-paired-transport"
+          python -B pipeline/tools/check_single_session_entry.py \
+            --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
+            --outdir "$RUNNER_TEMP/katana-single-session"
 
   paired-native-models:
     runs-on: ubuntu-latest

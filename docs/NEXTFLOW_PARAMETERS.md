@@ -1,5 +1,20 @@
 # Katana Nextflow: parameters and analysis choices
 
+## Current native entry
+
+New studies run `nextflow run pipeline/main.nf`. `--outdir` is the published
+result root and `-work-dir` is native cache. Stage dependencies and final
+delivery are part of this one Nextflow session. See [outputs](NATIVE_OUTPUTS.md).
+
+| Option | Default | Use |
+| --- | --- | --- |
+| `--bundle` | unset | Existing upstream bundle; select downstream-only instead of raw inputs. |
+| `--design_factors` | `[condition]` | Explicit factor names; YAML list or comma-separated CLI values. Subject pairing stays in the sample/contrast sheets. |
+| `--clean_work` | false | Let Nextflow remove task work only after the complete DAG and delivery succeed. Leave off for later resume. |
+
+`output_layout=legacy` and `native_delivery=false` preserve the old managed
+runner's contract. New studies use the default standard layout and delivery.
+
 This reference describes the **current Katana implementation**, not every
 option of `nf-core/rnaseq`, `rnasplice` or `differentialabundance`. For formats
 and commands, use [NEXTFLOW_USAGE.md](NEXTFLOW_USAGE.md). Defaults below were

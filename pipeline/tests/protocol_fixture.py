@@ -20,6 +20,15 @@ def write(path: Path, value: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
+    for command_name in ('preflight', 'import'):
+        entry = sub.add_parser(command_name)
+        entry.add_argument('--project-template', type=Path, required=True)
+        entry.add_argument('--config', type=Path, required=True)
+        if command_name == 'preflight':
+            entry.add_argument('--out', type=Path, required=True)
+        else:
+            entry.add_argument('--bundle', type=Path, required=True)
+            entry.add_argument('--outdir', type=Path, required=True)
     plan = sub.add_parser("plan")
     plan.add_argument("--project", type=Path, required=True)
     plan.add_argument("--config", type=Path, required=True)
@@ -45,7 +54,13 @@ def main() -> None:
     report.add_argument("--collection", type=Path, required=True)
     report.add_argument("--outdir", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "plan":
+    if args.command == 'preflight':
+        assert args.project_template.is_file() and args.config.is_file()
+        write(args.out, {'fixture': True, 'ready': True})
+    elif args.command == 'import':
+        assert (args.bundle / 'fixture.txt').read_text() == 'generated transport only'
+        write(args.outdir / 'project.json', {'fixture': True})
+    elif args.command == "plan":
         document = json.loads(args.config.read_text())
         assert args.project.is_file()
         if document.get("schema") == "katana.flow.config/v1":

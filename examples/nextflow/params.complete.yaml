@@ -124,3 +124,9 @@ slurm_partition: null
 max_cpus: null
 max_memory: null
 max_time: null
+
+# Existing complete upstream bundle (use mode: downstream-only instead of raw inputs).
+bundle: null
+design_factors: [condition]
+# Delete task work only after successful final delivery; failed work remains.
+clean_work: false

@@ -64,28 +64,44 @@ The interactive browser adds adjustable thresholds, result filtering, gene/event
 
 ## Run a study
 
-Supply the sample sheet, comparison sheet, references and analysis resources. One command runs Nextflow, delivers the report and reusable project, and removes completed temporary work. Internal configuration files are generated automatically:
+Supply the sample sheet, comparison sheet, references and analysis resources. One Nextflow run schedules read processing, differential analysis, Katana, the report and the reusable browser project. Internal configuration files are generated automatically:
 
 ```sh
-katana-flow run --mode complete \
+nextflow run pipeline/main.nf --mode complete \
   --input inputs/samples.csv --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
   --species 'Mus musculus' --reference_build GRCm39 \
   --gene_sets resources/pathways.gmt --rbp_gene_sets resources/rbps.gmt \
   --motif_database resources/motifs.json --clip_peaks resources/clip.tsv \
-  --profile docker --katana_container "$KATANA_IMAGE" \
-  --dexseq_tools_container "$DEXSEQ_IMAGE" --outdir results
+  -profile docker --katana_container "$KATANA_IMAGE" \
+  --dexseq_tools_container "$DEXSEQ_IMAGE" --outdir results -work-dir work
 ```
 
 Use the matching current package, workflow and images described in the [quick start](docs/QUICKSTART.md). The BAM entry uses the same command with a BAM sample sheet. Nextflow schedules dependencies automatically; cluster accounts, partitions and resources belong in your site configuration.
 
-Successful stages hand off their results before temporary work is removed. Failed work stays available for recovery. Add `--keep-work` to retain work for later Nextflow resume. See [storage management](docs/STORAGE_MANAGEMENT.md).
+Nextflow passes results between tasks through channels; no external Python coordinator or study-specific monitoring script is required. Add `-resume` to reuse this run's completed tasks. Work is separate from deliverables and remains available for recovery. See [storage management](docs/STORAGE_MANAGEMENT.md).
 
 The same [parameter template](examples/nextflow/params.complete.yaml) also works
-with `katana-flow run -params-file params.yaml -profile slurm,apptainer -c site.config`.
+with `nextflow run pipeline/main.nf -params-file params.yaml -profile slurm,apptainer -c site.config`.
 Explicit command-line parameters override the file. Use `-resume` to recover
-the same run. Direct `nextflow run pipeline/main.nf` remains available with the
-same scientific parameters and ordinary Nextflow work retention.
+the same run. The older `katana-flow run` command remains for resuming historical
+managed sessions; it is not the entry for new studies.
+
+Results are published as stages finish:
+
+```text
+results/
+  rnaseq/           # FastQC, trimming/alignment diagnostics, BAMs, Salmon, matrices
+  rnasplicing/      # Native rMATS and SUPPA outputs
+  differential/     # DEG, DTU and exon-usage results
+  katana/           # Per-task results and retained browser/target-analysis project
+  report/           # REPORT.html, REPORT.zip, figures and complete tables
+  pipeline_info/    # Nextflow execution records and final delivery receipt
+```
+
+For an existing upstream bundle, select `--mode downstream-only --bundle /data/katana_bundle`.
+For an imported Katana project, use `--mode downstream-only --project /data/project.json`.
+These entries do not launch alignment or upstream differential fitting.
 
 ## What you receive
 
@@ -99,7 +115,12 @@ same scientific parameters and ordinary Nextflow work retention.
 
 Use the [release installation guide](docs/RELEASE_INSTALL.md) for downloadable packages, or [build from current source](docs/QUICKSTART.md#install). The browser and reporting tools work from the Python package; new native analyses also need the documented R/tools environment. The integrated workflow uses containers, while standalone downstream users can use [Conda](docs/RUNTIME_ENVIRONMENTS.md).
 
-The source includes FASTQ/BAM workflows, existing-result adapters, downstream calculations, reports and selected-target commands. The current source has newer storage and configuration changes than the 25 October beta downloads; build matching images to use those changes throughout a run. [Validation records](docs/validation/entrypoints-runtime-20261025.md) and the [current integration review](docs/development/PIPELINE_REVIEW_20261026.md) describe tested routes and remaining work.
+The source includes FASTQ/BAM workflows, existing-result adapters, downstream
+calculations, reports and selected-target commands. Install the matching release
+workflow and runtime described in the installation guide. [Native delivery
+validation](docs/validation/native-entry-20261030.md) distinguishes generated
+integration tests from existing scientific validation; no completed study was
+rerun for this release.
 
 Katana is an independently maintained Nextflow workflow that reuses nf-core modules. Official nf-core inclusion is pending. This does not require manual task scheduling: Nextflow manages execution, dependencies and caching.
 

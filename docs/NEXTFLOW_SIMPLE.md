@@ -8,21 +8,19 @@ Supply samples, the comparisons you want, references, and an output directory.
 Katana generates its internal project template and downstream settings. You do
 not need to create `study.yml`, `project-template.json` or `flow.json`.
 
-For one command that also removes completed temporary work, use the installed
-`katana-flow run` launcher with the **same scientific parameters**:
+Use the native Nextflow entry for new studies:
 
 ```bash
-katana-flow run -params-file examples/nextflow/params.complete.yaml \
+nextflow run pipeline/main.nf -params-file examples/nextflow/params.complete.yaml \
   -profile slurm,apptainer -c examples/nextflow/kth.config \
-  --slurm_account YOUR_ALLOCATION --outdir /data/study/results
+  --slurm_account YOUR_ALLOCATION --outdir /data/study/results -work-dir /data/study/work
 ```
 
-Edit the template paths first. The launcher calls the native Nextflow workflow
-in two stages, retains results and target-analysis inputs, then cleans only
-completed stage work. Failed work remains available; repeat with `-resume`.
-Use `--keep-work` to retain caches or `--run-dir` to choose their managed root.
-The direct Nextflow command below uses the same parameters but retains work.
-Both routes require a matching updated installation/runtime.
+Edit the template paths first. A single Nextflow DAG connects all stages and
+publishes the report and independent client project. Use `-resume` with the same
+launch directory and work directory after interruption. No Python coordinator
+is needed. Historical `katana-flow run` sessions retain their old recovery
+command and installation until they finish; do not switch an active run's code.
 
 ## 1. FASTQ or BAM to analysis and report
 
@@ -216,7 +214,7 @@ Do not mix these routes expecting two configurations to be merged.
 
 Generated settings are published in `OUTDIR/pipeline_info/configuration/`.
 The final report, result tables and client-readable outputs follow the existing
-output layout. `-resume` reuses retained matching Nextflow work; it cannot reuse
+[standard output layout](NATIVE_OUTPUTS.md). `-resume` reuses retained matching Nextflow work; it cannot reuse
 deleted cache. `--storage_mode lean` reduces publication duplication but does
 not itself delete work. Keep work until the report and portable result package
 are verified, then use the existing documented cleanup route.

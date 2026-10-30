@@ -343,7 +343,9 @@ def run(args):
         for key in ("katana_container", "dexseq_tools_container", "flow_executable"):
             if getattr(args, key):
                 common.extend(["--" + key, getattr(args, key)])
-        common += ["--storage_mode", "lean"]
+        # Compatibility for existing two-session runs only. New studies use
+        # nextflow run pipeline/main.nf and its native delivery processes.
+        common += ["--storage_mode", "lean", "--output_layout", "legacy", "--native_delivery", "false"]
         try:
             if args.mode == "complete":
                 bundle = down_work / "upstream-output" / "katana_bundle"

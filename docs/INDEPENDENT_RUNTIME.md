@@ -1,8 +1,8 @@
 # Install the independent Katana runtime
 
-Use the launcher and wheel from the [29 October permission-fix release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261029).
+Use the launcher and wheel from the [30 October native-workflow release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261030).
 This beta includes paired comparisons, automatic strandedness, direct Nextflow
-parameters and managed cleanup. The older downloads remain available for
+parameters, standard output directories and native final delivery. The older downloads remain available for
 reproducing earlier installations.
 
 ## Linux cluster
@@ -15,13 +15,13 @@ modules before running. Scientific tasks use containers; references and
 databases are separate inputs.
 
 Download the controller from the new release. Reuse the unchanged scientific
-images from the [28 October release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261028); their exact hashes are also listed in the new manifest. This patch changes installation and launch validation, not scientific methods or image dependencies.
+images from the [28 October release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261028); their exact hashes are also listed in the new manifest. The new workflow uses the existing image commands for analysis, reporting and project retention. Scientific methods and image dependencies are unchanged.
 
 Required assets:
 
 | Asset | Purpose |
 | --- | --- |
-| `katana-controller-2.0.0b5.dev20261029-linux-x86_64.tar.gz` | Portable launcher, Python and Nextflow |
+| `katana-controller-2.0.0b5.dev20261030-linux-x86_64.tar.gz` | Portable launcher, Python and Nextflow |
 | `katana-downstream-2.0.0b5.dev20261028-linux-amd64.sif` | Matching Katana scientific runtime |
 | `kanata-dexseq-tools-20261024-linux-amd64.sif` | Unchanged DEXSeq counting runtime |
 | `SHA256SUMS`, `RELEASE_MANIFEST.json` | Checksums and tested versions |
@@ -29,9 +29,9 @@ Required assets:
 ```bash
 sha256sum --ignore-missing --check SHA256SUMS
 mkdir -p tools
-tar -xzf katana-controller-2.0.0b5.dev20261029-linux-x86_64.tar.gz -C tools
+tar -xzf katana-controller-2.0.0b5.dev20261030-linux-x86_64.tar.gz -C tools
 export PATH="$PWD/tools/katana-controller/bin:$PATH"
-katana-flow run --help
+nextflow run tools/katana-controller/pipeline/main.nf --help
 nextflow -version
 ```
 
@@ -61,7 +61,7 @@ genome-aligned BAM; the contrast sheet selects comparisons and their direction.
 Katana generates its internal project/settings JSON.
 
 ```bash
-katana-flow run \
+nextflow run tools/katana-controller/pipeline/main.nf \
   -profile slurm,singularity -c /path/to/site.config \
   --slurm_account YOUR_ALLOCATION \
   --input /data/study/samples.csv \
@@ -76,20 +76,22 @@ katana-flow run \
   --clip_peaks /data/resources/matched_clip_peaks.tsv \
   --katana_container /data/images/katana-downstream-2.0.0b5.dev20261028-linux-amd64.sif \
   --dexseq_tools_container /data/images/kanata-dexseq-tools-20261024-linux-amd64.sif \
-  --run-dir "$PROJECT/cache/katana/study-run" \
+  -work-dir "$PROJECT/cache/katana/study-work" \
   --outdir "$PROJECT/results/study"
 ```
 
-Replace the paths and site settings. The launcher retains published results and
-target-analysis inputs, then cleans validated completed stage work. Failed work
-stays available; repeat with `-resume`. `--keep-work` retains completed work too.
-Use separate run/output directories for different studies. Queue selection is
+Replace paths and site settings. Nextflow owns all stages in one session,
+including report and retained project delivery. See [standard outputs](NATIVE_OUTPUTS.md).
+No study-specific Python coordinator or polling script is required. Repeat the
+same command from the same launch directory with `-resume` to reuse completed
+tasks. Add `--clean_work` to let Nextflow remove work after successful delivery;
+failed work remains available. Leave it off to retain the completed resume cache.
+Use separate work/output directories for different studies. Queue selection is
 site configuration; Katana does not automatically select a memory partition.
 
-The direct Nextflow entry is `nextflow run tools/katana-controller/pipeline/main.nf`
-with the same scientific parameters. Use `-work-dir` for that route, which keeps
-native Nextflow work. Other upstream tool images come from the workflow or the
-site image cache, not the controller's Python environment.
+Existing managed runs keep their original launcher and software until completion.
+Do not replace an active installation to adopt the new directory layout.
+Other upstream tool images come from the workflow or site image cache.
 
 For paired animals, share `subject` between matching samples and set
 `paired=true` for that contrast. See [samples and contrasts](NEXTFLOW_USAGE.md),
@@ -120,7 +122,7 @@ Install the release wheel in a fresh Python 3.11+ environment:
 python -m venv .venv
 # Linux: source .venv/bin/activate
 # Windows PowerShell: .\.venv\Scripts\Activate.ps1
-python -m pip install './katana_splicing_tool-2.0.0b5.dev20261029-py3-none-any.whl[standalone]'
+python -m pip install './katana_splicing_tool-2.0.0b5.dev20261030-py3-none-any.whl[standalone]'
 python -m pip check
 katana-open --help
 katana-report --help

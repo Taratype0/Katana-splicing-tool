@@ -7,8 +7,8 @@ Katana does not generate every possible group combination.
 ## Install
 
 For the downloadable beta, follow [independent runtime installation](INDEPENDENT_RUNTIME.md).
-The 28 October assets include the portable controller, matching containers,
-paired contrasts and automatic stage cleanup. Earlier downloads keep their
+The current assets include the portable runtime, paired contrasts and a single
+Nextflow entry through report and project delivery. Earlier downloads keep their
 original behavior. A source installation is also available below.
 
 For the Python commands and browser, with Python 3.11 or newer:
@@ -76,20 +76,21 @@ FASTQ alone does not provide them. You can [turn off selected analyses](ANALYSIS
 and omit their calculation and dedicated resource requirements.
 
 ```sh
-katana-flow run --mode complete \
+nextflow run pipeline/main.nf --mode complete \
   --input inputs/samples.csv --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
   --species 'Mus musculus' --reference_build GRCm39 \
   --gene_sets resources/pathways.gmt --rbp_gene_sets resources/rbps.gmt \
   --motif_database resources/motifs.json --clip_peaks resources/clip.tsv \
-  --profile docker --katana_container "$KATANA_IMAGE" \
-  --dexseq_tools_container "$DEXSEQ_IMAGE" --outdir results
+  -profile docker --katana_container "$KATANA_IMAGE" \
+  --dexseq_tools_container "$DEXSEQ_IMAGE" --outdir results -work-dir work
 ```
 
 The same command handles a BAM sheet without realigning its BAMs. It runs
-the two native Nextflow stages automatically, verifies each handoff, and
-cleans their temporary work after success. No manual approval between tasks
-is needed. Add `--keep-work` if you want all Nextflow work retained.
+one Nextflow DAG through report and client-project delivery. No manual stage
+handoff or external coordinator is needed. Completed task outputs are published
+as they finish; `-resume` reuses matching work after interruption. See the
+[output layout and recovery guide](NATIVE_OUTPUTS.md).
 
 ### Small studies
 
@@ -111,8 +112,8 @@ estimable in a small study.
 
 ### On a cluster
 
-Use `--profile slurm,apptainer --site-config site.config` instead of
-`--profile docker`. Configure the partition, account, threads, memory and time
+Use `-profile slurm,apptainer -c site.config` instead of
+`-profile docker`. Configure the partition, account, threads, memory and time
 for your cluster. Katana does not choose a `memory` partition for you.
 See the [site configuration example](../examples/nextflow/site.config).
 Use an allocated compute environment for local execution, not a shared login
@@ -123,14 +124,14 @@ node. Slurm manages actual admission and concurrency.
 For a Katana upstream results bundle:
 
 ```sh
-katana-flow import --bundle upstream-results/katana_bundle \
-  --project-template inputs/project-template.json --outdir imported-project
-katana-flow run --mode downstream-only \
-  --project imported-project/project.json \
-  --profile docker --katana_container "$KATANA_IMAGE" --outdir results
+nextflow run pipeline/main.nf --mode downstream-only \
+  --bundle upstream-results/katana_bundle -params-file analysis-resources.yaml \
+  -profile docker --katana_container "$KATANA_IMAGE" --outdir results -work-dir work
 ```
 
-For a prepared Katana project, start at the second command. For external
+The resource file selects resources and optional analyses as in the full-run
+example. For a prepared Katana project, replace `--bundle` with `--project
+/data/project.json`. For external
 nf-core output, first map its result files, samples, comparisons and reference
 using the [existing-results guide](EXISTING_RESULTS.md). Automatic discovery
 from an arbitrary rnaseq/rnasplice/differentialabundance directory is not yet
@@ -138,14 +139,14 @@ available. A single pipeline's outputs may not cover every report analysis.
 
 ## 3. Open results or regenerate a report
 
-After a successful managed run:
+After a successful native run:
 
 | Path | Use |
 | --- | --- |
 | `results/report/REPORT.html` | Open the study report in a browser. |
 | `results/report/REPORT.zip` | Share the offline report and attachments. |
-| `results/project/project.json` | Open the reusable analysis project in Katana. |
-| `results/project/collection/` | Complete downstream results. |
+| `results/katana/project/project.json` | Open the reusable analysis project in Katana. |
+| `results/katana/project/collection/` | Complete downstream results. |
 | `results/pipeline_info/` | Execution traces, resource usage and logs. |
 
 Start the interactive application with `katana-open` and open the project.
@@ -160,7 +161,7 @@ katana-flow report --collection completed-collection --outdir refreshed-report
 ```
 
 This command assembles existing results without fitting new models. The
-seven-section format and comparison selector stay the same. A managed run
+seven-section format and comparison selector stay the same. A complete run
 already delivers its independent offline report; use that report after source
 work cleanup. Retained-project browsing and target analysis are separate from
 regenerating every report view from an archived collection's original paths.

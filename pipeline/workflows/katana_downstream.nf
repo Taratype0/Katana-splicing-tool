@@ -2,6 +2,7 @@ import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
 include { KATANA_FLOW_PLAN; KATANA_FLOW_VALIDATE_PLAN; KATANA_FLOW_COLLECT; KATANA_FLOW_REPORT } from '../modules/local/flow_control'
+include { KATANA_FLOW_RETAIN; KATANA_FLOW_DELIVERY } from '../modules/local/flow_delivery'
 include { KATANA_FLOW_TASK as AUDIT } from '../modules/local/flow_task'
 include { KATANA_FLOW_TASK as QUALITY } from '../modules/local/flow_task'
 include { KATANA_FLOW_TASK as AS } from '../modules/local/flow_task'
@@ -136,6 +137,11 @@ workflow KATANA_DOWNSTREAM {
     }
     KATANA_FLOW_COLLECT(plan, all_results, runtime_data)
     KATANA_FLOW_REPORT(KATANA_FLOW_COLLECT.out.collection, runtime_data)
+    if (params.native_delivery) {
+        KATANA_FLOW_RETAIN(KATANA_FLOW_COLLECT.out.collection, project_root, project_filename)
+        KATANA_FLOW_DELIVERY(KATANA_FLOW_RETAIN.out.project, KATANA_FLOW_REPORT.out.report,
+            Channel.value(file("${projectDir}/bin/katana_verify_delivery.py", checkIfExists: true)))
+    }
 
     emit:
     report = KATANA_FLOW_REPORT.out.report

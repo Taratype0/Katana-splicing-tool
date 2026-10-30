@@ -36,6 +36,13 @@ def number(request, name, default, minimum, maximum=None):
 
 
 def generate(request, resources, outdir):
+    factors = request.get('design_factors', ['condition'])
+    if isinstance(factors, str):
+        factors = [item.strip() for item in factors.split(',')]
+    if (not isinstance(factors, list) or not factors or
+            any(not isinstance(item, str) or not item.strip() for item in factors) or
+            len(set(factors)) != len(factors)):
+        raise ValueError('--design_factors requires unique nonempty factor names')
     analyses = {key: not boolean(request.get("skip_" + key, False), "skip_" + key) for key in ANALYSES}
     analyses["coverage"] = boolean(request.get("with_genebody_coverage", False), "with_genebody_coverage")
     event_set = request.get("event_set", "stable_significant")
@@ -75,6 +82,7 @@ def generate(request, resources, outdir):
             raise ValueError("--contrast_ids contains duplicates")
         settings["contrast_ids"] = selection
 
+    settings['design_factors'] = factors
     template = {"name": request.get("study_name") or "Katana study",
                 "rmats_mode": rmats_mode, "metadata": {}, "assets": []}
     for option, key in (("species", "species"), ("reference_build", "genome_build"),

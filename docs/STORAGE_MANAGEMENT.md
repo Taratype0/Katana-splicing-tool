@@ -1,5 +1,25 @@
 # Storage management
 
+## New studies: one native Nextflow run
+
+Use `nextflow run pipeline/main.nf --outdir results -work-dir work` with your
+study parameters. All stages and final delivery are native Nextflow tasks.
+The [standard outputs](NATIVE_OUTPUTS.md) are copied outside work; raw/trimmed
+FASTQ and generated STAR indexes are not published as extra delivery copies.
+Complete runs retain upstream inputs in the client project and do not publish
+another full interchange bundle. Use `-resume` while work is retained.
+
+After complete delivery and `katana-flow verify-retained --directory
+results/katana/project`, preview removal with `nextflow clean <run-name> -n`
+and apply with `nextflow clean <run-name> -f`. This removes that run's recovery
+cache, not delivered results. Do not clean an active run.
+
+## Historical managed sessions
+
+The remainder documents recovery/cleanup of the earlier `katana-flow run`
+entry. Keep its original command and installation for an already active run.
+New studies use the single-session entry above.
+
 `katana-flow run` runs the native Nextflow workflow with verified storage
 handoffs. It removes the completed upstream work before downstream analysis,
 then removes downstream work after the final report and retained analysis
