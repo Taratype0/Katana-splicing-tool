@@ -84,6 +84,12 @@ class PublicParser(argparse.ArgumentParser):
             self.error('Managed cleanup supports complete or downstream-only; use nextflow run for upstream-only')
         if not result.outdir:
             self.error('Supply --outdir or outdir in the parameter file')
+        # The old launcher remains for historical run recovery. New native
+        # delivery flags must not silently change its two-session lifecycle.
+        if (getattr(result, 'bundle', None) or getattr(result, 'clean_work', False)
+                or getattr(result, 'native_delivery', False)
+                or getattr(result, 'output_layout', None) not in (None, 'legacy')):
+            self.error('Use nextflow run pipeline/main.nf for bundle input, standard outputs or native cleanup')
         # Routing fields are controlled by the two native stage invocations.
         # retain/lean in a shared native template never changes cleanup policy.
         result.native_parameters = {}

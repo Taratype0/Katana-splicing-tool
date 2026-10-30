@@ -334,5 +334,20 @@
   },
   "max_time": {
     "type": "string"
+  },
+  "bundle": {
+    "type": "path"
+  },
+  "design_factors": {
+    "type": "selection"
+  },
+  "clean_work": {
+    "type": "bool"
+  },
+  "output_layout": {
+    "type": "string"
+  },
+  "native_delivery": {
+    "type": "bool"
   }
 }

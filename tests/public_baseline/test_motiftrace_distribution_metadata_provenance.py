@@ -92,7 +92,7 @@ def test_capacity_revision_preserves_historical_identity_and_records_current_sou
     assert changes['pyproject.toml']['previous_sha256']==sha256(old_toml.read_bytes()).hexdigest()
     current = (ROOT/'pyproject.toml').read_bytes()
     assert record['interface_source_sha256']['pyproject.toml'] == sha256(current).hexdigest()
-    for revision_name in ('distribution-version-metadata-20261029', 'distribution-version-metadata-20261028'):
+    for revision_name in ('distribution-version-metadata-20261030', 'distribution-version-metadata-20261029', 'distribution-version-metadata-20261028'):
         packaging_revision = next(r for r in record['interface_revisions'] if r.get('revision') == revision_name)
         assert packaging_revision['scientific_release_unchanged']
         assert not packaging_revision['scientific_calculation_changes']
@@ -110,7 +110,7 @@ def test_capacity_revision_preserves_historical_identity_and_records_current_sou
         assert old_doc == new_doc
         current = previous
     assert changes['pyproject.toml']['current_sha256'] == sha256(current).hexdigest()
-    assert tomllib.loads((ROOT/'pyproject.toml').read_text())['project']['version']=='2.0.0b5.dev20261029'
+    assert tomllib.loads((ROOT/'pyproject.toml').read_text())['project']['version']=='2.0.0b5.dev20261030'
     assert record['execution_adapter']['fixed_capacity_limits_enforced'] is False
     assert record['execution_adapter']['max_tests_default'] is None
     assert record['execution_adapter']['max_matrix_cells_default'] is None

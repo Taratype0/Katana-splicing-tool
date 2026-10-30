@@ -159,3 +159,11 @@ def test_missing_native_configuration_never_authorizes_cleanup(lifecycle):
     with pytest.raises(ValueError, match='Missing published native configuration'):
         managed.run(args)
     assert (args.outdir.with_name('results.run') / 'work/upstream').is_dir()
+
+
+@pytest.mark.parametrize('option,value', [('bundle','/data/completed'), ('clean_work','true'),
+    ('native_delivery','true'), ('output_layout','standard')])
+def test_native_delivery_options_cannot_enter_historical_managed_lifecycle(option, value, capsys):
+    with pytest.raises(SystemExit):
+        managed.parser().parse_args(['--outdir','results','--'+option,value])
+    assert 'Use nextflow run pipeline/main.nf' in capsys.readouterr().err
