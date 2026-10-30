@@ -18,7 +18,7 @@ a=p.parse_args()
 root=a.outdir.resolve(); root.mkdir(parents=True, exist_ok=False)
 rows=[]
 for i in range(6):
-    for lane in ['L2','L1']:
+    for lane in (['L1'] if i == 5 else ['L2','L1']):
         row=dict(sample=f'S{i}',condition='WT' if i%2==0 else 'MUT',subject=f'mouse{i//2}',lane=lane,strandedness='auto',read_length='4')
         for mate in (1,2):
             f=root/f'S{i}_{lane}_{mate}.fq.gz'
@@ -44,9 +44,11 @@ for name,flags in [('first',[]),('resume',['-resume'])]:
 audits=list((root/'work').glob('*/*/fastq_staging_audit.json'))
 assert len(audits)==6
 for audit_file in audits:
-    audit=json.loads(audit_file.read_text()); assert audit['lane_count']==2
+    audit=json.loads(audit_file.read_text())
+    lanes=['L1'] if audit['sample']=='S5' else ['L1','L2']
+    assert audit['lane_count']==len(lanes)
     for mate in (1,2):
         with gzip.open(audit_file.parent/f"{audit['sample']}_R{mate}.fastq.gz",'rt') as handle:
-            assert handle.read().splitlines()[::4]==[f"@{audit['sample']}_L1/{mate}",f"@{audit['sample']}_L2/{mate}"]
+            assert handle.read().splitlines()[::4]==[f"@{audit['sample']}_{lane}/{mate}" for lane in lanes]
 (root/'acceptance.json').write_text(json.dumps(dict(status='passed',samples=6,biological_pairs=3,native=results,paired_lane_order_verified=True),indent=2)+'\n')
 print((root/'acceptance.json').read_text())
