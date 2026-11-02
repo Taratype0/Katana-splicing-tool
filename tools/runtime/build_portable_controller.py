@@ -14,6 +14,25 @@ import subprocess
 import tarfile
 import tempfile
 import urllib.request
+from urllib.parse import unquote, urlparse
+
+
+def normalize_installation_report(report, wheel):
+    """Keep wheel provenance without publishing the builder's local path."""
+    report, wheel = Path(report), Path(wheel)
+    document = json.loads(report.read_text())
+    for entry in document.get('install', []):
+        info = entry.get('download_info', {})
+        url = info.get('url', '')
+        if urlparse(url).scheme != 'file':
+            continue
+        if Path(unquote(urlparse(url).path)).name != wheel.name:
+            raise ValueError('Unexpected local distribution in installation report')
+        if info.get('archive_info', {}).get('hashes', {}).get('sha256') != sha(wheel):
+            raise ValueError('Installation report wheel hash differs from accepted wheel')
+        info['url'] = 'artifact:' + wheel.name
+        info['local_path_omitted'] = True
+    report.write_text(json.dumps(document, indent=2) + '\n')
 
 PYTHON_URL = 'https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-unknown-linux-gnu-install_only.tar.gz'
 PYTHON_SHA = '6a79e922e50006b601f29e688407659da1c2b86ebcd4e9c7254cf234be8b89de'
@@ -68,6 +87,7 @@ def main():
             if line.strip() and not line.lstrip().startswith('#')) + '\n')
         run([python, '-I', '-m', 'pip', 'install', '--no-compile', '--no-cache-dir',
              '--constraint', version_constraints, '--report', bundle / 'installation-report.json', str(wheel) + '[flow]'])
+        normalize_installation_report(bundle / 'installation-report.json', wheel)
         run([python, '-I', '-m', 'pip', 'check'])
         # Validate the actual managed entry before export can repair permissions.
         run([python, '-I', '-c', 'from katana_next.flow.managed import _pipeline_source; print(_pipeline_source())'])
