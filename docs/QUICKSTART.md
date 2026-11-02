@@ -95,20 +95,12 @@ as they finish; `-resume` reuses matching work after interruption. See the
 ### Small studies
 
 The upstream differential route requires at least two independent samples per
-group. The integrated network defaults to **six total samples per comparison**,
-not six per group. To use a two-plus-two study, set the explicit network
-minimum in `flow.json`:
-
-```json
-{"network": {"parameters": {"minimum_network_samples": 4}}}
-```
-
-Merge this field into your full configuration. The network engine accepts a
-minimum of at least three; the upstream two-per-group requirement still applies.
-This changes the eligibility setting, not the number of observations or the
-method's statistical power. The selected minimum and actual sample count are
-recorded. This setting alone does not guarantee that other analyses are
-estimable in a small study.
+group. CoSplice builds one shared network across all comparable study samples,
+with no minimum biological-unit gate. Twelve independent units is a project
+recommendation. Pairing is optional: declare matching subjects and paired
+contrasts when appropriate. Six observations from three pairs remain three
+independent biological units. Model terms that cannot be estimated are recorded
+as unavailable. See [CoSplice](COSPLICE.md).
 
 ### On a cluster
 

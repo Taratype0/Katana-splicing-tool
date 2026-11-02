@@ -64,6 +64,7 @@ def create_plan(project, config):
                   "prioritize.enrichment": "enrichment", "prioritize.rbp_support": "enrichment",
                   "prioritize.motiftrace_consequences": "motiftrace", "prioritize.rbp_mechanism": "motiftrace",
                   "prioritize.motiftrace_parallel": "motiftrace",
+                  "programs.cosplice": "network_fit", "programs.psi_network": "network_fit",
                   "quality.read_coverage_bias": "coverage", "differential.replicate_interaction": "interaction"}
         execution_group = groups.get(workflow, "reference" if workflow == "flow.reference.bed12" else
                                      "mapp_prepare" if workflow == "flow.mapp.prepare" else "qc" if workflow in {"flow.qc.genebody", "flow.qc.sequencing"} else
@@ -141,7 +142,43 @@ def create_plan(project, config):
         if coverage_tasks:
             add("coverage-summary", "quality.read_coverage_bias", coverage_tasks)
 
-    if enabled["network"]:
+    if not isinstance(settings.get('network', {}), dict):
+        raise ValueError('network must be a configuration object')
+    network_engine = settings.get("network", {}).get("engine", "whole_study_4_3")
+    if network_engine not in {"whole_study_4_3", "legacy"}:
+        raise ValueError("network.engine must be whole_study_4_3 or explicit legacy")
+    if enabled["network"] and network_engine == "whole_study_4_3":
+        from katana_cosplice.study_design import project_study_design
+        network = settings.setdefault("network", {})
+        if network.get("scope") not in {None, "cohort", "whole_study"}:
+            raise ValueError("New CoSplice uses one whole-study network; select engine=legacy explicitly for old contrast networks")
+        if not isinstance(network.get('parameters', {}), dict):
+            raise ValueError('network.parameters must be a configuration object')
+        params = dict(network.get("parameters", {}))
+        if params.pop('hub_metric', 'abs_kME') != 'abs_kME':
+            raise ValueError('Whole-study CoSplice uses abs_kME; hub_metric cannot relabel the calculation')
+        if 'bootstrap_enabled' in params:
+            raise ValueError('Use network.bootstrap.enabled to request optional stability refits')
+        bootstrap = network.get('bootstrap', {})
+        if not isinstance(bootstrap, dict) or set(bootstrap) - {'enabled'}:
+            raise ValueError('network.bootstrap must contain only the enabled boolean')
+        enabled_bootstrap = bootstrap.get("enabled", False)
+        if not isinstance(enabled_bootstrap, bool):
+            raise ValueError("network.bootstrap.enabled must be true or false")
+        if not enabled_bootstrap and params.get("bootstrap_iterations", 0):
+            raise ValueError("Nonzero bootstrap iterations conflict with disabled bootstrap")
+        params["bootstrap_iterations"] = params.get("bootstrap_iterations", 50) if enabled_bootstrap else 0
+        params['association_contrast_ids'] = contrasts
+        if not any(a.kind in {'psi_matrix','cosplice_config'} for a in manifest.assets):
+            from .network_inputs import resolve_network_rmats_mode
+            params['rmats_mode'] = resolve_network_rmats_mode(manifest, params)
+        policy, planned_contrasts = project_study_design(manifest, paired=params.get("paired", False), association_contrast_ids=contrasts)
+        network.update(engine=network_engine, scope="whole_study", bootstrap={"enabled": enabled_bootstrap})
+        add("network-study", "programs.cosplice", ["audit"], params,
+            {"unit": "whole_study", "sample_ids": [s.sample_id for s in manifest.samples],
+             "sample_size_policy": policy, "contrast_ids": contrasts})
+
+    if enabled["network"] and network_engine == "legacy":
         network = settings.get("network", {})
         if not isinstance(network, dict):
             raise ValueError("network must be a configuration object")
@@ -317,6 +354,17 @@ def preflight_plan(plan):
             for kind in runner.definition.required_asset_kinds:
                 if kind not in kinds and not (kind == "gene_body_coverage" and any(t.get("adapter") == "qc.genebody" for t in plan["tasks"])):
                     errors.append({"task_id": task["id"], "error": f"Missing input asset kind: {kind}"})
+            if task['workflow_id'] in {'programs.cosplice','programs.psi_network'}:
+                from types import SimpleNamespace
+                from katana_cosplice.study_design import project_study_design
+                import sys, os, subprocess
+                try:
+                    runner.validate_assets(SimpleNamespace(manifest=manifest))
+                    project_study_design(manifest,paired=task['parameters'].get('paired',False))
+                    from katana_cosplice.study_runtime import check_runtime
+                    check_runtime()
+                except (ValueError,OSError,ImportError,subprocess.TimeoutExpired) as exc:
+                    errors.append({'task_id':task['id'],'error':str(exc)})
             if task["workflow_id"] == "prioritize.motiftrace_parallel":
                 from types import SimpleNamespace
                 try:

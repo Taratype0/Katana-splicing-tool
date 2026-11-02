@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-PACKAGE_VERSION = "1.0.0.post1"
-SCIENTIFIC_RELEASE = "1.0.0-frozen.20261017"
+PACKAGE_VERSION = "2.0.0"
+SCIENTIFIC_RELEASE = "eventgraph-20261030; legacy-1.0.0-frozen.20261017"
 
 _MODES = (
     dict(mode_id="boundary", label="Boundary motifs and reference binding",

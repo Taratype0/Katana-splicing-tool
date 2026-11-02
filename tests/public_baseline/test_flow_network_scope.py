@@ -11,8 +11,23 @@ from katana_next.flow.network_inputs import (
     network_scope_identity, prepare_project_network, resolve_network_rmats_mode, validate_external_network_config,
     verify_network_engine_scope,
 )
-from katana_next.flow.planner import create_plan
+from katana_next.flow.planner import create_plan as current_plan
 from katana_next.infrastructure.manifest_store import ManifestStore
+
+
+def create_plan(project, settings):
+    """Retain coverage of the explicitly selected original network engine."""
+    return current_plan(project, {**settings, 'network': {'engine':'legacy', **settings.get('network',{})}})
+
+
+def test_new_default_keeps_study_samples_and_selected_associations(study):
+    _, manifest = ManifestStore().load(study)
+    cid = manifest.contrasts[0].contrast_id
+    plan = current_plan(study, {'contrast_ids':[cid]})
+    task, = [t for t in plan['tasks'] if t['workflow_id']=='programs.cosplice']
+    assert task['parameters']['association_contrast_ids'] == [cid]
+    assert set(task['scope']['sample_ids']) == {s.sample_id for s in manifest.samples}
+    assert task['scope']['sample_size_policy']['minimum_units_gate'] is False
 
 
 @pytest.fixture

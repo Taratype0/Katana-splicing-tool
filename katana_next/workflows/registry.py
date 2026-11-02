@@ -26,8 +26,7 @@ from katana_next.workflows.interpretation import (
     IsoformSupportWorkflow,
     RbpSupportWorkflow,
 )
-from katana_next.workflows.programs import CoSpliceWorkflow
-from katana_next.workflows.psi_network import PsiNetworkWorkflow
+from katana_next.workflows.cosplice_study import CoSpliceWorkflow, PsiNetworkWorkflow
 from katana_next.workflows.djexpress import DJExpressWorkflow
 from katana_next.workflows.psi_projection import PsiProjectionWorkflow
 from katana_next.workflows.module_functions import ModuleFunctionsWorkflow

@@ -8,8 +8,15 @@ import pytest
 
 from katana_cosplice.config import ModuleInterpretationConfig
 from katana_cosplice.module_interpretation import module_hub_tables
-from katana_next.flow.planner import create_plan
+from katana_next.flow.planner import create_plan as _create_plan
 from katana_next.flow.stages import _network_hubs
+
+
+def create_plan(project, settings):
+    """Retain this suite's old per-contrast engine and artifact contract."""
+    settings = copy.deepcopy(settings)
+    settings.setdefault('network', {})['engine'] = 'legacy'
+    return _create_plan(project, settings)
 
 
 @pytest.fixture

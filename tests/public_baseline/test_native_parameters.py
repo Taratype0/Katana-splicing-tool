@@ -24,8 +24,8 @@ def test_default_resources_and_runtime_are_generated(tmp_path):
         paths.append(path)
     original = {p: p.read_bytes() for p in paths}
     template, config = configure.generate({"species": "Mus musculus", "resource_names": names}, paths, tmp_path / "generated")
-    assert config["network"] == {"scope": "contrast", "bootstrap": {"enabled": False},
-                                 "parameters": {"hub_metric": "abs_kME", "min_module_size": 20, "merge_cut_height": .25}}
+    assert config["network"] == {"engine": "whole_study_4_3", "scope": "whole_study", "bootstrap": {"enabled": False},
+                                 "parameters": {"min_module_size": 20, "merge_cut_height": .25}}
     assert config["analyses"]["coverage"] is False
     assert all(config["analyses"][key] for key in configure.ANALYSES)
     assert config["event_set"] == "stable_significant"

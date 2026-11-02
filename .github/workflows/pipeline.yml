@@ -74,6 +74,9 @@ jobs:
           python -B pipeline/tools/check_native_lanes.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --pipeline pipeline --outdir "$RUNNER_TEMP/katana-native-lanes"
+          python -B pipeline/tools/check_native_lanes.py \
+            --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
+            --pipeline pipeline --format tsv --outdir "$RUNNER_TEMP/katana-native-lanes-tsv"
           python -B pipeline/tools/check_resource_resume.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-resource-resume"

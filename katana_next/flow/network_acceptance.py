@@ -29,6 +29,9 @@ def _role(metadata):
 
 def network_report_gaps(collection, plan, report_manifest, report_dir):
     """Require each planned network's own completed figures and module browser."""
+    if any(t.get('workflow_id') == 'programs.cosplice' for t in plan['tasks']):
+        from .study_acceptance import whole_study_report_gaps
+        return whole_study_report_gaps(collection, plan, report_manifest, report_dir)
     import pandas as pd
     from .presentation import _network_task_identity, validate_network_view_proof, network_bootstrap_enabled
 

@@ -1,13 +1,13 @@
 name: Validate release runtime
 
 on:
-  push:
-    branches: ['codex/independent-runtime-release-20261028']
-    paths: ['.github/workflows/release-runtime.yml']
   workflow_dispatch:
     inputs:
       release_tag:
         description: Existing draft release containing the accepted wheel
+        required: true
+      runtime_version:
+        description: Version from the accepted wheel, for example 2.0.0b5.dev20261102
         required: true
       wheel_sha256:
         description: Accepted wheel SHA256
@@ -22,14 +22,16 @@ jobs:
     timeout-minutes: 50
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ inputs.release_tag || 'v2.0.0-beta.5.dev20261028' }}
-      WHEEL_SHA: ${{ inputs.wheel_sha256 || '32e7c17842ad5f448c6b12cc71a8f686c9f01ceb0a359d2efe0adf4a84769651' }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      WHEEL_SHA: ${{ inputs.wheel_sha256 }}
     steps:
       - uses: actions/checkout@v4
       - name: Check draft and obtain verified inputs
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$RUNTIME_VERSION" =~ ^[0-9][0-9a-zA-Z.+-]*$ ]]
           test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
           mkdir -p "$RUNNER_TEMP/katana-release/context" "$RUNNER_TEMP/katana-release/output"
           cd "$RUNNER_TEMP/katana-release"
@@ -53,14 +55,15 @@ jobs:
           COPY *.whl /tmp/katana-wheel/
           RUN python -m pip install --no-cache-dir --no-deps --force-reinstall /tmp/katana-wheel/*.whl && python -m pip check && rm -rf /tmp/katana-wheel
           DOCKER
-          docker build --network=none -t katana-downstream:2.0.0b5.dev20261028 context
+          docker build --network=none -t "katana-downstream:$RUNTIME_VERSION" context
+          test "$(docker run --rm --network=none "katana-downstream:$RUNTIME_VERSION" python -c 'from importlib.metadata import version; print(version("katana-splicing-tool"))')" = "$RUNTIME_VERSION"
           docker run --rm --network=none --user "$(id -u):$(id -g)" \
             -e NUMBA_CACHE_DIR=/tmp/numba -v "$PWD/output:/acceptance" \
-            katana-downstream:2.0.0b5.dev20261028 \
+            "katana-downstream:$RUNTIME_VERSION" \
             python /opt/katana/check_downstream_environment.py --out /acceptance/environment
-          docker run --rm --network=none katana-downstream:2.0.0b5.dev20261028 katana-flow run --help > output/run-help.txt
-          docker inspect katana-downstream:2.0.0b5.dev20261028 > output/image-inspect.json
-          docker save katana-downstream:2.0.0b5.dev20261028 | gzip -1 > output/katana-downstream-2.0.0b5.dev20261028-linux-amd64.docker.tar.gz
+          docker run --rm --network=none "katana-downstream:$RUNTIME_VERSION" katana-flow run --help > output/run-help.txt
+          docker inspect "katana-downstream:$RUNTIME_VERSION" > output/image-inspect.json
+          docker save "katana-downstream:$RUNTIME_VERSION" | gzip -1 > "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.docker.tar.gz"
           cd output
           sha256sum *.docker.tar.gz > docker-SHA256SUMS
           tar -czf docker-validation.tar.gz environment run-help.txt image-inspect.json

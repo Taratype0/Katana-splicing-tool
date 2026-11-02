@@ -92,11 +92,22 @@ def test_new_card_route_requires_recorded_eventgraph_engine(tmp_path, engine, ex
         'demo\taffected_sequence\taffected_inclusion\tSE\tinclusion_up\t0.003\n', encoding='utf8')
     for p in (plan, regions):
         builder.tables.append({'name': p.name, 'source': p.name, 'chapter': 7, 'contrast_id': 'B_vs_A'})
+    if engine == 'eventgraph_20261030':
+        from PIL import Image
+        logo = output / 'MOTIF_REPORT_0123456789abcdef.png'
+        Image.new('RGB', (10, 10), 'blue').save(logo)
+        builder.panels.append({'id': 'native-duplicate-logo', 'chapter': 7,
+            'title': logo.name, 'image': logo.name, 'contrast_id': 'B_vs_A',
+            'output_only': False, 'data_links': [], 'metadata': {
+                'analysis_engine': engine, 'relative_path': 'event_consequences/' + logo.name}})
+        builder.source['report_require_plot_data'] = True
     before = {p: p.read_bytes() for p in (plan, regions)}
     manifest = builder.write()
     cards = [p for p in manifest['panels'] if p.get('metadata', {}).get('motif_sequence_renderer')]
     assert len(cards) == expected_cards
     if expected_cards:
+        assert next(p for p in manifest['panels'] if p['id'] == 'native-duplicate-logo')['output_only']
+        assert all(any(link['role'] == 'plot_data' for link in p['data_links']) for p in cards)
         summary = manifest['motif_summaries'][0]['sequence_report']
         assert summary['regional_significant_regions'] == 1
         assert summary['window_significant_models'] == 0

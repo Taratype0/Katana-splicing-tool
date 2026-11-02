@@ -46,7 +46,7 @@ def test_complete_report_does_not_silently_disable_missing_computations(study):
     assert "mapp" in descriptions
     assert "genebody" in descriptions
     assert next(t for t in plan["tasks"] if t["id"] == "reference-bed")["adapter"] == "reference.bed12"
-    assert {t.get("adapter") for t in plan["tasks"]} >= {"network.fit", "network.associate", "network.annotate", "qc.genebody", "mapp.maei"}
+    assert {t.get("adapter") for t in plan["tasks"]} >= {"qc.genebody", "mapp.maei"}
     assert not any(t.get("adapter") == "network.bootstrap" for t in plan["tasks"])
 
 
@@ -68,8 +68,9 @@ def test_ordinary_das_switch_does_not_weaken_required_rs_motif_inputs(study):
     multiple = create_plan(study, {"event_set": "significant"})
     overlap = next(t for t in multiple["tasks"] if t["id"] == "overlap")
     assert overlap["parameters"]["event_set"] == "significant"
-    network = next(t for t in plan["tasks"] if t.get("adapter") == "network.fit")
-    assert network["scope"]["unit"] == "measurable_contrast_PSI"
+    network = next(t for t in plan["tasks"] if t.get("workflow_id") == "programs.cosplice")
+    assert network["scope"]["unit"] == "whole_study"
+    assert len(network["scope"]["sample_ids"]) == 15
     assert network["scope"]["contrast_ids"] == ["perturbation-vs-baseline"]
 
 

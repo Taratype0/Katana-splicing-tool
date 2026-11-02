@@ -135,6 +135,8 @@ def test_raw_template_preflight_binds_real_bundled_mapp_sources(tmp_path, monkey
     monkeypatch.setattr(dependency_checks, "python_dependency_issues", lambda *a, **k: [])
     monkeypatch.setattr(stages, "_executable", lambda value, default: str(value or default))
     monkeypatch.setattr(stages, "_require_r_packages", lambda *a: None)
+    from katana_cosplice import study_runtime
+    monkeypatch.setattr(study_runtime, "check_runtime", lambda: 'Rscript')
     monkeypatch.setattr(shutil, "which", lambda name: str(name))
     monkeypatch.setattr(stages, "execute_stage", lambda *a, **k: pytest.fail("Preflight must not run analysis"))
     result = template_preflight(template, config)

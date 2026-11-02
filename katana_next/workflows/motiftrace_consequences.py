@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 
 from katana_cosplice.motif_scanner import load_motif_database
-from katana_next.science.motiftrace_execution import analyze_consequences, EXECUTION_ADAPTER_VERSION
+from katana_motiftrace.engines import analyze_consequences, ENGINES
+from katana_next.science.motiftrace_eventgraph_execution import EXECUTION_ADAPTER_VERSION
 from katana_next.science.motiftrace_custom import load_custom_library
 from katana_next.science.rbp_sequence_results import digest
 from katana_next.science.versioned_evidence import verified_resource
@@ -15,23 +16,24 @@ from katana_next.workflows.sources import selected_source, selection_rows
 
 
 class MotifTraceConsequencesWorkflow(WorkflowBase):
-    version = "1.1.0"
+    version = "2.0.0"
     definition = WorkflowDefinition(
         workflow_id="prioritize.motiftrace_consequences", workspace_id="prioritize",
         label="Katana MotifTrace: paired RNA and region statistics",
         question="Which motif instances change between the two local RNA forms, and which matched-gene regions show sequence association?",
-        method="Existing DAS/PSI only; SE/A3SS/A5SS/MXE/RI reference RNA reconstruction; locus-paired instances; fixed motif-blind same-type gene matching; whole-pair swaps and maximum cluster-mass FWER. New window BH is separate from all historical results.",
+        method="Existing DAS/PSI only; all eligible events retained in the ledger; frozen global event matching and shared within-gene swaps. Region maximum-cluster FWER P and window BH FDR are separate. Explicit legacy engine retains the original method.",
         output_summary="Actual local RNA FASTA, gained/lost/retained loci, split genomic coordinates, replicate PSI-weighted opportunities, matching losses, complete new window P/FDR and region FWER P, portable event report.",
-        analysis_unit="local splice event and independent matched gene pair, not a new biological replicate",
+        analysis_unit="splice event; independent foreground gene block for EventGraph; independent gene pair for legacy",
         required_asset_kinds=(), optional_asset_kinds=("rbp_motif_database",),
         parameters=(
+            ParameterDefinition("analysis_engine", "Analysis implementation", "select", "eventgraph_20261030", "Validated event-level matching and gene-block inference for PWM models. Select legacy for the preserved original implementation or consensus libraries. No automatic fallback.", ENGINES),
             ParameterDefinition("selection_id", "Existing supported DAS events", "selection", "", "One comparison from its full measured catalog; all five rMATS event types supported. Successful quantification is never rerun."),
             ParameterDefinition("custom_motif_path", "User motif library (optional)", "text", "", "Species-matched consensus TSV or Minimal MEME plus metadata. Otherwise use registered verified public motif databases."),
             ParameterDefinition("model_ids", "Explicit model IDs (optional)", "text", "", "Comma-separated native IDs or exact model hashes. Empty means all supplied models; never silently truncate or select by significance."),
-            ParameterDefinition("cluster_permutations", "Whole-pair permutations", "number", 999, "Fixed before scanning; shared swaps across all models, methods and regions. Cluster P is FWER, not FDR. No fixed upper computation limit.", minimum=99),
+            ParameterDefinition("cluster_permutations", "Shared randomizations", "number", 999, "Fixed before scanning; all events of a foreground gene share a swap in EventGraph. Regional P is FWER, not window FDR. No fixed upper computation limit.", minimum=99),
         ),
         presentation_role="advanced",
-        limitations="Local reference forms are not phased complete transcripts. Motif availability/PSI weighting is not measured occupancy or causality. PWM candidate positions have no calibrated site P. Matching exchangeability is an assumption; fewer than 20 independent pairs yields NA. No HPC, CLIP, read quantification or source-result mutation.",
+        limitations="Local forms are not complete transcripts. Motif opportunity is not measured occupancy or causality. EventGraph requires PWM models and conditional gene-block central symmetry; fewer than 20 independent gene blocks is not estimable. Public validation gains were PTB-family-specific. Regional significance does not imply window or site significance.",
     )
 
     def parent_artifacts(self, context, parameters):
@@ -88,6 +90,11 @@ class MotifTraceConsequencesWorkflow(WorkflowBase):
             library = {**library, "models": chosen}
         from katana_next.science.motiftrace_events import validate_models
         validate_models(library["models"])
+        engine = parameters.get("analysis_engine", "eventgraph_20261030")
+        if engine not in ENGINES:
+            raise ValueError("Unknown MotifTrace analysis_engine: " + str(engine))
+        if engine == "eventgraph_20261030" and any(m["kind"] != "PWM" for m in library["models"].values()):
+            raise ValueError("EventGraph requires PWM models. Select analysis_engine=legacy for consensus libraries; no model is silently omitted.")
         return library
 
     def input_paths(self, context, parameters):
@@ -102,7 +109,12 @@ class MotifTraceConsequencesWorkflow(WorkflowBase):
             *(Path(row["path"]) for row in library["inputs"]),
             *(science/name for name in ("motiftrace_events.py", "motiftrace_clusters.py", "motiftrace_consequences.py",
                 "motiftrace_consequences.html", "motiftrace_budget.py", "motiftrace_execution.py", "motiftrace_custom.py", "se_rbp.py", "statistics.py")),
-            Path(__file__).resolve().parents[2]/"katana_cosplice/motif_scanner.py"]
+            Path(__file__).resolve().parents[2]/"katana_cosplice/motif_scanner.py",
+            science/"motiftrace_eventgraph_execution.py",
+            Path(__file__).resolve().parents[1]/"reports/motif_eventgraph.py",
+            Path(__file__).resolve().parents[2]/"katana_motiftrace/engines.py",
+            *(Path(__file__).resolve().parents[2]/"katana_motiftrace/eventgraph"/name for name in
+              ("matching.py", "inference.py", "adapter.py", "scanning.py"))]
 
     def run(self, context, job, run_fingerprint, parameters):
         source = self.parent_artifacts(context, parameters)[0]
@@ -113,23 +125,30 @@ class MotifTraceConsequencesWorkflow(WorkflowBase):
         complete = complete[complete.comparison_id.eq(selected.comparison_id.iloc[0])].copy()
         library = self._library(context, parameters)
         writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version,
-            common_metadata={"tool_name": "Katana MotifTrace", "quantification_rerun": False,
+            common_metadata={"tool_name": "Katana MotifTrace", "completion_scope": "motiftrace_sequence", "completion_verified": True, "quantification_rerun": False,
                 "execution_adapter_version": EXECUTION_ADAPTER_VERSION,
+                "analysis_engine": parameters.get("analysis_engine", "eventgraph_20261030"),
+                "window_correction": "complete comparison BH FDR", "regional_P_is_FDR": False,
                 "historical_P_FDR_unchanged": True, "new_inference": False, "cluster_correction": "maximum cluster mass FWER",
                 "genome_build": context.manifest.annotation.genome_build, "limitations": self.definition.limitations})
-        job.report(.1, "Freezing five-type RNA consequences and a separate new paired-swap statistical family")
+        job.report(.1, "Freezing event-level RNA consequences, matching and separate window BH / regional FWER results")
         summary = analyze_consequences(complete, set(selected.event_id), library["models"],
             context.manifest.annotation.genome_fasta, writer.directory/"event_consequences",
             permutations=parameters["cluster_permutations"], check_cancelled=job.check_cancelled,
+            analysis_engine=parameters.get("analysis_engine", "eventgraph_20261030"),
             max_tests=parameters.get("max_tests"), max_matrix_cells=parameters.get("max_matrix_cells"),
             provenance={"source_artifact_id": source.artifact_id, "source_table_SHA256": digest(source.path),
                 "genome_build": context.manifest.annotation.genome_build, "species": context.manifest.metadata["species"],
                 "genome_FASTA": str(context.manifest.annotation.genome_fasta), "motif_inputs": library["inputs"],
-                "implementation_SHA256": {p.name: digest(p) for p in (
+                "implementation_SHA256": {str(p.relative_to(Path(__file__).resolve().parents[2])): digest(p) for p in (
                     Path(__file__), Path(__file__).resolve().parents[1]/"reports/motif_native_index.py", *(Path(__file__).resolve().parents[1]/"science"/n for n in
-                        ("motiftrace_events.py", "motiftrace_clusters.py", "motiftrace_consequences.py", "motiftrace_consequences.html", "motiftrace_budget.py", "motiftrace_execution.py")))}})
+                        ("motiftrace_events.py", "motiftrace_clusters.py", "motiftrace_consequences.py", "motiftrace_consequences.html", "motiftrace_budget.py", "motiftrace_execution.py", "motiftrace_eventgraph_execution.py")),
+                    Path(__file__).resolve().parents[1]/"reports/motif_eventgraph.py",
+                    Path(__file__).resolve().parents[2]/"katana_motiftrace/engines.py",
+                    *(Path(__file__).resolve().parents[2]/"katana_motiftrace/eventgraph"/n for n in ("matching.py", "inference.py", "adapter.py", "scanning.py")))}})
         writer.common_metadata.update(new_inference=summary["eligible_new_window_tests"] > 0,
-            inference_status=summary["inference_status"])
+            inference_status=summary["inference_status"],
+            execution_adapter_version=summary["policy"].get("execution_adapter_version", EXECUTION_ADAPTER_VERSION))
         directory = writer.directory/"event_consequences"
         job.report(.9, "Registering actual RNA, locus changes, complete NA and separate region/window statistics")
         urls = {}

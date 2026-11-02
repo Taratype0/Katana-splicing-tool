@@ -327,39 +327,38 @@ Complete raw results and original effects/P/FDR remain available.
 
 ### Networks
 
+The default is one whole-study CoSplice fit using all comparable project samples,
+followed by the selected contrast associations. Pairing is optional and follows
+the contrast sheet. There is no minimum biological-unit gate; 12 independent
+units is a project recommendation. See [CoSplice](COSPLICE.md).
+
 | `flow.json` field | Default | Effect |
 | --- | --- | --- |
-| `network.scope` | `contrast` | Separate discovery/association/annotation for each selected comparison. Explicit `cohort` exists as an alternative and changes scientific scope. |
-| `network.config` | unset | Optional external engine YAML; must match the actual project/scope. |
-| `network.configs` | `{}` | Optional map from selected contrast IDs to exact scoped YAMLs; incompatible with cohort scope. |
-| `network.bootstrap.enabled` | `false` | Off by default; enable explicitly to schedule real resampling, not just a label. |
-| `network.parameters.minimum_network_samples` | `6` for contrast, `15` for cohort | Configurable integer >=3; observations in the selected network, not per group; independent units are recorded separately for explicit matched pairs. |
-| `network.parameters.rmats_mode` | Explicit request, then project metadata, then unique asset mode | `JC` or `JCEC`; ambiguous dual-mode sources fail rather than silently choose. |
-| `network.parameters.min_module_size` | `20` for generated configuration | Events, not genes. Omitted/null preserves explicit external YAML settings. |
-| `network.parameters.merge_cut_height` | `0.25` for generated configuration | Eigengene-dissimilarity merging; omitted/null preserves explicit external YAML settings. |
-| `network.parameters.hub_metric` | `abs_kME` | Retain signed kME and full ranking; `legacy_composite` is an explicitly different optional metric. |
-| `network.parameters.apply_threshold_labels` | `false` | Opt-in descriptive labels only; no threshold-based member deletion/refit. |
-| `network.parameters.max_events` | `0` | All eligible events. Positive cap is an explicit variance-ranked subset; not the default. |
-| `network.parameters.bootstrap_iterations` | `50` only when enabled | Integer at least 2 for an explicitly enabled bootstrap. No default bootstrap work when disabled. |
-| `network.parameters.tom_dense_max_events` | `null` | Legacy compatibility field; no event-count protection is enforced. |
-| `network.parameters.wgcna_timeout_seconds` | `null` | Legacy compatibility field; no internal R-WGCNA timeout. Scheduler time remains user-configurable. |
-| `network.parameters.rscript` | Runtime `Rscript` / declared path | Actual executable in the selected environment. |
+| `network.engine` | `whole_study_4_3` | Approved WGCNA + kME engine; `legacy` explicitly selects the older comparison engine. |
+| `network.scope` | `whole_study` | All comparable project samples, regardless of selected association contrasts. |
+| `network.parameters.paired` | `false` | Optional global repeated-unit declaration; paired contrasts retain their declared design. |
+| `network.parameters.min_module_size` | `20` | Minimum events per module. |
+| `network.parameters.merge_cut_height` | `0.25` | Eigengene merge height. |
+| `network.parameters.event_limit_mode` | `5000` | Approved variance-ranked event preset: `2000`, `5000`, `10000` or `Custom`; never select by DAS significance. |
+| `network.parameters.max_events` | `5000` | Used for Custom, integer 40-100000. If fewer events qualify, use all eligible events. |
+| `network.bootstrap.enabled` | `false` | No stability refits by default. |
+| `network.parameters.bootstrap_iterations` | `0` | Explicit opt-in unit-deletion refits, up to 500. Pair with bootstrap.enabled=true. |
+| `network.parameters.rmats_mode` | Project/unique source mode | Explicit `JC` or `JCEC` when importing native rMATS; mixed unresolved modes are rejected. |
 
-Generated contrast networks default to six observations in total; independent
-designs require distinct biological units. Explicit paired contrasts require at
-least three complete subject pairs and record both counts. Cohort scope defaults to 15 independent samples. Both are configurable through
-`network.parameters.minimum_network_samples` (integer >=3). Scope identities and actual sample count are recorded.
-The production engine retains observed-PSI WGCNA/TOM, `bicor`, signed network
-and soft power 6 unless a compatible explicit engine configuration changes
-them. Scientific defaults and full rankings remain separate from optional
-descriptive labels. Resolved engine configuration is the authoritative record.
+The new engine records signed kME and full rankings. kME is membership, not a
+bootstrap stability estimate. Unestimable associations remain NA. The new
+engine resolves Rscript from the selected runtime and imposes no internal
+calculation timeout; scheduler resources remain configurable. Older parameters
+such as `minimum_network_samples`, legacy YAML scope and composite Hub scoring
+belong to the [explicit legacy route](NETWORK_EXECUTION.md#explicit-legacy-engine).
 
 ### MotifTrace and boundary/CLIP
 
 | Runtime field | Default | Purpose |
 | --- | --- | --- |
+| `parameters.prioritize.motiftrace_consequences.analysis_engine` | `eventgraph_20261030` | Approved PWM EventGraph engine; `legacy` explicitly selects the older consensus engine. |
 | `parameters.prioritize.motiftrace_consequences.model_ids` | empty | All supplied models; optional predeclared native IDs/hashes. No fixed model-count cap or silent first-model selection. |
-| `...custom_motif_path` | empty | Optional species-matched consensus TSV/Minimal MEME with required metadata, replacing the public library for that calculation. |
+| `...custom_motif_path` | empty | Optional species-matched Minimal MEME PWM file and its `.metadata.tsv` sidecar. Consensus TSV is supported by explicit legacy mode. |
 | `...cluster_permutations` | `999` | Whole-pair swaps; integer >=99, with no fixed upper count. Maximum-cluster P is FWER, not enrichment FDR. |
 | `...max_tests` | `null` | Deprecated compatibility field for older parameter files; does not limit the number of tests. Omit from new configurations. |
 | `...max_matrix_cells` | `null` | Deprecated compatibility field for older parameter files; does not limit paired-matrix elements. Omit from new configurations. |

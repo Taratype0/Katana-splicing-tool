@@ -34,14 +34,16 @@ NEW_REPORT_WORKFLOW = {"workflow_id": "reports.study", "version": "1.0.0",
 # approved downstream DAS selection. The two earlier JSON inventories stay
 # byte-for-byte unchanged rather than becoming snapshots of whatever runs now.
 for entry in INVENTORY["workflows"]:
-    if entry["workflow_id"] == "programs.cosplice":
-        entry["version"] = "3.2.0"
-        entry["parameter_defaults"].update({"min_module_size": None, "merge_cut_height": None,
-                                            "apply_threshold_labels": False})
-        entry["parameter_defaults"].pop("membership_policy", None)
-    elif entry["workflow_id"] == "programs.psi_network":
-        entry["version"] = "1.4.0"
-        entry["parameter_defaults"]["apply_threshold_labels"] = False
+    if entry["workflow_id"] in {"programs.cosplice", "programs.psi_network"}:
+        # Approved study-wide engine and optional paired design replace the
+        # default fit entry. The preserved legacy calculations retain tests.
+        entry["version"] = "4.3.3"
+        entry["parameter_defaults"] = {
+            "paired": False, "association_contrast_ids": None,
+            "min_module_size": 20, "merge_cut_height": .25,
+            "event_limit_mode": "5000", "max_events": 5000,
+            "bootstrap_iterations": 0,
+        }
     elif entry["workflow_id"] == "programs.hub_events":
         entry["version"] = "2.0.0"
         entry["parameter_defaults"]["apply_threshold_labels"] = False
@@ -66,8 +68,10 @@ for entry in INVENTORY["workflows"]:
         })
     elif entry["workflow_id"] in {"prioritize.motiftrace_consequences", "prioritize.rbp_mechanism"}:
         # Approved execution-capacity revision: no budget controls in new UIs.
-        entry["version"] = {"prioritize.motiftrace_consequences": "1.1.0",
+        entry["version"] = {"prioritize.motiftrace_consequences": "2.0.0",
                             "prioritize.rbp_mechanism": "1.7.0"}[entry["workflow_id"]]
+        if entry['workflow_id'] == 'prioritize.motiftrace_consequences':
+            entry['parameter_defaults']['analysis_engine'] = 'eventgraph_20261030'
 
 
 def test_workflows_match_approved_all_sample_policy_and_retained_other_methods():
@@ -101,11 +105,13 @@ def test_only_approved_input_module_and_label_workflows_changed_from_preserved_b
         "membership_mode": "exact_event", "event_set": "stable_significant",
     }
     assert current["programs.cosplice"]["parameter_defaults"] == {
-        **{key: value for key, value in old["programs.cosplice"]["parameter_defaults"].items()
-           if key != "membership_policy"},
-        "min_module_size": None, "merge_cut_height": None, "apply_threshold_labels": False,
+        "paired": False, "association_contrast_ids": None,
+        "min_module_size": 20, "merge_cut_height": .25,
+        "event_limit_mode": "5000", "max_events": 5000,
+        "bootstrap_iterations": 0,
     }
-    for key in ("programs.psi_network", "programs.hub_events"):
+    assert current['programs.psi_network']['parameter_defaults'] == current['programs.cosplice']['parameter_defaults']
+    for key in ("programs.hub_events",):
         assert current[key]["parameter_defaults"] == {
             **old[key]["parameter_defaults"], "apply_threshold_labels": False,
         }
@@ -120,9 +126,12 @@ def test_only_approved_input_module_and_label_workflows_changed_from_preserved_b
             "foreground_source": "candidate_union", "background_source": "match_foreground",
         }
     for key in ("prioritize.motiftrace_consequences", "prioritize.rbp_mechanism"):
-        assert current[key]["version"] == {"prioritize.motiftrace_consequences": "1.1.0",
+        assert current[key]["version"] == {"prioritize.motiftrace_consequences": "2.0.0",
                                           "prioritize.rbp_mechanism": "1.7.0"}[key]
-        assert current[key]["parameter_defaults"] == old[key]["parameter_defaults"]
+        expected = dict(old[key]['parameter_defaults'])
+        if key == 'prioritize.motiftrace_consequences':
+            expected['analysis_engine'] = 'eventgraph_20261030'
+        assert current[key]["parameter_defaults"] == expected
 
 
 @pytest.mark.parametrize("workflow_id", [

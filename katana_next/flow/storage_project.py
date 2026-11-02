@@ -278,6 +278,14 @@ def _bind_catalog(root):
             continue
         path = _member(source_collection, relative)
         marker = read_json(path)
+        # Dependency joins are private views, independently materialized in
+        # several task sandboxes. They can share a scientific fingerprint but
+        # have different local artifact IDs and paths. Collection deliberately
+        # excludes these views from its public catalogue; do not bind their
+        # completion markers as producers of retained public artifacts.
+        if not any(item.get("artifact_id") in originals
+                   for item in marker.get("generated_artifacts", [])):
+            continue
         if marker.get("completed") is True and marker.get("workflow_id") and marker.get("run_fingerprint"):
             key = (marker["workflow_id"], marker["run_fingerprint"])
             prior = native_markers.get(key)

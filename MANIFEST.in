@@ -6,3 +6,5 @@ include katana_build.py
 include katana_motiftrace/motif_gene_reference.json
 recursive-include environments *.yml *.txt *.lock *.py
 recursive-include containers Dockerfile *.md *.json
+
+recursive-include katana_cosplice/_study_core/science *.py *.R *.html *.css *.js

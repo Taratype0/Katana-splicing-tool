@@ -53,6 +53,14 @@ def network_scope_identity(manifest, parameters, *, preserve_recorded_status=Tru
     choose contrast; persisted plans and the standalone engine keep their rules.
     """
     scope = parameters.get("network_scope", "cohort")
+    if scope == "whole_study":
+        from katana_cosplice.study_design import project_study_design
+        policy, contrasts = project_study_design(manifest, paired=parameters.get("paired", False))
+        return {"network_scope": "whole_study", "contrast_ids": [c["contrast_id"] for c in contrasts],
+                "sample_ids": [s.sample_id for s in manifest.samples],
+                "biological_sample_ids": [s.biological_sample_id for s in manifest.samples],
+                "n_samples": len(manifest.samples), "minimum_network_samples": 3,
+                "sample_size_status": "no_study_size_gate", "sample_size_policy": policy}
     if scope not in {"contrast", "cohort"}:
         raise ValueError("network.scope must be contrast or cohort")
     known = {c.contrast_id: c for c in manifest.contrasts}

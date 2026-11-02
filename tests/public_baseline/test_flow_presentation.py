@@ -329,7 +329,7 @@ def test_real_motif_task_and_collection_preserve_the_sealed_family(tmp_path):
     tasks = [{"id": "as", "workflow_id": "differential.as", "dependencies": [],
               "parameters": {"contrast_ids": [cid]}, "scope": {"contrast_ids": [cid]}},
              {"id": "motif", "workflow_id": "prioritize.motiftrace_consequences", "dependencies": ["as"],
-              "parameters": {"contrast_ids": [cid], "custom_motif_path": str(motif), "cluster_permutations": 99},
+              "parameters": {"analysis_engine": "legacy", "contrast_ids": [cid], "custom_motif_path": str(motif), "cluster_permutations": 99},
               "scope": {"contrast_ids": [cid]},
               "selection": {"analysis_id": "differential.as", "name": "Differential AS events", "contrast_ids": [cid]}}]
     plan = seal_plan({"project_manifest": str(project), "project_manifest_sha256": file_hash(project),

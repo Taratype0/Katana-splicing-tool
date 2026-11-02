@@ -73,6 +73,14 @@ def fastqLaneInputs(row) {
     [lane_count: lanes.size(), reads: lanes.flatten().collect { file(it, checkIfExists: true) }]
 }
 
+def sampleSheetRecords(samplesheets) {
+    def formats = samplesheets.branch {
+        tsv: it.name.toLowerCase().endsWith('.tsv')
+        csv: true
+    }
+    formats.csv.splitCsv(header: true).mix(formats.tsv.splitCsv(header: true, sep: '\t'))
+}
+
 workflow KATANA_PIPELINE {
     take:
     ch_samplesheet
@@ -83,7 +91,8 @@ workflow KATANA_PIPELINE {
 
     // Stage source parents for container-visible validation. CSV-relative paths
     // resolve against the original samplesheet, not an ephemeral task directory.
-    ch_raw_files = ch_samplesheet.splitCsv(header: true).combine(ch_samplesheet).flatMap { row, sheet ->
+    ch_sample_records = sampleSheetRecords(ch_samplesheet)
+    ch_raw_files = ch_sample_records.combine(ch_samplesheet).flatMap { row, sheet ->
         def input_parent = sheet.parent
         ['fastq_1', 'fastq_2', 'genome_bam', 'transcriptome_bam'].findAll { row[it] }.collect { key ->
             def candidate = row[key].toString()

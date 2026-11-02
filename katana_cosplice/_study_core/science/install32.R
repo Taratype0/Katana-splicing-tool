@@ -1,0 +1,7 @@
+root=commandArgs(TRUE)[1]; lib=file.path(root,'r_library32')
+dir.create(lib,recursive=TRUE,showWarnings=FALSE)
+.libPaths(c(lib,file.path(root,'r_library'),.libPaths()))
+options(timeout=180,repos=c(CRAN='https://cloud.r-project.org'))
+install.packages('flashier',lib=lib,dependencies=c('Depends','Imports','LinkingTo'))
+stopifnot(requireNamespace('flashier',quietly=TRUE),requireNamespace('ebnm',quietly=TRUE))
+writeLines(capture.output(sessionInfo()),file.path(root,'evidence/revision32/installation-session.txt'))

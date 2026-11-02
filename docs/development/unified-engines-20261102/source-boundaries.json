@@ -1,0 +1,610 @@
+{
+  "schema": "katana.unified_engine_sources/v1",
+  "approved_source": "katana-cosplice-event-options-fix-packaged-20261102",
+  "original_files_unchanged": true,
+  "rows": [
+    {
+      "source": "app/katana_next/workflows/cosplice_study.py",
+      "destination": "katana_next/workflows/cosplice_study.py",
+      "approved_sha256": "929d25c904297acfeee7001909dd096578802be89133d183a09d52f2365e86cd",
+      "integration_sha256": "851afc160e0770d8726017cef0e2293a45e7b967fc17dcd5b52c795fb61dfff3",
+      "byte_identical": false
+    },
+    {
+      "source": "app/katana_next/workflows/motiftrace_consequences.py",
+      "destination": "katana_next/workflows/motiftrace_consequences.py",
+      "approved_sha256": "98c08e3c7d2b3fdff3f555aabd2f87b4a1b682a91a31276026b28f51fdd32802",
+      "integration_sha256": "f5afcb85c3841ea4e82ac927ea53219f725fcc78e948c92f527677ba18d7825d",
+      "byte_identical": false
+    },
+    {
+      "source": "app/katana_next/science/motiftrace_eventgraph_execution.py",
+      "destination": "katana_next/science/motiftrace_eventgraph_execution.py",
+      "approved_sha256": "563c5c1bd410bf9885e153866b2a4a202009e74f381535aeb69a3fdb5d26e711",
+      "integration_sha256": "563c5c1bd410bf9885e153866b2a4a202009e74f381535aeb69a3fdb5d26e711",
+      "byte_identical": true
+    },
+    {
+      "source": "app/katana_motiftrace/engines.py",
+      "destination": "katana_motiftrace/engines.py",
+      "approved_sha256": "630ac392a6b833da647cdf46be6324cce69f1b96092bd371e9fdd61125da5c7e",
+      "integration_sha256": "630ac392a6b833da647cdf46be6324cce69f1b96092bd371e9fdd61125da5c7e",
+      "byte_identical": true
+    },
+    {
+      "source": "app/katana_motiftrace/eventgraph/adapter.py",
+      "destination": "katana_motiftrace/eventgraph/adapter.py",
+      "approved_sha256": "505502e8eec1bf5496e7551d3087169f00dedb0c0549bcec162e98f9f73205ae",
+      "integration_sha256": "505502e8eec1bf5496e7551d3087169f00dedb0c0549bcec162e98f9f73205ae",
+      "byte_identical": true
+    },
+    {
+      "source": "app/katana_motiftrace/eventgraph/inference.py",
+      "destination": "katana_motiftrace/eventgraph/inference.py",
+      "approved_sha256": "4750b640edb5ee4c4aaa6c4f9cbb30a76ad2295e961f18c87a68fdc1a831e4ba",
+      "integration_sha256": "4750b640edb5ee4c4aaa6c4f9cbb30a76ad2295e961f18c87a68fdc1a831e4ba",
+      "byte_identical": true
+    },
+    {
+      "source": "app/katana_motiftrace/eventgraph/matching.py",
+      "destination": "katana_motiftrace/eventgraph/matching.py",
+      "approved_sha256": "a11ced47761d3fb72a258bdf61b707da45f8e385670a91df2b01e224ba9384ae",
+      "integration_sha256": "a11ced47761d3fb72a258bdf61b707da45f8e385670a91df2b01e224ba9384ae",
+      "byte_identical": true
+    },
+    {
+      "source": "app/katana_motiftrace/eventgraph/scanning.py",
+      "destination": "katana_motiftrace/eventgraph/scanning.py",
+      "approved_sha256": "20250bc81a8c6d73cd13aacba33b2abf5c7e1d36b945df887e024595d61e9405",
+      "integration_sha256": "20250bc81a8c6d73cd13aacba33b2abf5c7e1d36b945df887e024595d61e9405",
+      "byte_identical": true
+    },
+    {
+      "source": "app/katana_motiftrace/eventgraph/__init__.py",
+      "destination": "katana_motiftrace/eventgraph/__init__.py",
+      "approved_sha256": "41362a5ea4931c546433d4c48290c5707bf02dbbea1c3aafa9f43d1225e47003",
+      "integration_sha256": "41362a5ea4931c546433d4c48290c5707bf02dbbea1c3aafa9f43d1225e47003",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/advanced.py",
+      "destination": "katana_cosplice/_study_core/science/advanced.py",
+      "approved_sha256": "650f9bdf5ad53febe2a6d85d492e3e7ae7cc9c07759da62b62e10b9847ce8709",
+      "integration_sha256": "650f9bdf5ad53febe2a6d85d492e3e7ae7cc9c07759da62b62e10b9847ce8709",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/algorithm28.py",
+      "destination": "katana_cosplice/_study_core/science/algorithm28.py",
+      "approved_sha256": "4c980f5e1f9ffb099bd7451b9ee2dd4207e2805e75052f4e8d3889a0af0d6a98",
+      "integration_sha256": "4c980f5e1f9ffb099bd7451b9ee2dd4207e2805e75052f4e8d3889a0af0d6a98",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/algorithm31.py",
+      "destination": "katana_cosplice/_study_core/science/algorithm31.py",
+      "approved_sha256": "87b9e3963e168b81dfc38cbd2163728ad7f444a35ebe89ae2c92acb61c89c5d0",
+      "integration_sha256": "87b9e3963e168b81dfc38cbd2163728ad7f444a35ebe89ae2c92acb61c89c5d0",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/audit_labels24.py",
+      "destination": "katana_cosplice/_study_core/science/audit_labels24.py",
+      "approved_sha256": "1e6363efbaf4eefacc8adf2f5434e2608c4a25d5ac60bff9f28915c4e0b77d8a",
+      "integration_sha256": "1e6363efbaf4eefacc8adf2f5434e2608c4a25d5ac60bff9f28915c4e0b77d8a",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/chapter6_42.py",
+      "destination": "katana_cosplice/_study_core/science/chapter6_42.py",
+      "approved_sha256": "295fa4a4dc1df20ee5844f5dea4e03b12dc0e0268506c5c707536442521f43f5",
+      "integration_sha256": "d929a577edbf77e0cdfd2ad82cb2d56e07a592b7e148c6075ecbc2dd743e84e9",
+      "byte_identical": false
+    },
+    {
+      "source": "cosplice_core/science/common32.py",
+      "destination": "katana_cosplice/_study_core/science/common32.py",
+      "approved_sha256": "0bc5ce86d75a6c573b3440b296655f81c9aa76716e0f13c5baa4ed9730c6f2d1",
+      "integration_sha256": "0bc5ce86d75a6c573b3440b296655f81c9aa76716e0f13c5baa4ed9730c6f2d1",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/cosplice_research.py",
+      "destination": "katana_cosplice/_study_core/science/cosplice_research.py",
+      "approved_sha256": "be05f2faad88b53f358608cae56099edb6ba102ab4d3266b005ad23ab6652a92",
+      "integration_sha256": "5c5f9ecd0fb72be6dd51b0e969246ed02e4a475421851ff779ed28be5e766042",
+      "byte_identical": false
+    },
+    {
+      "source": "cosplice_core/science/donor38.py",
+      "destination": "katana_cosplice/_study_core/science/donor38.py",
+      "approved_sha256": "cd01845ea4abeaec9941493761222e338f90eab1cc81bddf0f36b7aac6b6d6ee",
+      "integration_sha256": "cd01845ea4abeaec9941493761222e338f90eab1cc81bddf0f36b7aac6b6d6ee",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/enrichment32.py",
+      "destination": "katana_cosplice/_study_core/science/enrichment32.py",
+      "approved_sha256": "3e2e5afad5aa6152f4d9f0689e1b169889273d73d6c34e2c5a73cf28dcd2faac",
+      "integration_sha256": "3e2e5afad5aa6152f4d9f0689e1b169889273d73d6c34e2c5a73cf28dcd2faac",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/enrichment42.py",
+      "destination": "katana_cosplice/_study_core/science/enrichment42.py",
+      "approved_sha256": "c0a3a082a3f8126bc3e6b09c83a0479e549796f12555c2ab3efccbe2dbeae635",
+      "integration_sha256": "c0a3a082a3f8126bc3e6b09c83a0479e549796f12555c2ab3efccbe2dbeae635",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/feature_selection36.py",
+      "destination": "katana_cosplice/_study_core/science/feature_selection36.py",
+      "approved_sha256": "6ab2d316690055541ae2394a2edb6965c29b153ed50c53090058889feed2d7eb",
+      "integration_sha256": "6ab2d316690055541ae2394a2edb6965c29b153ed50c53090058889feed2d7eb",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/graph32.py",
+      "destination": "katana_cosplice/_study_core/science/graph32.py",
+      "approved_sha256": "cb8b3162cce1ce278487d092000287eb78334b868e86ff0f618ed65674a3d3da",
+      "integration_sha256": "cb8b3162cce1ce278487d092000287eb78334b868e86ff0f618ed65674a3d3da",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/graph32_product.py",
+      "destination": "katana_cosplice/_study_core/science/graph32_product.py",
+      "approved_sha256": "f82dae67e244d905db1eef658fc36bde2e6b7f7875bf5af9ff2f633a3dee8008",
+      "integration_sha256": "f82dae67e244d905db1eef658fc36bde2e6b7f7875bf5af9ff2f633a3dee8008",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/graph33.py",
+      "destination": "katana_cosplice/_study_core/science/graph33.py",
+      "approved_sha256": "6b9c7a20801db97e95c9d9887549db16d6ec79a3f4da195b5b71d13194bcdf9a",
+      "integration_sha256": "6b9c7a20801db97e95c9d9887549db16d6ec79a3f4da195b5b71d13194bcdf9a",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/inference38.py",
+      "destination": "katana_cosplice/_study_core/science/inference38.py",
+      "approved_sha256": "15a01935ca7974cfef4069353eef7152e488ed3702f5911a8716f48c015c8ab2",
+      "integration_sha256": "15a01935ca7974cfef4069353eef7152e488ed3702f5911a8716f48c015c8ab2",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/interpret_modules32.py",
+      "destination": "katana_cosplice/_study_core/science/interpret_modules32.py",
+      "approved_sha256": "191644b29ff409057f9f6f3120837fe78e6a54e50ef8b9ec80a47828b1cd86a3",
+      "integration_sha256": "191644b29ff409057f9f6f3120837fe78e6a54e50ef8b9ec80a47828b1cd86a3",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/masks32.py",
+      "destination": "katana_cosplice/_study_core/science/masks32.py",
+      "approved_sha256": "9e9a2947ac95a4d3c7ca12fbbc94aa1908c928c27f4abb64b675f410245a8763",
+      "integration_sha256": "9e9a2947ac95a4d3c7ca12fbbc94aa1908c928c27f4abb64b675f410245a8763",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/module_merge.py",
+      "destination": "katana_cosplice/_study_core/science/module_merge.py",
+      "approved_sha256": "8d7fd8b2cd437ac53c4f0ef4defe8dc8300a979d886ad617e220430e760a0986",
+      "integration_sha256": "8d7fd8b2cd437ac53c4f0ef4defe8dc8300a979d886ad617e220430e760a0986",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/module_qualification.py",
+      "destination": "katana_cosplice/_study_core/science/module_qualification.py",
+      "approved_sha256": "7618128932bd266dc2feed9893035556bcb080a36f2eea921313c4c27b695322",
+      "integration_sha256": "7618128932bd266dc2feed9893035556bcb080a36f2eea921313c4c27b695322",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/no_refit_report.py",
+      "destination": "katana_cosplice/_study_core/science/no_refit_report.py",
+      "approved_sha256": "9d19773edcb98d7c855f545376b343f92a2b142b7a54852d191aa2c739288567",
+      "integration_sha256": "9d19773edcb98d7c855f545376b343f92a2b142b7a54852d191aa2c739288567",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/parallel_rank33.py",
+      "destination": "katana_cosplice/_study_core/science/parallel_rank33.py",
+      "approved_sha256": "69750c1f482504d6298effd2f265a5b66c7d7101680ccae7c944867675b75476",
+      "integration_sha256": "69750c1f482504d6298effd2f265a5b66c7d7101680ccae7c944867675b75476",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/peer30.py",
+      "destination": "katana_cosplice/_study_core/science/peer30.py",
+      "approved_sha256": "49d58f1356ec05ba3a90ffb148b795602c0b94c4b2bc698c385877d2141420a6",
+      "integration_sha256": "49d58f1356ec05ba3a90ffb148b795602c0b94c4b2bc698c385877d2141420a6",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/permutation_inference.py",
+      "destination": "katana_cosplice/_study_core/science/permutation_inference.py",
+      "approved_sha256": "b9399482a3dff9632c4cfc40aad1d554c4153cc2856f66e58551032c043ae59a",
+      "integration_sha256": "b9399482a3dff9632c4cfc40aad1d554c4153cc2856f66e58551032c043ae59a",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/product.py",
+      "destination": "katana_cosplice/_study_core/science/product.py",
+      "approved_sha256": "19457ef3e0cfaaf9b1d07c769fd3976578d44b1923b930bff82dcfc898966026",
+      "integration_sha256": "f0c3d9398db9d3d11a489d64b9ee02b44558761adba3afa87d6e81cbbf81689f",
+      "byte_identical": false
+    },
+    {
+      "source": "cosplice_core/science/product32.py",
+      "destination": "katana_cosplice/_study_core/science/product32.py",
+      "approved_sha256": "6b6fe3bfb3b6c1aa9d54d69354c14d9425eaf117dac3712af7ec30541cc1d60a",
+      "integration_sha256": "6b6fe3bfb3b6c1aa9d54d69354c14d9425eaf117dac3712af7ec30541cc1d60a",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/product_hierarchy24.py",
+      "destination": "katana_cosplice/_study_core/science/product_hierarchy24.py",
+      "approved_sha256": "256854f5499f66152ba6d380443acfe94cc78ba1608264bb93b371819ad89cc0",
+      "integration_sha256": "256854f5499f66152ba6d380443acfe94cc78ba1608264bb93b371819ad89cc0",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/production43.py",
+      "destination": "katana_cosplice/_study_core/science/production43.py",
+      "approved_sha256": "cbfd1d54aeaa9fe2c80ef4aeb78c74b0b18bdf26c911d266efcbb342cf84af19",
+      "integration_sha256": "64cce0d4926a6b8dc07cf034e1e4e940b3d6c1f109f326aeeb839ab1180a9ed1",
+      "byte_identical": false
+    },
+    {
+      "source": "cosplice_core/science/program_gene_scope32.py",
+      "destination": "katana_cosplice/_study_core/science/program_gene_scope32.py",
+      "approved_sha256": "5e64906fa13f49f87d6ed6d22459b09f6cabcfdb445a924055f03ff8fc0bc073",
+      "integration_sha256": "5e64906fa13f49f87d6ed6d22459b09f6cabcfdb445a924055f03ff8fc0bc073",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/program_recovery32.py",
+      "destination": "katana_cosplice/_study_core/science/program_recovery32.py",
+      "approved_sha256": "7422e28edbb5da6480797babb9ada82f519142d41cecdcd73094df8f84b97bb2",
+      "integration_sha256": "7422e28edbb5da6480797babb9ada82f519142d41cecdcd73094df8f84b97bb2",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/recovery_details32.py",
+      "destination": "katana_cosplice/_study_core/science/recovery_details32.py",
+      "approved_sha256": "26302c1f3183821b4c3b5ac623023f16c74ab37ee56571c6cefbf4b1f9a890b4",
+      "integration_sha256": "26302c1f3183821b4c3b5ac623023f16c74ab37ee56571c6cefbf4b1f9a890b4",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/report29.py",
+      "destination": "katana_cosplice/_study_core/science/report29.py",
+      "approved_sha256": "5a75d2a9beae7415eece44b0ca1886547e00952e656413b0f97b17d8b5f93a82",
+      "integration_sha256": "5a75d2a9beae7415eece44b0ca1886547e00952e656413b0f97b17d8b5f93a82",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/report32.py",
+      "destination": "katana_cosplice/_study_core/science/report32.py",
+      "approved_sha256": "ba78f9dbdc6296770cd90cc4de546c6dcad794eb269451160b04010230451d53",
+      "integration_sha256": "ba78f9dbdc6296770cd90cc4de546c6dcad794eb269451160b04010230451d53",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/report37.py",
+      "destination": "katana_cosplice/_study_core/science/report37.py",
+      "approved_sha256": "8043626256d734b98f9df3894b1b21b1ed9ff5a6858ababf8f843314da31f55d",
+      "integration_sha256": "8043626256d734b98f9df3894b1b21b1ed9ff5a6858ababf8f843314da31f55d",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/report38.py",
+      "destination": "katana_cosplice/_study_core/science/report38.py",
+      "approved_sha256": "c6c0247537894af714ed161c78c09d0c88291fb0da081e655c852c7b556709a1",
+      "integration_sha256": "c6c0247537894af714ed161c78c09d0c88291fb0da081e655c852c7b556709a1",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/run_native32.py",
+      "destination": "katana_cosplice/_study_core/science/run_native32.py",
+      "approved_sha256": "99e4313399d83ab084ba23550a669b18b77037cda02d2d084ee25afad123a3e2",
+      "integration_sha256": "99e4313399d83ab084ba23550a669b18b77037cda02d2d084ee25afad123a3e2",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/run_native33.py",
+      "destination": "katana_cosplice/_study_core/science/run_native33.py",
+      "approved_sha256": "62690624ea320ef842eb8245b8e2776b0c1bf49be0cb6e5257b055573f629486",
+      "integration_sha256": "62690624ea320ef842eb8245b8e2776b0c1bf49be0cb6e5257b055573f629486",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/stable_network.py",
+      "destination": "katana_cosplice/_study_core/science/stable_network.py",
+      "approved_sha256": "64c50f1209d1675f27752187f09bbca2821a2a267e2ada1af27781668e845288",
+      "integration_sha256": "64c50f1209d1675f27752187f09bbca2821a2a267e2ada1af27781668e845288",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/stacking.py",
+      "destination": "katana_cosplice/_study_core/science/stacking.py",
+      "approved_sha256": "ef2605f4766f95cc00c57baf7c03571b35c7ee3735c7ba8cba6f4de6e1681ecc",
+      "integration_sha256": "ef2605f4766f95cc00c57baf7c03571b35c7ee3735c7ba8cba6f4de6e1681ecc",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/statistics31.py",
+      "destination": "katana_cosplice/_study_core/science/statistics31.py",
+      "approved_sha256": "36fe6b7b0ad94b5096e89810d73d2096edd4dca5a0d4c1620f3f3674a2a6d8cd",
+      "integration_sha256": "36fe6b7b0ad94b5096e89810d73d2096edd4dca5a0d4c1620f3f3674a2a6d8cd",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/statistics32.py",
+      "destination": "katana_cosplice/_study_core/science/statistics32.py",
+      "approved_sha256": "cfa577dddccdea32d413c5d839cb2d1eab25f573858390c88169cde9d882cdfb",
+      "integration_sha256": "cfa577dddccdea32d413c5d839cb2d1eab25f573858390c88169cde9d882cdfb",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study.py",
+      "destination": "katana_cosplice/_study_core/science/study.py",
+      "approved_sha256": "7ccfffaba5865c920776f6aea8e79605f8afc6fb2ff071749bd7af04e8f79e23",
+      "integration_sha256": "05ba798757ea4d0394e518d16e0a6033f4e8e245eb8bba50d3d27659d060569f",
+      "byte_identical": false
+    },
+    {
+      "source": "cosplice_core/science/study_inputs.py",
+      "destination": "katana_cosplice/_study_core/science/study_inputs.py",
+      "approved_sha256": "db75583d73c9c36ee16cb2c7cd37692499d18bacc1849fa1ef11c370ad8be9e0",
+      "integration_sha256": "db75583d73c9c36ee16cb2c7cd37692499d18bacc1849fa1ef11c370ad8be9e0",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study_report.py",
+      "destination": "katana_cosplice/_study_core/science/study_report.py",
+      "approved_sha256": "802967eefbef803d417fe6cc848a7bebc071d58e79f1a35db777a6737bcc01a2",
+      "integration_sha256": "802967eefbef803d417fe6cc848a7bebc071d58e79f1a35db777a6737bcc01a2",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study_report_data.py",
+      "destination": "katana_cosplice/_study_core/science/study_report_data.py",
+      "approved_sha256": "5c6395e6adddc5aa20f0716dacffef0a38a0e19dbc3d0862e9ae6d94917c764b",
+      "integration_sha256": "94d6eaad9d754a42a6e534ad4646773e0fc82143ec73f1af8d0679433ae3da00",
+      "byte_identical": false
+    },
+    {
+      "source": "cosplice_core/science/unit_robust.py",
+      "destination": "katana_cosplice/_study_core/science/unit_robust.py",
+      "approved_sha256": "a299aef9bd81b389b12758fe6d23885abf780692abfbb8da7f9a857485139e71",
+      "integration_sha256": "a299aef9bd81b389b12758fe6d23885abf780692abfbb8da7f9a857485139e71",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/validation22.py",
+      "destination": "katana_cosplice/_study_core/science/validation22.py",
+      "approved_sha256": "0ed92da541f71a8343bc20edd2e46da726d7c1f337045cbe4e77b80a7288d76d",
+      "integration_sha256": "0ed92da541f71a8343bc20edd2e46da726d7c1f337045cbe4e77b80a7288d76d",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/validation24.py",
+      "destination": "katana_cosplice/_study_core/science/validation24.py",
+      "approved_sha256": "4d88caedbb145190ccd882c3d375027f3bec8b93721bf7fae1160f03875ab496",
+      "integration_sha256": "4d88caedbb145190ccd882c3d375027f3bec8b93721bf7fae1160f03875ab496",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/audit_native33.R",
+      "destination": "katana_cosplice/_study_core/science/audit_native33.R",
+      "approved_sha256": "f1fdc88c25c2eec39018caea034cc0279af80da20137445625e7c45ffae71fe9",
+      "integration_sha256": "f1fdc88c25c2eec39018caea034cc0279af80da20137445625e7c45ffae71fe9",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/check_variance32.R",
+      "destination": "katana_cosplice/_study_core/science/check_variance32.R",
+      "approved_sha256": "0f0962cb3176afaf0c19d72783db1b6d5346e972e7d15cf1d2a7b4b59908c0fa",
+      "integration_sha256": "0f0962cb3176afaf0c19d72783db1b6d5346e972e7d15cf1d2a7b4b59908c0fa",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/check_vml32.R",
+      "destination": "katana_cosplice/_study_core/science/check_vml32.R",
+      "approved_sha256": "c7d892449afeaeaa01046a35a4ee52b7b1b9b0b57056c5d70c227cc60f371976",
+      "integration_sha256": "c7d892449afeaeaa01046a35a4ee52b7b1b9b0b57056c5d70c227cc60f371976",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/dynamic_cut31.R",
+      "destination": "katana_cosplice/_study_core/science/dynamic_cut31.R",
+      "approved_sha256": "e0f91c44ddf20e12bf03d7ed6b4cb852a185d31eda132a811ce5fb611d9d9a53",
+      "integration_sha256": "e0f91c44ddf20e12bf03d7ed6b4cb852a185d31eda132a811ce5fb611d9d9a53",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/engines.R",
+      "destination": "katana_cosplice/_study_core/science/engines.R",
+      "approved_sha256": "362a79d867aafe7495e408381920a132119cfb8a73bf3036bbcd96d8675a00ff",
+      "integration_sha256": "732b0effe614824180ad06b31cd73aa199e5c4d357d2af508203dae5d9268443",
+      "byte_identical": false
+    },
+    {
+      "source": "cosplice_core/science/export_tom32.R",
+      "destination": "katana_cosplice/_study_core/science/export_tom32.R",
+      "approved_sha256": "3afb57a96f797b78069fe6d3ff3f2fe288c78391e60f3503c35fe34f0b22b5a6",
+      "integration_sha256": "3afb57a96f797b78069fe6d3ff3f2fe288c78391e60f3503c35fe34f0b22b5a6",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/install32.R",
+      "destination": "katana_cosplice/_study_core/science/install32.R",
+      "approved_sha256": "ea788821d4d2e05846b8ca4de36eadf90aede983777c1648f9c7d043888b2dee",
+      "integration_sha256": "ea788821d4d2e05846b8ca4de36eadf90aede983777c1648f9c7d043888b2dee",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/kme35.R",
+      "destination": "katana_cosplice/_study_core/science/kme35.R",
+      "approved_sha256": "9b2658c1962b64e049e092fafe13903c65eea53584fef2413dab904ca061bf53",
+      "integration_sha256": "9b2658c1962b64e049e092fafe13903c65eea53584fef2413dab904ca061bf53",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/merge_modules.R",
+      "destination": "katana_cosplice/_study_core/science/merge_modules.R",
+      "approved_sha256": "dd24b80a2f42a035314588950300aa59c2cfd0f7d8f9b2c9425255c5f360a08c",
+      "integration_sha256": "cee0f71aa53670ab36c013f06d063ef2acdfdaebd238391be7d716deb51bc317",
+      "byte_identical": false
+    },
+    {
+      "source": "cosplice_core/science/native32.R",
+      "destination": "katana_cosplice/_study_core/science/native32.R",
+      "approved_sha256": "b58f0c860afc986debbf020d4d8ec4e4c5be68dce6044d1fed06b122f4c99120",
+      "integration_sha256": "b58f0c860afc986debbf020d4d8ec4e4c5be68dce6044d1fed06b122f4c99120",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/native33.R",
+      "destination": "katana_cosplice/_study_core/science/native33.R",
+      "approved_sha256": "4f9b97c9704e164b79aae6bb2799db5562ada67abb2ff6d2964a2c443db458ea",
+      "integration_sha256": "4f9b97c9704e164b79aae6bb2799db5562ada67abb2ff6d2964a2c443db458ea",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/native34.R",
+      "destination": "katana_cosplice/_study_core/science/native34.R",
+      "approved_sha256": "a876a16993d4124bf6188cc19fc78c128d80ecbd7ae671a8958e18b858eb2f44",
+      "integration_sha256": "a876a16993d4124bf6188cc19fc78c128d80ecbd7ae671a8958e18b858eb2f44",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/native_accelerated32.R",
+      "destination": "katana_cosplice/_study_core/science/native_accelerated32.R",
+      "approved_sha256": "492127803ea6b0b5ee4cdd9c2f0df6117920fff05ae85731243474d32240fa44",
+      "integration_sha256": "492127803ea6b0b5ee4cdd9c2f0df6117920fff05ae85731243474d32240fa44",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/peer30.R",
+      "destination": "katana_cosplice/_study_core/science/peer30.R",
+      "approved_sha256": "f0c293c0e74464f22722703127fb4e61b329033a05d31448f23166103606f5c4",
+      "integration_sha256": "f0c293c0e74464f22722703127fb4e61b329033a05d31448f23166103606f5c4",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/profile32.R",
+      "destination": "katana_cosplice/_study_core/science/profile32.R",
+      "approved_sha256": "3fa908d529288ffcfa206300361c26b731da9158a541bea6abb6f3489611ec99",
+      "integration_sha256": "3fa908d529288ffcfa206300361c26b731da9158a541bea6abb6f3489611ec99",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/rank32.R",
+      "destination": "katana_cosplice/_study_core/science/rank32.R",
+      "approved_sha256": "2c0276bc32ed7e17744d9e4a3823a443b0b7b98641360f3bbc4de6843e007591",
+      "integration_sha256": "2c0276bc32ed7e17744d9e4a3823a443b0b7b98641360f3bbc4de6843e007591",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/recut31.R",
+      "destination": "katana_cosplice/_study_core/science/recut31.R",
+      "approved_sha256": "e07bac3081ccee44f84733eb545f218773da20e0124519c763eedeaa76847394",
+      "integration_sha256": "e07bac3081ccee44f84733eb545f218773da20e0124519c763eedeaa76847394",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study_report.html",
+      "destination": "katana_cosplice/_study_core/science/study_report.html",
+      "approved_sha256": "7c00ad2cdbf8d759563cb3ff651c88533f438de72c9ae2759c724aa9d63edbb2",
+      "integration_sha256": "7c00ad2cdbf8d759563cb3ff651c88533f438de72c9ae2759c724aa9d63edbb2",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study_report26.html",
+      "destination": "katana_cosplice/_study_core/science/study_report26.html",
+      "approved_sha256": "a94bb8d79131e6893464d4534988355e9b8460a4a38eb30d39cb829a8dbd0ed0",
+      "integration_sha256": "a94bb8d79131e6893464d4534988355e9b8460a4a38eb30d39cb829a8dbd0ed0",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study_report27.html",
+      "destination": "katana_cosplice/_study_core/science/study_report27.html",
+      "approved_sha256": "21b73adbc173084e6b0b7b492fe520ff6a3cdfea23634e28e64613ba6ee76b84",
+      "integration_sha256": "21b73adbc173084e6b0b7b492fe520ff6a3cdfea23634e28e64613ba6ee76b84",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study_report28.html",
+      "destination": "katana_cosplice/_study_core/science/study_report28.html",
+      "approved_sha256": "50d6ee476b7fabbf74257a8f8ef8e270cbf012020532a9e9d358d960403edd31",
+      "integration_sha256": "50d6ee476b7fabbf74257a8f8ef8e270cbf012020532a9e9d358d960403edd31",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study_report29.html",
+      "destination": "katana_cosplice/_study_core/science/study_report29.html",
+      "approved_sha256": "249324dba09d703761e74ee7fd112d1eb00dc83c24654767223b1d26ee7cb1b1",
+      "integration_sha256": "249324dba09d703761e74ee7fd112d1eb00dc83c24654767223b1d26ee7cb1b1",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study_report31.html",
+      "destination": "katana_cosplice/_study_core/science/study_report31.html",
+      "approved_sha256": "93e47aa9fc22406c40c180db9d6d39ed79e58dbc45812a19da3c7abc6559ac8e",
+      "integration_sha256": "93e47aa9fc22406c40c180db9d6d39ed79e58dbc45812a19da3c7abc6559ac8e",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/study_report39.html",
+      "destination": "katana_cosplice/_study_core/science/study_report39.html",
+      "approved_sha256": "12dbb5be90c1099ad8ea23ec5ff90e0df2cf0775fc889d3ae2acc07b12f5b587",
+      "integration_sha256": "12dbb5be90c1099ad8ea23ec5ff90e0df2cf0775fc889d3ae2acc07b12f5b587",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/variance32.R",
+      "destination": "katana_cosplice/_study_core/science/variance32.R",
+      "approved_sha256": "7a51154efb5ce7478a13b66639a4e904f2b9d12cd6fcf6f4dba7023467da30bb",
+      "integration_sha256": "7a51154efb5ce7478a13b66639a4e904f2b9d12cd6fcf6f4dba7023467da30bb",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/katana_report.css",
+      "destination": "katana_cosplice/_study_core/science/katana_report.css",
+      "approved_sha256": "fc5b8bbf599f462270e002ca25712a1ceee90955f5c3c8962ed8fb190f33ff73",
+      "integration_sha256": "fc5b8bbf599f462270e002ca25712a1ceee90955f5c3c8962ed8fb190f33ff73",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/enrichment40.js",
+      "destination": "katana_cosplice/_study_core/science/enrichment40.js",
+      "approved_sha256": "75c98f6cc1c4032332ba14291eddb6f577ac8175b9bf3080ac122867083ae60f",
+      "integration_sha256": "75c98f6cc1c4032332ba14291eddb6f577ac8175b9bf3080ac122867083ae60f",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/enrichment42.js",
+      "destination": "katana_cosplice/_study_core/science/enrichment42.js",
+      "approved_sha256": "3bd11dd7e35ffbc21121a41d99f000faa5d8551e58a82f38fdb7a951237176f2",
+      "integration_sha256": "3bd11dd7e35ffbc21121a41d99f000faa5d8551e58a82f38fdb7a951237176f2",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/peer_report30.js",
+      "destination": "katana_cosplice/_study_core/science/peer_report30.js",
+      "approved_sha256": "025a2ea6dd72be51f8107d3a65ddb775ddd38fecca4de140f60605cb03d90ac8",
+      "integration_sha256": "025a2ea6dd72be51f8107d3a65ddb775ddd38fecca4de140f60605cb03d90ac8",
+      "byte_identical": true
+    },
+    {
+      "source": "cosplice_core/science/presentation39.js",
+      "destination": "katana_cosplice/_study_core/science/presentation39.js",
+      "approved_sha256": "5fbd7df614c1448d334fd038fa0232a7dff21407e48fef9d73959e5e96dd8797",
+      "integration_sha256": "5fbd7df614c1448d334fd038fa0232a7dff21407e48fef9d73959e5e96dd8797",
+      "byte_identical": true
+    }
+  ],
+  "integration_changes": "Runtime discovery, package resources, project-derived inputs, explicit pairing/sample-count policy and Nextflow/API transport. Original source remains unchanged."
+}

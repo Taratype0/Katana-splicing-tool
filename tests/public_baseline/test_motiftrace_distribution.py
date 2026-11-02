@@ -38,8 +38,8 @@ def test_installed_namespace_and_cli_inventory_do_not_initialize_gui_or_server()
         entry = next(item for item in distribution.entry_points if item.name == 'katana-motiftrace')
         assert entry.value == 'katana_motiftrace.cli:main'
     catalog = mode_catalog()
-    assert catalog['package_version'] == katana_motiftrace.__version__ == '1.0.0.post1'
-    assert catalog['scientific_release'] == katana_motiftrace.SCIENTIFIC_RELEASE == '1.0.0-frozen.20261017'
+    assert catalog['package_version'] == katana_motiftrace.__version__ == '2.0.0'
+    assert catalog['scientific_release'] == katana_motiftrace.SCIENTIFIC_RELEASE == 'eventgraph-20261030; legacy-1.0.0-frozen.20261017'
     assert {item['mode_id'] for item in catalog['modes']} == {
         'boundary', 'se_impact', 'completed_maps', 'consequences', 'usage', 'parallel'}
     command = [sys.executable, *(['-I'] if os.environ.get('KATANA_WHEEL_ONLY') == '1' else [])]

@@ -97,11 +97,15 @@ def test_independence_identity_and_model_corruption_rejected(tmp_path):
         load_frozen_model(path)
 
 
-def test_public_entrypoints_registered_with_original_network_defaults():
+def test_public_entrypoints_keep_projection_and_explicit_legacy_defaults():
     from katana_next.workflows.registry import WorkflowRegistry
+    from katana_next.workflows.psi_network import PsiNetworkWorkflow as LegacyPsiNetwork
     registry = WorkflowRegistry()
-    values = registry.get("programs.psi_network").normalize_parameters({})
+    values = LegacyPsiNetwork().normalize_parameters({})
     assert (values["signed"], values["method"], values["soft_power"]) == (True,"bicor",6)
+    current = registry.get("programs.psi_network").normalize_parameters({})
+    assert current["event_limit_mode"] == "5000"
+    assert current["bootstrap_iterations"] == 0
     assert registry.get("programs.psi_projection").definition.workspace_id == "programs"
 
 

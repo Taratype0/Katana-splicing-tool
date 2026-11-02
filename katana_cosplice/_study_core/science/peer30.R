@@ -1,0 +1,27 @@
+# Input-stage adapter; the clustering expressions are read verbatim from upstream.
+args=commandArgs(trailingOnly=TRUE)
+library(WGCNA)
+library(dynamicTreeCut)
+disableWGCNAThreads()
+out=args[1]; ng=as.integer(args[2]); np=as.integer(args[3]); official=args[4]
+genes=readLines(file.path(out,'genes.txt'))
+stopifnot(length(genes)==ng,ng>20,np>10)
+con=file(file.path(out,'distances.bin'),'rb')
+distData=matrix(readBin(con,'double',n=ng*np,size=8,endian='little'),nrow=np,ncol=ng)
+close(con);colnames(distData)=genes
+stopifnot(all(is.finite(distData)),all(apply(distData,2,sd)>0))
+# Paper beta=6 is applied once below, not twice as in concatenated upstream scripts.
+adjCoSplicEx=adjacency(distData,power=1,type='unsigned')
+check=cor(distData[,seq_len(min(12,ng)),drop=FALSE])
+stopifnot(max(abs(adjCoSplicEx[seq_len(ncol(check)),seq_len(ncol(check))]-abs(check)))<1e-10)
+rm(distData);gc()
+src=readLines(official)
+begin=grep('^softPowerCoSplicEx=6$',src)
+end=grep('^colorsCoSplicEx = labels2colors',src)
+stopifnot(length(begin)==1,length(end)==1,end>begin)
+core=paste(src[begin:end],collapse='\n')
+writeLines(core,file.path(out,'executed_upstream_core.R'))
+eval(parse(text=core))
+write.table(data.frame(gene_id=genes,module=hybridCoSplicEx$labels),file.path(out,'assignments.tsv'),sep='\t',row.names=FALSE,quote=FALSE)
+writeLines(c(paste('R',getRversion()),paste('WGCNA',packageVersion('WGCNA')),paste('dynamicTreeCut',packageVersion('dynamicTreeCut'))),file.path(out,'versions.txt'))
+writeLines(capture.output(sessionInfo()),file.path(out,'sessionInfo.txt'))

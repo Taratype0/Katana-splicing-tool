@@ -52,9 +52,9 @@ def generate(request, resources, outdir):
     if rmats_mode not in ("JC", "JCEC"):
         raise ValueError("--rmats_mode must be JC or JCEC")
     settings = {"schema": "katana.flow.config/v1", "event_set": event_set, "analyses": analyses,
-                "network": {"scope": "contrast", "bootstrap": {"enabled": boolean(
+                "network": {"engine": "whole_study_4_3", "scope": "whole_study", "bootstrap": {"enabled": boolean(
                     request.get("with_network_bootstrap", False), "with_network_bootstrap")},
-                    "parameters": {"hub_metric": "abs_kME"}}, "parameters": {}}
+                    "parameters": {}}, "parameters": {}}
     size = number(request, "network_min_module_size", 20, 2)
     height = number(request, "network_merge_cut_height", .25, 0, 1)
     if int(size) != size or not 0 < height < 1:

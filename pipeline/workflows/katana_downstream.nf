@@ -65,7 +65,12 @@ def motifRuntimeInputs(spec) {
     // Custom models are task data, not installed software. Declare them as path
     // inputs so Docker/Apptainer can see them and changed bytes invalidate cache.
     def model = spec.parameters?.custom_motif_path
-    model ? [file(model, checkIfExists: true)] : []
+    if (!model) return []
+    def paths = [file(model, checkIfExists: true)]
+    if (model.toString().toLowerCase().endsWith('.meme')) {
+        paths.add(file(model.toString() + '.metadata.tsv', checkIfExists: true))
+    }
+    return paths
 }
 
 workflow KATANA_DOWNSTREAM {

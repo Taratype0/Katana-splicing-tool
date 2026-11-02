@@ -61,6 +61,9 @@ def check_task_runtime(plan_path, task_id, *, project_path=None, runtime_label=N
         errors.append(str(exc))
     errors.extend(python_dependency_issues(task, resolve_executable=_executable))
     try:
+        if task['workflow_id'] in {'programs.cosplice','programs.psi_network'}:
+            from katana_cosplice.study_runtime import check_runtime
+            executables['Rscript'] = check_runtime()
         if adapter in {"network.fit", "network.bootstrap", "mapp.maei"}:
             configured = parameters.get("rscript")
             if adapter.startswith("network."):

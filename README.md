@@ -25,7 +25,7 @@ Read the **[quick start](docs/QUICKSTART.md)** for installation, example input t
 | Splicing landscape | Event-type distributions, PSI heatmaps, PCA, sample patterns and replicate consistency. PSI is the fraction of transcripts including a splice feature. |
 | Molecular differences | Differential gene expression (DEG), alternative splicing (DAS), transcript usage (DTU) and exon usage (DEXSeq), with effects, significance, gene labels and Top 10 tables. |
 | Comparisons and pathways | Event overlaps and directions across selected comparisons; GO/KEGG and other supplied gene sets, with detected-gene backgrounds and contributing genes. Explicit interaction designs support additional fitted models. |
-| Co-splicing networks | An independent network for each comparison: modules, complete gene/event membership, activity, condition associations, network graphs, enrichment and Hub rankings. |
+| Co-splicing networks | One network across comparable study samples: modules, complete gene/event membership, activity, selected condition associations, network graphs, enrichment and Hub rankings. |
 | MotifTrace and RBP analysis | RBP identity enrichment, splice-boundary motif/CLIP evidence, and motif sites gained, lost or retained in reconstructed RNA forms. |
 | Selected targets | Gene cards, Event cards, transcript and predicted protein consequences, read-backed Sashimi plots and individual HTML reports. |
 | Processed single-cell/nucleus data | Supported donor-aware splicing, transcript, network and visualization workflows, plus compatible MARVEL and long-read result imports. The raw-read pipeline targets bulk RNA-seq. |
@@ -40,9 +40,9 @@ See [MotifTrace commands and Python API](docs/MOTIFTRACE.md).
 
 ### Co-splicing networks
 
-Katana groups events with related PSI patterns using its WGCNA/TOM workflow. Each comparison has its own modules and matched downstream results. The browser provides network graphs, searchable member lists, module activity and significant enrichment with contributing genes.
+Katana groups events with related PSI patterns using its WGCNA/TOM workflow. Discovery uses all comparable study samples; the selected comparisons describe how the same modules vary with condition. The browser provides network graphs, searchable member lists, module activity and significant enrichment with contributing genes.
 
-Hub ranking uses absolute eigengene membership, `|kME|`, while retaining the signed values and complete ranking. Bootstrap is optional and off by default. Module size, merge height, sample minimum and execution resources are configurable. The current dense network method can require substantial memory for large event sets; see [network settings](docs/NETWORK_EXECUTION.md).
+Hub ranking uses absolute eigengene membership, `|kME|`, while retaining the signed values and complete ranking. Bootstrap is optional and off by default. Pairing is optional; repeated observations retain their biological-unit identities. Twelve independent units are recommended, without a hard sample-count gate. Module size, merge height, event count and execution resources are configurable; see [CoSplice commands and settings](docs/COSPLICE.md).
 
 ### Reports and browser
 
@@ -60,7 +60,7 @@ The study report has seven sections:
 
 A comparison selector keeps the report focused. Tables link to complete results, and the splicing display can switch between ordinary significant events and read-supported significant events (RS-DAS, the default).
 
-A supplied whole-study CoSplice result stays the same when the comparison selector changes. Its module composition, activities, associations and complete gene/event lists close the report. Imported older networks keep their recorded scope. See the [updated-module integration review](docs/UPDATED_MODULE_INTEGRATION_REVIEW.md) for the remaining new-engine installation and Nextflow work; this report update does not claim that work is complete.
+A whole-study CoSplice result stays the same when the comparison selector changes. Its module composition, activities, associations and complete gene/event lists close the report. Imported older networks keep their recorded scope. [CoSplice](docs/COSPLICE.md) and [MotifTrace](docs/MOTIFTRACE.md) also have standalone commands and Python APIs.
 
 The interactive browser adds adjustable thresholds, result filtering, gene/event selection and new analyses through the same Python service used by the command line. Selected-target reports are separate from the seven-section study report. Offline HTML can be shared without installing Katana.
 

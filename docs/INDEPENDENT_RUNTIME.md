@@ -1,6 +1,6 @@
 # Install the independent Katana runtime
 
-Use the launcher and wheel from the [30 October native-workflow release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261030).
+Use the launcher and wheel from the [2 November unified-engine release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261102).
 This beta includes paired comparisons, automatic strandedness, direct Nextflow
 parameters, standard output directories and native final delivery. The older downloads remain available for
 reproducing earlier installations.
@@ -14,22 +14,24 @@ a Conda environment or your Python user-site packages. The host supplies
 modules before running. Scientific tasks use containers; references and
 databases are separate inputs.
 
-Download the controller from the new release. Reuse the unchanged scientific
-images from the [28 October release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261028); their exact hashes are also listed in the new manifest. The new workflow uses the existing image commands for analysis, reporting and project retention. Scientific methods and image dependencies are unchanged.
+Download the controller and matching Katana downstream image from the same
+release. The new image includes whole-study CoSplice and EventGraph MotifTrace;
+an older downstream image cannot supply these engines. The DEXSeq counting image
+remains unchanged and is linked in the release manifest.
 
 Required assets:
 
 | Asset | Purpose |
 | --- | --- |
-| `katana-controller-2.0.0b5.dev20261030-linux-x86_64.tar.gz` | Portable launcher, Python and Nextflow |
-| `katana-downstream-2.0.0b5.dev20261028-linux-amd64.sif` | Matching Katana scientific runtime |
+| `katana-controller-2.0.0b5.dev20261102-linux-x86_64.tar.gz` | Portable launcher, Python and Nextflow |
+| `katana-downstream-2.0.0b5.dev20261102-linux-amd64.sif` | Matching Katana scientific runtime |
 | `kanata-dexseq-tools-20261024-linux-amd64.sif` | Unchanged DEXSeq counting runtime |
 | `SHA256SUMS`, `RELEASE_MANIFEST.json` | Checksums and tested versions |
 
 ```bash
 sha256sum --ignore-missing --check SHA256SUMS
 mkdir -p tools
-tar -xzf katana-controller-2.0.0b5.dev20261030-linux-x86_64.tar.gz -C tools
+tar -xzf katana-controller-2.0.0b5.dev20261102-linux-x86_64.tar.gz -C tools
 export PATH="$PWD/tools/katana-controller/bin:$PATH"
 nextflow run tools/katana-controller/pipeline/main.nf --help
 nextflow -version
@@ -74,7 +76,7 @@ nextflow run tools/katana-controller/pipeline/main.nf \
   --rbp_gene_sets /data/resources/rbp_gene_sets.gmt \
   --motif_database /data/resources/motifs.json \
   --clip_peaks /data/resources/matched_clip_peaks.tsv \
-  --katana_container /data/images/katana-downstream-2.0.0b5.dev20261028-linux-amd64.sif \
+  --katana_container /data/images/katana-downstream-2.0.0b5.dev20261102-linux-amd64.sif \
   --dexseq_tools_container /data/images/kanata-dexseq-tools-20261024-linux-amd64.sif \
   -work-dir "$PROJECT/cache/katana/study-work" \
   --outdir "$PROJECT/results/study"
@@ -101,15 +103,15 @@ have switches; supply resources for the analyses you enable.
 
 ## Docker workstation
 
-Load the unchanged 28 October downstream archive and DEXSeq tools archive:
+Load the matching downstream archive and unchanged DEXSeq tools archive:
 
 ```bash
-docker load -i katana-downstream-2.0.0b5.dev20261028-linux-amd64.docker.tar.gz
+docker load -i katana-downstream-2.0.0b5.dev20261102-linux-amd64.docker.tar.gz
 docker load -i kanata-dexseq-tools-20261024-linux-amd64.docker.tar.gz
 ```
 
 Use `-profile local,docker`, omit the cluster config/account and select
-`--katana_container katana-downstream:2.0.0b5.dev20261028` plus
+`--katana_container katana-downstream:2.0.0b5.dev20261102` plus
 `--dexseq_tools_container kanata-dexseq-tools:dev-20261024`.
 The controller runs on Linux. These are downloadable local images; the release
 does not publish registry tags or a PyPI package.
@@ -122,7 +124,7 @@ Install the release wheel in a fresh Python 3.11+ environment:
 python -m venv .venv
 # Linux: source .venv/bin/activate
 # Windows PowerShell: .\.venv\Scripts\Activate.ps1
-python -m pip install './katana_splicing_tool-2.0.0b5.dev20261030-py3-none-any.whl[standalone]'
+python -m pip install './katana_splicing_tool-2.0.0b5.dev20261102-py3-none-any.whl[standalone]'
 python -m pip check
 katana-open --help
 katana-report --help

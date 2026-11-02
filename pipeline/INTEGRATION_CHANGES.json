@@ -225,7 +225,7 @@
     {
       "path": "workflows/katana_core.nf",
       "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
-      "integrated_sha256": "6233799132810e70ef69bc375f1f7d78437ed67d23f2cb79ec004e50c5f490f1",
+      "integrated_sha256": "583f4e349b7a8f8db2d0179fb6109b6d6517ea8b4abcae2377e5caf724bc012f",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
@@ -238,6 +238,12 @@
           "previous_integrated_sha256": "f057e2c6e671881e9a866e69f6a625976737d486b5d718e8e8ca44f3b2de2ae6",
           "integrated_sha256": "6233799132810e70ef69bc375f1f7d78437ed67d23f2cb79ec004e50c5f490f1",
           "scope": "Group explicit lane rows into one biological sample and concatenate gzip members per mate in a native Nextflow task. Scientific models and paired identities unchanged."
+        },
+        {
+          "revision": "native-csv-tsv-20261102",
+          "previous_integrated_sha256": "6233799132810e70ef69bc375f1f7d78437ed67d23f2cb79ec004e50c5f490f1",
+          "integrated_sha256": "583f4e349b7a8f8db2d0179fb6109b6d6517ea8b4abcae2377e5caf724bc012f",
+          "scope": "Select tab delimiter for TSV samplesheets before native input-file staging; retain lane grouping and biological metadata."
         }
       ]
     },

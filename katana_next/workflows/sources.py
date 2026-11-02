@@ -54,7 +54,19 @@ def source_complete(context: ProjectContext, artifact: AnalysisArtifact) -> bool
         return True
     current = _workflow_versions().get(artifact.analysis_id)
     if current is not None and artifact.metadata.get("workflow_version") != current:
-        return False
+        # Completed legacy network products remain readable by reports and
+        # table-based follow-ups. This does not reuse them for a new fit: run
+        # fingerprints still bind the selected engine/version, and the full
+        # flow acceptance separately requires the new native study products.
+        from katana_next.workflows.programs import CoSpliceWorkflow
+        from katana_next.workflows.psi_network import PsiNetworkWorkflow
+        legacy_network_versions = {
+            'programs.cosplice': CoSpliceWorkflow.version,
+            'programs.psi_network': PsiNetworkWorkflow.version,
+        }
+        if (artifact.analysis_id not in legacy_network_versions or
+                artifact.metadata.get('workflow_version') != legacy_network_versions[artifact.analysis_id]):
+            return False
     path = context.results.artifact_directory(artifact.analysis_id, artifact.run_fingerprint) / "parameters.json"
     try:
         marker = json.loads(path.read_text(encoding="utf-8"))

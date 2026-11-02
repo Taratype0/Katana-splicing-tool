@@ -57,7 +57,11 @@ def main(argv=None):
                 result = motiftrace.run(args.mode, parameters, selection_id=args.selection_id,
                     contrast_ids=args.contrast_ids, force=args.force).model_dump(mode="json")
             print(json.dumps(result, indent=2, ensure_ascii=True))
-            return 2 if args.action == "plan" and not result["ready"] else 0
+            if args.action == "plan" and not result["ready"]:
+                return 2
+            if args.action == "run" and result["status"] not in {"complete", "cache_hit"}:
+                return 1
+            return 0
     except (OSError, ValueError, TypeError, KeyError, RuntimeError, ImportError) as error:
         print(json.dumps({"error": str(error)}), file=sys.stderr)
         return 1

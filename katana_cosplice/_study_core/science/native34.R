@@ -1,0 +1,9 @@
+args=commandArgs(trailingOnly=TRUE);out=args[1];outliers=as.numeric(args[2])
+suppressPackageStartupMessages(library(WGCNA))
+dat=read.csv(file.path(out,'input.csv'),row.names=1,check.names=FALSE)
+fit=blockwiseModules(dat,power=6,corType='bicor',networkType='signed',TOMType='signed',
+ minModuleSize=20,mergeCutHeight=.25,numericLabels=TRUE,pamRespectsDendro=FALSE,
+ deepSplit=2,maxBlockSize=ncol(dat),maxPOutliers=outliers,verbose=0)
+write.table(data.frame(event_key=colnames(dat),module=fit$colors),file.path(out,'native_assignments.tsv'),sep='\t',row.names=FALSE,quote=FALSE)
+saveRDS(fit,file.path(out,'native_model.rds'))
+writeLines(capture.output(sessionInfo()),file.path(out,'sessionInfo.txt'))

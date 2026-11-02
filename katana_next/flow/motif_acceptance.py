@@ -238,6 +238,9 @@ def required_motif_report_gaps(root, plan, report_manifest, report_dir, *, proje
                 if any(p.get("contrast_id") == cid and p.get("metadata", {}).get("motif_view_kind") == "top_motif"
                        for p in report_manifest.get("panels", [])):
                     raise ValueError("An empty RS foreground cannot have computed motif cards")
+            elif task.get('parameters',{}).get('analysis_engine') == 'eventgraph_20261030':
+                from .eventgraph_acceptance import verify_eventgraph_report
+                verify_eventgraph_report(receipt, transported, cid, report_manifest, report_dir)
             else:
                 family = _family(receipt, transported, cid)
                 _report_family(report_manifest, report_dir, cid, *family)

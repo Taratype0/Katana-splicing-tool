@@ -43,6 +43,13 @@ def template_preflight(template_path, config_path):
                              (config.get("mapp", {}).get("adapter", "mapp.maei"), config.get("mapp", {}))):
         if not enabled["network" if adapter == "network.fit" else "mapp"]:
             continue
+        if adapter == 'network.fit' and options.get('engine','whole_study_4_3') != 'legacy':
+            try:
+                from katana_cosplice.study_runtime import check_runtime
+                check_runtime()
+            except (ValueError,OSError,ImportError) as exc:
+                errors.append(str(exc))
+            continue
         inputs = options.get("inputs", {})
         if adapter in {"mapp.prepare", "mapp.maei"}:
             from .bundled_runtime import mapp_input_defaults
@@ -132,6 +139,12 @@ def build_complete_report(collection, outdir):
         if required_gaps:
             raise ValueError("Required fixed-report analyses are still absent from the rendered result; see flow.acceptance.failed.json")
         chapters = {int(panel["chapter"]) for panel in manifest.get("panels", []) if panel.get("image")}
+        # The approved shared network chapter renders its native graph/score
+        # data in an interactive browser. It need not duplicate those plots as
+        # PNG panels; required_report_gaps above verifies its complete payload.
+        if (any(t.get('workflow_id') == 'programs.cosplice' for t in plan['tasks'])
+                and any(b.get('whole_study') for b in manifest.get('network_browsers', []))):
+            chapters.add(6)
         if not required_figure_chapters(plan).issubset(chapters):
             raise ValueError("Fixed seven-chapter report is missing rendered figures; collection remains diagnostic")
         for name in ("REPORT.html", "report-manifest.json"):

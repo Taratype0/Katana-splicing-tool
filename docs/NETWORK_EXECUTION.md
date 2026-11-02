@@ -1,4 +1,10 @@
-# Running independent comparison networks
+# Network execution
+
+The current default is one whole-study CoSplice network, followed by the selected contrast associations. There is no hard minimum unit count; 12 independent biological units is a project recommendation. Pairing is optional and follows the declared contrast design. Use the [current CoSplice guide](COSPLICE.md) for API, CLI, parameters and outputs.
+
+## Explicit legacy engine
+
+The remaining sections describe only `network.engine: legacy` and archived comparison-network runs. They do not describe the new default.
 
 The flow creates one observed network for each selected contrast by default.
 Each network uses only the biological samples in that contrast. Its condition

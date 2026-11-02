@@ -319,7 +319,19 @@ def attach_to_builder(builder):
         builder.data_link_audit=[r for r in builder.data_link_audit if r.get('panel_id') not in old_ids]
         # Prior sequence cards remain downloadable; the new card is sequence-first.
         for panel in builder.panels:
-            if panel.get('contrast_id')==cid and panel.get('metadata',{}).get('motif_view_kind')=='top_motif': panel['output_only']=True
+            if panel.get('contrast_id') != cid:
+                continue
+            metadata = panel.get('metadata', {})
+            native_name = Path(metadata.get('relative_path', '')).name
+            native_logo = (metadata.get('analysis_engine') == 'eventgraph_20261030'
+                           and native_name.startswith('MOTIF_REPORT_')
+                           and Path(native_name).suffix in {'.png', '.svg'})
+            if metadata.get('motif_view_kind') == 'top_motif' or native_logo:
+                # The native report supplies standalone logo files too. The
+                # comparison-specific cards below already show these models,
+                # with exact PWM links and original P/FDR. Preserve the native
+                # files as attachments instead of displaying duplicate cards.
+                panel['output_only'] = True
         views={'panels':[], 'tables':[]}
         recorded_scope=next((p.get('metadata',{}).get('das_scope') for p in builder.panels
             if p.get('contrast_id')==cid and p.get('metadata',{}).get('das_scope')), {})

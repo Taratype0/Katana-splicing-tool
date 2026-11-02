@@ -24,9 +24,11 @@ def resource_kinds(configuration):
         result.add("gene_sets_gmt")
     if enabled["rbp_identity"]:
         result.add("rbp_gene_sets")
-    if enabled["motiftrace"] or enabled["motif_binding"]:
-        result.update(("rbp_motif_database", "fimo_runtime"))
+    motif = configuration.get('parameters', {}).get('prioritize.motiftrace_consequences', {})
+    if enabled['motiftrace'] and not motif.get('custom_motif_path'):
+        result.add('rbp_motif_database')
     if enabled["motif_binding"]:
+        result.update(("rbp_motif_database", "fimo_runtime"))
         result.add("rbp_binding_peaks")
     return result
 

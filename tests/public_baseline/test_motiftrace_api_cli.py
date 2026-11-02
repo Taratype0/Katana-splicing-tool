@@ -20,7 +20,7 @@ from katana_next.workflows.registry import WorkflowRegistry
 
 def test_catalog_is_detached_and_maps_only_existing_frozen_entries():
     catalog = mode_catalog()
-    assert catalog['scientific_release'] == SCIENTIFIC_RELEASE == '1.0.0-frozen.20261017'
+    assert catalog['scientific_release'] == SCIENTIFIC_RELEASE == 'eventgraph-20261030; legacy-1.0.0-frozen.20261017'
     registry = WorkflowRegistry()
     assert len(catalog['modes']) == 6
     for item in catalog['modes']:
@@ -120,7 +120,8 @@ def test_cli_does_not_execute_or_hide_bad_parameters(tmp_path, capsys):
     assert missing.value.code == 2
 
 
-def test_public_api_executes_original_sequence_kernel_then_cli_reuses_cache(tmp_path, capsys):
+@pytest.mark.parametrize("analysis_engine", ["legacy", "eventgraph_20261030"])
+def test_public_api_executes_original_sequence_kernel_then_cli_reuses_cache(tmp_path, capsys, analysis_engine):
     """Exercise the new dedicated route, not only its delegated legacy wrapper."""
     path = create_full_fixture(tmp_path / 'project')
     fasta = path.parent / 'inputs/fixture.genome.fa'
@@ -134,6 +135,10 @@ def test_public_api_executes_original_sequence_kernel_then_cli_reuses_cache(tmp_
     motif = tmp_path / 'motif.tsv'
     motif.write_text('motif_id\tRBP\tspecies\tevidence\tsource\tmotif\n'
                      'M\tR\tMus_musculus\tuser_defined\ttest only\tAC\n')
+    if analysis_engine == 'eventgraph_20261030':
+        (tmp_path/'models.meme.metadata.tsv').write_text('motif_id\tRBP\tspecies\tevidence\tsource\nM\tR\tMus_musculus\tuser_defined\ttest only\n',encoding='utf8')
+        motif = tmp_path / 'models.meme'
+        motif.write_text('MEME version 4\nALPHABET= ACGU\nMOTIF M Example\nletter-probability matrix: alength= 4 w= 2\n1 0 0 0\n0 1 0 0\n', encoding='utf8')
     before = {p: hashlib.sha256(p.read_bytes()).hexdigest()
               for p in (path.parent / 'inputs').rglob('*') if p.is_file()}
     with MotifTrace(path) as mt:
@@ -147,12 +152,24 @@ def test_public_api_executes_original_sequence_kernel_then_cli_reuses_cache(tmp_
             numerator_mean_reads=100, denominator_mean_reads=100,
             IncLevel1='.6,.7', IncLevel2='.3,.4', upstreamES=0, upstreamEE=40,
             downstreamES=300, downstreamEE=340, exonStart_0base=100, exonEnd=135)])
+        selected_rows = ['event-row']
+        if analysis_engine == 'eventgraph_20261030':
+            template = rows.iloc[0].to_dict()
+            generated = []
+            selected_rows = []
+            for i in range(24):
+                row = {**template,'row_id':f'fg{i}','event_id':f'SE:fg{i}','gene_id':f'foreground{i}','gene_symbol':f'FG{i}'}
+                generated.append(row); selected_rows.append(row['row_id'])
+                generated.append({**template,'row_id':f'bg{i}','event_id':f'SE:bg{i}','gene_id':f'background{i}','gene_symbol':f'BG{i}',
+                    'dpsi':0.,'fdr':.8,'significant':False,'stable_significant':False,
+                    'IncLevel1':'.3,.4','IncLevel2':'.3,.4','exonStart_0base':101,'exonEnd':136})
+            rows = pd.DataFrame(generated)
         writer = ArtifactWriter(mt.project.context, 'test.existing_event_catalog',
                                 'measured-toy-event', {}, '1.0')
         source = writer.table('Existing synthetic event', 'events.parquet', rows,
                               entity_type='splicing_event')
         writer.finish()
-        selection = mt.select(source.artifact_id, ['event-row'])
+        selection = mt.select(source.artifact_id, selected_rows)
         for mode in ('boundary', 'se_impact', 'completed_maps', 'consequences'):
             conflict = mt.plan(mode, selection_id=selection.selection_id,
                                contrast_ids=['rescue-vs-baseline'])
@@ -167,7 +184,7 @@ def test_public_api_executes_original_sequence_kernel_then_cli_reuses_cache(tmp_
             with pytest.raises(ValueError):
                 mt.run('boundary', selection_id=selection.selection_id, contrast_ids=invalid)
         assert mt.project.jobs.list() == []
-        params = {'custom_motif_path': str(motif), 'cluster_permutations': 99}
+        params = {'custom_motif_path': str(motif), 'cluster_permutations': 99, 'analysis_engine': analysis_engine}
         plan = mt.plan('consequences', params, selection_id=selection.selection_id)
         assert plan['ready'], plan['errors']
         job = mt.run('consequences', params, selection_id=selection.selection_id, timeout=90)
@@ -179,8 +196,14 @@ def test_public_api_executes_original_sequence_kernel_then_cli_reuses_cache(tmp_
         seal = next(a for a in outputs if a.path.name == 'COMPLETE.json')
         complete = json.loads(seal.path.read_text())
         assert complete['complete'] is True
-        assert all(a.metadata['inference_status'].startswith('not_estimable') for a in outputs)
-        assert all(a.metadata['new_inference'] is False for a in outputs)
+        if analysis_engine == 'legacy':
+            assert all(a.metadata['inference_status'].startswith('not_estimable') for a in outputs)
+            assert all(a.metadata['new_inference'] is False for a in outputs)
+        else:
+            summary = json.loads(next(a.path for a in outputs if a.path.name == 'RESULTS.json').read_text('utf8'))
+            assert summary['selected_events'] == 24
+            assert summary['eligible_new_window_tests'] > 0
+            assert summary['analysis_engine'] == analysis_engine
         pd.testing.assert_frame_equal(pd.read_parquet(source.path), rows)
     params_file = tmp_path / 'params.json'
     params_file.write_text(json.dumps(params))

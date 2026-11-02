@@ -404,6 +404,10 @@ def build_presentation_assets(root, plan, receipts, transport):
                  "complete_manifest": {"sha256": file_hash(marker), "bytes": marker.stat().st_size},
                  "files": [proof_member(identity, original) for original in [*originals, source_original / "COMPLETE.json"]]}
         proof_path = write_json(directory / ("motif-" + _safe(identity) + "-inputs.json"), proof)
+        if complete.get("analysis_engine") == "eventgraph_20261030":
+            # Its registered complete tables feed the approved sequence renderer.
+            # Legacy window-profile reconstruction must not consume new inference.
+            continue
         from katana_next.reports.motif_views import build_completed_motif_views
         rendered = build_completed_motif_views(marker.parent, directory / ("motif-" + _safe(identity)),
                     comparison_id=scopes[0], project_id=project["project_id"],

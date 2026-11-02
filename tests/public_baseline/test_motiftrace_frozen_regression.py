@@ -34,7 +34,7 @@ def test_integration_record_binds_existing_versions_parameters_and_sources():
     from katana_motiftrace import mode_catalog
     from katana_next.workflows.registry import WorkflowRegistry
     root = Path(__file__).resolve().parents[2]
-    record = json.loads((root / 'docs/motiftrace/integration.v1.json').read_text())
+    record = json.loads((root / 'docs/motiftrace/integration.v2.json').read_text())
     assert record['scientific_release'] == mode_catalog()['scientific_release']
     assert not record['scientific_calculation_changes']
     assert not record['scientific_parameter_changes']

@@ -32,7 +32,7 @@ as a user opt-out.
 | `mapp` | Native MAPP MAEI fits and any explicitly supplied calibrated parallel results |
 | `sequencing_qc` | Imported sequencing QC summaries (FASTQ/BAM caller outputs) |
 | `coverage` (default `false`) | Optional extra RSeQC gene-body BAM scan and summary; set `true` explicitly to calculate |
-| `network` | Independent per-comparison networks, associations, annotation and browsers |
+| `network` | One whole-study CoSplice network, selected contrast associations, annotation and browser |
 | `interaction` | Explicitly configured factorial interaction models |
 
 The study design, input audit, read-support classification and core molecular

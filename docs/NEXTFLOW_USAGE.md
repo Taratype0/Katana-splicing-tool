@@ -337,12 +337,11 @@ the software infer restoration, causality or experimental success. A difference
 between two response estimates is not automatically a fitted interaction.
 
 At least **two independent biological samples per selected arm** are required
-for upstream differential testing. The default complete downstream network
-defaults to **six independent samples in total per selected comparison**, not
-six per group. Set `network.parameters.minimum_network_samples` explicitly
-(for example, `4` for two-plus-two) to use a different network minimum. Values
-must be integers of at least three. Other analyses keep their own requirements;
-this option is an eligibility setting, not a power estimate. See [small studies](QUICKSTART.md#small-studies).
+for upstream differential testing. CoSplice uses all comparable project samples
+in one network and does not impose a minimum biological-unit count. Twelve
+independent units is a project recommendation. Paired observations retain their
+shared biological identity; unavailable model estimates remain NA. See
+[CoSplice design and commands](COSPLICE.md).
 
 The default model is `~ condition`. For matched samples, give each animal the
 same `subject` value in both conditions, and set `paired=true` in the contrast:
@@ -446,7 +445,8 @@ Save `inputs/flow.json`:
   },
   "analyses": {"coverage": false},
   "network": {
-    "scope": "contrast",
+    "engine": "whole_study_4_3",
+    "scope": "whole_study",
     "bootstrap": {"enabled": false},
     "parameters": {"rmats_mode": "JCEC", "min_module_size": 20, "merge_cut_height": 0.25}
   },
@@ -462,9 +462,10 @@ This selects RS-DAS by default. The fixed per-sample read-support gate is
 The report and supported downstream selections retain the same scope.
 See [thresholds and their basis](THRESHOLDS.md).
 
-Each selected comparison gets independent network discovery/followups and
-MotifTrace tasks, using only its own samples. Bootstrap is off; Hub ranking uses
-`|kME|`. MotifTrace analyzes the supplied/requested models without fixed
+CoSplice builds one shared network from all comparable project samples and tests
+the selected comparison associations. MotifTrace runs independently for each
+selected comparison. Bootstrap is off; membership is recorded using kME.
+See [CoSplice inputs, pairing and commands](COSPLICE.md). MotifTrace analyzes the supplied/requested PWM models without fixed
 model-count, test-count or matrix-element caps, while the report shows up to
 ten significant models and keeps complete families in outputs. No significant
 model produces a concise non-significance notice, not a fabricated sequence

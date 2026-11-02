@@ -23,7 +23,7 @@ def test_motiftrace_catalog_planning_and_saved_browser_are_read_only(tmp_path):
             assert response.status_code == 200, response.text
             assert response.json() == mode_catalog()
             catalog = response.json()
-            assert catalog["scientific_release"] == "1.0.0-frozen.20261017"
+            assert catalog["scientific_release"] == "eventgraph-20261030; legacy-1.0.0-frozen.20261017"
             assert {mode["mode_id"] for mode in catalog["modes"]} == {
                 "boundary", "se_impact", "completed_maps", "consequences", "usage", "parallel",
             }

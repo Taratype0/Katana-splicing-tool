@@ -3,9 +3,15 @@
 MotifTrace connects splice-event sequences, motif sites and compatible RBP
 evidence. Its Python, command-line and interactive interfaces use the same
 Katana workflow service, parameter definitions, input checks and result cache.
-This integration retains the approved `1.0.0-frozen.20261017` scoring and
-statistical methods. The package's interface and execution-policy revisions
-are recorded separately in [the integration record](motiftrace/integration.v1.json).
+The default consequences engine is the approved `eventgraph_20261030`
+implementation: event-level matched backgrounds and gene-block inference for
+PWM models. The original `1.0.0-frozen.20261017` implementation remains available
+with `analysis_engine: "legacy"`. There is no automatic method or model fallback.
+Versions and source identities are recorded in [the integration record](motiftrace/integration.v2.json).
+
+The report uses the original regional FWER and window BH values separately.
+Up to ten qualifying motifs are shown with sequences, statistics and linked
+genes/events. If none qualify, it says so. Complete results remain downloadable.
 
 ## Install
 

@@ -9,6 +9,17 @@ import sys
 import pytest
 
 
+def test_installed_whole_study_report_resources_are_complete():
+    from importlib.resources import files
+    core = files('katana_cosplice._study_core').joinpath('science')
+    for name in ('production43.py', 'engines.R', 'chapter6_42.py',
+                 'katana_report.css', 'presentation39.js',
+                 'enrichment40.js', 'enrichment42.js',
+                 'peer_report30.js'):
+        assert core.joinpath(name).is_file(), name
+        assert core.joinpath(name).read_bytes(), name
+
+
 def test_installed_managed_entry_has_executable_scripts_without_export():
     from katana_next.flow.managed import _pipeline_source
     main = _pipeline_source()

@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from katana_next.flow.collect import collect_results, validate_collection
-from katana_next.flow.model import file_sha256, seal_plan, write_json
+from katana_next.flow.model import canonical_hash, file_sha256, seal_plan, write_json
 from katana_next.flow.runtime import execute_task
 from katana_next.flow.storage_project import retain_collection_project, validate_retained_project
 from katana_next.full_fixture import create_full_fixture
@@ -60,6 +60,44 @@ def _collect_fixture(work, *, configure=None):
 @pytest.fixture
 def collected(tmp_path):
     return _collect_fixture(tmp_path / "owned-generated-work")
+
+
+@pytest.mark.parametrize("public_collision", [False, True])
+def test_private_dependency_markers_do_not_conflict_with_public_producers(collected, tmp_path, public_collision):
+    """Task-local joins may share a fingerprint; public producer conflicts may not."""
+    from katana_next.flow.runtime import file_record
+    _, source, collection = collected
+    ledger_path = collection / "transport-provenance.json"
+    ledger = json.loads(ledger_path.read_text())
+    original = next(collection / r["collection_path"] for r in ledger["products"]
+                    if Path(r["collection_path"]).name == "parameters.json")
+    private = json.loads(original.read_text())
+    if not public_collision:
+        for item in private["generated_artifacts"]:
+            item["artifact_id"] = "private-task-view-" + item["artifact_id"]
+    private["generated_table_files"] = ["different-task-local-join.tsv"]
+    marker = write_json(collection / "products/private-join/parameters.json", private)
+    ledger["products"].append({"source": file_record(marker),
+                               "collection_path": marker.relative_to(collection).as_posix()})
+    write_json(ledger_path, ledger)
+    receipt_path = collection / "collection.receipt.json"
+    receipt = json.loads(receipt_path.read_text())
+    for row in receipt["outputs"]:
+        if Path(row.get("relative_path", row["path"])).name == ledger_path.name:
+            row.update(sha256=file_sha256(ledger_path), size_bytes=ledger_path.stat().st_size)
+    relative = marker.relative_to(collection).as_posix()
+    receipt["outputs"].append({**file_record(marker), "path": relative, "relative_path": relative})
+    receipt.pop("receipt_sha256")
+    receipt["receipt_sha256"] = canonical_hash(receipt)
+    write_json(receipt_path, receipt)
+    validate_collection(collection)
+    if public_collision:
+        with pytest.raises(ValueError, match="Conflicting original completion"):
+            retain_collection_project(collection, source, tmp_path / "retained")
+    else:
+        result = retain_collection_project(collection, source, tmp_path / "retained")
+        assert result["status"] == "completed"
+        validate_retained_project(tmp_path / "retained")
 
 
 def test_source_work_removed_then_client_gene_event_export_and_cards(collected, tmp_path):

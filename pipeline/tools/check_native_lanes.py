@@ -12,6 +12,7 @@ p=argparse.ArgumentParser()
 group=p.add_mutually_exclusive_group(required=True)
 group.add_argument('--nextflow')
 group.add_argument('--nextflow-command-file',type=Path)
+p.add_argument('--format',choices=['csv','tsv'],default='csv')
 p.add_argument('--pipeline', type=Path, required=True)
 p.add_argument('--outdir', type=Path, required=True)
 a=p.parse_args()
@@ -25,14 +26,14 @@ for i in range(6):
             with gzip.open(f,'wb') as handle: handle.write(f'@S{i}_{lane}/{mate}\nACGT\n+\nIIII\n'.encode())
             row[f'fastq_{mate}']=str(f)
         rows.append(row)
-with (root/'samples.csv').open('w',newline='') as handle:
-    writer=csv.DictWriter(handle,list(rows[0])); writer.writeheader(); writer.writerows(rows)
+with (root/('samples.'+a.format)).open('w',newline='') as handle:
+    writer=csv.DictWriter(handle,list(rows[0]),delimiter='\t' if a.format=='tsv' else ','); writer.writeheader(); writer.writerows(rows)
 (root/'contrasts.csv').write_text('contrast,treatment,control,paired\nMUT_vs_WT,MUT,WT,true\n')
 (root/'ref.fa').write_text('>chr1\nACGT\n'); (root/'ref.gtf').write_text('# generated lane transport fixture\n')
 (root/'test.config').write_text("process { executor='local'; cpus=1; memory='1 GB'; time='5m' }\n")
 prefix=json.loads(a.nextflow_command_file.read_text()) if a.nextflow_command_file else [a.nextflow]
 base=[*prefix,'run',str(a.pipeline.resolve()/'tests/lanes.nf'),'-c',str(root/'test.config'),'-ansi-log','false',
-      '--input',str(root/'samples.csv'),'--contrasts',str(root/'contrasts.csv'),'--fasta',str(root/'ref.fa'),'--gtf',str(root/'ref.gtf'),'-work-dir',str(root/'work')]
+      '--input',str(root/('samples.'+a.format)),'--contrasts',str(root/'contrasts.csv'),'--fasta',str(root/'ref.fa'),'--gtf',str(root/'ref.gtf'),'-work-dir',str(root/'work')]
 results={}
 for name,flags in [('first',[]),('resume',['-resume'])]:
     with (root/f'{name}.log').open('w') as stream:

@@ -287,7 +287,7 @@ def test_real_product_api_new_route_downloads_and_cache(tmp_path):
         motif = tmp_path/"custom.tsv"
         motif.write_text("motif_id\tRBP\tspecies\tevidence\tsource\tmotif\nM\tR\tMus_musculus\tuser_defined\ttest only\tAC\n")
         parameters = {"selection_id": saved.selection_id, "sequence_scope": "event_consequences",
-            "custom_motif_path": str(motif), "cluster_permutations": 99}
+            "custom_motif_path": str(motif), "cluster_permutations": 99, "analysis_engine": "legacy"}
         url = f"/api/projects/{project}/workflows/prioritize.rbp_mechanism/run"
         started = client.post(url, json={"parameters": parameters})
         assert started.status_code == 200, started.text
