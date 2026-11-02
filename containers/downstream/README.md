@@ -1,7 +1,7 @@
 # Katana downstream image
 
 Load the accepted image archive from the
-[downloadable release](../../docs/RELEASE_INSTALL.md#linux-nextflow-with-docker),
+[downloadable release](../../docs/INDEPENDENT_RUNTIME.md#docker-workstation),
 or build a new matching image using the instructions below. The downloadable
 archive is a Docker image export, not a registry reference.
 
@@ -11,27 +11,25 @@ The image contains no research data, genome references, motif libraries or
 study-specific configuration. Qt is not installed.
 
 Use `main` for the commands below; further development continues on
-`codex/package-development`. The accepted runtime is
+`codex/` development branches. The accepted runtime is
 Linux x86-64 with Docker; native ARM64 and macOS execution have not been
 certified. Apptainer/Singularity profiles are available but need qualification
 on the target site. The container engine must already be available on the
 execution host. Nextflow and Java run on that host; Katana's native dependencies
 run inside the image.
 
-There is no published registry image yet. The
-[current entry/runtime record](../../docs/validation/entrypoints-runtime-20261025.md)
-identifies the `098ceae` development image and matching wheel. The
-[`dev-9546632` archive record](../../docs/validation/pipeline-closure-20261024.md)
-and [23 October runtime record](../../docs/validation/downstream-runtime-20261023.md)
-describe older images. An old archive does not acquire later fixes when source
-code changes. Build a matching wheel/image or obtain the exact artifact in its
-delivery record; keep image installation and scientific execution evidence separate.
+The [current runtime guide](../../docs/INDEPENDENT_RUNTIME.md) links the matching
+wheel, Docker/SIF images and portable launcher. Checksums and tested entry points
+are recorded in the release manifest. Dated records under `docs/validation/`
+remain evidence for older images; use the matching new image for CoSplice and
+EventGraph MotifTrace. There is no published registry tag.
 
 ## Build locally
 
 Start with a browser-enabled wheel and the checked-in Linux dependency locks.
-A source checkout includes the built browser assets; in a separate build
-environment, install `build` and build the wheel from the repository root:
+Build the browser assets first (`pnpm install --frozen-lockfile` and
+`pnpm build` in `apps/web`, using the pnpm version in `package.json`). In a
+separate build environment, build the wheel from the repository root:
 
 ```sh
 python -m pip install build
@@ -42,7 +40,7 @@ Set `wheel` to the single file just built. From a clean checkout, use a commit
 tag to keep this build separate from earlier runtime-check images:
 
 ```sh
-wheel=dist/katana_splicing_tool-2.0.0b5.dev20261025-py3-none-any.whl
+wheel=dist/katana_splicing_tool-2.0.0b5.dev20261102-py3-none-any.whl
 image="katana-downstream:dev-$(git rev-parse --short HEAD)"
 python scripts/build_downstream_container.py \
   --wheel "$wheel" \

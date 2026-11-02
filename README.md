@@ -34,7 +34,7 @@ Read the **[quick start](docs/QUICKSTART.md)** for installation, example input t
 
 For each selected comparison, MotifTrace reconstructs local RNA forms for five splice-event types and scans supplied motif models. It links sites to sequences, genomic positions, events and genes, and calculates the supported matched-background and PSI-weighted analyses. Boundary/CLIP evidence and mature-RNA sequence consequences are shown separately.
 
-The report displays up to ten significant motif models per comparison, including their sequences, original P/FDR and hit-gene links. Full model and site tables remain downloadable. Matching MAPP MAEI inputs can be prepared and fitted in the integrated workflow; compatible completed MAPP results can also be imported.
+The report displays up to ten significant motif models per comparison, including their sequences, original P values, regional FWER or window FDR, and hit-gene links. Full model and site tables remain downloadable. Matching MAPP MAEI inputs can be prepared and fitted in the integrated workflow; compatible completed MAPP results can also be imported.
 
 See [MotifTrace commands and Python API](docs/MOTIFTRACE.md).
 

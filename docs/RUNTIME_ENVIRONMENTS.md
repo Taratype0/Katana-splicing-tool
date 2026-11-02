@@ -15,15 +15,12 @@ report and browser dependencies without PySide6. Neither route supplies study
 references: FASTA/GTF, motif libraries, CLIP peaks and pathway databases remain
 explicit, versioned inputs.
 
-The accepted Linux x86-64 image, wheel and installed Conda binding
-are identified in the [entry/runtime record](validation/entrypoints-runtime-20261025.md).
-The [23 October container record](validation/current-container-20261023.md)
-and older archives remain historical evidence. Build a matching wheel and image
-when changing the software revision. No registry image or PyPI release is claimed.
-See [container build/load instructions](../containers/downstream/README.md). A complete runtime is a
-prerequisite for scientific workflow acceptance, not a substitute for it.
-The [generic workflow record](validation/generic-pipeline-20261023.md) tracks
-existing-result execution separately from those installation checks.
+Use the [current runtime guide](INDEPENDENT_RUNTIME.md) for the matching wheel,
+Docker/SIF images and portable Linux launcher. Exact dependencies remain pinned
+by the native and pip lock files below; the Katana wheel is installed separately.
+The release manifest records the actual tested artifacts. Dated records under
+`docs/validation/` retain evidence for their original versions.
+See [container build/load instructions](../containers/downstream/README.md).
 
 ## Standalone Linux environment
 

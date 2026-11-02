@@ -8,23 +8,15 @@ accepted wheel/image identities.
 ## Choose an installation
 
 Use **`main`** for the accepted workflow described here. Further development
-continues on `codex/package-development`; use a recorded commit or backup tag
+continues on `codex/` development branches; use a recorded commit or backup tag
 when reproducing a specific version. Choose one of these routes:
 
-First choose the [entry point for your inputs](ENTRY_POINTS.md). The
-[current execution/runtime record](validation/entrypoints-runtime-20261025.md)
-binds the accepted software, wheel and image and separates raw bulk execution,
-completed-result reporting and target-analysis checks.
-
-Completed-result reporting is validated on Windows and matching Linux Conda
-and Docker environments, including full result links, network browsing and
-portable report refresh. The [validated versions and checks](validation/completed-results-runtime-20261025.md)
-identify the exact wheel/image and supported entry points. All four
-[GitHub CI jobs](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40184505728)
-passed at `098ceae`. The unchanged workflow sources retain the passing
-[native Nextflow CI](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/40181808070)
-at `c448007`. New bulk FASTQ/BAM execution has
-[separate first/resume acceptance](validation/entrypoints-runtime-20261025.md#complete-bulk-workflow).
+First choose the [entry point for your inputs](ENTRY_POINTS.md). Use the
+[independent runtime guide](INDEPENDENT_RUNTIME.md) and the matching release's
+`RELEASE_MANIFEST.json`, `RUNTIME_VALIDATION.json` and `SHA256SUMS` for current
+software, image and validation identities. The November integration uses
+whole-study CoSplice and EventGraph MotifTrace; older wheels/images do not gain
+these engines from an updated source checkout.
 
 | Route | What it supplies | Host requirements |
 | --- | --- | --- |
@@ -32,23 +24,15 @@ at `c448007`. New bulk FASTQ/BAM execution has
 | [Standalone Linux Conda](RUNTIME_ENVIRONMENTS.md#standalone-linux-environment) | The full native downstream runtime for direct CLI, Python and browser use | Linux x86-64 and Conda or micromamba |
 | [Python source installation](#source-checkout) | Browser, CLI, reports and Python analyses | Python 3.11 or newer; selected native computations need their additional runtime |
 
-For current artifact identities and check status, use the
-[entry/runtime record](validation/entrypoints-runtime-20261025.md). The
-[completed-result record](validation/completed-results-runtime-20261025.md)
-retains the earlier full study-report acceptance under its exact original artifacts.
-The [historical container acceptance record](validation/pipeline-closure-20261024.md)
-identifies the earlier development image and its matching wheel.
-The [earlier runtime record](validation/downstream-runtime-20261023.md) documents
-the standalone Linux and Windows Python/browser installations; its older image
-does not include subsequent workflow/report fixes. Match the wheel, image and
-source revision instead of selecting by version string alone. No Katana image
-has been published to a registry and no PyPI release is advertised.
-[Generic workflow acceptance](validation/generic-pipeline-20261023.md) is tracked
-separately from installation checks.
+Earlier checks are retained in the dated [October entry/runtime record](validation/entrypoints-runtime-20261025.md)
+and [completed-result record](validation/completed-results-runtime-20261025.md).
+They describe their recorded versions, not the current engines. New engine
+integration checks use generated inputs; they do not imply a new real-study run.
+No PyPI package or container-registry publication is advertised.
 
 ## Versions and rollback
 
-`main` contains the accepted software. `codex/package-development` is used for
+`main` contains the accepted software. `codex/` branches are used for
 subsequent development. Record the exact Git commit with each installation;
 existing wheel/image acceptance records keep their original source hashes.
 The downloadable assets preserve the accepted builds; they are not a PyPI
