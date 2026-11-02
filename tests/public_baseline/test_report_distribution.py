@@ -10,6 +10,7 @@ import zipfile
 
 
 def test_report_resources_are_in_the_distribution():
+    assert resources.files('katana_motiftrace').joinpath('motif_gene_reference.json').is_file()
     for name, token in [('report.css', '--blue'), ('report.js', 'reportEventSet'),
                         ('table-template.html', '__DATA__'), ('matrix-browser.html', '__DATA__')]:
         assert token in resources.files('katana_next.reports').joinpath('assets', name).read_text('utf-8')
@@ -36,6 +37,8 @@ def test_installed_report_cli_from_an_unrelated_directory(tmp_path):
     assert result['status'] == 'completed' and result['no_upstream_rerun']
     page = Path(result['report']).read_text('utf-8')
     assert all(f'id="chapter-{n}"' in page for n in range(1, 8))
+    assert page.index('id="chapter-7"') < page.index('id="chapter-6"')
+    assert '07</b>Katana-Splice-Network' in page
     assert 'No completed result' in page
     with zipfile.ZipFile(result['archive']) as archive:
         assert archive.testzip() is None and 'assets/matrix-browser.html' in archive.namelist()

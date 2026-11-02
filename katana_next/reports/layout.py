@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import json
 import re
 import zipfile
-from .engine import CHAPTERS, esc, safe, chapter_for
+from .engine import CHAPTERS, CHAPTER_NUMBERS, esc, safe, chapter_for
 
 
 def _scope(record):
@@ -68,6 +68,8 @@ def _ordered_panels(builder, chapter):
         return sorted(records, key=lambda r: (contrasts.get(r.get('contrast_id'), 10**6), levels[_analysis(r)]))
     if chapter == 7:
         def evidence_layer(record):
+            if record.get('metadata', {}).get('motif_sequence_renderer'):
+                return -4 + record['metadata'].get('sequence_priority', 3)
             title = record['title'].lower()
             if 'motiftrace' in title:
                 return 3 if any(x in title for x in ('window', 'cluster', 'statistics')) else 2
@@ -107,6 +109,9 @@ def _rbp_summary(record):
 
 
 def _motif_summary(record):
+    if record.get('sequence_report'):
+        from .motif_sequences import summary_html
+        return '<article class="exhibit wide motif-significance" id="motif-status-'+esc(record['contrast_id'])+'"'+_scope(record)+'>'+summary_html(record['sequence_report'])+'</article>'
     status = record.get('status')
     heading = 'Significant motif sequences' if status == 'significant' else 'No significant motif' if status == 'no_significant_motif' else 'Motif tests not estimable'
     minimum = record.get('min_native_fdr')
@@ -116,6 +121,8 @@ def _motif_summary(record):
 
 
 def _network_browser(record):
+    if record.get('whole_study'):
+        return '<article class="exhibit wide network-browser" id="'+esc(record['id'])+'"'+_scope(record)+'><div class="exhibit-head"><h3>CoSplice | all study samples and conditions</h3></div><p class="fig-notes">One shared sample-level network. Changing the comparison selector does not refit or subset this network. Each module has its own genes, events, sample response and enrichment.</p>'+_link(record['source'], 'Open CoSplice whole-study report')+'<iframe loading="lazy" data-src="'+esc(record['source'])+'" title="CoSplice whole-study modules" class="network-frame"></iframe></article>'
     return '<article class="exhibit wide network-browser" id="'+esc(record['id'])+'"'+_scope(record)+'><div class="exhibit-head"><h3>Module network and complete gene lists | '+esc(record['contrast_id'])+'</h3></div><p class="fig-notes">Select a module below. The graph uses saved module membership and native adjacency; display-node and edge limits are stated in the browser. Gene symbols, IDs and all event memberships are searchable and downloadable.</p>'+_link(record['source'], 'Open network and module genes in a full window')+'<iframe loading="lazy" data-src="'+esc(record['source'])+'" title="Module network and gene lists" class="network-frame"></iframe></article>'
 
 
@@ -126,6 +133,7 @@ def render(builder):
     chapters = {n: v for n, v in CHAPTERS.items() if n in active_chapters(builder.analyses)}
     sections = []
     for number, (title, note) in chapters.items():
+        display_number = CHAPTER_NUMBERS[number]
         blocks = []
         if number == 6:
             blocks.extend(_network_browser(r) for r in builder.network_browsers)
@@ -143,8 +151,12 @@ def render(builder):
             if item.get('svg'): links += _link(item['svg'], 'SVG')
             links += _data_links(item)
             links += _measurement_note(item)
+            sequence_details = ''
+            if item.get('metadata', {}).get('sequence_evidence'):
+                from .motif_sequences import card_html
+                sequence_details = card_html(item['metadata']['sequence_evidence'])
             if item.get('selection_scope'): links += '<span class="selection-note">Recorded result scope; see provenance</span>'
-            blocks.append('<figure class="exhibit wide" id="'+esc(item['id'])+'"'+_scope(item)+'><div class="exhibit-head"><span class="exhibit-no">'+str(number)+'.'+str(index)+'</span><h3>'+esc(item['title'])+'</h3></div><button class="plot-button"><img loading="lazy" src="'+esc(item['image'])+'" alt="'+esc(item['title'])+'"></button><figcaption><p class="fig-notes">'+esc(item.get('caption', ''))+'</p><div class="fig-links">'+links+'</div></figcaption></figure>')
+            blocks.append('<figure class="exhibit wide" id="'+esc(item['id'])+'"'+_scope(item)+'><div class="exhibit-head"><span class="exhibit-no">'+str(display_number)+'.'+str(index)+'</span><h3>'+esc(item['title'])+'</h3></div><button class="plot-button"><img loading="lazy" src="'+esc(item['image'])+'" alt="'+esc(item['title'])+'"></button><figcaption><p class="fig-notes">'+esc(item.get('caption', ''))+'</p>'+sequence_details+'<div class="fig-links">'+links+'</div></figcaption></figure>')
             if number == 3:
                 group = (item.get('contrast_id'), _analysis(item))
                 following = chapter_items[index] if index < len(chapter_items) else None
@@ -179,14 +191,14 @@ def render(builder):
             seen_missing.add(key)
             blocks.append('<div class="status-panel"><strong>'+esc(entry.get('title', 'Not computed'))+'</strong>'+esc(text)+'</div>')
         controls = '<div class="local-controls">'+_policy_control('chapter3-das-selection')+'</div>' if number == 3 else ''
-        sections.append('<section class="chapter" id="chapter-'+str(number)+'"><div class="chapter-head"><span class="chapter-number">'+str(number).zfill(2)+'</span><h2>'+esc(title)+'</h2></div><p class="chapter-note">'+esc(note)+'</p>'+controls+'<p>'+_link('outputs/index.html#chapter-'+str(number), 'Complete data, figures and interactive browsers for this section')+'</p><div class="figure-grid">'+''.join(blocks)+'</div><p class="empty-scope">No result for this selected view.</p></section>')
+        sections.append('<section class="chapter" id="chapter-'+str(number)+'"><div class="chapter-head"><span class="chapter-number">'+str(display_number).zfill(2)+'</span><h2>'+esc(title)+'</h2></div><p class="chapter-note">'+esc(note)+'</p>'+controls+'<p>'+_link('outputs/index.html#chapter-'+str(number), 'Complete data, figures and interactive browsers for this section')+'</p><div class="figure-grid">'+''.join(blocks)+'</div><p class="empty-scope">No result for this selected view.</p></section>')
     contrasts = project.get('contrasts', [])
     sample_rows = ''.join('<tr><td>'+esc(s['sample_id'])+'</td><td>'+esc(s.get('biological_sample_id', s['sample_id']))+'</td><td>'+esc(s.get('condition', ''))+'</td></tr>' for s in project.get('samples', []))
     contrast_rows = ''.join('<tr><td>'+esc(c.get('label', c['contrast_id']))+'</td><td>'+esc(c['numerator'].get('label', ''))+'</td><td>'+esc(c['denominator'].get('label', ''))+'</td><td>'+str(len(c['numerator'].get('sample_ids', [])))+' / '+str(len(c['denominator'].get('sample_ids', [])))+'</td></tr>' for c in contrasts)
     annotation = project.get('annotation', {})
     design = '<h3>Samples and declared comparisons</h3><p>Effects follow the explicitly recorded numerator / denominator. Independent biological units are recorded per sample; no pairing is inferred from replicate numbers.</p><details><summary>All biological samples ('+str(len(project.get('samples', [])))+')</summary><table class="metadata"><tr><th>Sample</th><th>Biological unit</th><th>Condition</th></tr>'+sample_rows+'</table></details><details open><summary>Declared comparisons ('+str(len(contrasts))+')</summary><div class="table-scroll"><table class="metadata"><tr><th>Comparison</th><th>Numerator</th><th>Denominator</th><th>n / n</th></tr>'+contrast_rows+'</table></div></details><p>Reference: '+esc(annotation.get('genome_build', 'Not recorded'))+' · '+esc(project.get('metadata', {}).get('annotation_release', 'Annotation release not recorded'))+'. Reference file identities and actual method parameters are in provenance.</p>'
     sections[0] = sections[0].replace('<div class="figure-grid">', design+'<div class="figure-grid">', 1)
-    toc = ''.join('<a href="#chapter-'+str(n)+'"><b>'+str(n).zfill(2)+'</b>'+esc(value[0])+'</a>' for n, value in chapters.items())
+    toc = ''.join('<a href="#chapter-'+str(n)+'"><b>'+str(CHAPTER_NUMBERS[n]).zfill(2)+'</b>'+esc(value[0])+'</a>' for n, value in chapters.items())
     options = ''.join('<option value="'+esc(c['contrast_id'])+'">'+esc(c.get('label', c['contrast_id']))+'</option>' for c in contrasts)
     footnote = project.get('metadata', {}).get('gene_filter_policy', {}).get('footnote_en', 'Actual source filtering and fitting scope are retained in provenance. Missing filtering records are not inferred.')
     appendix = '<section class="chapter" id="appendix"><div class="chapter-head"><span class="chapter-number">A</span><h2>Methods, parameters and complete results</h2></div><p>'+esc(footnote)+'</p><p>RS-DAS: native caller FDR/effect criteria plus IJC + SJC ≥ 10 in every declared biological sample in both contrast arms. Ordinary DAS: the same native caller criteria without the read-support gate. Original caller P/FDR and effects are preserved. Historical analyses with another measurement policy are retained as fixed completed outputs and never silently relabelled.</p><p>Top 10: native FDR ascending, absolute native effect descending when available, stable object identity. Missing effect sizes remain unavailable; transcript, exon and gene units are separate.</p><p>Networks require their declared measurable PSI population, not just significant DAS. Motif occurrences, group enrichment, window statistics and CLIP binding evidence retain separate meanings.</p><p>'+_link('outputs/index.html', 'Complete results')+' · '+_link('provenance.json', 'Actual parameters and provenance')+' · '+_link('REPORT.zip', 'Download report package')+'</p><p>Katana Splicing Tool · '+_link('https://github.com/Taratype0/Katana-splicing-tool', 'Software and citation information')+'. No publication DOI is claimed.</p></section>'
@@ -208,7 +220,8 @@ def render(builder):
     payload['network_browsers'] = builder.network_browsers
     payload['presentation'] = {'default_comparison': contrasts[0]['contrast_id'] if contrasts else 'all',
                                'view': 'one_comparison', 'network_dendrogram_in_main': False,
-                               'motif_sequence_rule': 'native selected-test FDR <= 0.05; at most 10 distinct models'}
+                               'chapter_order': list(chapters), 'chapter_numbers': CHAPTER_NUMBERS,
+                               'motif_sequence_rule': 'sequence-first; regional FWER and window BH separated; at most 10 distinct qualifying models; affected RNA first; all models retained'}
     if hasattr(builder, 'release_status'): payload['release_status'] = builder.release_status
     payload['figure_data_links'] = builder.figure_data_coverage()
     payload['report_selection'] = source.get('report_selection', {'applied': False})
@@ -241,6 +254,6 @@ def _outputs(builder):
         tables = [t for t in builder.tables if t.get('chapter') == number or (not t.get('chapter') and chapter_for(t.get('analysis_id', '')) == number)]
         rows = ''.join('<tr><td>'+esc(t['name'])+'</td><td>'+esc(t.get('rows', ''))+'</td><td>'+_link('../'+t.get('view', t['source']), 'Full table / browser')+' '+_link('../'+t['source'], 'Complete source')+'</td></tr>' for t in tables)
         figures = ''.join('<details><summary>'+esc(p['title'])+'</summary><p>'+esc(p.get('caption', ''))+'</p>'+_link('../'+p['image'], 'Figure')+_data_links(p, '../')+'<img loading="lazy" style="max-width:100%" src="../'+esc(p['image'])+'" alt="'+esc(p['title'])+'"></details>' for p in builder.panels if p['chapter'] == number)
-        groups.append('<section id="chapter-'+str(number)+'"><h2>'+str(number)+'. '+esc(title)+'</h2><table class="metadata"><tr><th>Complete result</th><th>Rows</th><th>Access</th></tr>'+rows+'</table><h3>Complete figure gallery</h3>'+figures+'</section>')
+        groups.append('<section id="chapter-'+str(number)+'"><h2>'+str(CHAPTER_NUMBERS[number])+'. '+esc(title)+'</h2><table class="metadata"><tr><th>Complete result</th><th>Rows</th><th>Access</th></tr>'+rows+'</table><h3>Complete figure gallery</h3>'+figures+'</section>')
     (output/'outputs').mkdir(exist_ok=True)
     (output/'outputs/index.html').write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>Complete outputs · Katana</title><link rel="stylesheet" href="../assets/report.css"><main>'+_link('../REPORT.html', 'Report')+'<h1>Complete outputs</h1><p>Source tables retain every row, native P/FDR and effects. Top 10 and overview panels are summaries. Complete long tables, matrix browsers and figure galleries live here outside the report body.</p>'+''.join(groups)+'</main></html>', encoding='utf-8')

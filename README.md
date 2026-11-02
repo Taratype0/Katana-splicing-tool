@@ -55,10 +55,12 @@ The study report has seven sections:
 3. DEG, DAS, DTU and DEXSeq results.
 4. Cross-comparison results.
 5. GO/KEGG and pathway enrichment.
-6. Co-splicing networks.
-7. RBP and MotifTrace.
+6. RBP and MotifTrace.
+7. Co-splicing networks across the study.
 
 A comparison selector keeps the report focused. Tables link to complete results, and the splicing display can switch between ordinary significant events and read-supported significant events (RS-DAS, the default).
+
+A supplied whole-study CoSplice result stays the same when the comparison selector changes. Its module composition, activities, associations and complete gene/event lists close the report. Imported older networks keep their recorded scope. See the [updated-module integration review](docs/UPDATED_MODULE_INTEGRATION_REVIEW.md) for the remaining new-engine installation and Nextflow work; this report update does not claim that work is complete.
 
 The interactive browser adds adjustable thresholds, result filtering, gene/event selection and new analyses through the same Python service used by the command line. Selected-target reports are separate from the seven-section study report. Offline HTML can be shared without installing Katana.
 

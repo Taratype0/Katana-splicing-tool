@@ -213,7 +213,8 @@ def _test_chunks(source, members):
             'window_nt', 'window_start0', 'n_matched_gene_pairs', 'paired_rank_Z',
             'mean_paired_score_difference', 'raw_P_new_paired_swaps', 'q_new_window_family'} else 'object')
                                   for name in TEST_COLUMNS})])
-    return _read(path, chunksize=50000, usecols=TEST_COLUMNS, low_memory=False)
+    extra = [name for name in ('n_matched_events', 'n_independent_gene_blocks', 'layer') if name in header]
+    return _read(path, chunksize=50000, usecols=TEST_COLUMNS + extra, low_memory=False)
 
 
 def _recorded_pattern(model):
@@ -264,17 +265,18 @@ def _logo(ax, model):
 
 def _catalogue_browser(models):
     """All models, paginated locally; no CDN, downloads, motif scan or Top N."""
-    records = [{**model, 'model_id': key} for key, model in models.items()]
+    from .motif_sequences import representation
+    records = [{**model, 'model_id': key, 'motif_RNA': representation(model)['sequence']} for key, model in models.items()]
     data = json.dumps(records, allow_nan=False).replace('<', '\\u003c')
     return '''<!doctype html><html lang="en"><meta charset="utf-8"><title>All MotifTrace models</title>
 <style>body{font:15px Arial;color:#1e2630;margin:28px}article{border:1px solid #ddd;padding:14px;margin:15px 0}pre{white-space:pre-wrap}button,input{padding:7px;margin:4px}svg{max-width:100%}</style>
 <h1>Complete MotifTrace model catalogue</h1><p>Every declared model, native assignment and available recorded-test summary. The displayed order is descriptive: selected native test FDR, paired P, then model ID. Test-family FDR is not whole-model FDR. Logos describe recorded sequence preference, not measured binding.</p>
-<input id="query" placeholder="Model or RBP"><button id="previous">Previous</button><button id="next">Next</button><span id="count"></span><main id="models"></main>
+<input id="query" placeholder="Motif sequence, model or annotation"><button id="previous">Previous</button><button id="next">Next</button><span id="count"></span><main id="models"></main>
 <script id="catalogue" type="application/json">''' + data + '''</script><script>
 const all=JSON.parse(document.getElementById('catalogue').textContent);let page=0;const size=20;
 function text(tag,value){let n=document.createElement(tag);n.textContent=value;return n}
 function draw(){let query=document.getElementById('query').value.toLowerCase(),rows=all.filter(x=>JSON.stringify(x).toLowerCase().includes(query));page=Math.max(0,Math.min(page,Math.ceil(rows.length/size)-1));let root=document.getElementById('models');root.replaceChildren();
-for(const model of rows.slice(page*size,(page+1)*size)){let box=document.createElement('article');box.append(text('h2',(model.RBPs||model.model_id)+' · '+model.model_id));
+for(const model of rows.slice(page*size,(page+1)*size)){let box=document.createElement('article');box.append(text('h2',model.motif_RNA+' · '+model.model_id));box.append(text('p','Downstream library annotation: '+(model.RBPs||'not recorded')));
 if(Array.isArray(model.matrix)){const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 '+(model.matrix.length*34)+' 130');svg.style.width=(model.matrix.length*34)+'px';
 model.matrix.forEach((raw,i)=>{let sum=raw.reduce((a,b)=>a+b,0),row=raw.map(x=>x/sum),bits=2+row.reduce((a,b)=>a+(b?b*Math.log2(b):0),0),bottom=110;[0,1,2,3].sort((a,b)=>row[a]-row[b]).forEach(j=>{let height=row[j]*bits*45;if(height<.01)return;let t=document.createElementNS(ns,'text');t.textContent='ACGU'[j];t.setAttribute('x',i*34+3);t.setAttribute('y',bottom);t.setAttribute('font-family','Arial');t.setAttribute('font-weight','bold');t.setAttribute('font-size',height);t.setAttribute('fill',['#238B45','#2863A5','#D49A25','#C63F4A'][j]);svg.append(t);bottom-=height});});box.append(svg)}
 box.append(text('pre',JSON.stringify(model,null,2)));root.append(box)}document.getElementById('count').textContent=rows.length+' / '+all.length+' models; page '+(page+1)+' / '+Math.max(1,Math.ceil(rows.length/size));}
@@ -357,6 +359,9 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                            'caption': caption, 'output_only': output_only,
                            'metadata': {'das_scope': scope, 'statistical_family_split': False,
                                         'component': 'motiftrace_sequence',
+                                        'analysis_id': 'prioritize.motiftrace_consequences',
+                                        'completion_verified': True,
+                                        'completion_scope': 'motiftrace_sequence',
                                         'complete_manifest_sha256': evidence['manifest_sha256'],
                                         'completion_proof_sha256': evidence['proof_sha256'],
                                         'motif_image_sha256': digest(path)},
@@ -484,7 +489,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                    'the displayed FDR belongs to that window/full-sequence test, not a whole-model hypothesis. '
                    'Logo/consensus describes sequence preference, not measured binding. The local RNA example is descriptive, '
                    'and does not itself carry the aggregate test P/FDR. All models and complete tests are in the outputs.')
-        fig, save = figure(name, f'Top motif {rank}: {record["RBP"]} | {token}', caption,
+        fig, save = figure(name, f'Top motif {rank}: {record["motif_sequence"]} | {token}', caption,
                            pd.DataFrame([record]), 'motif_model_recorded_test',
                            [(ranking_path, 'All ranked models and native test statistics', 'motif_model_recorded_test'),
                             (test_source, 'Complete native test family', 'motif_window_test'),
@@ -497,7 +502,7 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                                   link('full_results', top10_path, 'Top 10 statistics', 'motif_model_recorded_test')])
         axes = fig.subplots(2, 1, gridspec_kw={'height_ratios': [1, 2]})
         _logo(axes[0], models[token])
-        axes[0].set_title(f'{record["RBP"]} | {record["motif_sequence"]}\n{stats}', fontsize=10)
+        axes[0].set_title(f'{record["motif_sequence"]} | library annotation: {record["RBP"]}\n{stats}', fontsize=10)
         axes[1].axis('off')
         lines = [test_label, 'Exact native test scope; no model-level FDR.', '']
         if event is None:
@@ -579,6 +584,56 @@ def build_completed_motif_views(source, destination, *, comparison_id, project_i
                                                           (source / 'NEW_CLUSTER_FWER.tsv', 'Complete cluster FWER results', 'motif_cluster')], output_only=True)
     ax = fig.subplots(); ax.bar(edges[:-1], counts, width=np.diff(edges), align='edge', color=BLUE)
     ax.set(xlabel='Maximum cluster mass across the complete comparison family', ylabel='Paired swaps'); save()
+    # Regional P is a distinct recorded endpoint. It must remain visible even
+    # when every window BH q fails. Never add these rows to the FDR ranking.
+    regional = _read(source / 'NEW_CLUSTER_FWER.tsv', low_memory=False)
+    if 'cluster_P_FWER_new_family' not in regional:
+        if not regional.empty and plan.get('analysis_engine') == 'eventgraph_20261030':
+            raise ValueError('Regional results lack their explicit FWER P column')
+        if not regional.empty:
+            unavailable.append({'chapter': 7, 'title': 'Regional FWER display',
+                                'reason': 'Legacy regional table lacks the explicit correction-family column; retained as a complete attachment without inferring significance.'})
+        regional = pd.DataFrame(columns=['model_id', 'region', 'cluster_P_FWER_new_family'])
+    values = pd.to_numeric(regional.cluster_P_FWER_new_family, errors='raise')
+    if not np.isfinite(values.dropna()).all() or not values.dropna().between(0, 1).all():
+        raise ValueError('Regional FWER P must be finite in [0, 1] or missing')
+    if 'layer' not in regional:
+        regional['layer'] = regional.get('region', pd.Series(index=regional.index, dtype=str)).map(
+            lambda r: 'affected_sequence' if str(r).startswith('affected_') else 'regulatory_pre_mRNA')
+    regional_path = table(regional, 'all-regional-FWER-recorded-tests', 'motif_region_FWER')
+    regional_significant = regional.loc[values.le(.05)].copy()
+    display_summary['regional_FWER_significant_regions'] = len(regional_significant)
+    display_summary['regional_FWER_is_window_FDR'] = False
+    for layer, label in [('affected_sequence', 'Affected RNA: motif consequences'),
+                         ('regulatory_pre_mRNA', 'Regulatory pre-mRNA flanks')]:
+        subset = regional_significant.loc[regional_significant.layer.eq(layer)].copy()
+        if subset.empty:
+            continue
+        subset = subset.sort_values(['cluster_P_FWER_new_family', 'model_id'], kind='stable')
+        # The figure is a bounded view; all regional records remain downloadable.
+        shown = subset.head(20).copy()
+        shown['plotted_minus_log10_regional_P'] = -np.log10(np.maximum(
+            shown.cluster_P_FWER_new_family, np.nextafter(0., 1.)))
+        fig, save = figure('regional-FWER-' + layer, 'Regional significance (FWER P) — ' + label,
+            f'{len(subset)} significant regions; showing the first {len(shown)} by recorded FWER P. '
+            'Maximum-cluster correction spans the complete comparison, including both layers. '
+            'Regional significance does not imply window BH FDR significance or significant individual sites. '
+            'Shared motif models are not independent RBP evidence.',
+            shown, 'motif_region_FWER', [(regional_path, 'All regional FWER records', 'motif_region_FWER'),
+                                       (test_source, 'Separate window BH FDR records', 'motif_window_test')],
+            size=(11, max(3.5, .36*len(shown)+1.5)))
+        ax = fig.subplots()
+        from .motif_sequences import representation
+        labels = [f'{representation(models[r.model_id])["sequence"]} | {r.event_type} {r.direction} | {r.region} {r.window_nt}nt'
+                  for r in shown.itertuples()]
+        ax.barh(range(len(shown)), shown.plotted_minus_log10_regional_P, color=BLUE)
+        ax.set_yticks(range(len(shown)), labels); ax.invert_yaxis()
+        ax.axvline(-np.log10(.05), color=RED, linestyle='--')
+        ax.set_xlabel('-log10(regional FWER P), not window FDR')
+        save()
+        panels[-1]['metadata'].update(motif_view_kind='regional_FWER',
+            significance_measure='whole_family_regional_FWER_P', region_layer=layer,
+            regional_P_column='cluster_P_FWER_new_family', window_FDR_column=None)
     # Keep the established sequence/statistical attachments first, then retain
     # every additional member authenticated by the scientific completion
     # manifest. Supporting RNA sequences, matching losses and replicate

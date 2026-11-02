@@ -44,7 +44,8 @@ def prepare_presentation(builder):
     for record in builder.tables:
         if (record.get('chapter') != 6 or record.get('analysis_id') != 'rich_browser'
                 or (record.get('metadata', {}).get('network_view_role') != 'module_browser'
-                    and not record.get('name', '').startswith('All network modules:'))):
+                    and not record.get('name', '').startswith('All network modules:')
+                    and record.get('metadata', {}).get('report_role') != 'whole_study_chapter')):
             continue
         cid = record.get('contrast_id', 'all')
         if cid in seen:
@@ -55,6 +56,7 @@ def prepare_presentation(builder):
         seen.add(cid)
         browsers.append({'id': 'network-browser-' + str(cid), 'chapter': 6, 'contrast_id': cid,
                          'source': record['source'], 'title': 'Module network and complete gene lists',
+                         'whole_study':record.get('metadata', {}).get('report_role')=='whole_study_chapter',
                          'metadata': record.get('metadata', {})})
     builder.network_browsers = browsers
     from .component_status import reconcile_component_statuses

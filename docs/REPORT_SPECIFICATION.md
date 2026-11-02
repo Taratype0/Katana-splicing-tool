@@ -1,6 +1,8 @@
 # Approved Katana report specification
 
-Specification: **1.1 — final report format approved 25 October 2026**.
+Specification: **1.1 — presentation revision approved 2 November 2026**.
+
+The 25 October format remains the baseline. The approved revision moves RBP/MotifTrace to section 6 and the shared study network to section 7, and adopts the reviewed sequence-first motif cards. Scientific computation is unchanged.
 
 The user approved the latest completed bulk report as the fixed format for
 future one-click reports. It supersedes the earlier presentation examples;
@@ -19,8 +21,8 @@ Report-format approval and software/pipeline release acceptance are separate.
 | 3. Differential molecular results | DEG volcano/heatmap with gene labels; DAS event volcano and ΔPSI; DTU transcript usage; DEXSeq exon usage; four-layer gene coverage, intersections and classes. Each comparison has separate Top 10 genes/events/transcripts/exon bins with expandable original fields and full-result links. |
 | 4. Cross-comparison overlap and interaction | Exact-event and applicable exon-usage comparisons, Venn/UpSet, directions and explicitly supported interaction tests. No automatic rescue/restoration claim. Each result links its complete table. |
 | 5. GO, KEGG and pathway enrichment | GO BP/MF/CC, KEGG and supported ranked/joint pathway results by comparison and evidence set. Link exact input genes and the matching detected/testable background; do not print long gene lists in the report. Retain database identities, contributing genes and original P/FDR. |
-| 6. Katana-Splice-Network | Direct interactive module network and complete searchable/downloadable gene lists; all modules and unassigned events, sizes, event/gene composition, members, PSI patterns, activities, condition associations, hubs, continuous membership metrics, significant enrichment and contributing genes. Graph display limits are explicit; complete membership is retained. Dendrograms and supporting diagnostics stay in outputs. |
-| 7. RBP and MotifTrace | Keep RBP identity/set enrichment, matched event-neighbourhood motif/CLIP evidence and RNA sequence consequences distinct. Show logos and target RNA context for up to ten distinct motifs with recorded native test FDR <= 0.05; otherwise show a concise no-significance statement. Complete model, window and nonsignificant results remain in outputs; supported completed parallel methods retain their own correction families. |
+| 6. RBP and MotifTrace | Keep identity enrichment, regulatory motifs/CLIP and RNA consequences separate. Show up to ten qualifying distinct original motif models, sequences, candidate RBP annotations and changed target genes/events. Regional FWER P and window/full-sequence BH FDR are separate endpoints; report their native values explicitly. With no qualifying model show a concise no-significance notice. All models and tests remain downloadable. |
+| 7. Katana-Splice-Network | A supplied whole-study network is shared across all comparison selections. Direct interactive module network and complete searchable/downloadable gene lists; all modules and unassigned events, sizes, event/gene composition, members, PSI patterns, activities, condition associations, hubs, continuous membership metrics, significant enrichment and contributing genes. Graph display limits are explicit; complete membership is retained. Dendrograms and supporting diagnostics stay in outputs. |
 
 The appendix records methods, actual parameters, exclusions, resources,
 versions, source records, output locations and Katana citation information.
@@ -33,7 +35,7 @@ Do not invent a publication or DOI.
   blue–white–red diverging heatmap. Keep nucleotide identity colours separate.
 - Open on one declared comparison, with a persistent comparison selector.
   Switching it updates all comparison-scoped chapters together. Shared study
-  QC remains visible; grouped cross-comparison panels retain their declared
+  QC and explicitly supplied whole-study networks remain visible; grouped cross-comparison panels retain their declared
   axes and appear only for the selected comparison's group. Do not return to
   displaying every comparison together by default.
 - Full tables, matrices, sample-similarity plots and complete heatmap pages
@@ -111,3 +113,7 @@ proceed without renewed approval. Changes to approved report content, major
 visual behaviour, scientific defaults or scope require a new explicit decision
 and a new specification revision. Keep prior approved examples recoverable.
 Do not redesign this format during routine packaging or integration work.
+
+## Compatibility with completed reports
+
+Persisted chapter identities and old anchors remain stable (network ID 6; motif ID 7), while the visible order and numbers are 1–5, MotifTrace 6, network 7. Output indexes and figure labels use the same visible order. Existing per-comparison network results are never relabelled as a whole-study fit. The new whole-study computation adapter is tracked separately from this presentation revision.

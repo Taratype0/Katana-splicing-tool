@@ -17,9 +17,12 @@ CHAPTERS = {
     3: ('Differential molecular results', 'Gene expression, exact splice events, transcript and exon usage; original measurement units retained.'),
     4: ('Cross-comparison overlap and interaction', 'Exact memberships and effect directions; interaction tests keep their own model families.'),
     5: ('GO, KEGG and pathway enrichment', 'Comparison-specific input sets and detected/testable backgrounds; original P/FDR retained.'),
-    6: ('Katana-Splice-Network', 'All available modules, composition, activity, enrichment, hubs and diagnostics.'),
     7: ('RBP and MotifTrace', 'RBP identity, matched motif/CLIP evidence and RNA sequence consequences are separate evidence layers.'),
+    6: ('Katana-Splice-Network', 'Shared study network, module composition, activity, enrichment, hubs and diagnostics.'),
 }
+# Keep persisted chapter identities compatible with completed reports. Order and
+# displayed numbers are presentation metadata, not scientific source identities.
+CHAPTER_NUMBERS = {identity: number for number, identity in enumerate(CHAPTERS, 1)}
 ASSET_ROOT = Path(__file__).with_name('assets')
 
 
@@ -494,11 +497,14 @@ class Builder:
             if panel.get('metadata', {}).get('component') == 'mapp_native':
                 self.derived_audits.append(validate_portable_mapp_panel(panel, report_root=self.output))
         current, motif_audit = apply_motif_significance_display(
-            {'panels':self.panels,'complete_results':self.tables},self.output)
+            {'panels':self.panels,'complete_results':self.tables,'motif_summaries':self.motif_summaries},self.output)
         self.panels = current['panels']
         if current['motif_summaries']:
             self.motif_summaries = current['motif_summaries']
             self.derived_audits.append(motif_audit)
+        if self.analyses['motiftrace']:
+            from .motif_sequences import attach_to_builder
+            attach_to_builder(self)
         prepare_presentation(self)
         coverage = self.figure_data_coverage()
         if coverage['strict_plot_data_required'] and coverage['unbound_main_figures']:

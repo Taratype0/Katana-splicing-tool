@@ -28,5 +28,31 @@
     "katana_next/reports/compact.py": "4dd15686e714c70bd0c61531702af0961a682f0d68657270fd26f0b1d50379bb"
   },
   "acceptance_boundary": "Real bulk report format and delivered reference accepted. Additional assays, pipeline entries, distribution and current CI have separate acceptance evidence.",
-  "change_rule": "Update data and results in this format. Changes to format or agreed scientific defaults require a new explicit user decision; technical fixes preserving it may proceed."
+  "change_rule": "Update data and results in this format. Changes to format or agreed scientific defaults require a new explicit user decision; technical fixes preserving it may proceed.",
+  "presentation_revision": {
+    "approval_date": "2026-11-02",
+    "decision": "User approved the dummy report and requested whole-study network last, invariant across comparison selection.",
+    "display_chapters": [
+      "Design, inputs and quality control",
+      "AS landscape",
+      "Differential molecular results",
+      "Cross-comparison overlap and interaction",
+      "GO, KEGG and pathway enrichment",
+      "RBP and MotifTrace",
+      "Katana-Splice-Network"
+    ],
+    "persisted_chapter_order": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      7,
+      6
+    ],
+    "motif_display": "Sequence-first Top 10; distinct regional FWER and window BH endpoints; explicit target genes and candidate RBP annotation; complete model outputs retained",
+    "science_changed": false,
+    "pipeline_integration_complete": false,
+    "specification_sha256": "bb90f1c9619b07085cffa63307c762f02ec03243181b53d2be10da7f70fb4c74"
+  }
 }

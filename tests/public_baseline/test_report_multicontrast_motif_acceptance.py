@@ -156,7 +156,10 @@ def test_multicontrast_top10_report_has_complete_portable_statistics_and_figures
         statistic_checks.append({"comparison_id": cid, "models_retained": 12,
                                 "top10": 7, "paired_native_values_preserved": True})
     assert len({p["id"] for p in report["panels"]}) == len(report["panels"])
-    assert len([x for x in page.figures if "top10-motif-" in x.get("id", "")]) == 21
+    # Approved sequence-first cards replace the old RNA-context panels in the
+    # body. The original panels and unchanged native statistics remain outputs.
+    assert len([x for x in page.figures if "motif-seq-" in x.get("id", "")]) == 21
+    assert not any("top10-motif-" in x.get("id", "") for x in page.figures)
     for link in page.links:
         if "://" not in link and not link.startswith("#"):
             assert (out / link.split("#", 1)[0]).is_file(), link

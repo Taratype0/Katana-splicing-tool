@@ -1,0 +1,1023 @@
+{
+  "schema": "katana.motif_gene_identity/v1",
+  "retrieved_UTC": "2026-11-02T12:26:27.202333+00:00",
+  "scope": "Identifier and orthology annotations only; no motif scores or statistical values",
+  "records": {
+    "homo_sapiens|ADARB1": {
+      "symbol": "ADARB1",
+      "gene_id": "ENSG00000197381",
+      "hgnc_id": "HGNC:226",
+      "entrez_id": "104",
+      "name": "adenosine deaminase RNA specific B1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/ADARB1",
+      "identity_response_sha256": "19005516228b02c81cd55d2ea3274c3dd53dc4ef94c262aeefe9b4fb812a3725"
+    },
+    "mus_musculus|ADARB1": {
+      "symbol": "Adarb1",
+      "gene_id": "ENSMUSG00000020262",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Adarb1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "7a768d5959a9d7f0d2b4654b63af48fac202a1a64e547820801081b114adb799",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "ADARB1",
+          "gene_id": "ENSG00000197381",
+          "hgnc_id": "HGNC:226",
+          "entrez_id": "104",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Adarb1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "7a768d5959a9d7f0d2b4654b63af48fac202a1a64e547820801081b114adb799"
+        }
+      ]
+    },
+    "homo_sapiens|DAZL": {
+      "symbol": "DAZL",
+      "gene_id": "ENSG00000092345",
+      "hgnc_id": "HGNC:2685",
+      "entrez_id": "1618",
+      "name": "deleted in azoospermia like",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/DAZL",
+      "identity_response_sha256": "d041f22ebaa924f8126e3badb29fb23bb31d82a0996ffacef1e49b661169980a"
+    },
+    "homo_sapiens|ELAVL3": {
+      "symbol": "ELAVL3",
+      "gene_id": "ENSG00000196361",
+      "hgnc_id": "HGNC:3314",
+      "entrez_id": "1995",
+      "name": "ELAV like RNA binding protein 3",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/ELAVL3",
+      "identity_response_sha256": "8a9d5e83739ab1738f057b374e217a57372ee3b29fc0d4dea098e9f069f8889d"
+    },
+    "homo_sapiens|HNRNPA1": {
+      "symbol": "HNRNPA1",
+      "gene_id": "ENSG00000135486",
+      "hgnc_id": "HGNC:5031",
+      "entrez_id": "3178",
+      "name": "heterogeneous nuclear ribonucleoprotein A1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/HNRNPA1",
+      "identity_response_sha256": "e5aeb25b7657bdbf4e0f54ad76759e4a5e1923ff2f36b31cab832442f71a590d"
+    },
+    "mus_musculus|HNRNPA1": {
+      "symbol": "Hnrnpa1",
+      "gene_id": "ENSMUSG00000046434",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Hnrnpa1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "42cece0ccf6abae69bbf31c48b7c180503e235e80e59b7b8821254217fddf6d3",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "HNRNPA1",
+          "gene_id": "ENSG00000135486",
+          "hgnc_id": "HGNC:5031",
+          "entrez_id": "3178",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Hnrnpa1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "42cece0ccf6abae69bbf31c48b7c180503e235e80e59b7b8821254217fddf6d3"
+        }
+      ]
+    },
+    "homo_sapiens|HNRNPF": {
+      "symbol": "HNRNPF",
+      "gene_id": "ENSG00000169813",
+      "hgnc_id": "HGNC:5039",
+      "entrez_id": "3185",
+      "name": "heterogeneous nuclear ribonucleoprotein F",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/HNRNPF",
+      "identity_response_sha256": "f1b062874ce944fe0888da519f8658c65bafeffcbca936a2387ead7c5fb579b8"
+    },
+    "homo_sapiens|HNRNPH1": {
+      "symbol": "HNRNPH1",
+      "gene_id": "ENSG00000169045",
+      "hgnc_id": "HGNC:5041",
+      "entrez_id": "3187",
+      "name": "heterogeneous nuclear ribonucleoprotein H1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/HNRNPH1",
+      "identity_response_sha256": "a9d22d47af0761479b97245f5da4ec7353586dbdc91bb51cc9bcf76de4f57e9e"
+    },
+    "homo_sapiens|KHDRBS1": {
+      "symbol": "KHDRBS1",
+      "gene_id": "ENSG00000121774",
+      "hgnc_id": "HGNC:18116",
+      "entrez_id": "10657",
+      "name": "KH RNA binding domain containing, signal transduction associated 1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/KHDRBS1",
+      "identity_response_sha256": "03cb1ffe891f17b7c75fdf52c15a63e8f5a4bf30d8df1d901d0c0533d2802012"
+    },
+    "homo_sapiens|KHSRP": {
+      "symbol": "KHSRP",
+      "gene_id": "ENSG00000088247",
+      "hgnc_id": "HGNC:6316",
+      "entrez_id": "8570",
+      "name": "KH-type splicing regulatory protein",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/KHSRP",
+      "identity_response_sha256": "5e03352fb1188089ed2a29b3501320a8b7c11ed84ec32abdd0a6cdbdc06abbfb"
+    },
+    "homo_sapiens|LIN28A": {
+      "symbol": "LIN28A",
+      "gene_id": "ENSG00000131914",
+      "hgnc_id": "HGNC:15986",
+      "entrez_id": "79727",
+      "name": "lin-28 RNA binding posttranscriptional regulator A",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/LIN28A",
+      "identity_response_sha256": "61bc68b1591c6f5315f12f5f0d2183fc43aa116fae0cb8a31a966de3312c5456"
+    },
+    "homo_sapiens|MSI1": {
+      "symbol": "MSI1",
+      "gene_id": "ENSG00000135097",
+      "hgnc_id": "HGNC:7330",
+      "entrez_id": "4440",
+      "name": "musashi RNA binding protein 1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/MSI1",
+      "identity_response_sha256": "78ba4d0287bb4bf02a1f06106a7dc9b783f0c3477caf1e7c47cac911ce39f52d"
+    },
+    "homo_sapiens|NFKB1": {
+      "symbol": "NFKB1",
+      "gene_id": "ENSG00000109320",
+      "hgnc_id": "HGNC:7794",
+      "entrez_id": "4790",
+      "name": "nuclear factor kappa B subunit 1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/NFKB1",
+      "identity_response_sha256": "f8dc9651d88e61821c20c19332ad1926ef2ec16c328ab842ef32594db77d17f6"
+    },
+    "homo_sapiens|NOVA2": {
+      "symbol": "NOVA2",
+      "gene_id": "ENSG00000104967",
+      "hgnc_id": "HGNC:7887",
+      "entrez_id": "4858",
+      "name": "NOVA alternative splicing regulator 2",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/NOVA2",
+      "identity_response_sha256": "6bf0676b04cf3a549150f52b5cdd12b102c982ba3c14eb2f9743047b432f16ac"
+    },
+    "homo_sapiens|PCBP1": {
+      "symbol": "PCBP1",
+      "gene_id": "ENSG00000169564",
+      "hgnc_id": "HGNC:8647",
+      "entrez_id": "5093",
+      "name": "poly(rC) binding protein 1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PCBP1",
+      "identity_response_sha256": "06299fbd7ed2e661482097f749350fb8be17aa3898a7f6702ffece0c312cf3fa"
+    },
+    "homo_sapiens|PCBP3": {
+      "symbol": "PCBP3",
+      "gene_id": "ENSG00000183570",
+      "hgnc_id": "HGNC:8651",
+      "entrez_id": "54039",
+      "name": "poly(rC) binding protein 3",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PCBP3",
+      "identity_response_sha256": "2bc4198ebaab9446db97a819967c8d27495e41995c18df2028dda55559c74f38"
+    },
+    "homo_sapiens|PIWIL1": {
+      "symbol": "PIWIL1",
+      "gene_id": "ENSG00000125207",
+      "hgnc_id": "HGNC:9007",
+      "entrez_id": "9271",
+      "name": "piwi like RNA-mediated gene silencing 1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PIWIL1",
+      "identity_response_sha256": "b065b2709d898cc32bfce59043622eaec6935f823d7ee38caf804ede1f421f4b"
+    },
+    "homo_sapiens|PTBP1": {
+      "symbol": "PTBP1",
+      "gene_id": "ENSG00000011304",
+      "hgnc_id": "HGNC:9583",
+      "entrez_id": "5725",
+      "name": "polypyrimidine tract binding protein 1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PTBP1",
+      "identity_response_sha256": "3888482884182c1e028b378f1c6a55ca95ffdcc26af165e518fd22d98653d049"
+    },
+    "mus_musculus|PTBP1": {
+      "symbol": "Ptbp1",
+      "gene_id": "ENSMUSG00000006498",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Ptbp1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "52e5de33f11ba3349e98a388b13aecd582aa6b9ea6d567c12ebf5f6b88e6ee43",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "PTBP1",
+          "gene_id": "ENSG00000011304",
+          "hgnc_id": "HGNC:9583",
+          "entrez_id": "5725",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Ptbp1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "52e5de33f11ba3349e98a388b13aecd582aa6b9ea6d567c12ebf5f6b88e6ee43"
+        }
+      ]
+    },
+    "homo_sapiens|PTBP2": {
+      "symbol": "PTBP2",
+      "gene_id": "ENSG00000117569",
+      "hgnc_id": "HGNC:17662",
+      "entrez_id": "58155",
+      "name": "polypyrimidine tract binding protein 2",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PTBP2",
+      "identity_response_sha256": "e5d54cd634308ce5a8822f12e25910f4747ec2aa0a757aef3a37a22a68c71816"
+    },
+    "mus_musculus|PTBP2": {
+      "symbol": "Ptbp2",
+      "gene_id": "ENSMUSG00000028134",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Ptbp2?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "43548ab2175ced16fa8d36cf1532b603a4964247312d54db62b83a1ca4c70ef7",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "PTBP2",
+          "gene_id": "ENSG00000117569",
+          "hgnc_id": "HGNC:17662",
+          "entrez_id": "58155",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Ptbp2?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "43548ab2175ced16fa8d36cf1532b603a4964247312d54db62b83a1ca4c70ef7"
+        }
+      ]
+    },
+    "homo_sapiens|PUM2": {
+      "symbol": "PUM2",
+      "gene_id": "ENSG00000055917",
+      "hgnc_id": "HGNC:14958",
+      "entrez_id": "23369",
+      "name": "pumilio RNA binding family member 2",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PUM2",
+      "identity_response_sha256": "a2eedcf4ac0d273dd22cbfe4f7501b93614cc67390ce1512cc9404c7888d53d3"
+    },
+    "homo_sapiens|RAVER1": {
+      "symbol": "RAVER1",
+      "gene_id": "ENSG00000161847",
+      "hgnc_id": "HGNC:30296",
+      "entrez_id": "125950",
+      "name": "ribonucleoprotein, PTB binding 1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/RAVER1",
+      "identity_response_sha256": "8f42dcd3527126c4f92eb0cd32fd36345a5c8a1d05e3f5cb94d455595bd36c88"
+    },
+    "homo_sapiens|RBM38": {
+      "symbol": "RBM38",
+      "gene_id": "ENSG00000132819",
+      "hgnc_id": "HGNC:15818",
+      "entrez_id": "55544",
+      "name": "RNA binding motif protein 38",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/RBM38",
+      "identity_response_sha256": "4aad235a56bfb30d18bab8ec3f75f259fb852669daf3a1a72e26aa66aebf7f12"
+    },
+    "mus_musculus|RBM38": {
+      "symbol": "Rbm38",
+      "gene_id": "ENSMUSG00000027510",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Rbm38?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "d3d08e8c050b4c67c04833c65924671a1c2b9094614d896d7aa049f0a8136fa0",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "RBM38",
+          "gene_id": "ENSG00000132819",
+          "hgnc_id": "HGNC:15818",
+          "entrez_id": "55544",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Rbm38?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "d3d08e8c050b4c67c04833c65924671a1c2b9094614d896d7aa049f0a8136fa0"
+        }
+      ]
+    },
+    "homo_sapiens|RBM45": {
+      "symbol": "RBM45",
+      "gene_id": "ENSG00000155636",
+      "hgnc_id": "HGNC:24468",
+      "entrez_id": "129831",
+      "name": "RNA binding motif protein 45",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/RBM45",
+      "identity_response_sha256": "91d9a860cb57febe50ca97e5960581d18630a56d9417a8bedf60a12fe40ebf38"
+    },
+    "mus_musculus|RBM45": {
+      "symbol": "Rbm45",
+      "gene_id": "ENSMUSG00000042369",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Rbm45?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "a0332e6f6afd62014df7d8a703360c5ba1759ea2d6a0d34e6b97b7dd856a8822",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "RBM45",
+          "gene_id": "ENSG00000155636",
+          "hgnc_id": "HGNC:24468",
+          "entrez_id": "129831",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Rbm45?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "a0332e6f6afd62014df7d8a703360c5ba1759ea2d6a0d34e6b97b7dd856a8822"
+        }
+      ]
+    },
+    "homo_sapiens|RC3H1": {
+      "symbol": "RC3H1",
+      "gene_id": "ENSG00000135870",
+      "hgnc_id": "HGNC:29434",
+      "entrez_id": "149041",
+      "name": "ring finger and CCCH-type domains 1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/RC3H1",
+      "identity_response_sha256": "55495ab39d929206b7c7221f37e8c9db136b8f5eae1d4d54a517f689b23e2abf"
+    },
+    "mus_musculus|RC3H1": {
+      "symbol": "Rc3h1",
+      "gene_id": "ENSMUSG00000040423",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Rc3h1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "f84fdc1352985520e63f3f82504eab0b90fa1bf469c01e3951073ac917d42e48",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "RC3H1",
+          "gene_id": "ENSG00000135870",
+          "hgnc_id": "HGNC:29434",
+          "entrez_id": "149041",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Rc3h1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "f84fdc1352985520e63f3f82504eab0b90fa1bf469c01e3951073ac917d42e48"
+        }
+      ]
+    },
+    "homo_sapiens|SRSF1": {
+      "symbol": "SRSF1",
+      "gene_id": "ENSG00000136450",
+      "hgnc_id": "HGNC:10780",
+      "entrez_id": "6426",
+      "name": "serine and arginine rich splicing factor 1",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/SRSF1",
+      "identity_response_sha256": "be84beb95c5a4e425a3b94ecf640b0de390bb537dba4aaec262ce17baf4b5aee"
+    },
+    "mus_musculus|SRSF1": {
+      "symbol": "Srsf1",
+      "gene_id": "ENSMUSG00000018379",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Srsf1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "4e3f4ef036df4959fffc3dc7bd31b0b2c6e8d1d10350295f132258f216e2b4b0",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "SRSF1",
+          "gene_id": "ENSG00000136450",
+          "hgnc_id": "HGNC:10780",
+          "entrez_id": "6426",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Srsf1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "4e3f4ef036df4959fffc3dc7bd31b0b2c6e8d1d10350295f132258f216e2b4b0"
+        }
+      ]
+    },
+    "homo_sapiens|SYNCRIP": {
+      "symbol": "SYNCRIP",
+      "gene_id": "ENSG00000135316",
+      "hgnc_id": "HGNC:16918",
+      "entrez_id": "10492",
+      "name": "synaptotagmin binding cytoplasmic RNA interacting protein",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/SYNCRIP",
+      "identity_response_sha256": "e68e8207a5e8baf492939b814940b5a33e2437ea47c08c0de709de1c685b9de9"
+    },
+    "mus_musculus|SYNCRIP": {
+      "symbol": "Syncrip",
+      "gene_id": "ENSMUSG00000032423",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Syncrip?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "e7c280f252b5e2b9f60decbed7ac8d48920cb35377c87f71d170064841c70920",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "SYNCRIP",
+          "gene_id": "ENSG00000135316",
+          "hgnc_id": "HGNC:16918",
+          "entrez_id": "10492",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Syncrip?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "e7c280f252b5e2b9f60decbed7ac8d48920cb35377c87f71d170064841c70920"
+        }
+      ]
+    },
+    "homo_sapiens|TLR3": {
+      "symbol": "TLR3",
+      "gene_id": "ENSG00000164342",
+      "hgnc_id": "HGNC:11849",
+      "entrez_id": "7098",
+      "name": "toll like receptor 3",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/TLR3",
+      "identity_response_sha256": "e6f28252fab709e4e56cf71621ee0ba5d872e75f4d3ad07f55d1248916b70bb0"
+    },
+    "mus_musculus|TLR3": {
+      "symbol": "Tlr3",
+      "gene_id": "ENSMUSG00000031639",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Tlr3?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "8e84a9e4ddc4cbef7356ce78819a2dd6867587507cb2340267d91f969481d997",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "TLR3",
+          "gene_id": "ENSG00000164342",
+          "hgnc_id": "HGNC:11849",
+          "entrez_id": "7098",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Tlr3?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "8e84a9e4ddc4cbef7356ce78819a2dd6867587507cb2340267d91f969481d997"
+        }
+      ]
+    },
+    "homo_sapiens|YBX2": {
+      "symbol": "YBX2",
+      "gene_id": "ENSG00000006047",
+      "hgnc_id": "HGNC:17948",
+      "entrez_id": "51087",
+      "name": "Y-box binding protein 2",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/YBX2",
+      "identity_response_sha256": "2240a37869899525a6258c8e604f0856a0f764ab1bc8517fce131f9b72bf39ff"
+    },
+    "mus_musculus|YBX2": {
+      "symbol": "Ybx2",
+      "gene_id": "ENSMUSG00000018554",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Ybx2?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+      "identity_response_sha256": "8ea3dd0ed76e24d7ea3c05cde30c788bd3604d67945d469da9ae8d08375ea6c6",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "YBX2",
+          "gene_id": "ENSG00000006047",
+          "hgnc_id": "HGNC:17948",
+          "entrez_id": "51087",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Ybx2?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+          "response_sha256": "8ea3dd0ed76e24d7ea3c05cde30c788bd3604d67945d469da9ae8d08375ea6c6"
+        }
+      ]
+    },
+    "homo_sapiens|YBX3": {
+      "symbol": "YBX3",
+      "gene_id": "ENSG00000060138",
+      "hgnc_id": "HGNC:2428",
+      "entrez_id": "8531",
+      "name": "Y-box binding protein 3",
+      "species": "homo_sapiens",
+      "identity_evidence": "HGNC approved symbol",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/YBX3",
+      "identity_response_sha256": "27464163e683d7c1a5a9b347d5784de438b2a86d3236361f8248183405b4515c"
+    },
+    "mus_musculus|HNRNPH1": {
+      "symbol": "Hnrnph1",
+      "gene_id": "ENSMUSG00000007850",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Hnrnph1?target_species=homo_sapiens;type=orthologues;content-type=application/json",
+      "identity_response_sha256": "1d0668d55fab633f8bf9d920d433e4f034530b1cd1f3892d75d72fd0c9f70c12",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "HNRNPH1",
+          "gene_id": "ENSG00000169045",
+          "hgnc_id": "HGNC:5041",
+          "entrez_id": "3187",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Hnrnph1?target_species=homo_sapiens;type=orthologues;content-type=application/json",
+          "response_sha256": "1d0668d55fab633f8bf9d920d433e4f034530b1cd1f3892d75d72fd0c9f70c12"
+        }
+      ]
+    },
+    "mus_musculus|KHDRBS1": {
+      "symbol": "Khdrbs1",
+      "gene_id": "ENSMUSG00000028790",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Khdrbs1?target_species=homo_sapiens;type=orthologues;content-type=application/json",
+      "identity_response_sha256": "eed96b11419096a25148459e5c5920ead0fc4badb8abd91c2615f9fb8de95e2e",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "KHDRBS1",
+          "gene_id": "ENSG00000121774",
+          "hgnc_id": "HGNC:18116",
+          "entrez_id": "10657",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Khdrbs1?target_species=homo_sapiens;type=orthologues;content-type=application/json",
+          "response_sha256": "eed96b11419096a25148459e5c5920ead0fc4badb8abd91c2615f9fb8de95e2e"
+        }
+      ]
+    },
+    "mus_musculus|KHSRP": {
+      "symbol": "Khsrp",
+      "gene_id": "ENSMUSG00000007670",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Khsrp?target_species=homo_sapiens;type=orthologues;content-type=application/json",
+      "identity_response_sha256": "73f49195a89651efbbd0c8401034dbd8502a1fb4d55c4c5d157acf2d41532a3f",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "KHSRP",
+          "gene_id": "ENSG00000088247",
+          "hgnc_id": "HGNC:6316",
+          "entrez_id": "8570",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Khsrp?target_species=homo_sapiens;type=orthologues;content-type=application/json",
+          "response_sha256": "73f49195a89651efbbd0c8401034dbd8502a1fb4d55c4c5d157acf2d41532a3f"
+        }
+      ]
+    },
+    "mus_musculus|YBX3": {
+      "symbol": "Ybx3",
+      "gene_id": "ENSMUSG00000030189",
+      "species": "mus_musculus",
+      "identity_evidence": "Ensembl source gene for queried symbol",
+      "identity_url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Ybx3?target_species=homo_sapiens;type=orthologues;content-type=application/json",
+      "identity_response_sha256": "562a22a80ffce54347b537f44d6d8005f89216164e0d883765893a87dd11eb67",
+      "orthologs": [
+        {
+          "species": "homo_sapiens",
+          "symbol": "YBX3",
+          "gene_id": "ENSG00000060138",
+          "hgnc_id": "HGNC:2428",
+          "entrez_id": "8531",
+          "relationship": "ortholog_one2one",
+          "evidence": "Ensembl orthology; HGNC target identity",
+          "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Ybx3?target_species=homo_sapiens;type=orthologues;content-type=application/json",
+          "response_sha256": "562a22a80ffce54347b537f44d6d8005f89216164e0d883765893a87dd11eb67"
+        }
+      ]
+    },
+    "mus_musculus|DAZL": {
+      "symbol": "DAZL",
+      "gene_id": "MGI:1342328",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/DAZL",
+      "identity_response_sha256": "d041f22ebaa924f8126e3badb29fb23bb31d82a0996ffacef1e49b661169980a",
+      "orthologs": [
+        {
+          "symbol": "DAZL",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000092345",
+          "hgnc_id": "HGNC:2685",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/DAZL",
+          "response_sha256": "d041f22ebaa924f8126e3badb29fb23bb31d82a0996ffacef1e49b661169980a"
+        }
+      ]
+    },
+    "mus_musculus|ELAVL3": {
+      "symbol": "ELAVL3",
+      "gene_id": "MGI:109157",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/ELAVL3",
+      "identity_response_sha256": "8a9d5e83739ab1738f057b374e217a57372ee3b29fc0d4dea098e9f069f8889d",
+      "orthologs": [
+        {
+          "symbol": "ELAVL3",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000196361",
+          "hgnc_id": "HGNC:3314",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/ELAVL3",
+          "response_sha256": "8a9d5e83739ab1738f057b374e217a57372ee3b29fc0d4dea098e9f069f8889d"
+        }
+      ]
+    },
+    "mus_musculus|HNRNPF": {
+      "symbol": "HNRNPF",
+      "gene_id": "MGI:2138741",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/HNRNPF",
+      "identity_response_sha256": "f1b062874ce944fe0888da519f8658c65bafeffcbca936a2387ead7c5fb579b8",
+      "orthologs": [
+        {
+          "symbol": "HNRNPF",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000169813",
+          "hgnc_id": "HGNC:5039",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/HNRNPF",
+          "response_sha256": "f1b062874ce944fe0888da519f8658c65bafeffcbca936a2387ead7c5fb579b8"
+        }
+      ]
+    },
+    "mus_musculus|LIN28A": {
+      "symbol": "LIN28A",
+      "gene_id": "MGI:1890546",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/LIN28A",
+      "identity_response_sha256": "61bc68b1591c6f5315f12f5f0d2183fc43aa116fae0cb8a31a966de3312c5456",
+      "orthologs": [
+        {
+          "symbol": "LIN28A",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000131914",
+          "hgnc_id": "HGNC:15986",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/LIN28A",
+          "response_sha256": "61bc68b1591c6f5315f12f5f0d2183fc43aa116fae0cb8a31a966de3312c5456"
+        }
+      ]
+    },
+    "mus_musculus|MSI1": {
+      "symbol": "MSI1",
+      "gene_id": "MGI:107376",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/MSI1",
+      "identity_response_sha256": "78ba4d0287bb4bf02a1f06106a7dc9b783f0c3477caf1e7c47cac911ce39f52d",
+      "orthologs": [
+        {
+          "symbol": "MSI1",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000135097",
+          "hgnc_id": "HGNC:7330",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/MSI1",
+          "response_sha256": "78ba4d0287bb4bf02a1f06106a7dc9b783f0c3477caf1e7c47cac911ce39f52d"
+        }
+      ]
+    },
+    "mus_musculus|NFKB1": {
+      "symbol": "NFKB1",
+      "gene_id": "MGI:97312",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/NFKB1",
+      "identity_response_sha256": "f8dc9651d88e61821c20c19332ad1926ef2ec16c328ab842ef32594db77d17f6",
+      "orthologs": [
+        {
+          "symbol": "NFKB1",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000109320",
+          "hgnc_id": "HGNC:7794",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/NFKB1",
+          "response_sha256": "f8dc9651d88e61821c20c19332ad1926ef2ec16c328ab842ef32594db77d17f6"
+        }
+      ]
+    },
+    "mus_musculus|NOVA2": {
+      "symbol": "NOVA2",
+      "gene_id": "MGI:104296",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/NOVA2",
+      "identity_response_sha256": "6bf0676b04cf3a549150f52b5cdd12b102c982ba3c14eb2f9743047b432f16ac",
+      "orthologs": [
+        {
+          "symbol": "NOVA2",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000104967",
+          "hgnc_id": "HGNC:7887",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/NOVA2",
+          "response_sha256": "6bf0676b04cf3a549150f52b5cdd12b102c982ba3c14eb2f9743047b432f16ac"
+        }
+      ]
+    },
+    "mus_musculus|PCBP1": {
+      "symbol": "PCBP1",
+      "gene_id": "MGI:1345635",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PCBP1",
+      "identity_response_sha256": "06299fbd7ed2e661482097f749350fb8be17aa3898a7f6702ffece0c312cf3fa",
+      "orthologs": [
+        {
+          "symbol": "PCBP1",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000169564",
+          "hgnc_id": "HGNC:8647",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/PCBP1",
+          "response_sha256": "06299fbd7ed2e661482097f749350fb8be17aa3898a7f6702ffece0c312cf3fa"
+        }
+      ]
+    },
+    "mus_musculus|PCBP3": {
+      "symbol": "PCBP3",
+      "gene_id": "MGI:1890470",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PCBP3",
+      "identity_response_sha256": "2bc4198ebaab9446db97a819967c8d27495e41995c18df2028dda55559c74f38",
+      "orthologs": [
+        {
+          "symbol": "PCBP3",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000183570",
+          "hgnc_id": "HGNC:8651",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/PCBP3",
+          "response_sha256": "2bc4198ebaab9446db97a819967c8d27495e41995c18df2028dda55559c74f38"
+        }
+      ]
+    },
+    "mus_musculus|PIWIL1": {
+      "symbol": "PIWIL1",
+      "gene_id": "MGI:1928897",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PIWIL1",
+      "identity_response_sha256": "b065b2709d898cc32bfce59043622eaec6935f823d7ee38caf804ede1f421f4b",
+      "orthologs": [
+        {
+          "symbol": "PIWIL1",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000125207",
+          "hgnc_id": "HGNC:9007",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/PIWIL1",
+          "response_sha256": "b065b2709d898cc32bfce59043622eaec6935f823d7ee38caf804ede1f421f4b"
+        }
+      ]
+    },
+    "mus_musculus|PUM2": {
+      "symbol": "PUM2",
+      "gene_id": "MGI:1931751",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/PUM2",
+      "identity_response_sha256": "a2eedcf4ac0d273dd22cbfe4f7501b93614cc67390ce1512cc9404c7888d53d3",
+      "orthologs": [
+        {
+          "symbol": "PUM2",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000055917",
+          "hgnc_id": "HGNC:14958",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/PUM2",
+          "response_sha256": "a2eedcf4ac0d273dd22cbfe4f7501b93614cc67390ce1512cc9404c7888d53d3"
+        }
+      ]
+    },
+    "mus_musculus|RAVER1": {
+      "symbol": "RAVER1",
+      "gene_id": "MGI:1919016",
+      "species": "mus_musculus",
+      "identity_evidence": "HGNC mouse-homolog cross-reference; source symbol retained from motif library",
+      "identity_url": "https://rest.genenames.org/fetch/symbol/RAVER1",
+      "identity_response_sha256": "8f42dcd3527126c4f92eb0cd32fd36345a5c8a1d05e3f5cb94d455595bd36c88",
+      "orthologs": [
+        {
+          "symbol": "RAVER1",
+          "species": "homo_sapiens",
+          "gene_id": "ENSG00000161847",
+          "hgnc_id": "HGNC:30296",
+          "relationship": "HGNC_mouse_homolog_cross_reference",
+          "evidence": "HGNC homolog cross-reference; not a new sequence-similarity inference",
+          "url": "https://rest.genenames.org/fetch/symbol/RAVER1",
+          "response_sha256": "8f42dcd3527126c4f92eb0cd32fd36345a5c8a1d05e3f5cb94d455595bd36c88"
+        }
+      ]
+    }
+  },
+  "failures": {
+    "DAZL": {
+      "error": "The read operation timed out",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Dazl?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "ELAVL3": {
+      "error": "The read operation timed out",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Elavl3?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "HNRNPF": {
+      "error": "The read operation timed out",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Hnrnpf?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "LIN28A": {
+      "error": "HTTP Error 500: Internal Server Error",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Lin28a?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "MSI1": {
+      "error": "HTTP Error 500: Internal Server Error",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Msi1?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "NFKB1": {
+      "error": "HTTP Error 500: Internal Server Error",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Nfkb1?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "NOVA2": {
+      "error": "HTTP Error 500: Internal Server Error",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Nova2?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "PCBP1": {
+      "error": "HTTP Error 500: Internal Server Error",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Pcbp1?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "PCBP3": {
+      "error": "HTTP Error 500: Internal Server Error",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Pcbp3?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "PIWIL1": {
+      "error": "HTTP Error 500: Internal Server Error",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Piwil1?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "PUM2": {
+      "error": "HTTP Error 500: Internal Server Error",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Pum2?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    },
+    "RAVER1": {
+      "error": "HTTP Error 500: Internal Server Error",
+      "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Raver1?target_species=homo_sapiens;type=orthologues;content-type=application/json"
+    }
+  },
+  "previous_failed_fetches": {
+    "DAZL": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Dazl?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "ELAVL3": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Elavl3?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "HNRNPF": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Hnrnpf?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "HNRNPH1": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Hnrnph1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "KHDRBS1": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Khdrbs1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "KHSRP": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Khsrp?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "LIN28A": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Lin28a?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "MSI1": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Msi1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "NFKB1": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Nfkb1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "NOVA2": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Nova2?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "PCBP1": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Pcbp1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "PCBP3": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Pcbp3?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "PIWIL1": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Piwil1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    },
+    "PUM2": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Pum2?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 503: Service Unavailable"
+      }
+    },
+    "RAVER1": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Raver1?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 503: Service Unavailable"
+      }
+    },
+    "YBX3": {
+      "homology": {
+        "url": "https://rest.ensembl.org/homology/symbol/mus_musculus/Ybx3?target_species=homo_sapiens;type=orthologues;sequence=none;content-type=application/json",
+        "error": "HTTP Error 500: Internal Server Error"
+      }
+    }
+  },
+  "homolog_cross_reference_documentation": "https://www.genenames.org/news/announcements/2014/07/17/multi-homologs-per-species/",
+  "resolved_by_HGNC_mouse_homolog_cross_reference": [
+    "DAZL",
+    "ELAVL3",
+    "HNRNPF",
+    "LIN28A",
+    "MSI1",
+    "NFKB1",
+    "NOVA2",
+    "PCBP1",
+    "PCBP3",
+    "PIWIL1",
+    "PUM2",
+    "RAVER1"
+  ],
+  "unresolved_symbols": []
+}

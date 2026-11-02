@@ -1,8 +1,8 @@
 # CoSplice and MotifTrace integration review
 
-Review date: 2026-11-02. Status: **not ready for main promotion**.
+Review date: 2026-11-02. **New-engine integration remains incomplete.** The user has approved the report presentation for a separate main update; this does not promote the new computation engines.
 
-This review compares the selected local sealed application, `katana-cosplice-event-options-fix-packaged-20261102`, with the pipeline development checkout and GitHub main `4f046758cefe244082c2acf4436c3215d7ebb6b3`. The pipeline entry files listed below are identical between that main commit and the reviewed development baseline. No production implementation was replaced in this review.
+This review compares the selected local sealed application, `katana-cosplice-event-options-fix-packaged-20261102`, with the pipeline development checkout and GitHub main `4f046758cefe244082c2acf4436c3215d7ebb6b3`. The pipeline entry files listed below are identical between that main commit and the reviewed development baseline. The subsequent approved report patch ports only the reviewed presentation and annotation code, retaining main's optional-analysis and storage behavior. No new scientific engine is routed into the pipeline by that patch.
 
 ## What is connected
 
@@ -46,3 +46,7 @@ For the report builder, use Python with the selected release's `app` directory o
 All panels and statistical values are synthetic display fixtures; no biological interpretation is implied. MAPP and matched CLIP are optional calculations not illustrated in this dummy. The unmodified renderer page is retained outside the delivery directory as `renderer-original.html`. In the review copy only, the header is explicitly synthetic and missing-real-input notices are grouped in the appendix; their original records remain in the report manifest and `DUMMY_REVIEW.json`. No production renderer was edited.
 
 Approval of this layout does not replace the remaining integration and installation checks. Main promotion remains subject to user approval and passing those checks.
+
+## Approved presentation revision
+
+The report ends with the shared study network, after RBP/MotifTrace. The same declared whole-study artifact is visible under every comparison selection; historical contrast-specific fits keep their recorded scope. Complete tables, native P/FDR and immutable input identities remain unchanged. This patch is based directly on main and does not include the separate unmerged lane-processing branch.

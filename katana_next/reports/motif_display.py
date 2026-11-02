@@ -45,6 +45,7 @@ def motif_display_summary(ranking, comparison_id, *, threshold=.05, limit=10):
     status = "significant" if count else "no_significant_motif" if valid.any() else "not_estimable"
     if status == "no_significant_motif":
         notice = (f"No motif has a recorded native test with FDR ≤ {threshold:g}. "
+                  "This statement concerns window/full-sequence BH FDR only; regional FWER significance is reported separately. "
                   "No nonsignificant sequence panels are shown; all models and original statistics remain in the outputs.")
     elif status == "not_estimable":
         notice = ("No native motif test is estimable for this comparison. "
@@ -88,6 +89,10 @@ def apply_motif_significance_display(manifest, report_root, *, threshold=.05, li
         if "comparison_id" not in ranking or not ranking.comparison_id.astype(str).eq(cid).all():
             raise ValueError("Complete motif ranking belongs to another comparison")
         summary = motif_display_summary(ranking, cid, threshold=threshold, limit=limit)
+        previous = next((s for s in result.get('motif_summaries', []) if str(s.get('contrast_id')) == cid), {})
+        for key in ('regional_FWER_significant_regions', 'regional_FWER_is_window_FDR'):
+            if key in previous:
+                summary[key] = previous[key]
         summary.update(ranking_path=table["source"], ranking_sha256=source_hashes[table["source"]])
         selected = set(summary["main_model_ids"])
         panels = [p for p in result.get("panels", []) if p.get("contrast_id") == cid
@@ -105,7 +110,8 @@ def apply_motif_significance_display(manifest, report_root, *, threshold=.05, li
         if summary["status"] != "significant":
             for panel in result.get("panels", []):
                 if (panel.get("contrast_id") == cid and
-                        panel.get("metadata", {}).get("component") == "motiftrace_sequence"):
+                        panel.get("metadata", {}).get("component") == "motiftrace_sequence" and
+                        panel.get("metadata", {}).get("motif_view_kind") != "regional_FWER"):
                     panel["output_only"] = True
         summaries.append(summary)
     motif_cids = {str(p["contrast_id"]) for p in result.get("panels", [])
