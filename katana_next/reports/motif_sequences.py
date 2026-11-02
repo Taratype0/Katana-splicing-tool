@@ -280,6 +280,12 @@ def attach_to_builder(builder):
         if not plan_path and not result_path: continue
         plan=json.loads(plan_path.read_text('utf-8-sig')) if plan_path else {}
         result=json.loads(result_path.read_text('utf-8-sig')) if result_path else {}
+        # Existing installed pipeline outputs retain their validated legacy
+        # panels and native-test acceptance. Opt into the new sequence renderer
+        # only through the recorded EventGraph engine, never a filename guess.
+        engine=plan.get('analysis_engine') or result.get('policy',{}).get('analysis_engine')
+        if engine != 'eventgraph_20261030':
+            continue
         models=plan.get('models') or result.get('policy',{}).get('models')
         if not models: continue
         for data in (plan,result):

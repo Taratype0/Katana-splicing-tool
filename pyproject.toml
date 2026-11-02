@@ -125,7 +125,6 @@ include = ["app", "app.*", "katana_cosplice", "katana_cosplice.*", "katana_motif
 namespaces = false
 
 [tool.setuptools.package-data]
-"katana_motiftrace" = ["motif_gene_reference.json"]
 "katana_next.science" = ["rbp_sequence_browser.html", "motiftrace_windows.html", "motiftrace_consequences.html", "motiftrace_parallel.html", "rbp_evidence_layers.json", "*.R"]
 "katana_next" = ["vendor/DJExpress_SOURCE_SHA256.json", "vendor/DJExpress/*", "vendor/DJExpress/R/*.R", "vendor/MAPP/SOURCE.json", "vendor/MAPP/LICENSE", "vendor/MAPP/COPYING*", "vendor/MAPP/modules/*/scripts/*"]
 "katana_next.contracts" = ["schemas/*.json", "data/*.json"]

@@ -5,6 +5,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from bs4 import BeautifulSoup
+import pytest
 
 from katana_next.reports.engine import ASSET_ROOT, Builder
 from katana_next.reports.refresh import refresh_report
@@ -72,3 +73,31 @@ def test_motif_annotations_are_packaged_and_statistical_endpoints_stay_separate(
     assert report['displayed_models'] == 1
     assert report['window_significant_models'] == 0
     assert report['regional_significant_regions'] == 1
+
+
+@pytest.mark.parametrize('engine,expected_cards', [('legacy', 0), ('eventgraph_20261030', 1)])
+def test_new_card_route_requires_recorded_eventgraph_engine(tmp_path, engine, expected_cards):
+    output = tmp_path / 'report'
+    shutil.copytree(ASSET_ROOT, output / 'assets')
+    builder = Builder({'project': {'project_id': 'engine-scope', 'samples': [],
+        'contrasts': [{'contrast_id': 'B_vs_A', 'numerator': {'label': 'B'},
+                       'denominator': {'label': 'A'}}]}, 'artifacts': [], 'mode': 'bulk'},
+        output, 'stable_significant')
+    plan = output / 'ANALYSIS_PLAN_BEFORE_SCORING.json'
+    plan.write_text(json.dumps({'comparison_id': 'B_vs_A', 'analysis_engine': engine,
+        'models': {'demo': {'kind': 'PWM', 'matrix': [[.7,.1,.1,.1]] * 5}},
+        'synthetic_display_fixture': True}), encoding='utf8')
+    regions = output / 'NEW_CLUSTER_FWER.tsv'
+    regions.write_text('model_id\tlayer\tregion\tevent_type\tdirection\tcluster_P_FWER_new_family\n'
+        'demo\taffected_sequence\taffected_inclusion\tSE\tinclusion_up\t0.003\n', encoding='utf8')
+    for p in (plan, regions):
+        builder.tables.append({'name': p.name, 'source': p.name, 'chapter': 7, 'contrast_id': 'B_vs_A'})
+    before = {p: p.read_bytes() for p in (plan, regions)}
+    manifest = builder.write()
+    cards = [p for p in manifest['panels'] if p.get('metadata', {}).get('motif_sequence_renderer')]
+    assert len(cards) == expected_cards
+    if expected_cards:
+        summary = manifest['motif_summaries'][0]['sequence_report']
+        assert summary['regional_significant_regions'] == 1
+        assert summary['window_significant_models'] == 0
+    assert all(p.read_bytes() == data for p, data in before.items())
