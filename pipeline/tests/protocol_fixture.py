@@ -66,7 +66,8 @@ def main() -> None:
         if document.get("schema") == "katana.flow.config/v1":
             # Native flat-entry transport test: parse real generated settings,
             # but perform no biological computation in this explicit test CLI.
-            assert document["network"]["scope"] == "contrast"
+            assert document["network"]["scope"] == "whole_study"
+            assert document["network"]["engine"] == "whole_study_4_3"
             assert document["parameters"]["differential.deg"]["fdr"] > 0
             document["tasks"] = [
                 {"id": "fixture-audit", "execution_group": "audit", "workflow_id": "fixture", "dependencies": [], "delay": 0},
