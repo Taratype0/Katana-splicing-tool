@@ -22,7 +22,7 @@ jobs:
           for id in (41700183693,41700216459,41700224428):
               r=json.loads(subprocess.check_output(['gh','run','view',str(id),'--repo',repo,'--json','headSha,status,conclusion']))
               assert r==dict(headSha=head,status='completed',conclusion='success'),r
-          r=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases/tags/v2.0.0-beta.5.dev2026110306']))
+          r=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases/433133850']))
           assert r['draft'] and r['target_commitish']==head
           PY
       - uses: actions/download-artifact@v4
