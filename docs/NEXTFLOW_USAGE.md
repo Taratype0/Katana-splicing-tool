@@ -28,33 +28,20 @@ the explicit configuration examples later in this guide.
 `study.yml` is not a required Katana file or a reserved filename. All native
 parameters can instead be supplied explicitly, including `--outdir`.
 
-From a checkout with a **matching installed package/container**, the complete
-FASTQ or BAM command has this form. Replace the example paths, reference IDs,
-allocation and images with real values; this is not a ready-to-run study command.
-The sample sheet selects FASTQ versus BAM input.
+For mouse GRCm39, the complete FASTQ or BAM command has this form. Nextflow
+fetches the versioned containers, while selected analysis databases use the
+shared resource cache. Replace paths and site settings with your own.
 
 ```bash
-nextflow run pipeline/main.nf \
-  -profile slurm,apptainer \
-  -c examples/nextflow/kth.config \
-  --slurm_account YOUR_ALLOCATION \
-  --mode complete \
-  --input /data/project/samples.csv \
-  --contrasts /data/project/contrasts.csv \
-  --fasta /data/reference/genome.fa \
-  --gtf /data/reference/annotation.gtf \
-  --reference_build YOUR_BUILD \
-  --annotation_release YOUR_RELEASE \
-  --species 'Mus musculus' \
-  --gene_sets /data/resources/pathways.gmt \
-  --rbp_gene_sets /data/resources/rbp_gene_sets.gmt \
-  --motif_database /data/resources/motifs.json \
-  --clip_peaks /data/resources/matched_clip_peaks.tsv \
-  --katana_container /data/images/katana-matching-version.sif \
-  --dexseq_tools_container /data/images/dexseq-tools.sif \
-  --outdir /data/project/results \
-  -work-dir /data/project/work \
-  -resume
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103 \
+  -profile singularity -c pdc_kth.config -c custom.config \
+  --project YOUR_ALLOCATION \
+  --input /data/project/samples.csv --contrasts /data/project/contrasts.csv \
+  --fasta /data/reference/genome.fa --gtf /data/reference/annotation.gtf \
+  --reference_build GRCm39 --annotation_release 'GENCODE vM34' \
+  --species Mus_musculus --resource_cache /data/cache/katana/resources \
+  --digest_cache /data/cache/katana/checksums \
+  --outdir /data/project/results -work-dir /data/project/work
 ```
 
 The shell line continuations form one command. `--outdir` is the final output
@@ -69,11 +56,12 @@ configuration. The name `kth.config` is arbitrary, not a Nextflow option.
 
 The official nf-core institutional profile is named
 [`pdc_kth`](https://nf-co.re/configs/pdc_kth/), not `kth_config`. This Katana
-checkout does not automatically import that institutional profile. Its current
-`--project` option names a downstream project file, whereas the official profile
-uses `--project` for the Slurm account; do not apply it unchanged. This example
-uses `--slurm_account` instead and does not automatically route jobs to memory
-nodes. Queue/account configuration is separate from biological parameters.
+checkout loads it when you pass your local `pdc_kth.config`. In raw-data mode,
+`--project` can carry the allocation consumed by that site config. In existing
+project mode, `--project` names the Katana project file instead; use a site config
+with an explicit account or `--slurm_account` for that route. Katana's own
+Slurm profile uses `--slurm_account`. It does not automatically route jobs to
+memory nodes. Queue/account configuration is separate from biological parameters.
 
 `project-template.json` and `flow.json` are now generated internally by the current
 source workflow. The explicit JSON examples below remain available for advanced settings

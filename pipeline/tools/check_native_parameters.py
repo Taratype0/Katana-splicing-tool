@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--nextflow-command-json", type=Path)
     parser.add_argument("--outdir", type=Path, required=True)
+    parser.add_argument("--repository-entry", action="store_true")
     args = parser.parse_args()
     prefix = json.loads(args.nextflow_command_json.read_text()) if args.nextflow_command_json else ["nextflow"]
     root = args.outdir.resolve()
@@ -23,7 +24,7 @@ def main():
     (inputs / "project.json").write_text("{}\n")
     results = {}
     def execute(label, extra, success=True):
-        command = [*prefix, "run", str(PIPELINE / "main.nf"), *extra,
+        command = [*prefix, "run", str(PIPELINE.parent if args.repository_entry else PIPELINE / "main.nf"), *extra,
                    "--flow_executable", str(PIPELINE / "tests/protocol_fixture.py"),
                    "-c", str(PIPELINE / "tests/transport.config"),
                    "-ansi-log", "false", "--outdir", str(root / "output"),

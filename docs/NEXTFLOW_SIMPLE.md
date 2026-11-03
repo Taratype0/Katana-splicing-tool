@@ -1,64 +1,44 @@
 # Run Katana with Nextflow
 
-Use the [matching package, controller and containers](INDEPENDENT_RUNTIME.md).
-The 28 October release includes these direct options. The older 25 October
-downloads retain their previous interface.
+Supply sample and contrast tables, a genome FASTA, an annotation GTF, and output
+paths. One Nextflow run connects read processing, statistical analysis, Katana,
+and the report. No separate Python installation, coordinator, JSON or YAML is
+needed for this entry.
 
-Supply samples, the comparisons you want, references, and an output directory.
-Katana generates its internal project template and downstream settings. You do
-not need to create `study.yml`, `project-template.json` or `flow.json`.
-
-Use the native Nextflow entry for new studies:
-
-```bash
-nextflow run pipeline/main.nf -params-file examples/nextflow/params.complete.yaml \
-  -profile slurm,apptainer -c examples/nextflow/kth.config \
-  --slurm_account YOUR_ALLOCATION --outdir /data/study/results -work-dir /data/study/work
-```
-
-Edit the template paths first. A single Nextflow DAG connects all stages and
-publishes the report and independent client project. Use `-resume` with the same
-launch directory and work directory after interruption. No Python coordinator
-is needed. Historical `katana-flow run` sessions retain their old recovery
-command and installation until they finish; do not switch an active run's code.
+The server needs Nextflow >=25.10.4, Java >=17, and Apptainer/Singularity or
+Docker. Nextflow downloads the versioned tool images automatically. For mouse
+GRCm39, Katana also downloads the [versioned analysis databases](RESOURCE_DATABASES.md)
+required by your selected analyses. FASTA and GTF remain explicit inputs.
 
 ## 1. FASTQ or BAM to analysis and report
 
-From the repository checkout:
-
 ```bash
-nextflow run pipeline/main.nf \
-  -profile slurm,apptainer \
-  -c examples/nextflow/kth.config \
-  --slurm_account YOUR_ALLOCATION \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103 \
+  -profile singularity -c /path/to/site.config \
   --input /data/study/samples.csv \
   --contrasts /data/study/contrasts.csv \
   --fasta /data/reference/genome.fa \
   --gtf /data/reference/annotation.gtf \
-  --reference_build GRCm39 \
-  --annotation_release YOUR_ANNOTATION_RELEASE \
-  --species 'Mus musculus' \
-  --study_name 'My study' \
-  --gene_sets /data/resources/pathways.gmt \
-  --rbp_gene_sets /data/resources/rbp_gene_sets.gmt \
-  --motif_database /data/resources/motifs.json \
-  --clip_peaks /data/resources/matched_clip_peaks.tsv \
-  --katana_container /data/images/katana-matching-version.sif \
-  --dexseq_tools_container /data/images/dexseq-tools.sif \
-  --outdir /data/study/results \
-  -work-dir /data/study/work \
-  -resume
+  --reference_build GRCm39 --annotation_release 'GENCODE vM34' \
+  --species Mus_musculus --study_name 'My study' \
+  --resource_cache /data/cache/katana/resources \
+  --digest_cache /data/cache/katana/checksums \
+  --outdir /data/study/results -work-dir /data/study/work
 ```
 
-Replace paths, allocation, species/build and release with your own. Resource
-formats are the existing Katana resource formats: a filename alone does not
-convert an arbitrary motif or CLIP database. See the resource sections of [the parameter reference](NEXTFLOW_PARAMETERS.md).
+Your site configuration selects the executor, allocation and queues. On Dardel,
+use `-c pdc_kth.config -c custom.config --project YOUR_ALLOCATION` with your
+existing site files. Katana does not switch tasks to a memory partition.
+On a workstation use `-profile docker` and omit the site config/account options.
+The same command works with the released pipeline directory in place of the
+GitHub repository name.
 
-For a workstation, use `-profile local,docker`, Docker image references instead
-of SIF paths, and omit `-c kth.config` / `--slurm_account`. For another cluster,
-use your site's Slurm config. Queue choices are site configuration; analyses do
-not automatically select a memory partition. The supplied `kth.config` uses
-`shared`. It is a Katana example, not an automatic import of nf-core's `pdc_kth`.
+`-bg` backgrounds the Nextflow driver. Follow `.nextflow.log` and the reports in
+`results/pipeline_info`. After interruption, rerun the same command with
+`-resume`, from the same launch directory and using the same release and work
+path. Add `--clean_work true` when you want Nextflow to remove task caches after
+successful final delivery; failed runs keep their cache for recovery. Formal
+results and BAMs are retained. Shared image/database caches remain reusable.
 
 The sample sheet selects the input type. FASTQ:
 
@@ -98,31 +78,23 @@ optionally selects a subset for downstream work; the upstream comparison CSV
 still controls upstream tests. To avoid unwanted upstream tests, put only the
 desired comparisons in that CSV.
 
-## 2. Use one optional Nextflow parameter file
+## 2. Existing results and optional configuration
 
-Download/copy [params.complete.yaml](../examples/nextflow/params.complete.yaml),
-edit paths and optional settings, then run:
+For a Katana upstream bundle, replace the raw input arguments with
+`--mode downstream-only --bundle /data/katana_bundle`; keep the species,
+reference-build and resource settings. For an imported project, use
+`--mode downstream-only --project /data/project/katana.project.json`; its existing
+resources and identities are reused. These entries do not redo alignment.
 
-```bash
-nextflow run pipeline/main.nf \
-  -params-file /data/study/params.complete.yaml \
-  -profile slurm,apptainer \
-  -c examples/nextflow/kth.config \
-  --slurm_account YOUR_ALLOCATION \
-  -work-dir /data/study/work -resume
-```
-
-YAML is optional. Every scalar option can instead be passed as `--option value`;
-CLI values override the parameter file. Use `-c` for executor, queues and task
-resource requests. Use `-params-file` or `--...` for analysis inputs/settings.
-The [complete native option table](NEXTFLOW_NATIVE_OPTIONS.md) lists every
-declared parameter and its default, including STAR, Salmon, rMATS and SUPPA.
+All routine settings use command-line options. A Nextflow `-params-file` is
+optional. The advanced `--flow_config` and `--project_template` inputs remain
+available for specialized designs, but are not prerequisites for a normal run.
 
 ## 3. Select analyses
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--skip_network` | false | Omit independent per-comparison network calculations and their report results. |
+| `--skip_network` | false | Omit whole-study CoSplice and its condition/contrast associations. |
 | `--skip_motiftrace` | false | Omit MotifTrace sequence consequences and its motif summaries. |
 | `--skip_motif_binding` | false | Omit motif/CLIP binding analysis; useful when matched CLIP is unavailable. |
 | `--skip_mapp` | false | Omit MAPP fitting and its report results. |
@@ -168,7 +140,7 @@ select `--skip_enrichment --skip_network --skip_rbp_identity`.
 
 Read support remains at least 10 reads in **every** sample of the selected
 comparison. Network defaults remain 20 events per module, merge height 0.25,
-per-comparison fitting, kME ranking and no bootstrap. Module size and merge height have direct custom options. This entrypoint change
+whole-study fitting with contrast associations, kME ranking and no bootstrap. Module size and merge height have direct custom options. This entrypoint change
 does not alter the algorithms. Explicit factorial design settings can still
 use the existing advanced configuration route documented below.
 

@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'pipeline/**'
+      - 'nextflow.config'
       - 'katana_next/flow/**'
       - 'pyproject.toml'
       - 'setup.py'
@@ -11,6 +12,7 @@ on:
   pull_request:
     paths:
       - 'pipeline/**'
+      - 'nextflow.config'
       - 'katana_next/flow/**'
       - 'pyproject.toml'
       - 'setup.py'
@@ -91,7 +93,7 @@ jobs:
 
           python -B pipeline/tools/check_native_parameters.py \
             --nextflow-command-json "$RUNNER_TEMP/nextflow-command.json" \
-            --outdir "$RUNNER_TEMP/katana-flat-parameters"
+            --repository-entry --outdir "$RUNNER_TEMP/katana-flat-parameters"
           python -B pipeline/tools/check_unified_cleanup.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-unified-cleanup"

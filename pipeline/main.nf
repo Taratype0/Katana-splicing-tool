@@ -16,9 +16,45 @@ def automaticConfiguration() {
     keys += ['landscape', 'cross_comparison', 'enrichment', 'rbp_identity', 'motiftrace',
              'motif_binding', 'mapp', 'network', 'interaction', 'sequencing_qc'].collect { "skip_${it}".toString() }
     def request = keys.collectEntries { key -> [(key): params[key]] }
-    def names = ['gene_sets', 'rbp_gene_sets', 'motif_database', 'clip_peaks', 'fimo_runtime'].findAll { params[it] }
+    def kinds = ['gene_sets', 'rbp_gene_sets', 'motif_database', 'clip_peaks', 'fimo_runtime']
+    def resources = []
+    def names = []
+    def entries = []
+    kinds.findAll { params[it] }.each { name ->
+        def supplied = params[name] instanceof List ? params[name] : params[name].toString().split(',').toList()
+        def paths = supplied.collectMany { pattern ->
+            def matched = file(pattern.toString().trim(), checkIfExists: true)
+            matched instanceof List ? matched : [matched]
+        }.sort { it.toString() }
+        paths.eachWithIndex { path, index ->
+            resources << path
+            names << name
+            entries << [asset_id: paths.size() == 1 ? name : "${name}_${index + 1}".toString(), metadata: [:]]
+        }
+    }
+    if (params.bundle) request.mode = 'complete'
     request.resource_names = names
-    def resources = names.collect { file(params[it], checkIfExists: true) }
+    request.resource_entries = entries
+    request.resource_cache = file(params.resource_cache).toAbsolutePath().normalize().toString()
+    request.resource_catalog = []
+    def raw = params.mode != 'downstream-only' || params.bundle
+    if (raw && params.resource_bundle != 'none') {
+        def bundle = params.resource_bundle
+        def mouse = params.species?.toString()?.replace(' ', '_')?.toLowerCase() in ['mus_musculus', 'mouse']
+        if (bundle == 'auto') bundle = mouse && params.reference_build == 'GRCm39' ? 'mouse-grcm39-v1' : 'none'
+        if (bundle != 'none') {
+            if (bundle != 'mouse-grcm39-v1' || !mouse || params.reference_build != 'GRCm39')
+                error('The mouse-grcm39-v1 resource bundle requires Mus_musculus and GRCm39. Use --resource_bundle none with your own databases for another species/build.')
+            def catalog = new groovy.json.JsonSlurper().parse(file("${projectDir}/assets/resources/mouse-grcm39-v1.json").toFile())
+            def wanted = []
+            if (!params.skip_enrichment || !params.skip_network) wanted << 'gene_sets'
+            if (!params.skip_rbp_identity) wanted << 'rbp_gene_sets'
+            if (!params.skip_motiftrace || !params.skip_motif_binding) wanted << 'motif_database'
+            if (!params.skip_motif_binding) wanted << 'clip_peaks'
+            request.resource_catalog = catalog.assets.findAll { it.parameter in wanted && !(it.parameter in names) }
+        }
+    }
+
     [request, resources]
 }
 
@@ -66,7 +102,7 @@ workflow {
   --mode complete         --input samples.csv --contrasts contrasts.csv --fasta genome.fa --gtf annotation.gtf
                           --species 'Mus musculus' --gene_sets pathways.gmt --rbp_gene_sets rbps.gmt
                           --motif_database motifs.json --clip_peaks matched-peaks.tsv
-                          --dexseq_tools_container <built-image-or-SIF>
+                          --resource_bundle auto  (mouse / GRCm39 defaults; optional local resource overrides)
   --mode upstream-only    --input samples.csv --contrasts contrasts.csv --fasta genome.fa --gtf annotation.gtf
   --mode downstream-only  --project project.json
   --mode downstream-only  --bundle /data/completed/katana_bundle
@@ -79,7 +115,8 @@ Optional analyses: --skip_network --skip_motiftrace --skip_motif_binding --skip_
   --skip_interaction --skip_sequencing_qc
 Extra gene-body BAM scanning: --with_genebody_coverage (off by default).
 Internal JSON is generated automatically. Advanced --project_template/--flow_config still work.
-See docs/NEXTFLOW_SIMPLE.md and examples/nextflow/params.complete.yaml for all settings.
+Use nextflow -bg run to launch in the background. See docs/NEXTFLOW_SIMPLE.md for direct CLI examples.
+Containers download automatically for Docker, Singularity and Apptainer. No hand-written JSON is required.
 Samplesheet strandedness: forward|reverse|unstranded|auto. Auto uses matched genome-BAM RSeQC evidence.
 Required calculations are verified before the fixed seven-section report is accepted.'''
     } else {
@@ -101,7 +138,7 @@ Required calculations are verified before the fixed seven-section report is acce
             error('Katana stage containers require known execution-group keys and nonempty image references')
         }
         if ((params.mode != 'upstream-only' || params.managed_preflight) && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !params.katana_container) {
-            error('A Katana container profile requires --katana_container pointing to your built full runtime image; host fallback is disabled')
+            error('No Katana container is configured; restore the release defaults or supply --katana_container.')
         }
         if ((params.mode != 'upstream-only' || params.managed_preflight) && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !(params.flow_executable in ['katana-flow', '/opt/conda/bin/katana-flow'])) {
             error('Container profiles require the image launcher katana-flow or /opt/conda/bin/katana-flow; mounted host launchers are not allowed')
@@ -154,7 +191,7 @@ Required calculations are verified before the fixed seven-section report is acce
             validateStrandednessParameters()
             requireParameters(['input', 'contrasts', 'fasta', 'gtf'])
             if ((workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !params.dexseq_tools_container) {
-                error('Raw FASTQ/BAM execution requires --dexseq_tools_container pointing to the built DEXSeq tools image or SIF. See containers/dexseq-tools/README.md; no unpublished registry image is assumed.')
+                error('No DEXSeq container is configured; restore the release defaults or supply --dexseq_tools_container.')
             }
             samples = Channel.value(file(params.input, checkIfExists: true))
             contrasts = Channel.value(file(params.contrasts, checkIfExists: true))

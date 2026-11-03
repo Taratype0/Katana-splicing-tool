@@ -1,6 +1,6 @@
 # Katana
 
-Start with [installation](docs/INDEPENDENT_RUNTIME.md), the [Nextflow run guide](docs/NEXTFLOW_SIMPLE.md) and the [parameter template](examples/nextflow/params.complete.yaml).
+Start with the [Nextflow quick start](docs/NEXTFLOW_SIMPLE.md) or [standalone installation](docs/INDEPENDENT_RUNTIME.md).
 
 **RNA splicing analysis, co-splicing networks and MotifTrace, with an interactive study report.**
 
@@ -69,17 +69,14 @@ The interactive browser adds adjustable thresholds, result filtering, gene/event
 Supply the sample sheet, comparison sheet, references and analysis resources. One Nextflow run schedules read processing, differential analysis, Katana, the report and the reusable browser project. Internal configuration files are generated automatically:
 
 ```sh
-nextflow run pipeline/main.nf --mode complete \
-  --input inputs/samples.csv --contrasts inputs/contrasts.csv \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103 \
+  -profile docker --input inputs/samples.csv --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
-  --species 'Mus musculus' --reference_build GRCm39 \
-  --gene_sets resources/pathways.gmt --rbp_gene_sets resources/rbps.gmt \
-  --motif_database resources/motifs.json --clip_peaks resources/clip.tsv \
-  -profile docker --katana_container "$KATANA_IMAGE" \
-  --dexseq_tools_container "$DEXSEQ_IMAGE" --outdir results -work-dir work
+  --species Mus_musculus --reference_build GRCm39 \
+  --outdir results -work-dir work
 ```
 
-Use the matching current package, workflow and images described in the [quick start](docs/QUICKSTART.md). The BAM entry uses the same command with a BAM sample sheet. Nextflow schedules dependencies automatically; cluster accounts, partitions and resources belong in your site configuration.
+Nextflow fetches the matching tool images. Mouse GRCm39 defaults also fetch versioned GO, KEGG, RBP, motif and reference CLIP resources; see [databases](docs/RESOURCE_DATABASES.md) for sources and overrides. The BAM entry uses the same command with a BAM sample sheet. Nextflow schedules dependencies automatically; cluster accounts, partitions and resources belong in your site configuration.
 
 Nextflow passes results between tasks through channels; no external Python coordinator or study-specific monitoring script is required. Add `-resume` to reuse this run's completed tasks. Work is separate from deliverables and remains available for recovery. See [storage management](docs/STORAGE_MANAGEMENT.md).
 

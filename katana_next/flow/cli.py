@@ -201,6 +201,7 @@ def main(argv=None):
     command.add_argument("--collection", required=True, type=Path)
     command.add_argument("--project", required=True, type=Path)
     command.add_argument("--outdir", required=True, type=Path)
+    command.add_argument("--native-work-root", type=Path, help="Internal immutable native workspace handoff")
     command = sub.add_parser("verify-retained", help="Reload a retained project independently of source work")
     command.add_argument("--directory", required=True, type=Path)
     command = sub.add_parser("export-pipeline")
@@ -232,6 +233,7 @@ def main(argv=None):
             command.add_argument("--require-ready", action="store_true", help="Fail before scheduling when fixed-report resources are missing")
     command = sub.add_parser("import")
     command.add_argument("--bundle", required=True, type=Path)
+    command.add_argument("--owned-link-root", type=Path, help="Internal native work root for immutable generated artifacts")
     command.add_argument("--project-template", required=True, type=Path)
     command.add_argument("--config", type=Path, help="Analysis switches for optional template resources")
     command.add_argument("--outdir", required=True, type=Path)
@@ -269,7 +271,7 @@ def main(argv=None):
                 result = clean_completed_run(args.run_dir, apply=args.apply)
             elif args.action == "retain-project":
                 from .storage_project import retain_collection_project
-                result = retain_collection_project(args.collection, args.project, args.outdir)
+                result = retain_collection_project(args.collection, args.project, args.outdir, native_work_root=args.native_work_root)
             elif args.action == "verify-retained":
                 from .storage_project import validate_retained_project
                 context = validate_retained_project(args.directory)
@@ -312,7 +314,7 @@ def main(argv=None):
             elif args.action == "import":
                 from .importer import import_bundle
                 result = {"project": str(import_bundle(args.bundle, args.project_template, args.outdir,
-                    analysis_configuration=read_json(args.config) if args.config else None))}
+                    analysis_configuration=read_json(args.config) if args.config else None, owned_link_root=args.owned_link_root))}
             elif args.action == "validate-plan":
                 from .plan_reuse import validate_existing_plan
                 if args.out.exists():

@@ -13,6 +13,8 @@ import json
 import math
 import re
 import shutil
+import sqlite3
+import os
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
@@ -53,6 +55,24 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def remember_checksum(path, checksum):
+    # Same on-disk cache contract as the downstream runtime; no Katana import
+    # is needed in this standard-library-only upstream process.
+    root = os.environ.get('KATANA_DIGEST_CACHE')
+    if not root or os.name != 'posix':
+        return
+    path = Path(path).resolve()
+    stat = path.stat()
+    key = json.dumps([str(path), stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns])
+    try:
+        Path(root).mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(str(Path(root) / 'digests.sqlite3'), timeout=0.2) as db:
+            db.execute('CREATE TABLE IF NOT EXISTS hashes (identity TEXT PRIMARY KEY, sha TEXT NOT NULL)')
+            db.execute('INSERT OR IGNORE INTO hashes VALUES (?, ?)', (key, checksum))
+    except (OSError, sqlite3.Error):
+        pass
 
 
 def safe_relative(value: str) -> str:
@@ -226,7 +246,7 @@ def record(root: Path, relative: str, kind: str, **extra) -> dict:
     return {"kind": kind, "relative_path": relative, "bytes": path.stat().st_size, "sha256": sha256(path), "status": "available", **extra}
 
 
-def export_bundle(source_map_path: Path, output_dir: Path, samples_path: Path, contrasts_path: Path, profile: str = "core", allow_partial: bool = False) -> dict:
+def export_bundle(source_map_path: Path, output_dir: Path, samples_path: Path, contrasts_path: Path, profile: str = "core", allow_partial: bool = False, owned_root: Path | None = None) -> dict:
     source_map_path = source_map_path.resolve()
     data = json.loads(source_map_path.read_text(encoding="utf-8-sig"))
     samples = read_metadata(samples_path, {"sample": "sample_id", "group": "condition"}, {"sample_id", "condition"})
@@ -382,11 +402,40 @@ def export_bundle(source_map_path: Path, output_dir: Path, samples_path: Path, c
             continue
         destination = inside(output_dir, item["relative_path"])
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(item["source"], destination)
-        source_hash = sha256(Path(item["source"]))
-        result = record(output_dir, item["relative_path"], item["kind"], **{key: value for key, value in item.items() if key not in {"kind", "relative_path", "source"}})
-        if result["sha256"] != source_hash:
-            raise ValueError(f"Source/copy checksum mismatch: {destination}")
+        # Compute the checksum while copying, instead of rereading the source
+        # and destination (including each large BAM) after the copy.
+        source = Path(item["source"])
+        before = source.stat()
+        linked = False
+        if (owned_root is not None and source.resolve().is_relative_to(owned_root.resolve())
+                and before.st_nlink == 1):
+            try:
+                os.link(source, destination)
+                linked = True
+                before = source.stat()  # link creation itself changes ctime
+            except OSError:
+                pass
+        checksum = hashlib.sha256()
+        with source.open('rb') as reader:
+            if linked:
+                for block in iter(lambda: reader.read(8 * 1024 * 1024), b''):
+                    checksum.update(block)
+            else:
+                with destination.open('xb') as writer:
+                    for block in iter(lambda: reader.read(8 * 1024 * 1024), b''):
+                        writer.write(block)
+                        checksum.update(block)
+        after = source.stat()
+        if ((before.st_size, before.st_mtime_ns, before.st_ctime_ns) !=
+                (after.st_size, after.st_mtime_ns, after.st_ctime_ns) or
+                destination.stat().st_size != before.st_size):
+            raise ValueError(f"Source changed during export: {source}")
+        source_hash = checksum.hexdigest()
+        remember_checksum(source, source_hash)
+        remember_checksum(destination, source_hash)
+        result = {"kind": item["kind"], "relative_path": item["relative_path"],
+                  "bytes": before.st_size, "sha256": source_hash, "status": "available",
+                  **{key: value for key, value in item.items() if key not in {"kind", "relative_path", "source"}}}
         result["source_sha256"] = source_hash
         exported.append(result)
     # These normalized metadata files are adapters; original source sheets are also archived unchanged.
@@ -438,9 +487,10 @@ def main(argv=None) -> int:
     parser.add_argument("--contrasts", type=Path, required=True)
     parser.add_argument("--profile", choices=("core", "full"), default="core")
     parser.add_argument("--allow-partial", action="store_true", help="Deliberately export scoped failed/not-computed optional branches; never fabricate their outputs")
+    parser.add_argument("--owned-root", type=Path, help="Native Nextflow work root; reuse only singly linked products within it")
     args = parser.parse_args(argv)
     try:
-        result = export_bundle(args.source_map, args.output_dir, args.samples, args.contrasts, args.profile, args.allow_partial)
+        result = export_bundle(args.source_map, args.output_dir, args.samples, args.contrasts, args.profile, args.allow_partial, args.owned_root)
     except (ValueError, OSError, KeyError, json.JSONDecodeError) as error:
         parser.exit(2, f"Bundle export failed: {error}\n")
     print(json.dumps({"status": result["status"], "artifacts": len(result["artifacts"]), "bundle": str(args.output_dir.resolve())}))

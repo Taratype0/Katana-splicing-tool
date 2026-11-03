@@ -2,12 +2,18 @@
 
 ## Current native entry
 
-New studies run `nextflow run pipeline/main.nf`. `--outdir` is the published
+New studies run `nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103`. `--outdir` is the published
 result root and `-work-dir` is native cache. Stage dependencies and final
 delivery are part of this one Nextflow session. See [outputs](NATIVE_OUTPUTS.md).
 
 | Option | Default | Use |
 | --- | --- | --- |
+| `--resource_bundle` | auto | For Mus_musculus/GRCm39, download mouse-grcm39-v1. Use none for custom-only resources. |
+| `--resource_cache` | launch/.katana-cache/resources | Versioned resource cache, separate from task work. |
+| `--digest_cache` | launch/.katana-cache/checksums | One checksum database for unchanged-file reuse across tasks. |
+| `--verify_content` | false | Force full file rereads instead of metadata-validated digest reuse. |
+| `--katana_container` | release image | Optional override; default Docker image or SIF is downloaded by Nextflow. |
+| `--dexseq_tools_container` | pinned DEXSeq image | Optional override; default is downloaded by Nextflow. |
 | `--bundle` | unset | Existing upstream bundle; select downstream-only instead of raw inputs. |
 | `--design_factors` | `[condition]` | Explicit factor names; YAML list or comma-separated CLI values. Subject pairing stays in the sample/contrast sheets. |
 | `--clean_work` | false | Let Nextflow remove task work only after the complete DAG and delivery succeed. Leave off for later resume. |
@@ -39,7 +45,7 @@ The advanced JSON fields below remain supported; older releases retain their old
 | Nextflow launcher | Single-dash Nextflow arguments | `-profile`, `-params-file`, `-c`, `-work-dir`, `-resume`. |
 | Pipeline parameters | `--parameter` or a Nextflow YAML/JSON params file | `--mode`, `--input`, `--contrasts`, reference paths and rMATS settings. |
 | Study/resources | Direct `--species` and resource paths; generated template, or an existing imported `project.json` | Species, exact samples/contrasts, resources, JC/JCEC and original result provenance. |
-| Downstream plan | Direct switches/thresholds; generated `flow.json`, or an advanced explicit config | Selected contrasts, RS-DAS, per-module analysis parameters, independent networks, QC and MAPP. |
+| Downstream plan | Direct switches/thresholds; generated `flow.json`, or an advanced explicit config | Selected contrasts, RS-DAS, per-module analysis parameters, whole-study CoSplice, QC and MAPP. |
 | Site execution | Nextflow `-c site.config` | Fully qualified process resource selectors, account policy and executor configuration. |
 | Managed storage runner | `katana-flow run` arguments | `--outdir`, `--run-dir`, `--keep-work`, `--resume`, `--profile`, repeated `--site-config`. |
 | Deep dive | Exported request plus `bindings.json` and target CLI arguments | Chosen source row IDs, target scope, BAM/index locations and worker budget. |
@@ -496,3 +502,13 @@ results remain. See [selection, resource and resume examples](ANALYSIS_AND_EXECU
 The managed `katana-flow run` command accepts `--resource-config FILE.json`.
 This execution-only file can change during `--resume`; scientific configuration,
 inputs and arbitrary site configurations retain their normal identity checks.
+
+## Multiple resource files
+
+`--gene_sets`, `--rbp_gene_sets`, `--motif_database` and `--clip_peaks` accept
+comma-separated paths, a quoted glob, or an optional Nextflow parameter-file
+list. Each file remains a separate asset. Supplying a kind replaces that kind
+in the default resource bundle; other required kinds still download automatically.
+The bundled CLIP sources retain separate target, assay, biosample and genome-build
+metadata. For custom per-file metadata use an advanced project template.
+See [database versions and provenance](RESOURCE_DATABASES.md).

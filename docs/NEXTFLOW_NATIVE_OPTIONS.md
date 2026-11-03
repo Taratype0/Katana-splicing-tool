@@ -1,12 +1,12 @@
 # Native Nextflow options
 
-All 114 declared options from `pipeline/nextflow.config`.
+Declared options from `pipeline/nextflow.config`.
 Use these as `--name value` or keys in one optional `-params-file`.
 Single-dash launcher options such as `-profile`, `-c`, `-work-dir`, and `-resume` are separate.
 
 See [run examples and explanations](NEXTFLOW_SIMPLE.md), [scientific parameter details](NEXTFLOW_PARAMETERS.md),
 and [the complete editable template](../examples/nextflow/params.complete.yaml).
-The older published wheel does not include the new flat downstream options; use a matching current-source runtime.
+Use a versioned release so the workflow and default containers match.
 
 | Parameter | Declared default |
 | --- | --- |
@@ -21,8 +21,8 @@ The older published wheel does not include the new flat downstream options; use 
 | `--flow_plan` | `null` |
 | `--flow_report_revision` | `"1"` |
 | `--flow_executable` | `"katana-flow"` |
-| `--katana_container` | `null` |
-| `--dexseq_tools_container` | `null` |
+| `--katana_container` | Versioned Docker image; release SIF with singularity/apptainer |
+| `--dexseq_tools_container` | Versioned DEXSeq image/SIF |
 | `--katana_stage_containers` | `{}` |
 | `--outdir` | `"results"` |
 | `--publish_dir_mode` | `"copy"` |
@@ -37,6 +37,10 @@ The older published wheel does not include the new flat downstream options; use 
 | `--clip_peaks` | `null` |
 | `--fimo_runtime` | `null` |
 | `--resource_metadata` | `{}` |
+| `--resource_bundle` | `auto` |
+| `--resource_cache` | `${launchDir}/.katana-cache/resources` |
+| `--digest_cache` | `${launchDir}/.katana-cache/checksums` |
+| `--verify_content` | `false` |
 | `--contrast_ids` | `null` |
 | `--rmats_mode` | `"JCEC"` |
 | `--event_set` | `"stable_significant"` |

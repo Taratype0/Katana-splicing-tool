@@ -77,6 +77,29 @@ class _OwnedCopies:
         self.retained_aliases[self.storage._node(destination.lstat())] += 1
 
 
+class _NativeCopies:
+    """Native handoff of immutable generated workspace and collection files."""
+    def __init__(self, work, project, collection):
+        self.work = Path(work).resolve(strict=True)
+        self.roots = [(project.parent / 'bundle').resolve(strict=True), collection.resolve(strict=True)]
+        if not all(p.resolve().is_relative_to(self.work) for p in [project, *self.roots]):
+            raise ValueError('Native retention inputs must be inside this Nextflow work directory')
+        receipt = read_json(project.parent / 'import.receipt.json')
+        if receipt.get('status') != 'completed' or receipt.get('schema') != 'katana.flow.import/v1':
+            raise ValueError('Native retention requires a completed imported workspace')
+
+    def _validate(self):
+        if not self.work.is_dir():
+            raise ValueError('Native work directory disappeared')
+
+    def allow(self, path):
+        resolved = path.resolve(strict=True)
+        return not path.is_symlink() and any(resolved.is_relative_to(root.resolve()) for root in self.roots)
+
+    def record(self, destination):
+        pass
+
+
 def _member(root, relative):
     relative = Path(relative)
     if relative.is_absolute() or ".." in relative.parts:
@@ -94,15 +117,16 @@ def _record(root, path):
 
 def _verified_copy(source, destination, copied_content=None, *, expected_sha256=None, owned_copies=None):
     """Deduplicate only new retained copies, never hardlink borrowed inputs."""
-    before = (source.stat().st_size, source.stat().st_mtime_ns)
+    from .file_io import copy_verified, identity, remember
+    before = identity(source)
     expected = file_sha256(source)
     if expected_sha256 is not None and expected != expected_sha256:
         raise ValueError("A retained source changed after execution-bound input verification")
     if owned_copies is not None:
         owned_copies._validate()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    identity = (before[0], expected)
-    prior = copied_content.get(identity) if copied_content is not None else None
+    content_key = (before[2], expected)
+    prior = copied_content.get(content_key) if copied_content is not None else None
     if prior is not None:
         if prior.is_symlink() or not prior.is_file() or file_sha256(prior) != expected:
             raise ValueError("An owned retained copy changed during content deduplication")
@@ -111,19 +135,23 @@ def _verified_copy(source, destination, copied_content=None, *, expected_sha256=
         except OSError:
             # Cross-filesystem or unsupported hardlinks never make borrowing
             # an input inode acceptable; fall back to an independent copy.
-            shutil.copy2(source, destination)
+            copy_verified(source, destination, expected=expected)
     elif owned_copies is not None and owned_copies.allow(source):
         try:
             os.link(source, destination)
         except OSError:
-            shutil.copy2(source, destination)
+            copy_verified(source, destination, expected=expected)
     else:
-        shutil.copy2(source, destination)
-    if ((source.stat().st_size, source.stat().st_mtime_ns) != before or
-            file_sha256(source) != expected or file_sha256(destination) != expected):
+        copy_verified(source, destination, expected=expected)
+    if os.path.samefile(source, destination) and identity(source)[:4] == before[:4]:
+        # Creating a hard link changes ctime, but not the already-read bytes.
+        remember(source, expected)
+        remember(destination, expected)
+    if (identity(source)[:4] != before[:4] or
+            file_sha256(destination) != expected):
         raise ValueError("A retained source changed during copying")
     if copied_content is not None:
-        copied_content.setdefault(identity, destination)
+        copied_content.setdefault(content_key, destination)
     if owned_copies is not None:
         owned_copies.record(destination)
 
@@ -365,7 +393,7 @@ def _bind_catalog(root):
     return context
 
 
-def retain_collection_project(collection, source_project, destination, *, owned_scope=None):
+def retain_collection_project(collection, source_project, destination, *, owned_scope=None, native_work_root=None):
     """Create an independent analysis project; never modify or delete sources.
 
     Inputs are copied once per resolved source path (including explicit BAM
@@ -392,7 +420,10 @@ def retain_collection_project(collection, source_project, destination, *, owned_
         raise FileExistsError("Retained project destination already exists; preserve it")
     if not destination.parent.is_dir():
         raise ValueError("Retained project parent must already exist")
-    owned_copies = _OwnedCopies(owned_scope, destination) if owned_scope is not None else None
+    if owned_scope is not None and native_work_root is not None:
+        raise ValueError('Choose one ownership mode')
+    owned_copies = (_NativeCopies(native_work_root, source_project, collection) if native_work_root is not None
+                    else _OwnedCopies(owned_scope, destination) if owned_scope is not None else None)
 
     payload = source.model_dump(mode="json")
     paths = {}

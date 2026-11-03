@@ -1,158 +1,54 @@
-# Install the independent Katana runtime
+# Install and run Katana
 
-Use the launcher and wheel from the [2 November unified-engine release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261102).
-This beta includes paired comparisons, automatic strandedness, direct Nextflow
-parameters, standard output directories and native final delivery. The older downloads remain available for
-reproducing earlier installations.
+## Nextflow users
 
-## Linux cluster
+Use the [Nextflow quick start](NEXTFLOW_SIMPLE.md). If your server already has
+Nextflow >=25.10.4, Java >=17 and a supported container engine, no Katana Python
+installation is required. Nextflow downloads the versioned containers and
+Katana fetches selected databases once into your resource cache. No server-specific
+Katana installation path is used.
 
-The controller archive includes Python, installed dependencies, Nextflow
-25.10.4 and the exported pipeline. It does not use another Katana installation,
-a Conda environment or your Python user-site packages. The host supplies
-**Java 17+**, **Singularity/Apptainer** and scheduler clients. Load your site's
-modules before running. Scientific tasks use containers; references and
-databases are separate inputs.
+## Standalone downstream and browser users
 
-Download the controller and matching Katana downstream image from the same
-release. The new image includes whole-study CoSplice and EventGraph MotifTrace;
-an older downstream image cannot supply these engines. The DEXSeq counting image
-remains unchanged and is linked in the release manifest.
+Install the wheel from the matching [release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev20261103)
+into an isolated Python environment. The standalone scientific dependencies and
+Conda instructions are in [installation](INSTALL.md). The Python API, `katana-flow`
+and target-analysis commands remain available independently of Nextflow.
 
-Required assets:
+## Offline or portable controller installation
 
-| Asset | Purpose |
-| --- | --- |
-| `katana-controller-2.0.0b5.dev20261102-linux-x86_64.tar.gz` | Portable launcher, Python and Nextflow |
-| `katana-downstream-2.0.0b5.dev20261102-linux-amd64.sif` | Matching Katana scientific runtime |
-| `kanata-dexseq-tools-20261024-linux-amd64.sif` | Unchanged DEXSeq counting runtime |
-| `SHA256SUMS`, `RELEASE_MANIFEST.json` | Checksums and tested versions |
+The optional controller archive includes Python, installed controller dependencies,
+Nextflow and an exported workflow. Scientific tasks still use containers. Download
+the matching controller and downstream SIF plus the unchanged DEXSeq SIF linked
+in the release manifest. Check `SHA256SUMS` once when installing, then extract:
 
 ```bash
-sha256sum --ignore-missing --check SHA256SUMS
 mkdir -p tools
-tar -xzf katana-controller-2.0.0b5.dev20261102-linux-x86_64.tar.gz -C tools
+tar -xzf katana-controller-2.0.0b5.dev20261103-linux-x86_64.tar.gz -C tools
 export PATH="$PWD/tools/katana-controller/bin:$PATH"
 nextflow run tools/katana-controller/pipeline/main.nf --help
-nextflow -version
 ```
 
-Every selected download must be listed in the checksums and report `OK`.
-The archive can be extracted to a different directory on another compatible
-Linux x86-64 host. Its launchers locate files relative to their installation.
-The bundled Python serves the controller; scientific tools run in task images.
+Offline sites can pass `--katana_container /images/katana.sif` and
+`--dexseq_tools_container /images/dexseq.sif`, and use a pre-populated resource
+cache or explicit database paths. These overrides are optional for online use.
 
-Put caches on the allocation intended for the study:
+## Cache locations
+
+Put reusable caches on your project's storage, separately from task work:
 
 ```bash
-export PROJECT=/path/to/your/project
-export NXF_HOME="$PROJECT/cache/katana/nextflow"
-export NXF_SINGULARITY_CACHEDIR="$PROJECT/cache/katana/images"
-export SINGULARITY_CACHEDIR="$PROJECT/cache/katana/singularity"
+export NXF_HOME=/data/cache/katana/nextflow
+export NXF_SINGULARITY_CACHEDIR=/data/cache/katana/images
+export SINGULARITY_CACHEDIR=/data/cache/katana/singularity
 mkdir -p "$NXF_HOME" "$NXF_SINGULARITY_CACHEDIR" "$SINGULARITY_CACHEDIR"
 ```
 
 For Apptainer use `NXF_APPTAINER_CACHEDIR` and `APPTAINER_CACHEDIR` instead.
-Pass a writable `NUMBA_CACHE_DIR` through the container environment when the
-site disallows writes to a default cache location.
+Pass `--resource_cache /data/cache/katana/resources` and
+`--digest_cache /data/cache/katana/checksums` to the pipeline. Download checksums
+and changed-file checks remain enabled. Repeated reads of unchanged local files
+reuse a small checksum database; `--verify_content true` forces full rereads.
 
-## FASTQ or BAM to the report
-
-The scientific arguments are unchanged. A samplesheet selects FASTQ or
-genome-aligned BAM; the contrast sheet selects comparisons and their direction.
-Katana generates its internal project/settings JSON.
-
-```bash
-nextflow run tools/katana-controller/pipeline/main.nf \
-  -profile slurm,singularity -c /path/to/site.config \
-  --slurm_account YOUR_ALLOCATION \
-  --input /data/study/samples.csv \
-  --contrasts /data/study/contrasts.csv \
-  --fasta /data/reference/genome.fa \
-  --gtf /data/reference/annotation.gtf \
-  --reference_build YOUR_BUILD --annotation_release YOUR_RELEASE \
-  --species 'Mus musculus' \
-  --gene_sets /data/resources/pathways.gmt \
-  --rbp_gene_sets /data/resources/rbp_gene_sets.gmt \
-  --motif_database /data/resources/motifs.json \
-  --clip_peaks /data/resources/matched_clip_peaks.tsv \
-  --katana_container /data/images/katana-downstream-2.0.0b5.dev20261102-linux-amd64.sif \
-  --dexseq_tools_container /data/images/kanata-dexseq-tools-20261024-linux-amd64.sif \
-  -work-dir "$PROJECT/cache/katana/study-work" \
-  --outdir "$PROJECT/results/study"
-```
-
-Replace paths and site settings. Nextflow owns all stages in one session,
-including report and retained project delivery. See [standard outputs](NATIVE_OUTPUTS.md).
-No study-specific Python coordinator or polling script is required. Repeat the
-same command from the same launch directory with `-resume` to reuse completed
-tasks. Add `--clean_work` to let Nextflow remove work after successful delivery;
-failed work remains available. Leave it off to retain the completed resume cache.
-Use separate work/output directories for different studies. Queue selection is
-site configuration; Katana does not automatically select a memory partition.
-
-Existing managed runs keep their original launcher and software until completion.
-Do not replace an active installation to adopt the new directory layout.
-Other upstream tool images come from the workflow or site image cache.
-
-For paired animals, share `subject` between matching samples and set
-`paired=true` for that contrast. See [samples and contrasts](NEXTFLOW_USAGE.md),
-the [parameter reference](NEXTFLOW_PARAMETERS.md) and
-[editable template](../examples/nextflow/params.complete.yaml). Optional analyses
-have switches; supply resources for the analyses you enable.
-
-## Docker workstation
-
-Load the matching downstream archive and unchanged DEXSeq tools archive:
-
-```bash
-docker load -i katana-downstream-2.0.0b5.dev20261102-linux-amd64.docker.tar.gz
-docker load -i kanata-dexseq-tools-20261024-linux-amd64.docker.tar.gz
-```
-
-Use `-profile local,docker`, omit the cluster config/account and select
-`--katana_container katana-downstream:2.0.0b5.dev20261102` plus
-`--dexseq_tools_container kanata-dexseq-tools:dev-20261024`.
-The controller runs on Linux. These are downloadable local images; the release
-does not publish registry tags or a PyPI package.
-
-## Python, browser and existing results
-
-Install the release wheel in a fresh Python 3.11+ environment:
-
-```bash
-python -m venv .venv
-# Linux: source .venv/bin/activate
-# Windows PowerShell: .\.venv\Scripts\Activate.ps1
-python -m pip install './katana_splicing_tool-2.0.0b5.dev20261102-py3-none-any.whl[standalone]'
-python -m pip check
-katana-open --help
-katana-report --help
-katana-targets --help
-```
-
-Completed results and reports can be read without a cluster. New computations
-also need their documented R/external tools and resources; Nextflow supplies
-those through containers. Standalone native Linux users can use the locked
-[Conda environment](RUNTIME_ENVIRONMENTS.md).
-
-Existing bundles enter downstream analysis without repeating read processing;
-completed collections can generate reports directly. Gene/event deep dives use
-`katana-targets`. See the [entry-point guide](NEXTFLOW_USAGE.md#1-choose-an-entry).
-
-## Validation and updates
-
-The release manifest records hashes, CI and native runtime checks. Wheels built
-on both Windows and Linux are installed on Linux and tested by directly running
-the packaged gene-import and transcript-import R modules through Nextflow,
-including a cached second run. This catches executable-bit loss that an exported
-pipeline or `--help` check would miss. The launcher checks packaged script
-permissions before submitting work, without modifying the installation. Checks use
-installed commands, generated paired counts and generated Nextflow tasks;
-they do not imply every study or cluster has been run. The approved seven-section
-report format is unchanged.
-
-Install updates into new software directories and use matching images. Keep
-data/results outside software directories. Remove an old runtime after launchers
-and configs reference the new install. Updating Git alone does not update an
-installed package or image.
+Keep a running study on its original release and image. Updating a release does
+not silently replace an active run's code or invalidate its successful work.

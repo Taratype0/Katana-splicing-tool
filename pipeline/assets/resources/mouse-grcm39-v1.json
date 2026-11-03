@@ -1,0 +1,210 @@
+{
+  "version": "mouse-grcm39-v1",
+  "species": "Mus_musculus",
+  "reference_build": "GRCm39",
+  "assets": [
+    {
+      "asset_id": "mouse::ATtRACT",
+      "parameter": "motif_database",
+      "filename": "ATtRACT.zip",
+      "metadata": {
+        "species": "Mus_musculus",
+        "taxon": "10090",
+        "sha256": "adf73651e8e4d75c0fea86a5fb10926c93b7b04628d065789c1196b9ee0a3a76",
+        "semantics": "sequence preference, not experimental binding sites",
+        "source_url": "https://attract.cnic.es/",
+        "version": "ATtRACT_archive_20260909",
+        "motifs_available": 49,
+        "RBPs_available": 27,
+        "evidence_counts": {
+          "direct_experiment": 49
+        }
+      },
+      "url": "https://attract.cnic.es/attract/static/ATtRACT.zip"
+    },
+    {
+      "asset_id": "mouse::GO_MGI_mouse",
+      "parameter": "gene_sets",
+      "filename": "GO_MGI_mouse.gmt",
+      "metadata": {
+        "species": "Mus_musculus",
+        "taxon": "10090",
+        "sha256": "08deea278f4b87618377651b73c200888465fc0b9148dccbaedff646cb81dfc3",
+        "semantics": "mouse MGI GO annotations, propagated is_a/part_of",
+        "version": "mouse-20260909-v2",
+        "source_url": "https://current.geneontology.org/annotations/gaf/MOUSE-mod.gaf.gz",
+        "source_urls": [
+          "https://current.geneontology.org/annotations/gaf/MOUSE-mod.gaf.gz",
+          "https://purl.obolibrary.org/obo/go/go-basic.obo"
+        ],
+        "version_scope": "Derived frozen local resource bundle; native input sources and conversion semantics retained"
+      },
+      "url": "https://github.com/Taratype0/Katana-splicing-tool/releases/download/v2.0.0-beta.5.dev20261103/GO_MGI_mouse.gmt.gz",
+      "compression": "gzip"
+    },
+    {
+      "asset_id": "mouse::KEGG_2019_Mouse_symbols",
+      "parameter": "gene_sets",
+      "filename": "KEGG_2019_Mouse_symbols.gmt",
+      "metadata": {
+        "species": "Mus_musculus",
+        "taxon": "10090",
+        "sha256": "a96830c54a39b79ed8890d60a0cd77e62f12dfedb247ce2e40be489d874405b4",
+        "semantics": "KEGG 2019 Mouse via Enrichr; unique case-insensitive mapping to mouse MGI symbols; frozen legacy library, not current KEGG",
+        "version": "mouse-20260909-v2",
+        "source_url": "https://maayanlab.cloud/Enrichr/geneSetLibrary?mode=text&libraryName=KEGG_2019_Mouse",
+        "source_urls": [
+          "https://maayanlab.cloud/Enrichr/geneSetLibrary?mode=text&libraryName=KEGG_2019_Mouse"
+        ],
+        "version_scope": "Derived frozen local resource bundle; native input sources and conversion semantics retained",
+        "ontology": "KEGG"
+      },
+      "url": "https://maayanlab.cloud/Enrichr/geneSetLibrary?mode=text&libraryName=KEGG_2019_Mouse",
+      "transform": "mouse_kegg_symbols",
+      "source_sha256": "6aabbf753f6d14dd2205f47fc5e461688fa550a9685dffc77d27c28c7fb13df4",
+      "mapping_resource": {
+        "filename": "mouse-mgi-symbols-v1.txt",
+        "url": "https://github.com/Taratype0/Katana-splicing-tool/releases/download/v2.0.0-beta.5.dev20261103/mouse-mgi-symbols-v1.txt",
+        "metadata": {
+          "sha256": "a942cbabde9d9f768c2d91ccb8787d1eb7f3e4efe5fafc75afa56f2a1f1fa323"
+        }
+      }
+    },
+    {
+      "asset_id": "mouse::RBP_mouse",
+      "parameter": "rbp_gene_sets",
+      "filename": "RBP_mouse.gmt",
+      "metadata": {
+        "species": "Mus_musculus",
+        "taxon": "10090",
+        "sha256": "2bcb5ef4dde0e461200ce0381bbb14563e9e02c4b4c47d63ad73b7613f402464",
+        "semantics": "RBP/splicing-factor membership, NOT RBP target sets or causal regulators",
+        "version": "mouse-20260909-v2",
+        "source_url": "https://current.geneontology.org/annotations/gaf/MOUSE-mod.gaf.gz",
+        "source_urls": [
+          "https://current.geneontology.org/annotations/gaf/MOUSE-mod.gaf.gz",
+          "https://attract.cnic.es/download"
+        ],
+        "version_scope": "Derived frozen local resource bundle; native input sources and conversion semantics retained"
+      },
+      "url": "https://github.com/Taratype0/Katana-splicing-tool/releases/download/v2.0.0-beta.5.dev20261103/RBP_mouse.gmt.gz",
+      "compression": "gzip"
+    },
+    {
+      "asset_id": "mouse::CLIP::GSE69710_NOVA1",
+      "parameter": "clip_peaks",
+      "filename": "GSE69710_NOVA1.mm39.bed",
+      "metadata": {
+        "species": "Mus_musculus",
+        "genome_build": "GRCm39",
+        "coordinate_system": "0-based-half-open",
+        "source_url": "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE69710",
+        "version": "author_peaks_mm9_explicit_mm39_liftOver_20261010",
+        "sha256": "2ffd5bd9d0d76756a1362b87b648aac6a7a40c7a666da858de2aeaba62d7a5b5",
+        "assay": "HITS-CLIP",
+        "biosample": "CD1 E18.5 cortex",
+        "target": "NOVA1",
+        "accession": "GSE69710_NOVA1",
+        "peak_calling": "author BC>=2, unique reads>=10",
+        "native_build": "mm9",
+        "native_sha256": "6ef6220b1b18e1bd78987eb479b63e61de2397daecc09fc1fbb5aede49b8de51",
+        "chain_sha256": "f0e3bc08b960ee60ef5c1e8a2ad405bafdad28d3e85b8800b56736ffa72be629",
+        "liftover_binary_sha256": "8bb6ffa39c28fffbb52b64a258328ea9f7d97dc3b89cf385cca14495e7eeaa3b",
+        "native_records": 9988,
+        "converted_records": 9988,
+        "unmapped_records": 0,
+        "coordinate_conversion": "UCSC liftOver -minMatch=0.95; no remapping of reads",
+        "reference_context": "reference biosample, not current animals"
+      },
+      "url": "https://github.com/Taratype0/Katana-splicing-tool/releases/download/v2.0.0-beta.5.dev20261103/GSE69710_NOVA1.mm39.bed.gz",
+      "compression": "gzip"
+    },
+    {
+      "asset_id": "mouse::CLIP::GSE69710_NOVA2",
+      "parameter": "clip_peaks",
+      "filename": "GSE69710_NOVA2.mm39.bed",
+      "metadata": {
+        "species": "Mus_musculus",
+        "genome_build": "GRCm39",
+        "coordinate_system": "0-based-half-open",
+        "source_url": "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE69710",
+        "version": "author_peaks_mm9_explicit_mm39_liftOver_20261010",
+        "sha256": "20d533f62d1f3fc19a1fec4dc7474d27cbc44623d9644cf5f1593246322dbb6c",
+        "assay": "HITS-CLIP",
+        "biosample": "CD1 E18.5 cortex",
+        "target": "NOVA2",
+        "accession": "GSE69710_NOVA2",
+        "peak_calling": "author BC>=2, unique reads>=10",
+        "native_build": "mm9",
+        "native_sha256": "2a80b29cfafc9ce1c4c8028650ab32283b0c0b24407f0043e2b0e19662cc593a",
+        "chain_sha256": "f0e3bc08b960ee60ef5c1e8a2ad405bafdad28d3e85b8800b56736ffa72be629",
+        "liftover_binary_sha256": "8bb6ffa39c28fffbb52b64a258328ea9f7d97dc3b89cf385cca14495e7eeaa3b",
+        "native_records": 36591,
+        "converted_records": 36590,
+        "unmapped_records": 1,
+        "coordinate_conversion": "UCSC liftOver -minMatch=0.95; no remapping of reads",
+        "reference_context": "reference biosample, not current animals"
+      },
+      "url": "https://github.com/Taratype0/Katana-splicing-tool/releases/download/v2.0.0-beta.5.dev20261103/GSE69710_NOVA2.mm39.bed.gz",
+      "compression": "gzip"
+    },
+    {
+      "asset_id": "mouse::CLIP::GSM1828887",
+      "parameter": "clip_peaks",
+      "filename": "GSM1828887.mm39.bed",
+      "metadata": {
+        "species": "Mus_musculus",
+        "genome_build": "GRCm39",
+        "coordinate_system": "0-based-half-open",
+        "source_url": "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSM1828887",
+        "version": "author_peaks_mm9_explicit_mm39_liftOver_20261010",
+        "sha256": "1919d13e19941f9fadc3d5af56ba6d75ef4e2e0d97437f2bfdbd15b3d598c5c9",
+        "assay": "iCLIP",
+        "biosample": "46C mESC",
+        "target": "PTBP1",
+        "accession": "GSM1828887",
+        "peak_calling": "author FDR<0.01, 20nt neighborhood, >=4 significant reads",
+        "native_build": "mm9",
+        "native_sha256": "616e0b947d22ed9557eb8ea38942bde902e08f73bae4c187c12df114a06a91ab",
+        "chain_sha256": "f0e3bc08b960ee60ef5c1e8a2ad405bafdad28d3e85b8800b56736ffa72be629",
+        "liftover_binary_sha256": "8bb6ffa39c28fffbb52b64a258328ea9f7d97dc3b89cf385cca14495e7eeaa3b",
+        "native_records": 963604,
+        "converted_records": 963596,
+        "unmapped_records": 8,
+        "coordinate_conversion": "UCSC liftOver -minMatch=0.95; no remapping of reads",
+        "reference_context": "reference biosample, not current animals"
+      },
+      "url": "https://github.com/Taratype0/Katana-splicing-tool/releases/download/v2.0.0-beta.5.dev20261103/GSM1828887.mm39.bed.gz",
+      "compression": "gzip"
+    },
+    {
+      "asset_id": "mouse::CLIP::GSM1828888",
+      "parameter": "clip_peaks",
+      "filename": "GSM1828888.mm39.bed",
+      "metadata": {
+        "species": "Mus_musculus",
+        "genome_build": "GRCm39",
+        "coordinate_system": "0-based-half-open",
+        "source_url": "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSM1828888",
+        "version": "author_peaks_mm9_explicit_mm39_liftOver_20261010",
+        "sha256": "e1c7bd23ecfdda519ea6b3883a5bf5d4f511d83558c159af5ab1342330d8102b",
+        "assay": "iCLIP",
+        "biosample": "46C mNPC",
+        "target": "PTBP1",
+        "accession": "GSM1828888",
+        "peak_calling": "author FDR<0.01, 20nt neighborhood, >=4 significant reads",
+        "native_build": "mm9",
+        "native_sha256": "95fb89ec35e9e8a04e0b5a74deeb52afb8664866a5d3133cf2ce63a90ae4a8ee",
+        "chain_sha256": "f0e3bc08b960ee60ef5c1e8a2ad405bafdad28d3e85b8800b56736ffa72be629",
+        "liftover_binary_sha256": "8bb6ffa39c28fffbb52b64a258328ea9f7d97dc3b89cf385cca14495e7eeaa3b",
+        "native_records": 950077,
+        "converted_records": 950077,
+        "unmapped_records": 0,
+        "coordinate_conversion": "UCSC liftOver -minMatch=0.95; no remapping of reads",
+        "reference_context": "reference biosample, not current animals"
+      },
+      "url": "https://github.com/Taratype0/Katana-splicing-tool/releases/download/v2.0.0-beta.5.dev20261103/GSM1828888.mm39.bed.gz",
+      "compression": "gzip"
+    }
+  ]
+}

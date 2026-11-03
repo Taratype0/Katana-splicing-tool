@@ -11,6 +11,11 @@ import base64
 import hashlib
 import json
 import math
+import os
+import urllib.request
+import tempfile
+import gzip
+from collections import defaultdict
 from pathlib import Path
 
 ANALYSES = ("landscape", "cross_comparison", "enrichment", "rbp_identity",
@@ -18,6 +23,96 @@ ANALYSES = ("landscape", "cross_comparison", "enrichment", "rbp_identity",
 RESOURCE_KINDS = {"gene_sets": "gene_sets_gmt", "rbp_gene_sets": "rbp_gene_sets",
                   "motif_database": "rbp_motif_database", "clip_peaks": "rbp_binding_peaks",
                   "fimo_runtime": "fimo_runtime"}
+
+
+def fetch_resource(item, cache):
+    """Versioned public downloads: atomic files, one SHA check, cached reuse."""
+    from katana_next.flow.file_io import digest, remember, identity
+    checksum = item['metadata']['sha256']
+    if len(checksum) != 64 or any(c not in '0123456789abcdef' for c in checksum):
+        raise ValueError('Invalid resource checksum')
+    name = item['filename']
+    if Path(name).name != name or name in ('.', '..'):
+        raise ValueError('Invalid resource filename')
+    folder = Path(cache) / checksum
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / name
+    if target.is_file():
+        if digest(target) != checksum:
+            raise ValueError('Cached resource changed: ' + str(target))
+        return target
+    url = item['url']
+    if not url.startswith(('https://', 'http://')):
+        raise ValueError('Resource downloads require HTTP(S)')
+    temporary = None
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Katana-resource-download/1'})
+        with urllib.request.urlopen(req, timeout=120) as response, tempfile.NamedTemporaryFile(dir=folder, delete=False) as stream:
+            temporary = Path(stream.name)
+            h = hashlib.sha256()
+            if item.get('transform') == 'mouse_kegg_symbols':
+                raw = response.read()
+                if hashlib.sha256(raw).hexdigest() != item['source_sha256']:
+                    raise ValueError('KEGG upstream source differs from pinned version')
+                mapping = fetch_resource(item['mapping_resource'], cache)
+                folded = defaultdict(set)
+                for symbol in mapping.read_text().splitlines():
+                    folded[symbol.casefold()].add(symbol)
+                sets = {}
+                for line in raw.decode().splitlines():
+                    fields = line.strip().split('\t')
+                    if len(fields) < 3:
+                        continue
+                    genes = set()
+                    for gene in fields[2:]:
+                        matches = folded[gene.strip().casefold()]
+                        if len(matches) == 1:
+                            genes.update(matches)
+                    sets[fields[0]] = genes
+                content = ''.join(term + '\t' + item.get('content_source_url', item['url']) + '\t' + '\t'.join(sorted(genes)) + '\n'
+                                  for term, genes in sorted(sets.items()) if genes).replace('\n', '\r\n').encode()
+                stream.write(content)
+                h.update(content)
+            else:
+                reader = gzip.GzipFile(fileobj=response) if item.get('compression') == 'gzip' else response
+                for block in iter(lambda: reader.read(1024 * 1024), b''):
+                    stream.write(block)
+                    h.update(block)
+        if h.hexdigest() != checksum:
+            raise ValueError('Downloaded resource checksum differs from the pinned release: ' + name)
+        # A concurrent process may have finished the same immutable download.
+        if target.exists():
+            if digest(target) != checksum:
+                raise ValueError('Concurrent resource download differs: ' + name)
+        else:
+            os.replace(temporary, target)
+            remember(target, checksum, identity(target))
+        return target
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def resource_entries(request, resources):
+    names = request.get('resource_names', [])
+    if len(names) != len(resources) or set(names) - set(RESOURCE_KINDS):
+        raise ValueError('Resource names and staged inputs do not match')
+    declarations = request.get('resource_entries')
+    if declarations is not None and len(declarations) != len(names):
+        raise ValueError('Resource declarations and staged inputs do not match')
+    entries = []
+    for index, (name, filename) in enumerate(zip(names, resources)):
+        declared = declarations[index] if declarations is not None else {}
+        entries.append(dict(parameter=name, path=str(filename), asset_id=declared.get('asset_id', name),
+                            metadata=declared.get('metadata', {})))
+    catalog = request.get('resource_catalog') or []
+    supplied = set(names)
+    for item in catalog:
+        if item['parameter'] in supplied:
+            continue
+        entries.append(dict(parameter=item['parameter'], asset_id=item['asset_id'],
+            path=str(fetch_resource(item, request['resource_cache'])), metadata=item['metadata']))
+    return entries
 
 
 def boolean(value, name):
@@ -92,26 +187,31 @@ def generate(request, resources, outdir):
     metadata = request.get("resource_metadata") or {}
     if not isinstance(metadata, dict) or set(metadata) - set(RESOURCE_KINDS):
         raise ValueError("--resource_metadata accepts metadata objects keyed by resource parameter")
-    names = request.get("resource_names", [])
-    if len(names) != len(resources) or len(set(names)) != len(names) or set(names) - set(RESOURCE_KINDS):
-        raise ValueError("Resource names and staged inputs do not match")
-    for name, filename in zip(names, resources):
+    entries = resource_entries(request, resources)
+    names = [entry['parameter'] for entry in entries]
+    ids = [entry['asset_id'] for entry in entries]
+    if len(set(ids)) != len(ids):
+        raise ValueError('Resource asset IDs must be unique')
+    for entry in entries:
+        name, filename = entry['parameter'], entry['path']
         path = Path(filename).resolve(strict=True)
         if not path.is_file():
             raise ValueError(f"--{name} must be a file")
-        h = hashlib.sha256()
-        with path.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""): h.update(chunk)
-        digest = h.hexdigest()
-        declared = dict(metadata.get(name) or {})
-        if declared.get("sha256", digest) != digest:
+        try:
+            from katana_next.flow.file_io import digest as file_digest
+            checksum = file_digest(path)
+        except ImportError:
+            with path.open('rb') as stream:
+                checksum = hashlib.file_digest(stream, 'sha256').hexdigest()
+        declared = {**(metadata.get(name) or {}), **entry['metadata']}
+        if declared.get("sha256", checksum) != checksum:
             raise ValueError(f"--{name}: declared resource SHA256 does not match its bytes")
         for key in ("species", "genome_build"):
-            if declared.get(key) and template["metadata"].get(key) and declared[key] != template["metadata"][key]:
+            if declared.get(key) and template["metadata"].get(key) and str(declared[key]).replace(" ", "_") != str(template["metadata"][key]).replace(" ", "_"):
                 raise ValueError(f"--{name}: {key} conflicts with project declaration")
-        record = {"source_url": path.as_uri(), "version": "sha256:" + digest,
-                  "version_kind": "content_identity", **template["metadata"], **declared, "sha256": digest}
-        template["assets"].append({"asset_id": name, "kind": RESOURCE_KINDS[name],
+        record = {"source_url": path.as_uri(), "version": "sha256:" + checksum,
+                  "version_kind": "content_identity", **template["metadata"], **declared, "sha256": checksum}
+        template["assets"].append({"asset_id": entry['asset_id'], "kind": RESOURCE_KINDS[name],
                                     "path": str(path), "metadata": record})
     raw = request.get("mode", "complete") != "downstream-only"
     if raw:

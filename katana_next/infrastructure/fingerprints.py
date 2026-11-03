@@ -47,9 +47,8 @@ def fingerprint_file(path: str | Path, *, force_full: bool = False) -> FileFinge
     stat = resolved.stat()
     digest = hashlib.sha256()
     if force_full or stat.st_size <= _FULL_HASH_LIMIT:
-        with resolved.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(4 * _CHUNK_BYTES), b""):
-                digest.update(chunk)
+        from katana_next.flow.file_io import digest as cached_digest
+        full_digest = cached_digest(resolved)
         method = "sha256-full"
     else:
         offsets = (
@@ -69,7 +68,7 @@ def fingerprint_file(path: str | Path, *, force_full: bool = False) -> FileFinge
         exists=True,
         size=stat.st_size,
         modified_ns=stat.st_mtime_ns,
-        digest=digest.hexdigest(),
+        digest=full_digest if method == "sha256-full" else digest.hexdigest(),
         hash_method=method,
     )
 

@@ -6,13 +6,19 @@
     {
       "path": "bin/katana_bundle.py",
       "snapshot_sha256": "c63b8681f0253cc3c0ca24ea8c75e8083fec8951254f8384c07ba450be8e1f15",
-      "integrated_sha256": "68898422ccd46993a6a0340056986017444ae10e69788f3735803b4380a3db8f",
+      "integrated_sha256": "cf24b86fb82693581f192754fd418e76c2899bc7f26766acb96b9fcc88eb9b43",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
           "previous_integrated_sha256": "6b753545089ad3641f12f51ddce225402b968e996e26124abac3a13971846f84",
           "integrated_sha256": "68898422ccd46993a6a0340056986017444ae10e69788f3735803b4380a3db8f",
           "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        },
+        {
+          "revision": "portable-entry-20261103",
+          "previous_integrated_sha256": "68898422ccd46993a6a0340056986017444ae10e69788f3735803b4380a3db8f",
+          "integrated_sha256": "cf24b86fb82693581f192754fd418e76c2899bc7f26766acb96b9fcc88eb9b43",
+          "scope": "Single-pass export checksums and task-owned hardlink handoff; data bytes and scientific methods unchanged."
         }
       ]
     },
@@ -328,6 +334,19 @@
           "previous_integrated_sha256": "4452cc7f98fca12d053a13af481d928197e8342ff4b945e1b092d789ad03930b",
           "integrated_sha256": "d812476cb4cad04bf3d3056d7f3a423b53e0a985e01be2c5ab0b7362aac5535e",
           "scope": "Group explicit lane rows into one biological sample and concatenate gzip members per mate in a native Nextflow task. Scientific models and paired identities unchanged."
+        }
+      ]
+    },
+    {
+      "path": "modules/local/katana_export.nf",
+      "snapshot_sha256": "043edc643971d40977758f046145865222927330572e9d7b0022270bb709af0b",
+      "integrated_sha256": "1a75622f6fa2dade44145b28608dd57d22a72318f7ad6a856cb0f907393dfbac",
+      "integration_revisions": [
+        {
+          "revision": "portable-entry-20261103",
+          "previous_integrated_sha256": "043edc643971d40977758f046145865222927330572e9d7b0022270bb709af0b",
+          "integrated_sha256": "1a75622f6fa2dade44145b28608dd57d22a72318f7ad6a856cb0f907393dfbac",
+          "scope": "Single-pass export checksums and task-owned hardlink handoff; data bytes and scientific methods unchanged."
         }
       ]
     }

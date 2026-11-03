@@ -6,10 +6,10 @@ Katana does not generate every possible group combination.
 
 ## Install
 
-For the downloadable beta, follow [independent runtime installation](INDEPENDENT_RUNTIME.md).
-The current assets include the portable runtime, paired contrasts and a single
-Nextflow entry through report and project delivery. Earlier downloads keep their
-original behavior. A source installation is also available below.
+For Nextflow, use the [direct launch command](NEXTFLOW_SIMPLE.md). Nextflow,
+Java and a container engine are sufficient; matching containers download
+automatically. Mouse GRCm39 analysis databases also download automatically.
+The Python installation below is for standalone analysis and the browser.
 
 For the Python commands and browser, with Python 3.11 or newer:
 
@@ -28,22 +28,16 @@ The Python installation alone supports browsing/reporting; new analyses use
 the [downstream container](../containers/downstream/README.md) or the
 [standalone Conda environment](RUNTIME_ENVIRONMENTS.md).
 
-For the full container workflow, download the matching release images, or build
-the downstream image and [DEXSeq tools image](../containers/dexseq-tools/README.md).
-Set `KATANA_IMAGE` and `DEXSEQ_IMAGE` to their image names or SIF paths.
-The upstream modules supply their other tool images automatically.
-References and organism-specific analysis databases are configured separately.
-
-Create your study directory outside the software checkout. Keep input tables
-under `inputs/`, reads under `reads/`, and references under `references/`.
-Commands below run from that study directory with Katana on `PATH`.
+Create your study directory outside the software checkout. Keep sample and
+contrast tables separate from the work and results directories.
 
 ## 1. Start from FASTQ or BAM
 
 Copy the [FASTQ sample sheet](../examples/nextflow/samples_fastq.csv) or
 [BAM sample sheet](../examples/nextflow/samples_bam.csv) and replace its paths
-and groups. Write one row per biological sample. Currently, multiple lanes
-need to be merged before this entry.
+and groups. For multiple lanes, repeat the biological sample with a distinct
+`lane` ID and each pair of original FASTQs. Nextflow performs the merge. CSV
+and TSV are accepted.
 
 FASTQ sheet columns:
 
@@ -65,25 +59,22 @@ contrast,treatment,control
 Treated_vs_Control,Treated,Control
 ```
 
-Effects follow treatment relative to control. The raw-data route currently
-supports independent groups with `~ condition`; paired/batch-adjusted models
-need a separate compatible analysis route. See [experimental design](NEXTFLOW_USAGE.md#4-contrastsheet-input-and-direction).
+Effects follow treatment relative to control. Independent comparisons use
+`~ condition`. Paired comparisons declare `paired=true,blocking=subject` in
+the contrast sheet and matching `subject` identities in the sample sheet; they
+use `~ subject + condition`. See [experimental design](NEXTFLOW_USAGE.md#4-contrastsheet-input-and-direction).
 
-Supply [resource paths and analysis parameters](NEXTFLOW_SIMPLE.md) directly,
-or in the shared parameter template. Internal project/settings JSON is generated.
-The full default report uses these resources; downloading
-FASTQ alone does not provide them. You can [turn off selected analyses](ANALYSIS_AND_EXECUTION_OPTIONS.md)
-and omit their calculation and dedicated resource requirements.
+Supply sample/contrast sheets, reference files and output paths. Internal JSON
+is generated automatically. The selected modules use the versioned
+[mouse databases](RESOURCE_DATABASES.md), or your explicit resource overrides.
+Optional analyses can be disabled with the documented `--skip_*` switches.
 
 ```sh
-nextflow run pipeline/main.nf --mode complete \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103 \
   --input inputs/samples.csv --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
-  --species 'Mus musculus' --reference_build GRCm39 \
-  --gene_sets resources/pathways.gmt --rbp_gene_sets resources/rbps.gmt \
-  --motif_database resources/motifs.json --clip_peaks resources/clip.tsv \
-  -profile docker --katana_container "$KATANA_IMAGE" \
-  --dexseq_tools_container "$DEXSEQ_IMAGE" --outdir results -work-dir work
+  --species Mus_musculus --reference_build GRCm39 \
+  -profile docker --outdir results -work-dir work
 ```
 
 The same command handles a BAM sheet without realigning its BAMs. It runs
@@ -116,13 +107,13 @@ node. Slurm manages actual admission and concurrency.
 For a Katana upstream results bundle:
 
 ```sh
-nextflow run pipeline/main.nf --mode downstream-only \
-  --bundle upstream-results/katana_bundle -params-file analysis-resources.yaml \
-  -profile docker --katana_container "$KATANA_IMAGE" --outdir results -work-dir work
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103 \
+  --mode downstream-only --bundle upstream-results/katana_bundle \
+  --species Mus_musculus --reference_build GRCm39 \
+  -profile docker --outdir results -work-dir work
 ```
 
-The resource file selects resources and optional analyses as in the full-run
-example. For a prepared Katana project, replace `--bundle` with `--project
+Resource options and analysis switches are the same as in the full-run example. For a prepared Katana project, replace `--bundle` with `--project
 /data/project.json`. For external
 nf-core output, first map its result files, samples, comparisons and reference
 using the [existing-results guide](EXISTING_RESULTS.md). Automatic discovery

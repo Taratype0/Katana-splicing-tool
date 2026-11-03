@@ -158,7 +158,8 @@ def test_conflicting_or_unverified_upstream_metadata_is_not_imported(tmp_path, m
     assert not (tmp_path / "rejected").exists()
 
 
-def test_actual_exporter_importer_preserves_declarations_without_claiming_validation(tmp_path):
+@pytest.mark.parametrize("owned", [False, True])
+def test_actual_exporter_importer_preserves_declarations_without_claiming_validation(tmp_path, owned):
     from katana_next.flow.distribution import export_pipeline
     pipeline = export_pipeline(tmp_path / "pipeline")
     spec = importlib.util.spec_from_file_location("bundle_exporter", pipeline / "bin/katana_bundle.py")
@@ -189,7 +190,10 @@ def test_actual_exporter_importer_preserves_declarations_without_claiming_valida
         "gene_exclusions": exclusions, "assay": "bulk", "assay_validation": "declared",
         "rmats_sample_order": {"A": ["a"], "B": ["b"]}})
     exported = tmp_path / "exported"
-    manifest = exporter.export_bundle(source, exported, samples, contrasts)
+    manifest = exporter.export_bundle(source, exported, samples, contrasts, owned_root=tmp_path if owned else None)
+    import os
+    for item in artifacts:
+        assert os.path.samefile(item["source"], exported / item["relative_path"]) == owned
     assert manifest["reference_declarations"] == declarations
     assert manifest["gene_exclusions"] == exclusions
     assert manifest["assay"] == "bulk"

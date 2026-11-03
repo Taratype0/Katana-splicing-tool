@@ -7,10 +7,48 @@ import os
 from pathlib import Path
 import shutil
 import time
+import json
+import sqlite3
 from threading import RLock
 
 _digests = OrderedDict()
 _lock = RLock()
+
+
+def _persistent(path, stamp, value=None):
+    root = os.environ.get('KATANA_DIGEST_CACHE')
+    if not root or not stamp[1] or not metadata_cache_ready(stamp):
+        return None
+    # One small database, not one sidecar per scientific file. Rollback journal
+    # (not WAL) and a bounded lock wait work with shared-filesystem locking;
+    # unsupported or busy caches simply fall back to reading the source.
+    key = json.dumps([str(Path(path).resolve()), *stamp])
+    try:
+        Path(root).mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(str(Path(root) / 'digests.sqlite3'), timeout=0.2) as db:
+            db.execute('CREATE TABLE IF NOT EXISTS hashes (identity TEXT PRIMARY KEY, sha TEXT NOT NULL)')
+            if value is not None:
+                db.execute('INSERT OR IGNORE INTO hashes VALUES (?, ?)', (key, value))
+                return value
+            row = db.execute('SELECT sha FROM hashes WHERE identity=?', (key,)).fetchone()
+            return row[0] if row else None
+    except (OSError, sqlite3.Error):
+        return None
+
+
+def remember(path, value, stamp=None):
+    """Record a digest computed from these bytes, not an unverified declaration."""
+    current = identity(path)
+    if stamp is not None and current != stamp:
+        raise ValueError('File changed while recording checksum: ' + str(path))
+    if not metadata_cache_ready(current):
+        return
+    key = (("inode" if current[1] else str(Path(path).resolve())), *current)
+    with _lock:
+        _digests[key] = value
+        while len(_digests) > 8192:
+            _digests.popitem(last=False)
+    _persistent(path, current, value)
 
 
 def metadata_cache_ready(stamp):
@@ -55,20 +93,50 @@ def digest(path):
         if cached is not None and metadata_cache_ready(before) and os.environ.get("KATANA_VERIFY_CONTENT") != "1":
             _digests.move_to_end(key)
             return cached
+    if os.environ.get('KATANA_VERIFY_CONTENT') != '1':
+        checksum = _persistent(path, before)
+        if (isinstance(checksum, str) and len(checksum) == 64 and
+                all(c in '0123456789abcdef' for c in checksum) and identity(path) == before):
+            with _lock:
+                _digests[key] = checksum
+            return checksum
     with path.open('rb') as handle:
         value = hashlib.file_digest(handle, 'sha256').hexdigest()
     if identity(path) != before:
         raise ValueError(f'File changed during content verification: {path}')
-    with _lock:
-        # Do not retain an ambiguous fresh identity for reuse after the window:
-        # another same-tick write could otherwise inherit that old digest.
-        if metadata_cache_ready(before):
-            _digests[key] = value
-        else:
-            _digests.pop(key, None)
-        while len(_digests) > 8192:
-            _digests.popitem(last=False)
+    remember(path, value, before)
     return value
+
+
+def copy_verified(source, destination, *, expected=None):
+    """Independent copy and SHA256 in one source pass; never rescan the copy.
+
+    Explicit full verification remains available through KATANA_VERIFY_CONTENT.
+    Atomic replacement is deliberately not used: callers own a new destination.
+    """
+    source, destination = Path(source), Path(destination)
+    before = identity(source)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    checksum = hashlib.sha256()
+    try:
+        with source.open('rb') as reader, destination.open('xb') as writer:
+            for block in iter(lambda: reader.read(8 * 1024 * 1024), b''):
+                checksum.update(block)
+                writer.write(block)
+        value = checksum.hexdigest()
+        if identity(source) != before or destination.stat().st_size != before[2]:
+            raise ValueError('Source changed during copying: ' + str(source))
+        if expected is not None and value != expected:
+            raise ValueError('Source checksum changed during copying: ' + str(source))
+        shutil.copystat(source, destination)
+        remember(source, value, before)
+        remember(destination, value)
+        if os.environ.get('KATANA_VERIFY_CONTENT') == '1' and digest(destination) != value:
+            raise ValueError('Destination checksum mismatch: ' + str(destination))
+        return value
+    except Exception:
+        # A partial destination stays visible for diagnosis, never accepted.
+        raise
 
 
 def retain_owned_file(source, destination):

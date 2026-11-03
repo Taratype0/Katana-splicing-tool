@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path, PurePosixPath
 
 from .model import file_sha256, read_json, write_json
+from .file_io import copy_verified, identity, remember
 
 
 def _upstream_metadata(source, paths):
@@ -227,13 +228,18 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None, ana
     for relative, path in paths.items():
         destination = out / "bundle" / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
+        verified = file_sha256(path)
+        before = identity(path)
         if owned is not None and path.resolve().is_relative_to(owned) and relative not in normalized_members:
             try:
                 os.link(path, destination)
             except OSError:
-                shutil.copyfile(path, destination)
+                copy_verified(path, destination, expected=file_sha256(path))
         else:
-            shutil.copyfile(path, destination)
+            copy_verified(path, destination, expected=file_sha256(path))
+        if os.path.samefile(path, destination) and identity(path)[:4] == before[:4]:
+            remember(path, verified)
+            remember(destination, verified)
         if file_sha256(path) != file_sha256(destination):
             raise ValueError("Imported native bytes changed while copying")
     for relative, content in normalized_members.items():

@@ -130,3 +130,9 @@ bundle: null
 design_factors: [condition]
 # Delete task work only after successful final delivery; failed work remains.
 clean_work: false
+
+# Automatically retrieve pinned mouse/GRCm39 annotations; use none for custom resources.
+resource_bundle: auto
+resource_cache: .katana-cache/resources
+digest_cache: .katana-cache/checksums
+verify_content: false
