@@ -227,7 +227,8 @@ workflow KATANA_PIPELINE {
     ch_versions = ch_versions.mix(SALMON_GENOME_PROJECTION.out.versions)
 
     // Count each sample once, then fit only the declared contrasts.
-    DEXSEQ_ANNOTATION(FILTER_ANALYSIS_GTF.out.gtf, params.aggregation)
+    DEXSEQ_ANNOTATION(FILTER_ANALYSIS_GTF.out.gtf, params.aggregation,
+        file("${projectDir}/vendor/dexseq/dexseq_prepare_annotation.py", checkIfExists: true))
     DEXSEQ_DEU(FILTER_ANALYSIS_GTF.out.gtf, ch_resolved_bam, DEXSEQ_ANNOTATION.out.gff,
         ch_resolved_samples, VALIDATE_INPUTS.out.contrasts,
         params.n_dexseq_plot, params.aggregation, params.alignment_quality)

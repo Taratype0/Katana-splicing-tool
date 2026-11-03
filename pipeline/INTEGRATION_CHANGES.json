@@ -277,7 +277,7 @@
     {
       "path": "workflows/katana_core.nf",
       "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
-      "integrated_sha256": "583f4e349b7a8f8db2d0179fb6109b6d6517ea8b4abcae2377e5caf724bc012f",
+      "integrated_sha256": "9f2bc8daf0918f76bad3111a124a15c0cbfa69dcaa68d64f5857614b8d18d899",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
@@ -296,6 +296,12 @@
           "previous_integrated_sha256": "6233799132810e70ef69bc375f1f7d78437ed67d23f2cb79ec004e50c5f490f1",
           "integrated_sha256": "583f4e349b7a8f8db2d0179fb6109b6d6517ea8b4abcae2377e5caf724bc012f",
           "scope": "Select tab delimiter for TSV samplesheets before native input-file staging; retain lane grouping and biological metadata."
+        },
+        {
+          "revision": "dexseq-explicit-annotation-tool-20261103",
+          "previous_integrated_sha256": "583f4e349b7a8f8db2d0179fb6109b6d6517ea8b4abcae2377e5caf724bc012f",
+          "integrated_sha256": "9f2bc8daf0918f76bad3111a124a15c0cbfa69dcaa68d64f5857614b8d18d899",
+          "scope": "Pass the original DEXSeq annotation script as a staged path in the primary workflow call."
         }
       ]
     },
