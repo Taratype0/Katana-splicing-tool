@@ -40,7 +40,10 @@ PY
   echo 'cc6b9d9c17b98fdcbf59b0dfffe77c20356b786830c7dc503ac2dc5f4b434b99  environments/locks/linux-64.explicit.txt' | (cd "$GITHUB_WORKSPACE"; sha256sum --check --strict)
   echo '4bbfdd6b3510821fce032d52d42a52bef1313238fad82b7c2d831adda5cb87f1  environments/locks/pip-linux-64.lock' | (cd "$GITHUB_WORKSPACE"; sha256sum --check --strict)
   docker load -i katana-downstream-2.0.0b5.dev20261102-linux-amd64.docker.tar.gz
-  docker tag sha256:79c0746d637155fb35aa4137f11b91f5050f85bf715847ae3d680de9a69001d3 katana-runtime-base:verified
+  # The verified archive supplies this unique tag. Docker storage backends may
+  # expose a manifest digest or a config digest as their local image identifier.
+  docker inspect katana-downstream:2.0.0b5.dev20261102 > output/base-image-inspect.json
+  docker tag katana-downstream:2.0.0b5.dev20261102 katana-runtime-base:verified
   ;;
 build)
   cd "$ROOT"
