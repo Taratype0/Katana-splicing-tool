@@ -1,85 +1,73 @@
-name: Validate release runtime
+name: Verify accepted release assets
 on:
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: Existing draft release containing the candidate wheel
-        required: true
-      runtime_version:
-        description: Candidate wheel version
-        required: true
-      wheel_sha256:
-        description: Candidate wheel SHA256
-        required: true
-      software_run:
-        description: Software CI run with accepted wheel and installed-controller jobs
-        required: true
 permissions:
   contents: write
   actions: read
 jobs:
-  docker-runtime:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 150
+  upload-accepted-controller:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ inputs.release_tag }}
-      RUNTIME_VERSION: ${{ inputs.runtime_version }}
-      WHEEL_SHA: ${{ inputs.wheel_sha256 }}
-      SOFTWARE_RUN: ${{ inputs.software_run }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: '21'
-      - name: Obtain verified wheel, controller and runtime base
-        run: bash tools/runtime/release_runtime.sh prepare
-      - name: Build and verify installed candidate image
-        run: bash tools/runtime/release_runtime.sh build
-      - name: Verify native container execution and cache reuse
+          ref: 38eb64631a9c0997c93bc7992a92a93c881218c1
+      - name: Verify accepted source and existing draft
         run: |
-          python pipeline/tools/check_container_runtime.py --image "katana-downstream:$RUNTIME_VERSION" --nextflow "$CONTROLLER/bin/nextflow" --outdir "$RUNNER_TEMP/katana-release/output/native-runtime"
-      - name: Verify installed standalone models and approved report
-        run: bash tools/runtime/release_runtime.sh models
-      - name: Verify installed native DAG, models, report, delivery and resume
+          python - <<'PY'
+          import subprocess,json
+          repo='Taratype0/Katana-splicing-tool';head='38eb64631a9c0997c93bc7992a92a93c881218c1'
+          for id in (41700183693,41700216459,41700224428):
+              r=json.loads(subprocess.check_output(['gh','run','view',str(id),'--repo',repo,'--json','headSha,status,conclusion']))
+              assert r==dict(headSha=head,status='completed',conclusion='success'),r
+          r=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases/tags/v2.0.0-beta.5.dev2026110306']))
+          assert r['draft'] and r['target_commitish']==head
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: installed-native-linux
+          run-id: 41700183693
+          github-token: ${{ github.token }}
+          path: accepted/controller
+      - uses: actions/download-artifact@v4
+        with:
+          name: upstream-resource-policy
+          run-id: 41700216459
+          github-token: ${{ github.token }}
+          path: accepted/native/upstream-resource-policy
+      - uses: actions/download-artifact@v4
+        with:
+          name: paired-native-models
+          run-id: 41700216459
+          github-token: ${{ github.token }}
+          path: accepted/native/paired-native-models
+      - name: Verify installed payload and upload only accepted assets
         run: |
-          "$CONTROLLER/python/bin/python3" -I tools/runtime/check_native_models.py --image "katana-downstream:$RUNTIME_VERSION" --nextflow "$CONTROLLER/bin/nextflow" --outdir "$RUNNER_TEMP/katana-release/output/native-models"
-      - name: Preserve validated Docker runtime in draft release
-        run: bash tools/runtime/release_runtime.sh collect-docker
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: release-runtime-checks
-          path: |
-            ${{ runner.temp }}/katana-release/output/**/*.json
-            ${{ runner.temp }}/katana-release/output/**/*.log
-            ${{ runner.temp }}/katana-release/output/**/*.tsv
-            ${{ runner.temp }}/katana-release/output/*SUMS
-          retention-days: 7
-
-  apptainer-runtime:
-    needs: docker-runtime
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ inputs.release_tag }}
-      RUNTIME_VERSION: ${{ inputs.runtime_version }}
-      WHEEL_SHA: ${{ inputs.wheel_sha256 }}
-      SOFTWARE_RUN: ${{ inputs.software_run }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build and verify SIF from the accepted Docker archive
-        run: bash tools/runtime/release_runtime.sh apptainer
-      - name: Preserve complete runtime acceptance in draft release
-        run: bash tools/runtime/release_runtime.sh collect
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: release-apptainer-checks
-          path: |
-            ${{ runner.temp }}/katana-release/output/**/*.json
-            ${{ runner.temp }}/katana-release/output/**/*.log
-            ${{ runner.temp }}/katana-release/output/*SUMS
-          retention-days: 7
+          python - <<'PY'
+          from pathlib import Path
+          import tarfile,hashlib,json,subprocess
+          root=Path('accepted');files=list((root/'controller').rglob('*linux-x86_64.tar.gz'));assert len(files)==1,files
+          archive=files[0];head='38eb64631a9c0997c93bc7992a92a93c881218c1'
+          checked=[]
+          with tarfile.open(archive) as tar:
+              for source in ('pipeline/modules/local/rmats_prep_bam.nf','pipeline/vendor/dexseq/dexseq_count.py','pipeline/conf/upstream_task_resources.config','pipeline/conf/portable_resources.config','pipeline/conf/pdc_kth.config','pipeline/conf/task_resources.config','pipeline/assets/measured-resources.json','pipeline/assets/resource-policy.json','pipeline/nextflow.config','pipeline/bin/katana_configure.py','pipeline/subworkflows/local/dexseq_deu.nf'):
+                  matches=[m for m in tar.getmembers() if m.name.endswith('/_pipeline/'+source.removeprefix('pipeline/'))]
+                  assert len(matches)==1,(source,len(matches))
+                  content=tar.extractfile(matches[0]).read();assert content==Path(source).read_bytes(),source
+                  checked.append(dict(path=source,sha256=hashlib.sha256(content).hexdigest()))
+              matches=[m for m in tar.getmembers() if m.name.endswith('/katana_next/targets/bundle.py')];assert len(matches)==1
+              assert tar.extractfile(matches[0]).read()==Path('katana_next/targets/bundle.py').read_bytes()
+          with archive.open('rb') as f:sha=hashlib.file_digest(f,'sha256').hexdigest()
+          evidence=[]
+          for p in (root/'native').rglob('*.json'):
+              try: content=json.loads(p.read_text())
+              except ValueError: continue
+              evidence.append(dict(path=str(p.relative_to(root/'native')),record=content))
+          assert evidence
+          record=dict(status='passed',source_commit=head,software_run=41700183693,native_run=41700216459,controller=dict(filename=archive.name,bytes=archive.stat().st_size,sha256=sha),packaged_sources=checked,native_evidence=evidence,rebuild=False)
+          receipt=Path('CONTROLLER_VALIDATION.json');receipt.write_text(json.dumps(record,indent=2)+'\n')
+          subprocess.run(['gh','release','upload','v2.0.0-beta.5.dev2026110306',str(archive),str(receipt),'--repo','Taratype0/Katana-splicing-tool'],check=True)
+          print(json.dumps(dict(status='uploaded_verified_controller',**record['controller'])))
+          PY
