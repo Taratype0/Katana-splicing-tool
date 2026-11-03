@@ -1,9 +1,10 @@
 # Katana downstream image
 
-Load the accepted image archive from the
-[downloadable release](../../docs/INDEPENDENT_RUNTIME.md#docker-workstation),
-or build a new matching image using the instructions below. The downloadable
-archive is a Docker image export, not a registry reference.
+Normal Nextflow runs download the matching image automatically: choose
+`-profile docker`, `-profile singularity` or `-profile apptainer`. Image addresses
+are versioned in the pipeline configuration. For offline use, download the
+Docker archive or SIF from the [matching release](../../docs/INDEPENDENT_RUNTIME.md).
+Local builds are optional and described below.
 
 This image supplies the Python, R and native tools used by Katana downstream
 tasks. Existing upstream modules retain their own nf-core tool environments.
@@ -22,7 +23,8 @@ The [current runtime guide](../../docs/INDEPENDENT_RUNTIME.md) links the matchin
 wheel, Docker/SIF images and portable launcher. Checksums and tested entry points
 are recorded in the release manifest. Dated records under `docs/validation/`
 remain evidence for older images; use the matching new image for CoSplice and
-EventGraph MotifTrace. There is no published registry tag.
+EventGraph MotifTrace. Docker uses the versioned `j387735517/katana-downstream`
+registry image; Apptainer/Singularity use the release SIF.
 
 ## Build locally
 
@@ -40,7 +42,7 @@ Set `wheel` to the single file just built. From a clean checkout, use a commit
 tag to keep this build separate from earlier runtime-check images:
 
 ```sh
-wheel=dist/katana_splicing_tool-2.0.0b5.dev20261102-py3-none-any.whl
+wheel=dist/katana_splicing_tool-2.0.0b5.dev20261103-py3-none-any.whl
 image="katana-downstream:dev-$(git rev-parse --short HEAD)"
 python scripts/build_downstream_container.py \
   --wheel "$wheel" \

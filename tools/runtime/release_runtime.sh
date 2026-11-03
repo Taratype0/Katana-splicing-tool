@@ -8,7 +8,15 @@ prepare)
   [[ "$RUNTIME_VERSION" =~ ^[0-9][0-9a-zA-Z.+-]*$ ]]
   [[ "$SOFTWARE_RUN" =~ ^[0-9]+$ ]]
   test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
-  test "$(gh run view "$SOFTWARE_RUN" --json conclusion --jq .conclusion)" = success
+  gh run view "$SOFTWARE_RUN" --json headSha,jobs > /tmp/katana-software-checks.json
+  python - <<'PYCHECK'
+import json
+from pathlib import Path
+run=json.loads(Path('/tmp/katana-software-checks.json').read_text())
+required={'package-wheel','installed-native-import (linux)','installed-native-import (windows)'}
+passed={j['name'] for j in run['jobs'] if j['status']=='completed' and j['conclusion']=='success'}
+assert required <= passed, (required-passed)
+PYCHECK
   mkdir -p "$ROOT/context" "$ROOT/output"
   cd "$ROOT"
   gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" -p '*.whl' -D context

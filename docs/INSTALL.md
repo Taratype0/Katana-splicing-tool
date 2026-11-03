@@ -28,15 +28,17 @@ Earlier checks are retained in the dated [October entry/runtime record](validati
 and [completed-result record](validation/completed-results-runtime-20261025.md).
 They describe their recorded versions, not the current engines. New engine
 integration checks use generated inputs; they do not imply a new real-study run.
-No PyPI package or container-registry publication is advertised.
+Python wheels are distributed through GitHub Releases. Nextflow profiles select
+the matching Docker registry image or downloadable Apptainer/Singularity SIF.
+No PyPI publication is advertised.
 
 ## Versions and rollback
 
 `main` contains the accepted software. `codex/` branches are used for
 subsequent development. Record the exact Git commit with each installation;
 existing wheel/image acceptance records keep their original source hashes.
-The downloadable assets preserve the accepted builds; they are not a PyPI
-package or a container-registry publication.
+The downloadable assets preserve the accepted builds. Match the release tag
+in your command to its wheel and container versions; PyPI is not required.
 
 The previous `main` is preserved by the annotated tag
 [`archive/pre-main-package-20261025`](https://github.com/Taratype0/Katana-splicing-tool/tree/archive/pre-main-package-20261025),
@@ -58,7 +60,8 @@ Nextflow sources. A shared package version string alone is not sufficient:
 verify the supplied wheel SHA256, source commit, image ID and dependency-lock
 identities in its delivery/acceptance record. Existing accepted artifacts keep
 their original identities; a newer source change does not update an old image.
-No public PyPI or container-registry release is claimed.
+For the current public image addresses, see the
+[independent runtime guide](INDEPENDENT_RUNTIME.md).
 
 For report assembly only, install the supplied wheel with its report extra in
 a fresh Python 3.11+ environment, replacing the example filename with the exact
@@ -113,34 +116,23 @@ the same command with `micromamba run -n katana katana-report ...` after
 installing the native/pip locks and matching wheel. Genome references and
 analysis databases remain project resources rather than installer contents.
 
-### Build or load a matching container
+### Automatic container downloads
 
-Follow the [container build instructions](../containers/downstream/README.md#build-locally)
-to build the accepted software from `main`. If an image archive was supplied,
-verify its archive checksum, load it and compare the actual image ID with the
-same delivery record. The [current runtime record](validation/entrypoints-runtime-20261025.md)
-binds the accepted `098ceae` software, matching wheel and image. A historical
-archive does not include later fixes simply because `main` was updated.
+The normal Nextflow command needs no manual image download or host Katana
+Python installation. `-profile docker` selects versioned registry images;
+`-profile singularity` or `-profile apptainer` selects the matching SIF files.
+This includes the DEXSeq tools image for FASTQ/BAM analysis. Other upstream
+modules retain their own pinned nf-core tool images.
 
-For new FASTQ/BAM processing, also [build or load the separate DEXSeq tools image](../containers/dexseq-tools/README.md)
-and pass its actual identity with `--dexseq_tools_container`. Existing-result
-downstream-only analysis does not need that upstream image. Upstream nf-core
-modules retain their own pinned tool images, which the executor must be able
-to obtain. No unpublished registry tag is used as an installation source.
+For offline sites, preload the images and pass `--katana_container` and
+`--dexseq_tools_container` with local paths. Keep reusable image and database
+caches outside task work. The [runtime guide](INDEPENDENT_RUNTIME.md) documents
+cache locations and the optional portable controller; the
+[database guide](RESOURCE_DATABASES.md) lists automatic and custom resources.
 
-The [historical `9546632` image record](validation/pipeline-closure-20261024.md)
-is retained for reproducing that older version; it is not the current install.
-The host needs Docker and, for the integrated pipeline, Java/Nextflow. Katana's
-Python/R/native dependencies are inside the image; a host Conda environment is
-not needed. Standalone CLI/browser users can use the locked Conda route below.
-
-Installation does not require recreating an existing analysis plan. To resume
-unchanged downstream work, use the original `--flow_plan` path with `-resume`
-and retain its inputs and Nextflow cache; no `--flow_config` is needed for that
-route. See [plan validation and recovery commands](INTEGRATED_PIPELINE.md#resume-an-unchanged-downstream-plan).
-The same guide documents the explicit, presentation-only recovery of a verified
-MotifTrace display failure; installing a new wheel does not automatically
-rerun a completed computation.
+Local builds are optional: follow the [container instructions](../containers/downstream/README.md#build-locally)
+when developing or changing dependencies. An existing running study should
+continue with its original release and image so `-resume` can reuse its work.
 
 ## Source checkout
 

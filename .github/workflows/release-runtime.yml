@@ -12,7 +12,7 @@ on:
         description: Candidate wheel SHA256
         required: true
       software_run:
-        description: Successful software CI run supplying the matching Linux controller
+        description: Software CI run with accepted wheel and installed-controller jobs
         required: true
 permissions:
   contents: write
