@@ -29,6 +29,6 @@ process KATANA_EXPORT {
     """
     printf '%s' '${source_json_b64}' | python3 -c 'import base64, sys; from pathlib import Path; Path("source_map.json").write_bytes(base64.b64decode(sys.stdin.buffer.read(), validate=True))'
     python3 "$exporter" --source-map source_map.json --output-dir katana_bundle \\
-      --samples "$samplesheet" --contrasts "$contrastsheet" --profile full --owned-root "${workflow.workDir}"
+      --samples "$samplesheet" --contrasts "$contrastsheet" --profile full --owned-root "${task.ext.katana_owned_work_root}"
     """
 }

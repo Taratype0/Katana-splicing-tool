@@ -13,7 +13,7 @@ process KATANA_FLOW_RETAIN {
     """
     ${containerRuntimePrelude(workflow.containerEngine)}
     ${quote(params.flow_executable)} retain-project --collection ${quote(collection)} \\
-        --project ${quote(project_root.resolve(project_filename))} --outdir project ${params.mode == 'complete' ? '--native-work-root ' + quote(workflow.workDir) : ''}
+        --project ${quote(project_root.resolve(project_filename))} --outdir project ${params.mode == 'complete' ? '--native-work-root ' + quote(task.ext.katana_owned_work_root) : ''}
     test -s project/retention.receipt.json
     """
 }

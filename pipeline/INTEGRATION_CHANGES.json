@@ -340,12 +340,12 @@
     {
       "path": "modules/local/katana_export.nf",
       "snapshot_sha256": "043edc643971d40977758f046145865222927330572e9d7b0022270bb709af0b",
-      "integrated_sha256": "1a75622f6fa2dade44145b28608dd57d22a72318f7ad6a856cb0f907393dfbac",
+      "integrated_sha256": "71165d973fcfe4e0fa88590cf66895e4a43bb7594fc8fb0e5771f74eebcb94e9",
       "integration_revisions": [
         {
           "revision": "portable-entry-20261103",
           "previous_integrated_sha256": "043edc643971d40977758f046145865222927330572e9d7b0022270bb709af0b",
-          "integrated_sha256": "1a75622f6fa2dade44145b28608dd57d22a72318f7ad6a856cb0f907393dfbac",
+          "integrated_sha256": "71165d973fcfe4e0fa88590cf66895e4a43bb7594fc8fb0e5771f74eebcb94e9",
           "scope": "Single-pass export checksums and task-owned hardlink handoff; data bytes and scientific methods unchanged."
         }
       ]

@@ -61,7 +61,7 @@ process KATANA_FLOW_IMPORT {
     def quote = { value -> "'" + value.toString().replace("'", "'\"'\"'") + "'" }
     """
     ${containerRuntimePrelude(workflow.containerEngine)}
-    ${quote(params.flow_executable)} import ${params.mode == 'complete' ? '--owned-link-root ' + quote(workflow.workDir) : ''} --bundle ${quote(bundle)} \\
+    ${quote(params.flow_executable)} import ${params.mode == 'complete' ? '--owned-link-root ' + quote(task.ext.katana_owned_work_root) : ''} --bundle ${quote(bundle)} \\
         --project-template ${quote(project_template_root.resolve(project_template_filename))} \\
         --config ${quote(flow_config.resolve(flow_config_filename))} --outdir workspace
     test -s workspace/project.json
