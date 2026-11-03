@@ -17,7 +17,7 @@ def boundaries(root, command, env):
         ('long_retry', 144, '32h', [], 'long'),
         ('unsupported_memory', 900, '16h', [], None),
         ('explicit_memory', 900, '16h', ['--slurm_partition', 'memory'], 'memory'),
-        ('explicit_options', 900, '16h', ['--clusterOptions', '--partition=custom-partition'], 'custom-partition'),
+        ('explicit_options', 900, '16h', ['--clusterOptions=--partition=custom-partition'], 'custom-partition'),
     ]
     for name, memory, duration, extra, partition in cases:
         run = root / name
