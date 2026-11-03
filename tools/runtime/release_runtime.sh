@@ -32,6 +32,20 @@ assert receipt['wheel_sha256']==os.environ['WHEEL_SHA'], receipt
 archive=next(Path('accepted-controller').rglob('katana-controller-*.tar.gz'))
 assert hashlib.file_digest(archive.open('rb'),'sha256').hexdigest()==receipt['archive_sha256']
 PY
+  python - <<'PYCONTROLLER'
+import tarfile,hashlib,json,os
+from pathlib import Path
+archive=next(Path('accepted-controller').rglob('katana-controller-*.tar.gz'))
+checked=[]
+with tarfile.open(archive) as tar:
+ for source in ('katana_next/flow/file_io.py','katana_next/flow/importer.py','katana_next/flow/_pipeline/nextflow.config'):
+  matches=[m for m in tar.getmembers() if m.name.endswith('/'+source)];assert len(matches)==1,source
+  local=source.replace('katana_next/flow/_pipeline/','pipeline/')
+  content=tar.extractfile(matches[0]).read();assert content==(Path(os.environ['GITHUB_WORKSPACE'])/local).read_bytes(),source
+  checked.append(dict(path=source,sha256=hashlib.sha256(content).hexdigest()))
+record=dict(status='passed',source_commit=os.environ['GITHUB_SHA'],software_run=os.environ['SOFTWARE_RUN'],controller=dict(filename=archive.name,bytes=archive.stat().st_size,sha256=hashlib.file_digest(archive.open('rb'),'sha256').hexdigest()),packaged_sources=checked,rebuild=False)
+Path('output/CONTROLLER_VALIDATION.json').write_text(json.dumps(record,indent=2)+'\n')
+PYCONTROLLER
   mkdir controller
   tar xzf "$(find accepted-controller -name 'katana-controller-*.tar.gz')" -C controller
   echo "$ROOT/controller/katana-controller/bin" >> "$GITHUB_PATH"
@@ -86,6 +100,7 @@ with tarfile.open('docker-validation.tar.gz','w:gz') as archive:
 PYDOCKER
   test "$(gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
   gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" *.docker.tar.gz docker-SHA256SUMS docker-validation.tar.gz docker.acceptance.json
+  gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" "$(find "$ROOT/accepted-controller" -name 'katana-controller-*.tar.gz')" CONTROLLER_VALIDATION.json
   ;;
 apptainer)
   mkdir -p "$ROOT/output"
