@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import csv
+import math
 from pathlib import Path
 import re
 import shutil
@@ -25,6 +27,10 @@ def _project_sources(spec):
 
 def _source_type(path, metadata):
     name = Path(path).name
+    if name == "strandedness.summary.tsv":
+        if metadata.get("qc_type", "strandedness") != "strandedness" or metadata.get("qc_phase", "library") != "library":
+            raise ValueError("Conflicting native strandedness QC declaration")
+        return "strandedness", "library"
     if name.endswith(("_fastqc.zip", "_fastqc.html")):
         phase = metadata.get("qc_phase")
         if phase not in {"raw", "trimmed", "bam_records"}:
@@ -55,6 +61,49 @@ def _sample(path, metadata, sample_ids):
     return matches[0]
 
 
+def _source_samples(path, metadata, sample_ids, kind):
+    if kind != "strandedness":
+        return {_sample(path, metadata, sample_ids)}
+    columns = {"sample", "requested", "strandedness", "method", "informative_forward_fraction",
+               "informative_reverse_fraction", "failed_to_determine_fraction", "usable_reads_sampled"}
+    with Path(path).open(encoding="utf-8-sig", newline="") as stream:
+        reader = csv.DictReader(stream, delimiter="\t")
+        if not reader.fieldnames or len(reader.fieldnames) != len(set(reader.fieldnames)) or not columns <= set(reader.fieldnames):
+            raise ValueError("Invalid native strandedness summary columns")
+        rows = list(reader)
+    seen = set()
+    for row in rows:
+        sid = row.get("sample")
+        if None in row or any(row.get(key) is None for key in columns):
+            raise ValueError("Malformed native strandedness summary row")
+        if sid not in sample_ids or sid in seen:
+            raise ValueError("Unknown or duplicate sample in native strandedness summary: " + str(sid))
+        seen.add(sid)
+        resolved = row["strandedness"]
+        if resolved not in {"forward", "reverse", "unstranded"}:
+            raise ValueError("Unresolved native strandedness for " + sid)
+        if row["method"] == "user_declared_not_inferred":
+            if row["requested"] != resolved:
+                raise ValueError("Conflicting declared strandedness for " + sid)
+            if any(row[key] for key in columns - {"sample", "requested", "strandedness", "method"}):
+                raise ValueError("Declared strandedness must not claim inferred measurements: " + sid)
+        elif row["method"] == "rseqc_infer_experiment" and row["requested"] == "auto":
+            for key in ("informative_forward_fraction", "informative_reverse_fraction", "failed_to_determine_fraction"):
+                try:
+                    value = float(row[key])
+                except ValueError as error:
+                    raise ValueError("Invalid native strandedness fraction for " + sid) from error
+                if not math.isfinite(value) or not 0 <= value <= 1:
+                    raise ValueError("Invalid native strandedness fraction for " + sid)
+            if not row["usable_reads_sampled"].isdigit() or int(row["usable_reads_sampled"]) <= 0:
+                raise ValueError("Invalid native strandedness read count for " + sid)
+        else:
+            raise ValueError("Unsupported native strandedness method for " + sid)
+    if seen != sample_ids:
+        raise ValueError("Native strandedness summary is missing samples: " + ", ".join(sorted(sample_ids - seen)))
+    return seen
+
+
 def readiness(spec):
     if "project" in spec.get("readiness_deferred_inputs", []):
         return []
@@ -70,15 +119,15 @@ def readiness(spec):
             if not asset.path.is_file() or not asset.path.stat().st_size:
                 raise ValueError("Missing or empty completed native QC asset: " + asset.asset_id)
             kind, phase = _source_type(asset.path, asset.metadata)
-            sid = _sample(asset.path, asset.metadata, sample_ids)
+            covered_samples = _source_samples(asset.path, asset.metadata, sample_ids, kind)
             if not (kind == "fastqc" and asset.path.name.endswith(".html")):
-                covered.setdefault(phase, set()).add(sid)
+                covered.setdefault(phase, set()).update(covered_samples)
             expected_hash = asset.metadata.get("upstream_sha256")
             if expected_hash and file_sha256(asset.path) != expected_hash:
                 raise ValueError("Completed native QC source SHA256 changed: " + asset.asset_id)
         bam_samples = sample_ids - expected_samples
         for phase, samples in covered.items():
-            eligible = bam_samples if phase == "bam_records" else expected_samples
+            eligible = sample_ids if phase == "library" else (bam_samples if phase == "bam_records" else expected_samples)
             missing = eligible - samples
             if missing:
                 raise ValueError("Native sequencing QC phase " + phase + " is missing declared eligible samples: " + ", ".join(sorted(missing)))
@@ -101,7 +150,8 @@ def execute_stage(spec, output_dir):
     phases, source_ledger, duplicate_keys = {}, [], {}
     for index, asset in enumerate(sources):
         kind, phase = _source_type(asset.path, asset.metadata)
-        sid = _sample(asset.path, asset.metadata, sample_ids)
+        covered_samples = _source_samples(asset.path, asset.metadata, sample_ids, kind)
+        sid = "all samples" if kind == "strandedness" else next(iter(covered_samples))
         before = asset.path.stat()
         digest = file_sha256(asset.path)
         destination = out / "native" / phase / f"{index:06d}" / asset.path.name
@@ -116,7 +166,8 @@ def execute_stage(spec, output_dir):
                "recorded_size": before.st_size, "sha256": digest, "sample_id": sid,
                "biological_sample_id": sid, "asset_id": asset.asset_id,
                "native_id": asset.metadata.get("source_native_id"), "source_path": str(asset.path),
-               "transported_native_path": str(destination), "qc_type": kind, "qc_phase": phase}
+               "transported_native_path": str(destination), "qc_type": kind, "qc_phase": phase,
+               "source_sample_ids": sorted(covered_samples)}
         if asset.path.name.endswith("_fastqc.zip"):
             mate = _identity(asset.path, sid)[1]
             duplicate_keys.setdefault((phase, sid, mate), []).append(row)
@@ -133,6 +184,18 @@ def execute_stage(spec, output_dir):
     for phase, rows in phases.items():
         native = out / "native" / phase
         write_json(native / "QC_FETCH_MANIFEST.json", {"files": rows})
+        if phase == "library":
+            # A cohort summary is a measured/declaration table, not a per-read
+            # FastQC report. Preserve its exact bytes in the existing QC links.
+            for row in rows:
+                artifacts.append({"name": "Resolved library strandedness (all samples)",
+                    "path": row["transported_native_path"], "kind": "table", "status": "complete",
+                    "analysis_id": "quality.reads", "metadata": {"qc_phase": phase,
+                    "original_native_QC": True, "native_QC_values_preserved": True,
+                    "sample_ids": row["source_sample_ids"], "upstream_jobs": 0}})
+            phase_receipts[phase] = {"status": "completed", "source_files": len(rows),
+                "samples": sorted(sample_ids), "native_values_preserved": True, "upstream_jobs": 0}
+            continue
         rendered = build_qc_assets(native, out / "rendered" / phase)
         phase_receipts[phase] = rendered["receipt"]
         for artifact in rendered["artifacts"]:

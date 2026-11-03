@@ -103,6 +103,11 @@ class StrandednessTests(unittest.TestCase):
             receipt=resolve(sheet,contrast,evidence,root/'resolved')
             self.assertEqual(sheet.read_bytes(),before)
             self.assertEqual(receipt['auto_samples'],2)
+            # The real producer's cohort table must be accepted by the downstream reader.
+            from katana_next.flow.sequencing import _source_type, _source_samples
+            summary=root/'resolved/strandedness.summary.tsv'
+            self.assertEqual(_source_type(summary, {'qc_type':'strandedness','qc_phase':'library'}), ('strandedness','library'))
+            self.assertEqual(_source_samples(summary, {}, {'S0','S1','S2','S3'}, 'strandedness'), {'S0','S1','S2','S3'})
             with (root/'resolved/samplesheet.resolved.csv').open() as f:rows=list(csv.DictReader(f))
             self.assertEqual([r['sample'] for r in rows],['S0','S1','S2','S3'])
             self.assertEqual({r['strandedness'] for r in rows},{'reverse'})

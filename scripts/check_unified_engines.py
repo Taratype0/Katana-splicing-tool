@@ -105,6 +105,8 @@ def fixture(root, paired=False):
         InputAsset(asset_id='generated-psi',kind='psi_matrix',path=psi),InputAsset(asset_id='generated-events',kind='event_annotation',path=events))
     manifest=manifest.model_copy(update={'assets':assets,'metadata':{**manifest.metadata,'species':'Mus_musculus'}})
     ManifestStore().save(manifest,path)
+    from qc_fixture import add_native_qc
+    add_native_qc(path)
     return path,meme
 
 
@@ -120,7 +122,7 @@ def main():
     project,meme=fixture(root/'source')
     selected=['perturbation-vs-baseline','rescue-vs-baseline']
     settings={'design_factors':['condition'],'contrast_ids':selected,
-        'analyses':{'coverage':False,'mapp':False,'motif_binding':False,'interaction':False,'sequencing_qc':False},
+        'analyses':{'coverage':False,'mapp':False,'motif_binding':False,'interaction':False,'sequencing_qc':True},
         'parameters':{'prioritize.motiftrace_consequences':{'custom_motif_path':str(meme),'cluster_permutations':99}}}
     plan=create_plan(project,settings); plan_path=write_json(root/'plan.json',plan)
     receipts={}

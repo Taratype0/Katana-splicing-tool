@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0,"/checks")
 from check_unified_engines import fixture
 p,m=fixture(Path.cwd()/"source")
-cfg={"design_factors":["condition"],"contrast_ids":["perturbation-vs-baseline","rescue-vs-baseline"],"analyses":{"coverage":False,"mapp":False,"motif_binding":False,"interaction":False,"sequencing_qc":False},"parameters":{"prioritize.motiftrace_consequences":{"custom_motif_path":str(m),"cluster_permutations":99}}}
+cfg={"design_factors":["condition"],"contrast_ids":["perturbation-vs-baseline","rescue-vs-baseline"],"analyses":{"coverage":False,"mapp":False,"motif_binding":False,"interaction":False,"sequencing_qc":True},"parameters":{"prioritize.motiftrace_consequences":{"custom_motif_path":str(m),"cluster_permutations":99}}}
 Path("config").mkdir()
 Path("config/flow.json").write_text(json.dumps(cfg))
 '''
@@ -72,7 +72,7 @@ Path("config/flow.json").write_text(json.dumps(cfg))
     assert (report / 'REPORT.zip').stat().st_size > 0
     (root / 'acceptance.json').write_text(json.dumps(dict(status='passed',
         generated_data_only=True, native_runs=records, retained_project_readback=True,
-        unchanged_report_format=True, network_and_motiftrace_enabled=True), indent=2) + '\n')
+        unchanged_report_format=True, network_and_motiftrace_enabled=True, sequencing_qc_enabled=True), indent=2) + '\n')
 
 
 if __name__ == '__main__':

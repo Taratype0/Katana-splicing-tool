@@ -116,11 +116,13 @@ def test_changed_or_absent_native_sequencing_sources_do_not_pass_readiness(tmp_p
     assert "No completed native sequencing QC" in ";".join(readiness(spec))
 
 
-def test_sequencing_qc_executes_through_task_and_relocatable_collection(tmp_path):
+@pytest.mark.parametrize("with_summary", [False, True])
+def test_sequencing_qc_executes_through_task_and_relocatable_collection(tmp_path, with_summary):
     from katana_next.flow.model import seal_plan
     from katana_next.flow.runtime import execute_task, validate_receipt
     from katana_next.flow.collect import collect_results, materialize_report_descriptor, validate_collection
     project = study(tmp_path / "original")
+    summary = add_strand_summary(project, STRAND_HEADER + STRAND_AUTO) if with_summary else None
     original = project.read_bytes()
     plan = write_json(tmp_path / "plan.json", seal_plan({
         "project_manifest": str(project), "project_manifest_sha256": file_sha256(project),
@@ -140,6 +142,11 @@ def test_sequencing_qc_executes_through_task_and_relocatable_collection(tmp_path
     relocated = materialize_report_descriptor(moved)
     assert all(Path(panel["path"]).is_relative_to(moved) for view in relocated["extra_views"] for panel in view["panels"])
     assert all(Path(link["path"]).is_file() for view in relocated["extra_views"] for panel in view["panels"] for link in panel["data_links"])
+    if summary:
+        tables = [table for view in relocated["extra_views"] for table in view["tables"] if "Resolved library strandedness" in table["name"]]
+        assert len(tables) == 1
+        assert Path(tables[0]["path"]).is_relative_to(moved)
+        assert Path(tables[0]["path"]).read_bytes() == summary.read_bytes()
     assert project.read_bytes() == original
 
 
@@ -180,3 +187,61 @@ def test_bam_fastqc_keeps_measured_record_scope_and_requires_all_bam_samples(tmp
     document["samples"][-1]["attributes"]["source"] = "genome_bam"
     write_json(project, document)
     assert "bam_records is missing declared eligible samples: B2" in ";".join(readiness(spec))
+
+
+STRAND_HEADER = "sample\trequested\tstrandedness\tmethod\tinformative_forward_fraction\tinformative_reverse_fraction\tfailed_to_determine_fraction\tusable_reads_sampled\n"
+STRAND_AUTO = "S1\tauto\treverse\trseqc_infer_experiment\t0.024697790746144227\t0.9753022092538557\t0.0404\t200000\n"
+STRAND_DECLARED = "S1\treverse\treverse\tuser_declared_not_inferred\t\t\t\t\n"
+
+
+def add_strand_summary(project, content):
+    path = project.parent / 'strandedness.summary.tsv'
+    path.write_text(content)
+    document = json.loads(project.read_text())
+    document['assets'].append({'asset_id':'strand', 'kind':'sequencing_qc', 'path':path.name,
+        'metadata':{'qc_type':'strandedness','qc_phase':'library','upstream_sha256':file_sha256(path)}})
+    write_json(project, document)
+    return path
+
+
+@pytest.mark.parametrize('row', [STRAND_AUTO, STRAND_DECLARED])
+def test_cohort_strandedness_retained_as_exact_qc_table_without_upstream_rerun(tmp_path, row):
+    project = study(tmp_path/'original')
+    summary = add_strand_summary(project, STRAND_HEADER + row)
+    spec = {'adapter':'qc.sequencing','inputs':{'project':str(project)}}
+    assert readiness(spec) == []
+    result = execute_stage(spec, tmp_path/'rendered')
+    index = json.loads(Path(result['evidence']['qc_view_index']).read_text())
+    table = next(a for a in index['artifacts'] if a.get('metadata',{}).get('qc_phase')=='library')
+    assert table['kind'] == 'table' and Path(table['path']).read_bytes() == summary.read_bytes()
+    assert table['metadata']['sample_ids'] == ['S1']
+    assert result['evidence']['upstream_jobs'] == 0
+    assert result['evidence']['native_qc_files'] == 5
+    assert result['evidence']['native_qc_figures'] >= 10
+
+
+@pytest.mark.parametrize('content, expected', [
+    (STRAND_HEADER, 'missing samples'),
+    (STRAND_HEADER + STRAND_AUTO * 2, 'duplicate sample'),
+    (STRAND_HEADER + STRAND_AUTO.replace('S1', 'unknown'), 'Unknown'),
+    (STRAND_HEADER + STRAND_AUTO.replace('0.0404', 'nan'), 'fraction'),
+    (STRAND_HEADER + STRAND_AUTO.replace('200000', '0'), 'read count'),
+    (STRAND_HEADER + STRAND_AUTO.replace('reverse', 'auto', 1), 'Unresolved'),
+    (STRAND_HEADER + STRAND_DECLARED.replace('reverse', 'forward', 1), 'Conflicting'),
+])
+def test_strandedness_invalid_or_missing_samples_do_not_bypass_readiness(tmp_path, content, expected):
+    project = study(tmp_path/'original')
+    add_strand_summary(project, content)
+    assert expected in ';'.join(readiness({'inputs':{'project':str(project)}}))
+
+
+def test_cohort_summary_covers_bam_as_well_as_fastq_samples(tmp_path):
+    project = study(tmp_path/'original')
+    document = json.loads(project.read_text())
+    document['samples'].append({'sample_id':'B1','biological_sample_id':'donor-b','condition':'A','attributes':{'source':'bam'}})
+    write_json(project, document)
+    summary = add_strand_summary(project, STRAND_HEADER + STRAND_AUTO)
+    assert 'missing samples: B1' in ';'.join(readiness({'inputs':{'project':str(project)}}))
+    summary.write_text(STRAND_HEADER + STRAND_AUTO + STRAND_DECLARED.replace('S1','B1'))
+    document = json.loads(project.read_text());document['assets'][-1]['metadata']['upstream_sha256']=file_sha256(summary);write_json(project,document)
+    assert readiness({'inputs':{'project':str(project)}}) == []
