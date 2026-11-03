@@ -46,8 +46,8 @@ build)
   cd "$ROOT"
   cat > context/Dockerfile <<'DOCKER'
 FROM katana-runtime-base:verified
-COPY *.whl /tmp/katana-wheel/
-RUN python -m pip install --no-cache-dir --no-deps --force-reinstall /tmp/katana-wheel/*.whl && python -m pip check && rm -rf /tmp/katana-wheel
+COPY *.whl /tmp/katana-candidate-install/
+RUN python -m pip install --no-cache-dir --no-deps --force-reinstall /tmp/katana-candidate-install/*.whl && python -m pip check && rm -rf /tmp/katana-candidate-install /tmp/katana-wheel
 DOCKER
   docker build --network=none -t "$IMAGE" context
   test "$(docker run --rm --network=none "$IMAGE" python -c 'from importlib.metadata import version; print(version("katana-splicing-tool"))')" = "$RUNTIME_VERSION"
