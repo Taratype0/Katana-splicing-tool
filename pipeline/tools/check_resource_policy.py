@@ -51,7 +51,9 @@ def main():
         assert rows['sequencing-summary'] == ['1', '4 GB', '2h', serial_queue], rows
         assert rows['annotation'] == ['1', '4 GB', '2h', serial_queue], rows
         assert rows['parallel-fixture'] == (['1', '32 MB', '2m', 'parallel-test'] if name == 'site' else ['2', '16 MB', '1m', 'unset']), rows
-        assert rows['serial-upstream-fixture'] == ['2' if name == 'site' else '1', '16 MB', '1m', serial_queue], rows
+        # DEXSEQ_COUNT now has the upstream process_single memory/time request
+        # as well as the serial CPU allocation; withName outranks the fixture label.
+        assert rows['serial-upstream-fixture'] == ['2' if name == 'site' else '1', '6 GB', '4h', serial_queue], rows
         proof[name] = rows
     receipt = {'status': 'passed', 'scope': 'native local allocation and queue-selector regression, not Slurm or scientific execution',
         'completed_tasks': 10, 'allocations': proof}

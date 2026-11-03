@@ -1,0 +1,1166 @@
+{
+  "schema": "katana.resource_policy/v1",
+  "scope": "Version-pinned resource request audit, not measured real-study peak usage",
+  "sources": [
+    {
+      "repository": "nf-core/rnaseq",
+      "tag": "3.27.0",
+      "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+      "source_url": "https://codeload.github.com/nf-core/rnaseq/tar.gz/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+      "archive_sha256": "7c73ce3a3a52d0d1e60ba3f699266228c2799741093269f2ad27673716f381ef",
+      "files": 678
+    },
+    {
+      "repository": "nf-core/rnasplice",
+      "tag": "2.0.0",
+      "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+      "source_url": "https://codeload.github.com/nf-core/rnasplice/tar.gz/aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+      "archive_sha256": "74f49b3615ced5c9de6c380b33c504810dc0d3f98d9d1b323663296e67b61672",
+      "files": 469
+    },
+    {
+      "repository": "nf-core/differentialabundance",
+      "tag": "2.0.0",
+      "commit": "30ed7741fc392127156c2fb10cfa3d69d216b54b",
+      "source_url": "https://codeload.github.com/nf-core/differentialabundance/tar.gz/30ed7741fc392127156c2fb10cfa3d69d216b54b",
+      "archive_sha256": "cd58bc41e620775e8bfc4b993d83474619985a4af268afd000e89edd836388d1",
+      "files": 275
+    },
+    {
+      "repository": "nf-core/rnasplice",
+      "tag": "1.0.4",
+      "commit": "1d0494ae3402d1a46e0adadad24f81a0ff855c77",
+      "source_url": "https://codeload.github.com/nf-core/rnasplice/tar.gz/1d0494ae3402d1a46e0adadad24f81a0ff855c77",
+      "archive_sha256": "e5f4190b6f10372335ec3cb2aa3d0c36ff873fe0c7ea4c441c04f42642423655",
+      "files": 128
+    },
+    {
+      "repository": "nf-core/differentialabundance",
+      "tag": "1.5.0",
+      "commit": "3dd360fed0dca1780db1bdf5dce85e5258fa2253",
+      "source_url": "https://codeload.github.com/nf-core/differentialabundance/tar.gz/3dd360fed0dca1780db1bdf5dce85e5258fa2253",
+      "archive_sha256": "dddeb2f057a8345f77252eba52e37830805531dc984d3831302b3628da92f2ba",
+      "files": 114
+    }
+  ],
+  "processes": [
+    {
+      "process": "ADAPT_SUPPA_CONTRASTS",
+      "source": "pipeline/modules/local/adapt_suppa_contrasts.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "FILTER_ANALYSIS_GTF",
+      "source": "pipeline/modules/local/analysis_reference.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "ANALYSIS_TRANSCRIPTS",
+      "source": "pipeline/modules/local/analysis_reference.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "AUDIT_GENOME_BAM",
+      "source": "pipeline/modules/local/audit_genome_bam.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "CAPTURE_BAM_AUDIT",
+      "source": "pipeline/modules/local/capture_bam_audit.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "COLLATE_GENOME_BAM",
+      "source": "pipeline/modules/local/collate_genome_bam.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "CREATE_BAMLIST",
+      "source": "pipeline/modules/local/create_bamlist.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/local/createbamlist/main.nf",
+        "sha256": "4fe058791afb160b3c11cd1a8a2840575c502656dd0436ceaab9216726a01b5d",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/createbamlist/main.nf"
+      }
+    },
+    {
+      "process": "CREATE_BAMLIST_SINGLE",
+      "source": "pipeline/modules/local/create_bamlist_single.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/local/createbamlist/main.nf",
+        "sha256": "4fe058791afb160b3c11cd1a8a2840575c502656dd0436ceaab9216726a01b5d",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/createbamlist/main.nf"
+      }
+    },
+    {
+      "process": "DEXSEQ_ANNOTATION",
+      "source": "pipeline/modules/local/dexseq_annotation.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "matched",
+      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "upstream_process": "DEXSEQ_PREPAREANNOTATION",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/dexseq/prepareannotation/main.nf",
+        "sha256": "fc33acbe69d24f6039229c20e6bebcf346ec07fac9226bc4c9ef7829616f9311",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/prepareannotation/main.nf"
+      }
+    },
+    {
+      "process": "DEXSEQ_COUNT",
+      "source": "pipeline/modules/local/dexseq_count.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "matched",
+      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "upstream_process": "DEXSEQ_COUNT",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/dexseq/count/main.nf",
+        "sha256": "b58449040e58244300e40f8202cdc14c58b009f499bff570cfae7fd9bf215585",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/count/main.nf"
+      }
+    },
+    {
+      "process": "DEXSEQ_DTU",
+      "source": "pipeline/modules/local/dexseq_dtu.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "matched",
+      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "upstream_process": "DEXSEQ_DTU",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/dexseq/dtu/main.nf",
+        "sha256": "c9977fd1c7d4d1c3e100f563173cdab235522fc1d135fbfcfc6af7d5ff2a1c5e",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/dtu/main.nf"
+      }
+    },
+    {
+      "process": "DEXSEQ_EXON",
+      "source": "pipeline/modules/local/dexseq_exon.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "matched",
+      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "upstream_process": "DEXSEQ_EXON",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/dexseq/exon/main.nf",
+        "sha256": "76c7677fe39140b2ce06cbe9a5e3b89a0379a31ea7ecf28836b9275ef4f63cb2",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/exon/main.nf"
+      }
+    },
+    {
+      "process": "DRIMSEQ_FILTER",
+      "source": "pipeline/modules/local/drimseq_filter.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/local/drimseq/dmfilter/main.nf",
+        "sha256": "bf875f347f4ff27ed04b814dd189d024fd89d301b8804fad7ef3995a6d785597",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/drimseq/dmfilter/main.nf"
+      }
+    },
+    {
+      "process": "KATANA_FLOW_CONFIGURE",
+      "source": "pipeline/modules/local/flow_control.nf",
+      "labels": [
+        "katana_control"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 2
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_PREFLIGHT",
+      "source": "pipeline/modules/local/flow_control.nf",
+      "labels": [
+        "katana_control"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 2
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_IMPORT",
+      "source": "pipeline/modules/local/flow_control.nf",
+      "labels": [
+        "katana_control"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 2
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_PLAN",
+      "source": "pipeline/modules/local/flow_control.nf",
+      "labels": [
+        "katana_control"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 2
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_VALIDATE_PLAN",
+      "source": "pipeline/modules/local/flow_control.nf",
+      "labels": [
+        "katana_control"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 2
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_COLLECT",
+      "source": "pipeline/modules/local/flow_control.nf",
+      "labels": [
+        "katana_control"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 2
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_REPORT",
+      "source": "pipeline/modules/local/flow_control.nf",
+      "labels": [
+        "katana_report"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 8
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_RETAIN",
+      "source": "pipeline/modules/local/flow_delivery.nf",
+      "labels": [
+        "katana_control"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 2
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_DELIVERY",
+      "source": "pipeline/modules/local/flow_delivery.nf",
+      "labels": [
+        "katana_control"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 2
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_TASK",
+      "source": "pipeline/modules/local/flow_task.nf",
+      "labels": [
+        "katana_downstream"
+      ],
+      "initial": {
+        "cpus": "task-dependent",
+        "memory_gib": "task-dependent",
+        "time_hours": "task-dependent"
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "KATANA_FLOW_RESOURCE_TASK",
+      "source": "pipeline/modules/local/flow_task_resources.nf",
+      "labels": [
+        "katana_downstream"
+      ],
+      "initial": {
+        "cpus": "task-dependent",
+        "memory_gib": "task-dependent",
+        "time_hours": "task-dependent"
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Katana control/report or per-task resource policy"
+    },
+    {
+      "process": "GFFREAD_TX2GENE",
+      "source": "pipeline/modules/local/gffread_tx2gene.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/local/gffread/tx2gene/main.nf",
+        "sha256": "e24e4984ce0f33e75c8aed2d96dcce239d240b6aa851b3a022e5e75c8a80bea5",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/gffread/tx2gene/main.nf"
+      }
+    },
+    {
+      "process": "GFFREAD_STRAND_MODELS",
+      "source": "pipeline/modules/local/infer_strandedness.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Existing serial inference override"
+    },
+    {
+      "process": "RSEQC_INFEREXPERIMENT",
+      "source": "pipeline/modules/local/infer_strandedness.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Existing serial inference override"
+    },
+    {
+      "process": "KATANA_TXIMPORT",
+      "source": "pipeline/modules/local/katana_differential.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Serial invocation but medium memory policy matches rnasplice TXIMETA_TXIMPORT; no invented lower memory requirement.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/local/tximeta/tximport/main.nf",
+        "sha256": "b36b6e5ae8c6f5eb21b861b542d6265741980526a2598124b571458c6084ad32",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/tximeta/tximport/main.nf"
+      }
+    },
+    {
+      "process": "KATANA_DESEQ2_CONTRAST",
+      "source": "pipeline/modules/local/katana_differential.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "matched",
+      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "upstream_process": "DESEQ2_DIFFERENTIAL",
+      "upstream": {
+        "repository": "nf-core/differentialabundance",
+        "tag": "2.0.0",
+        "commit": "30ed7741fc392127156c2fb10cfa3d69d216b54b",
+        "path": "modules/nf-core/deseq2/differential/main.nf",
+        "sha256": "31b7058013106fc6d302a75d18a8aed43d59e1e3e85156f216ee047a18ab307c",
+        "url": "https://github.com/nf-core/differentialabundance/blob/30ed7741fc392127156c2fb10cfa3d69d216b54b/modules/nf-core/deseq2/differential/main.nf"
+      }
+    },
+    {
+      "process": "KATANA_NORMALIZE",
+      "source": "pipeline/modules/local/katana_differential.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "serial subset",
+      "rationale": "Normalization-only subset of DESeq2; no parallel argument in current R invocation.",
+      "upstream_process": "DESEQ2_DIFFERENTIAL",
+      "upstream": {
+        "repository": "nf-core/differentialabundance",
+        "tag": "2.0.0",
+        "commit": "30ed7741fc392127156c2fb10cfa3d69d216b54b",
+        "path": "modules/nf-core/deseq2/differential/main.nf",
+        "sha256": "31b7058013106fc6d302a75d18a8aed43d59e1e3e85156f216ee047a18ab307c",
+        "url": "https://github.com/nf-core/differentialabundance/blob/30ed7741fc392127156c2fb10cfa3d69d216b54b/modules/nf-core/deseq2/differential/main.nf"
+      }
+    },
+    {
+      "process": "KATANA_DESEQ2_METADATA",
+      "source": "pipeline/modules/local/katana_differential.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "KATANA_EXPORT",
+      "source": "pipeline/modules/local/katana_export.nf",
+      "labels": [
+        "process_low",
+        "katana_io"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "PREPARE_REFERENCES",
+      "source": "pipeline/modules/local/prepare_references.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Existing serial invocation CPU override; inherited memory/time"
+    },
+    {
+      "process": "REFERENCE_FAIDX",
+      "source": "pipeline/modules/local/reference_faidx.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "matched",
+      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "upstream_process": "SAMTOOLS_FAIDX",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "modules/nf-core/samtools/faidx/main.nf",
+        "sha256": "cab0f0c700e78d01d2d5a52cd53cd9a952613ec4c1f73417f07f64bae317b1c7",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/samtools/faidx/main.nf"
+      }
+    },
+    {
+      "process": "RESOLVE_SAMPLE_STRANDEDNESS",
+      "source": "pipeline/modules/local/resolve_sample_strandedness.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "RMATS_POST",
+      "source": "pipeline/modules/local/rmats_post.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "1.0.4",
+        "commit": "1d0494ae3402d1a46e0adadad24f81a0ff855c77",
+        "path": "modules/local/rmats_post.nf",
+        "sha256": "25fac904356724b4e29eb05f1e64650818a6e1e66e09da05ed5168711e223ace",
+        "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_post.nf"
+      }
+    },
+    {
+      "process": "RMATS_POST_SINGLE",
+      "source": "pipeline/modules/local/rmats_post_single.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "1.0.4",
+        "commit": "1d0494ae3402d1a46e0adadad24f81a0ff855c77",
+        "path": "modules/local/rmats_post_single.nf",
+        "sha256": "16cc1616a73265134ad79d3597e462ffcdcdf45002e67d074f99ae0f2a0820fc",
+        "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_post_single.nf"
+      }
+    },
+    {
+      "process": "RMATS_PREP",
+      "source": "pipeline/modules/local/rmats_prep.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
+      },
+      "disposition": "granularity exception retained",
+      "rationale": "Katana retains rnasplice 1.0.4 contrast-level preparation of both BAM groups. rnasplice 2.0.0 process_single is one BAM per task, so its 1 CPU/6 GB reservation cannot be copied as an equivalent contrast-level allocation. No unit/granularity change or scientific rerun in this resource patch.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "1.0.4",
+        "commit": "1d0494ae3402d1a46e0adadad24f81a0ff855c77",
+        "path": "modules/local/rmats_prep.nf",
+        "sha256": "a8fffd1ce2f6745afd7a3ac6f1a80db29e51a05cac8e84e8bf8466465ba16bc0",
+        "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_prep.nf"
+      }
+    },
+    {
+      "process": "RMATS_PREP_SINGLE",
+      "source": "pipeline/modules/local/rmats_prep_single.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
+      },
+      "disposition": "granularity exception retained",
+      "rationale": "Katana retains rnasplice 1.0.4 contrast-level preparation of both BAM groups. rnasplice 2.0.0 process_single is one BAM per task, so its 1 CPU/6 GB reservation cannot be copied as an equivalent contrast-level allocation. No unit/granularity change or scientific rerun in this resource patch.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "1.0.4",
+        "commit": "1d0494ae3402d1a46e0adadad24f81a0ff855c77",
+        "path": "modules/local/rmats_prep_single.nf",
+        "sha256": "37c68f0c98306b056c01fbcf91225e603bbc32ddc648392e243c80112214109e",
+        "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_prep_single.nf"
+      }
+    },
+    {
+      "process": "SALMON_GENOME_PROJECTION",
+      "source": "pipeline/modules/local/salmon_genome_projection.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "modules/nf-core/salmon/quant/main.nf",
+        "sha256": "83191e6db39d83544f3203bd122168383cc1e55925711906ebb416cf1c1665e4",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/salmon/quant/main.nf"
+      }
+    },
+    {
+      "process": "SPLIT_CONTRASTS",
+      "source": "pipeline/modules/local/split_contrasts.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "STAGE_FASTQ",
+      "source": "pipeline/modules/local/stage_fastq.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "serial lane adapter",
+      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "upstream_process": "CAT_FASTQ",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "modules/nf-core/cat/fastq/main.nf",
+        "sha256": "9b32e6eea1b0b8b73f2e6c1cab97cd0ef7000891daad40e0872df3c0554148b6",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/cat/fastq/main.nf"
+      }
+    },
+    {
+      "process": "STAGER",
+      "source": "pipeline/modules/local/stager.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/local/stager/main.nf",
+        "sha256": "be3f5f2d6cd93ccf969a393552c209cc6f77a801b626940afe0bc7c8fe1f779a",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/stager/main.nf"
+      }
+    },
+    {
+      "process": "CLUSTEREVENTS",
+      "source": "pipeline/modules/local/suppa_clusterevents.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/suppa/clusterevents/main.nf",
+        "sha256": "dfae5571030596b0689700e13ba6d900da90a190b7abfa2805290375ad43f219",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/clusterevents/main.nf"
+      }
+    },
+    {
+      "process": "CLUSTERGROUPS",
+      "source": "pipeline/modules/local/suppa_clustergroups.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/local/clustergroups/main.nf",
+        "sha256": "6d3fcde77dfb5321d286d17aaf31b598ab1d1afdaa00c32ccea9053bc3944439",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/clustergroups/main.nf"
+      }
+    },
+    {
+      "process": "DIFFSPLICE",
+      "source": "pipeline/modules/local/suppa_diffsplice.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/suppa/diffsplice/main.nf",
+        "sha256": "53a298ec307d2bf037d4410f50108f99d39df37e691fde378f4bf577d7e6e930",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/diffsplice/main.nf"
+      }
+    },
+    {
+      "process": "GENERATE_EVENTS",
+      "source": "pipeline/modules/local/suppa_generateevents.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/suppa/generateevents/main.nf",
+        "sha256": "b26d466d2a4f59cf371a2e030aa659f669d6400c0e6be8fcac257390fe308764",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/generateevents/main.nf"
+      }
+    },
+    {
+      "process": "PSIPEREVENT",
+      "source": "pipeline/modules/local/suppa_psiperevent.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/suppa/psiperevent/main.nf",
+        "sha256": "1da37ab06b55d31ac6e8fafa51597754a5753c6528809fd742ce47a51ff7c750",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/psiperevent/main.nf"
+      }
+    },
+    {
+      "process": "PSIPERISOFORM",
+      "source": "pipeline/modules/local/suppa_psiperisoform.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/suppa/psiperisoform/main.nf",
+        "sha256": "4c7a2371961813b87157121a3a5132644320aae3a089ca0d7d0180a1848eedd8",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/psiperisoform/main.nf"
+      }
+    },
+    {
+      "process": "SPLIT_FILES",
+      "source": "pipeline/modules/local/suppa_split_files.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "TXIMPORT",
+      "source": "pipeline/modules/local/tximport.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Serial invocation but medium memory policy matches rnasplice TXIMETA_TXIMPORT; no invented lower memory requirement.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/local/tximeta/tximport/main.nf",
+        "sha256": "b36b6e5ae8c6f5eb21b861b542d6265741980526a2598124b571458c6084ad32",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/tximeta/tximport/main.nf"
+      }
+    },
+    {
+      "process": "VALIDATE_INPUTS",
+      "source": "pipeline/modules/local/validate_inputs.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "VALIDATE_REFERENCE",
+      "source": "pipeline/modules/local/validate_reference.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "katana-specific retained",
+      "rationale": "Inherited nf-core base label"
+    },
+    {
+      "process": "FASTQC",
+      "source": "pipeline/modules/nf-core/fastqc/main.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "matched",
+      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "upstream_process": "FASTQC",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "modules/nf-core/fastqc/main.nf",
+        "sha256": "1c4dcb7cd15d46c39cbe9263fbf6e50e08b3331a9bd8402827e9612c8091f6ec",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/fastqc/main.nf"
+      }
+    },
+    {
+      "process": "SAMTOOLS_INDEX",
+      "source": "pipeline/modules/nf-core/samtools/index/main.nf",
+      "labels": [
+        "process_low"
+      ],
+      "initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "modules/nf-core/samtools/index/main.nf",
+        "sha256": "dca5ef0ac9c7ab78b1759f60a434fdd52c4fcb8df7dce2b1c069c84631f33562",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/samtools/index/main.nf"
+      }
+    },
+    {
+      "process": "SAMTOOLS_SORT",
+      "source": "pipeline/modules/nf-core/samtools/sort/main.nf",
+      "labels": [
+        "process_medium"
+      ],
+      "initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "modules/nf-core/samtools/sort/main.nf",
+        "sha256": "da2601afd35e13b1c8e996f8d1393bb73235da6d935365c626e8ca1f5b8adc9a",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/samtools/sort/main.nf"
+      }
+    },
+    {
+      "process": "STAR_ALIGN",
+      "source": "pipeline/modules/nf-core/star/align/main.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "modules/nf-core/star/align/main.nf",
+        "sha256": "437a12a9df4f7c3d16600f04f2cb631c4512a30352ebb243f24890597b0c9b38",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/star/align/main.nf"
+      }
+    },
+    {
+      "process": "STAR_GENOMEGENERATE",
+      "source": "pipeline/modules/nf-core/star/genomegenerate/main.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 16,
+        "memory_gib": 96,
+        "time_hours": 16
+      },
+      "disposition": "measured index exception retained",
+      "rationale": "Existing 16 CPU/96 GB initial request and 128 GB retry retained: recorded GRCm39 index peak 68.3 GB exceeded 48/64 GB. Other assemblies can override it.",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "modules/nf-core/star/genomegenerate/main.nf",
+        "sha256": "f77c1e779991af98b49125acbb699746350e2ddb5900eadbb0863159ceede2f9",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/star/genomegenerate/main.nf"
+      }
+    },
+    {
+      "process": "TRIMGALORE",
+      "source": "pipeline/modules/nf-core/trimgalore/main.nf",
+      "labels": [
+        "process_high"
+      ],
+      "initial": {
+        "cpus": 8,
+        "memory_gib": 4,
+        "time_hours": 8
+      },
+      "disposition": "matched",
+      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "upstream_process": "TRIMGALORE",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "conf/modules/trimgalore.config",
+        "sha256": "2a13f45899e958c8231470c1b86004d0e7ca32f56605b66cf653eb8b82afebaf",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/conf/modules/trimgalore.config"
+      }
+    },
+    {
+      "process": "UNTAR",
+      "source": "pipeline/modules/nf-core/untar/main.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "upstream-equivalent retained",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "upstream": {
+        "repository": "nf-core/rnaseq",
+        "tag": "3.27.0",
+        "commit": "a1fcdddd3b826fe46eb46f0479f2ff8a7815af05",
+        "path": "modules/nf-core/untar/main.nf",
+        "sha256": "037665c6bdc42ddcc75e30a293c629c53a1d245ce7c8c7791f18ef3c1069f62d",
+        "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/untar/main.nf"
+      }
+    }
+  ],
+  "unchanged_science": true,
+  "user_config_modified": false,
+  "clusters_hardcoded": false
+}
