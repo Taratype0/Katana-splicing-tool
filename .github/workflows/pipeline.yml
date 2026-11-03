@@ -39,6 +39,15 @@ jobs:
             https://github.com/nextflow-io/nextflow/releases/download/v25.10.4/nextflow-25.10.4-dist \
             --output "$RUNNER_TEMP/nextflow-25.10.4-dist"
           echo "60db869a7618783e3ee60183a2b0c6c50ffc67221eabec60800b904991786aaa  $RUNNER_TEMP/nextflow-25.10.4-dist" | sha256sum --check --strict
+      - name: Verify effective upstream allocations, aliases and user overrides
+        env:
+          NXF_OFFLINE: 'true'
+        shell: bash
+        run: |
+          python -c 'import json,os; print(json.dumps(["java", "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "-cp", os.environ["RUNNER_TEMP"] + "/nextflow-25.10.4-dist", "nextflow.cli.Launcher"]))' > "$RUNNER_TEMP/resource-nextflow-command.json"
+          python -B pipeline/tools/check_upstream_resources.py \
+            --nextflow-command-file "$RUNNER_TEMP/resource-nextflow-command.json" \
+            --outdir "$RUNNER_TEMP/katana-upstream-resource-policy"
       - name: Verify reference exclusions
         run: python -B -m unittest discover -s pipeline/tests -p test_reference_filter.py -v
       - name: Verify strandedness classification and contrast gates
@@ -87,10 +96,6 @@ jobs:
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-resource-policy"
 
-          python -B pipeline/tools/check_upstream_resources.py \
-            --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
-            --outdir "$RUNNER_TEMP/katana-upstream-resource-policy"
-
           python -B pipeline/tools/check_native_cache_scope.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-cache-scope"
@@ -107,6 +112,15 @@ jobs:
           python -B pipeline/tools/check_single_session_entry.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-single-session"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-resource-policy
+          path: |
+            ${{ runner.temp }}/katana-upstream-resource-policy/acceptance.receipt.json
+            ${{ runner.temp }}/katana-upstream-resource-policy/*/stdout.txt
+            ${{ runner.temp }}/katana-upstream-resource-policy/*/stderr.txt
+          retention-days: 7
 
   paired-native-models:
     runs-on: ubuntu-latest

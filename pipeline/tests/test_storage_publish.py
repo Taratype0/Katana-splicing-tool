@@ -168,6 +168,9 @@ def _fixture(root: Path, mode: str, *, full_config=False):
     cpus = 1
     memory = '64 MB'
     time = '2m'
+    // This publication-only fixture prints bytes. Cap per-tool requests too;
+    // the separate allocation probe tests uncapped production requests.
+    resourceLimits = [cpus: 1, memory: 64.MB, time: 2.min]
     withName: 'STAR_GENOMEGENERATE' { cpus = 1; memory = '64 MB' }
     withLabel: katana_control { cpus = 1; memory = '64 MB'; time = '2m'; container = null }
     withLabel: katana_downstream { cpus = 1; memory = '64 MB'; time = '2m'; container = null }
