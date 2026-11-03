@@ -155,10 +155,11 @@ def _fixture(root: Path, mode: str, *, full_config=False):
             commands.append(f"printf 'generated publication fixture\\n' > '{item}'")
         commands_block = "\n    ".join(commands)
         label = f"    label '{labels[name]}'\n" if name in labels else ""
+        model_inputs = "    val contrast\n    val rmats_paired_stats\n" if name == "RMATS_POST" else ""
         processes.append(f'''process {name} {{
 {label}    input:
     val meta
-    output:
+{model_inputs}    output:
 {output_block}
     script:
     """
@@ -166,7 +167,9 @@ def _fixture(root: Path, mode: str, *, full_config=False):
     """
 }}
 ''')
-    workflow = "\n".join(f"    {name}([id: 'S1'])" for name in outputs)
+    workflow = "\n".join(
+        f"    {name}([id: 'S1'], 'pair', [pair:false])" if name == "RMATS_POST" else
+        f"    {name}([id: 'S1'])" for name in outputs)
     (root / "main.nf").write_text("nextflow.enable.dsl=2\n" + "\n".join(processes) + f"\nworkflow {{\n{workflow}\n}}\n", encoding="utf-8")
     included_config = PIPELINE / "nextflow.config" if full_config else CONFIG
     escaped_config = included_config.as_posix().replace("'", "\\'")
