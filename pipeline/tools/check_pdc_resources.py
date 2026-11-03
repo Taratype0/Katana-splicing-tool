@@ -9,6 +9,14 @@ import subprocess
 from check_upstream_resources import PIPELINE, fixture
 
 
+def partitions_in(wrapper):
+    # Slurm accepts several options on one #SBATCH line; clusterOptions uses
+    # that form whereas the queue directive gets a dedicated line.
+    directives = '\n'.join(line[len('#SBATCH'):].strip()
+                           for line in wrapper.splitlines() if line.startswith('#SBATCH'))
+    return re.findall(r'(?:^|\s)(?:-p\s+|--partition[=\s]+)(\S+)', directives)
+
+
 def boundaries(root, command, env):
     proof = {}
     cases = [
@@ -50,7 +58,7 @@ workflow { RESOURCE_BOUNDARY() }
             wrappers = list((run/'work').glob('*/*/.command.run'))
             assert len(wrappers) == 1
             text = wrappers[0].read_text()
-            found = re.findall(r'^#SBATCH\s+(?:-p\s+|--partition[=\s]+)(\S+)', text, re.M)
+            found = partitions_in(text)
             assert found == [partition], (name, found, text[:800])
         proof[name] = dict(memory_gib=memory, time=duration, partition=partition,
                            returncode=result.returncode, extra=extra)
@@ -118,7 +126,7 @@ exit 0
                 desired = 'user-star'
                 assert cpus == 10 and gib == 80
             assert queue == desired, (case, name, fields, desired)
-            partitions = re.findall(r'^#SBATCH\s+(?:-p\s+|--partition[=\s]+)(\S+)', wrapper, re.M)
+            partitions = partitions_in(wrapper)
             assert partitions == [desired], (name, partitions, wrapper[:700])
             assert '--account=generated-account' in wrapper
             rows.setdefault(name, []).append(dict(cpus=cpus, memory=memory, time=time,
