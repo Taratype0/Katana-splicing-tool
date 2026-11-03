@@ -1,6 +1,6 @@
 {
   "schema": "katana.resource_policy/v1",
-  "scope": "Version-pinned resource request audit, not measured real-study peak usage",
+  "scope": "Complete task/alias resource policy; selected measured initial refinements, not universal measured peaks",
   "sources": [
     {
       "repository": "nf-core/rnaseq",
@@ -51,12 +51,19 @@
         "process_low"
       ],
       "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 4
+      },
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported. Streaming/reference preparation: 4 GiB initial headroom; observed reference steps below 0.8 GiB in rescue.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
-      },
-      "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      }
     },
     {
       "process": "FILTER_ANALYSIS_GTF",
@@ -70,7 +77,9 @@
         "time_hours": 4
       },
       "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      "rationale": "Inherited nf-core base label",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "ANALYSIS_TRANSCRIPTS",
@@ -79,12 +88,19 @@
         "process_low"
       ],
       "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 4
+      },
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported. Streaming/reference preparation: 4 GiB initial headroom; observed reference steps below 0.8 GiB in rescue.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
-      },
-      "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      }
     },
     {
       "process": "AUDIT_GENOME_BAM",
@@ -93,12 +109,19 @@
         "process_low"
       ],
       "initial": {
-        "cpus": 2,
+        "cpus": 1,
         "memory_gib": 12,
         "time_hours": 4
       },
-      "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      }
     },
     {
       "process": "CAPTURE_BAM_AUDIT",
@@ -107,12 +130,19 @@
         "process_medium"
       ],
       "initial": {
+        "cpus": 2,
+        "memory_gib": 6,
+        "time_hours": 8
+      },
+      "disposition": "execution-only refinement",
+      "rationale": "Streaming samtools decompression plus serial AWK, no whole-BAM matrix; 2 workers/6 GiB initial, retry 12 GiB.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "previous_initial": {
         "cpus": 6,
         "memory_gib": 36,
         "time_hours": 8
-      },
-      "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      }
     },
     {
       "process": "COLLATE_GENOME_BAM",
@@ -126,7 +156,9 @@
         "time_hours": 8
       },
       "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      "rationale": "Inherited nf-core base label",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "CREATE_BAMLIST",
@@ -148,7 +180,9 @@
         "path": "modules/local/createbamlist/main.nf",
         "sha256": "4fe058791afb160b3c11cd1a8a2840575c502656dd0436ceaab9216726a01b5d",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/createbamlist/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "CREATE_BAMLIST_SINGLE",
@@ -170,7 +204,9 @@
         "path": "modules/local/createbamlist/main.nf",
         "sha256": "4fe058791afb160b3c11cd1a8a2840575c502656dd0436ceaab9216726a01b5d",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/createbamlist/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "DEXSEQ_ANNOTATION",
@@ -193,7 +229,9 @@
         "path": "modules/nf-core/dexseq/prepareannotation/main.nf",
         "sha256": "fc33acbe69d24f6039229c20e6bebcf346ec07fac9226bc4c9ef7829616f9311",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/prepareannotation/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "DEXSEQ_COUNT",
@@ -216,7 +254,9 @@
         "path": "modules/nf-core/dexseq/count/main.nf",
         "sha256": "b58449040e58244300e40f8202cdc14c58b009f499bff570cfae7fd9bf215585",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/count/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "DEXSEQ_DTU",
@@ -239,7 +279,9 @@
         "path": "modules/nf-core/dexseq/dtu/main.nf",
         "sha256": "c9977fd1c7d4d1c3e100f563173cdab235522fc1d135fbfcfc6af7d5ff2a1c5e",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/dtu/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "DEXSEQ_EXON",
@@ -262,7 +304,9 @@
         "path": "modules/nf-core/dexseq/exon/main.nf",
         "sha256": "76c7677fe39140b2ce06cbe9a5e3b89a0379a31ea7ecf28836b9275ef4f63cb2",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/exon/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "DRIMSEQ_FILTER",
@@ -271,12 +315,12 @@
         "process_medium"
       ],
       "initial": {
-        "cpus": 6,
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -284,6 +328,13 @@
         "path": "modules/local/drimseq/dmfilter/main.nf",
         "sha256": "bf875f347f4ff27ed04b814dd189d024fd89d301b8804fad7ef3995a6d785597",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/drimseq/dmfilter/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
       }
     },
     {
@@ -298,7 +349,9 @@
         "time_hours": 2
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_FLOW_PREFLIGHT",
@@ -312,7 +365,9 @@
         "time_hours": 2
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_FLOW_IMPORT",
@@ -326,7 +381,9 @@
         "time_hours": 2
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_FLOW_PLAN",
@@ -340,7 +397,9 @@
         "time_hours": 2
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_FLOW_VALIDATE_PLAN",
@@ -354,7 +413,9 @@
         "time_hours": 2
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_FLOW_COLLECT",
@@ -368,7 +429,9 @@
         "time_hours": 2
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_FLOW_REPORT",
@@ -382,7 +445,9 @@
         "time_hours": 8
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_FLOW_RETAIN",
@@ -396,7 +461,9 @@
         "time_hours": 2
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_FLOW_DELIVERY",
@@ -410,7 +477,9 @@
         "time_hours": 2
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_FLOW_TASK",
@@ -424,7 +493,9 @@
         "time_hours": "task-dependent"
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "KATANA_FLOW_RESOURCE_TASK",
@@ -438,7 +509,9 @@
         "time_hours": "task-dependent"
       },
       "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy"
+      "rationale": "Katana control/report or per-task resource policy",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "GFFREAD_TX2GENE",
@@ -447,12 +520,12 @@
         "process_low"
       ],
       "initial": {
-        "cpus": 2,
-        "memory_gib": 12,
+        "cpus": 1,
+        "memory_gib": 4,
         "time_hours": 4
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported. Streaming/reference preparation: 4 GiB initial headroom; observed reference steps below 0.8 GiB in rescue.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -460,6 +533,13 @@
         "path": "modules/local/gffread/tx2gene/main.nf",
         "sha256": "e24e4984ce0f33e75c8aed2d96dcce239d240b6aa851b3a022e5e75c8a80bea5",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/gffread/tx2gene/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
       }
     },
     {
@@ -474,7 +554,9 @@
         "time_hours": 4
       },
       "disposition": "katana-specific retained",
-      "rationale": "Existing serial inference override"
+      "rationale": "Existing serial inference override",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "RSEQC_INFEREXPERIMENT",
@@ -488,7 +570,9 @@
         "time_hours": 4
       },
       "disposition": "katana-specific retained",
-      "rationale": "Existing serial inference override"
+      "rationale": "Existing serial inference override",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_TXIMPORT",
@@ -497,12 +581,12 @@
         "process_medium"
       ],
       "initial": {
-        "cpus": 6,
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Serial invocation but medium memory policy matches rnasplice TXIMETA_TXIMPORT; no invented lower memory requirement.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -510,6 +594,13 @@
         "path": "modules/local/tximeta/tximport/main.nf",
         "sha256": "b36b6e5ae8c6f5eb21b861b542d6265741980526a2598124b571458c6084ad32",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/tximeta/tximport/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
       }
     },
     {
@@ -533,7 +624,9 @@
         "path": "modules/nf-core/deseq2/differential/main.nf",
         "sha256": "31b7058013106fc6d302a75d18a8aed43d59e1e3e85156f216ee047a18ab307c",
         "url": "https://github.com/nf-core/differentialabundance/blob/30ed7741fc392127156c2fb10cfa3d69d216b54b/modules/nf-core/deseq2/differential/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_NORMALIZE",
@@ -556,7 +649,9 @@
         "path": "modules/nf-core/deseq2/differential/main.nf",
         "sha256": "31b7058013106fc6d302a75d18a8aed43d59e1e3e85156f216ee047a18ab307c",
         "url": "https://github.com/nf-core/differentialabundance/blob/30ed7741fc392127156c2fb10cfa3d69d216b54b/modules/nf-core/deseq2/differential/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_DESEQ2_METADATA",
@@ -570,7 +665,9 @@
         "time_hours": 4
       },
       "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      "rationale": "Inherited nf-core base label",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "KATANA_EXPORT",
@@ -580,12 +677,19 @@
         "katana_io"
       ],
       "initial": {
-        "cpus": 2,
+        "cpus": 1,
         "memory_gib": 12,
         "time_hours": 4
       },
-      "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      }
     },
     {
       "process": "PREPARE_REFERENCES",
@@ -595,11 +699,18 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 12,
+        "memory_gib": 4,
         "time_hours": 4
       },
-      "disposition": "katana-specific retained",
-      "rationale": "Existing serial invocation CPU override; inherited memory/time"
+      "disposition": "execution-only refinement",
+      "rationale": " Streaming/reference preparation: 4 GiB initial headroom; observed reference steps below 0.8 GiB in rescue.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 1,
+        "memory_gib": 12,
+        "time_hours": 4
+      }
     },
     {
       "process": "REFERENCE_FAIDX",
@@ -622,7 +733,9 @@
         "path": "modules/nf-core/samtools/faidx/main.nf",
         "sha256": "cab0f0c700e78d01d2d5a52cd53cd9a952613ec4c1f73417f07f64bae317b1c7",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/samtools/faidx/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "RESOLVE_SAMPLE_STRANDEDNESS",
@@ -636,7 +749,9 @@
         "time_hours": 4
       },
       "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      "rationale": "Inherited nf-core base label",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "RMATS_POST",
@@ -650,7 +765,7 @@
         "time_hours": 16
       },
       "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -658,7 +773,9 @@
         "path": "modules/local/rmats_post.nf",
         "sha256": "25fac904356724b4e29eb05f1e64650818a6e1e66e09da05ed5168711e223ace",
         "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_post.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "RMATS_POST_SINGLE",
@@ -672,7 +789,7 @@
         "time_hours": 16
       },
       "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -680,7 +797,9 @@
         "path": "modules/local/rmats_post_single.nf",
         "sha256": "16cc1616a73265134ad79d3597e462ffcdcdf45002e67d074f99ae0f2a0820fc",
         "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_post_single.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "RMATS_PREP",
@@ -694,7 +813,7 @@
         "time_hours": 16
       },
       "disposition": "historical declaration, not used by current workflow",
-      "rationale": "Preserved source module; current RMATS workflow calls RMATS_PREP_BAM once per sample instead.",
+      "rationale": "Preserved source module; current RMATS workflow calls RMATS_PREP_BAM once per sample instead. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -702,7 +821,9 @@
         "path": "modules/local/rmats_prep.nf",
         "sha256": "a8fffd1ce2f6745afd7a3ac6f1a80db29e51a05cac8e84e8bf8466465ba16bc0",
         "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_prep.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "RMATS_PREP_SINGLE",
@@ -716,7 +837,7 @@
         "time_hours": 16
       },
       "disposition": "historical declaration, not used by current workflow",
-      "rationale": "Preserved source module; current RMATS workflow calls RMATS_PREP_BAM once per sample instead.",
+      "rationale": "Preserved source module; current RMATS workflow calls RMATS_PREP_BAM once per sample instead. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -724,7 +845,9 @@
         "path": "modules/local/rmats_prep_single.nf",
         "sha256": "37c68f0c98306b056c01fbcf91225e603bbc32ddc648392e243c80112214109e",
         "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_prep_single.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "SALMON_GENOME_PROJECTION",
@@ -746,7 +869,9 @@
         "path": "modules/nf-core/salmon/quant/main.nf",
         "sha256": "83191e6db39d83544f3203bd122168383cc1e55925711906ebb416cf1c1665e4",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/salmon/quant/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "SPLIT_CONTRASTS",
@@ -760,7 +885,9 @@
         "time_hours": 4
       },
       "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      "rationale": "Inherited nf-core base label",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "STAGE_FASTQ",
@@ -783,7 +910,9 @@
         "path": "modules/nf-core/cat/fastq/main.nf",
         "sha256": "9b32e6eea1b0b8b73f2e6c1cab97cd0ef7000891daad40e0872df3c0554148b6",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/cat/fastq/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "STAGER",
@@ -792,12 +921,12 @@
         "process_medium"
       ],
       "initial": {
-        "cpus": 6,
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -805,6 +934,13 @@
         "path": "modules/local/stager/main.nf",
         "sha256": "be3f5f2d6cd93ccf969a393552c209cc6f77a801b626940afe0bc7c8fe1f779a",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/stager/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
       }
     },
     {
@@ -814,12 +950,12 @@
         "process_high"
       ],
       "initial": {
-        "cpus": 12,
+        "cpus": 1,
         "memory_gib": 72,
         "time_hours": 16
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -827,6 +963,13 @@
         "path": "modules/nf-core/suppa/clusterevents/main.nf",
         "sha256": "dfae5571030596b0689700e13ba6d900da90a190b7abfa2805290375ad43f219",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/clusterevents/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
       }
     },
     {
@@ -849,7 +992,9 @@
         "path": "modules/local/clustergroups/main.nf",
         "sha256": "6d3fcde77dfb5321d286d17aaf31b598ab1d1afdaa00c32ccea9053bc3944439",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/clustergroups/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "DIFFSPLICE",
@@ -858,12 +1003,12 @@
         "process_high"
       ],
       "initial": {
-        "cpus": 12,
+        "cpus": 1,
         "memory_gib": 72,
         "time_hours": 16
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -871,6 +1016,13 @@
         "path": "modules/nf-core/suppa/diffsplice/main.nf",
         "sha256": "53a298ec307d2bf037d4410f50108f99d39df37e691fde378f4bf577d7e6e930",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/diffsplice/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
       }
     },
     {
@@ -880,12 +1032,12 @@
         "process_low"
       ],
       "initial": {
-        "cpus": 2,
+        "cpus": 1,
         "memory_gib": 12,
         "time_hours": 4
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -893,6 +1045,13 @@
         "path": "modules/nf-core/suppa/generateevents/main.nf",
         "sha256": "b26d466d2a4f59cf371a2e030aa659f669d6400c0e6be8fcac257390fe308764",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/generateevents/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
       }
     },
     {
@@ -902,12 +1061,12 @@
         "process_medium"
       ],
       "initial": {
-        "cpus": 6,
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -915,6 +1074,13 @@
         "path": "modules/nf-core/suppa/psiperevent/main.nf",
         "sha256": "1da37ab06b55d31ac6e8fafa51597754a5753c6528809fd742ce47a51ff7c750",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/psiperevent/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
       }
     },
     {
@@ -924,12 +1090,12 @@
         "process_medium"
       ],
       "initial": {
-        "cpus": 6,
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -937,6 +1103,13 @@
         "path": "modules/nf-core/suppa/psiperisoform/main.nf",
         "sha256": "4c7a2371961813b87157121a3a5132644320aae3a089ca0d7d0180a1848eedd8",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/suppa/psiperisoform/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
       }
     },
     {
@@ -946,12 +1119,19 @@
         "process_low"
       ],
       "initial": {
-        "cpus": 2,
+        "cpus": 1,
         "memory_gib": 12,
         "time_hours": 4
       },
-      "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      }
     },
     {
       "process": "TXIMPORT",
@@ -960,12 +1140,12 @@
         "process_medium"
       ],
       "initial": {
-        "cpus": 6,
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Serial invocation but medium memory policy matches rnasplice TXIMETA_TXIMPORT; no invented lower memory requirement.",
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -973,6 +1153,13 @@
         "path": "modules/local/tximeta/tximport/main.nf",
         "sha256": "b36b6e5ae8c6f5eb21b861b542d6265741980526a2598124b571458c6084ad32",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/tximeta/tximport/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
       }
     },
     {
@@ -982,12 +1169,19 @@
         "process_low"
       ],
       "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 4
+      },
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported. Streaming/reference preparation: 4 GiB initial headroom; observed reference steps below 0.8 GiB in rescue.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
-      },
-      "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      }
     },
     {
       "process": "VALIDATE_REFERENCE",
@@ -996,12 +1190,19 @@
         "process_low"
       ],
       "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 4
+      },
+      "disposition": "execution-only refinement",
+      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported. Streaming/reference preparation: 4 GiB initial headroom; observed reference steps below 0.8 GiB in rescue.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial": {
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
-      },
-      "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label"
+      }
     },
     {
       "process": "FASTQC",
@@ -1011,11 +1212,11 @@
       ],
       "initial": {
         "cpus": 2,
-        "memory_gib": 12,
+        "memory_gib": 4,
         "time_hours": 4
       },
-      "disposition": "matched",
-      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "disposition": "execution-only refinement",
+      "rationale": "Observed 1.1 GiB peak across 12 full mouse libraries; initial 4 GiB headroom, retry 8 GiB.",
       "upstream_process": "FASTQC",
       "upstream": {
         "repository": "nf-core/rnaseq",
@@ -1024,6 +1225,13 @@
         "path": "modules/nf-core/fastqc/main.nf",
         "sha256": "1c4dcb7cd15d46c39cbe9263fbf6e50e08b3331a9bd8402827e9612c8091f6ec",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/fastqc/main.nf"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "previous_initial": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
       }
     },
     {
@@ -1046,7 +1254,9 @@
         "path": "modules/nf-core/samtools/index/main.nf",
         "sha256": "dca5ef0ac9c7ab78b1759f60a434fdd52c4fcb8df7dce2b1c069c84631f33562",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/samtools/index/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "SAMTOOLS_SORT",
@@ -1068,7 +1278,9 @@
         "path": "modules/nf-core/samtools/sort/main.nf",
         "sha256": "da2601afd35e13b1c8e996f8d1393bb73235da6d935365c626e8ca1f5b8adc9a",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/samtools/sort/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "STAR_ALIGN",
@@ -1082,7 +1294,7 @@
         "time_hours": 16
       },
       "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "rationale": "Matching upstream label; existing task-specific overrides remain explicit. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
       "upstream": {
         "repository": "nf-core/rnaseq",
         "tag": "3.27.0",
@@ -1090,7 +1302,9 @@
         "path": "modules/nf-core/star/align/main.nf",
         "sha256": "437a12a9df4f7c3d16600f04f2cb631c4512a30352ebb243f24890597b0c9b38",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/star/align/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "STAR_GENOMEGENERATE",
@@ -1112,7 +1326,9 @@
         "path": "modules/nf-core/star/genomegenerate/main.nf",
         "sha256": "f77c1e779991af98b49125acbb699746350e2ddb5900eadbb0863159ceede2f9",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/star/genomegenerate/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     },
     {
       "process": "TRIMGALORE",
@@ -1122,11 +1338,11 @@
       ],
       "initial": {
         "cpus": 8,
-        "memory_gib": 4,
+        "memory_gib": 8,
         "time_hours": 8
       },
-      "disposition": "matched",
-      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "disposition": "execution-only refinement",
+      "rationale": "Observed peak 4.1 GiB across 12 libraries; initial 8 GiB headroom, retry 16 GiB with fixed 8 workers.",
       "upstream_process": "TRIMGALORE",
       "upstream": {
         "repository": "nf-core/rnaseq",
@@ -1135,6 +1351,13 @@
         "path": "conf/modules/trimgalore.config",
         "sha256": "2a13f45899e958c8231470c1b86004d0e7ca32f56605b66cf653eb8b82afebaf",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/conf/modules/trimgalore.config"
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "previous_initial": {
+        "cpus": 8,
+        "memory_gib": 4,
+        "time_hours": 8
       }
     },
     {
@@ -1157,7 +1380,9 @@
         "path": "modules/nf-core/untar/main.nf",
         "sha256": "037665c6bdc42ddcc75e30a293c629c53a1d245ce7c8c7791f18ef3c1069f62d",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/untar/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
     },
     {
       "process": "RMATS_PREP_BAM",
@@ -1179,10 +1404,112 @@
         "path": "modules/nf-core/rmats/prep/main.nf",
         "sha256": "d7e45bf022db6b474ffe555b80d3f173814311f8e23ba193ff4a2d862b3504d9",
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/rmats/prep/main.nf"
-      }
+      },
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting"
     }
   ],
   "unchanged_science": true,
   "user_config_modified": false,
-  "clusters_hardcoded": false
+  "clusters_hardcoded": false,
+  "downstream_groups": {
+    "quality": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "as": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "deg": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "dtu": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "landscape": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "evidence": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "enrichment": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "overlap": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "coverage": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "interaction": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "network_fit": {
+      "cpus": 12,
+      "memory_gib": 72,
+      "time_hours": 16
+    },
+    "motiftrace": {
+      "cpus": 6,
+      "memory_gib": 36,
+      "time_hours": 8
+    },
+    "mapp_prepare": {
+      "cpus": 6,
+      "memory_gib": 36,
+      "time_hours": 8
+    },
+    "mapp": {
+      "cpus": 6,
+      "memory_gib": 36,
+      "time_hours": 8
+    },
+    "network_followup": {
+      "cpus": 2,
+      "memory_gib": 12,
+      "time_hours": 4
+    },
+    "qc": {
+      "cpus": 1,
+      "memory_gib": 4,
+      "time_hours": 12
+    },
+    "reference": {
+      "cpus": 1,
+      "memory_gib": 4,
+      "time_hours": 2
+    },
+    "audit": {
+      "cpus": 1,
+      "memory_gib": 4,
+      "time_hours": 2
+    }
+  },
+  "site_policy": {
+    "profile": "pdc_kth",
+    "shared_max_scheduler_cpus": 64,
+    "shared_memory_per_cpu_mib": 888,
+    "automatic_memory_partition": false,
+    "other_sites_unchanged": true,
+    "rationale": "Shared-first preference up to one quarter of a 256-logical-CPU Dardel node; configurable, not a Slurm limit or guaranteed queue acceleration."
+  }
 }

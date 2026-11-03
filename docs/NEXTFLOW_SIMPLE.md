@@ -13,7 +13,7 @@ required by your selected analyses. FASTA and GTF remain explicit inputs.
 ## 1. FASTQ or BAM to analysis and report
 
 ```bash
-nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110303 \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110304 \
   -profile singularity -c /path/to/site.config \
   --input /data/study/samples.csv \
   --contrasts /data/study/contrasts.csv \
@@ -27,8 +27,11 @@ nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110303 \
 ```
 
 Your site configuration selects the executor, allocation and queues. On Dardel,
-use `-c pdc_kth.config -c custom.config --project YOUR_ALLOCATION` with your
-existing site files. Katana does not switch tasks to a memory partition.
+use `-profile singularity,pdc_kth -c custom.config --project YOUR_ALLOCATION`
+in place of the generic profile/site options above. The packaged profile accounts
+for memory-driven shared CPU allocation; do not also load an older `pdc_kth.config`.
+Your custom configuration remains yours. See [task resources](RESOURCE_ALLOCATION.md).
+Katana does not automatically switch tasks to a memory partition.
 On a workstation use `-profile docker` and omit the site config/account options.
 The same command works with the released pipeline directory in place of the
 GitHub repository name.

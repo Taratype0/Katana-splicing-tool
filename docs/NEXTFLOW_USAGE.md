@@ -33,8 +33,8 @@ fetches the versioned containers, while selected analysis databases use the
 shared resource cache. Replace paths and site settings with your own.
 
 ```bash
-nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110303 \
-  -profile singularity -c pdc_kth.config -c custom.config \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110304 \
+  -profile singularity,pdc_kth -c custom.config \
   --project YOUR_ALLOCATION \
   --input /data/project/samples.csv --contrasts /data/project/contrasts.csv \
   --fasta /data/reference/genome.fa --gtf /data/reference/annotation.gtf \
@@ -49,19 +49,18 @@ root, `-work-dir` is the Nextflow work/cache directory, `-c` loads a Groovy site
 configuration, and `-profile` selects runtime profiles. `-resume` reuses retained
 matching work when present; it does not recover deleted work.
 
-[The supplied kth.config](../examples/nextflow/kth.config) is a Katana Dardel
-example with shared allocation and the Klemming bind. Load the site's runtime
-modules before launch. Other clusters should replace it with their own site
-configuration. The name `kth.config` is arbitrary, not a Nextflow option.
-
-The official nf-core institutional profile is named
-[`pdc_kth`](https://nf-co.re/configs/pdc_kth/), not `kth_config`. This Katana
-checkout loads it when you pass your local `pdc_kth.config`. In raw-data mode,
-`--project` can carry the allocation consumed by that site config. In existing
-project mode, `--project` names the Katana project file instead; use a site config
-with an explicit account or `--slurm_account` for that route. Katana's own
-Slurm profile uses `--slurm_account`. It does not automatically route jobs to
-memory nodes. Queue/account configuration is separate from biological parameters.
+The packaged `pdc_kth` profile is Katana's Dardel resource adapter, informed by
+the [official institutional profile](https://nf-co.re/configs/pdc_kth/) and PDC
+partition capacities. It keeps small jobs on shared, accounts for RAM-driven CPU
+allocation, and routes larger requests to main/long without automatically selecting
+memory. Do not combine it with an older separate `pdc_kth.config`.
+Use `-c custom.config` for your own overrides; Katana never edits that file.
+See [allocation details and settings](RESOURCE_ALLOCATION.md).
+Other clusters should use their own site configuration instead. In raw-data mode,
+`--project` is the allocation; in imported-project mode use `--slurm_account` for
+the allocation and `--project` for the project file. Load your runtime modules
+before launch. The legacy `examples/nextflow/kth.config` remains an explicit
+shared-only example, not the new automatic routing policy.
 
 `project-template.json` and `flow.json` are now generated internally by the current
 source workflow. The explicit JSON examples below remain available for advanced settings

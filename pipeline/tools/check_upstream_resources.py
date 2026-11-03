@@ -26,6 +26,18 @@ def declared_processes():
     return result
 
 
+def declared_aliases():
+    aliases = {}
+    for folder in ('workflows', 'subworkflows'):
+        for path in (PIPELINE / folder).rglob('*.nf'):
+            for block in re.findall(r'include\s*\{(.*?)\}', path.read_text(), re.S):
+                for original, alias in re.findall(r'(\w+)\s+as\s+(\w+)', block):
+                    if original in declared_processes() and original != alias:
+                        assert alias not in aliases or aliases[alias] == original, alias
+                        aliases[alias] = original
+    return aliases
+
+
 def fixture(root, catalog):
     root.mkdir(parents=True, exist_ok=False)
     modules = root / 'probes'
@@ -56,21 +68,17 @@ LABELS
         value = record['initial']
         expected[name] = ([2, '12 GB', '4h', 'unset', 1] if value['cpus'] == 'task-dependent' else
                           [int(value['cpus']), f"{value['memory_gib']} GB", f"{value['time_hours']}h", 'unset', 1])
-    # The source module and its BAM alias must both inherit FASTQC's override.
-    include.append("include { FASTQC as BAM_FASTQC } from './probes/FASTQC'")
-    calls.append("    BAM_FASTQC(Channel.of([id:'BAM_FASTQC']))")
-    expected['BAM_FASTQC'] = expected['FASTQC'].copy()
-    # Exercise the real downstream execution groups, not only one generic task.
-    for alias, group, resources in [
-        ('NETWORK_FIT', 'network_fit', [12, '72 GB', '16h']),
-        ('MOTIFTRACE', 'motiftrace', [6, '36 GB', '8h']),
-        ('MAPP_PREPARE', 'mapp_prepare', [6, '36 GB', '8h']),
-        ('MAPP', 'mapp', [6, '36 GB', '8h']),
-        ('NETWORK_FOLLOWUP', 'network_followup', [2, '12 GB', '4h']),
-    ]:
-        include.append(f"include {{ KATANA_FLOW_TASK as {alias} }} from './probes/KATANA_FLOW_TASK'")
+    # Every currently wired alias, including all downstream execution groups.
+    for alias, original in declared_aliases().items():
+        if alias in expected:
+            continue
+        include.append(f"include {{ {original} as {alias} }} from './probes/{original}'")
+        group = 'motiftrace' if alias == 'MOTIFTRACE_RESOURCE' else alias.lower()
         calls.append(f"    {alias}(Channel.of([id:'{alias}', execution_group:'{group}', workflow_id:'fixture']))")
-        expected[alias] = resources + ['unset', 1]
+        expected[alias] = expected[original].copy()
+        if original in ('KATANA_FLOW_TASK', 'KATANA_FLOW_RESOURCE_TASK'):
+            setting = catalog['downstream_groups'][group]
+            expected[alias] = [setting['cpus'], f"{setting['memory_gib']} GB", f"{setting['time_hours']}h", 'unset', 1]
     (root / 'main.nf').write_text('nextflow.enable.dsl=2\n' + '\n'.join(include) +
         '\nworkflow KATANA_CORE {\n' + '\n'.join(calls) +
         '\n}\nworkflow KATANA_PIPELINE { KATANA_CORE() }\nworkflow { KATANA_PIPELINE() }\n')
@@ -95,7 +103,7 @@ def main():
     for case in ('defaults', 'user_overrides'):
         run = root / case
         expected = fixture(run, catalog)
-        expected['TRIMGALORE'] = [16, '8 GB', '16h', 'unset', 2]
+        expected['TRIMGALORE'] = [8, '16 GB', '16h', 'unset', 2]
         extra = []
         if case == 'user_overrides':
             user = run / 'user.config'
@@ -132,7 +140,7 @@ def main():
             assert observed[-1] == value, (case, key, observed, value)
             if key == 'TRIMGALORE':
                 assert len(observed) == 2, observed
-                assert observed[0] == ([8, '4 GB', '8h', 'unset', 1] if case == 'defaults' else [3, '5 GB', '3h', 'user-trim', 1]), observed
+                assert observed[0] == ([8, '8 GB', '8h', 'unset', 1] if case == 'defaults' else [3, '5 GB', '3h', 'user-trim', 1]), observed
             else:
                 assert len(observed) == 1, (key, observed)
         proof[case] = rows

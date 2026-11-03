@@ -48,6 +48,13 @@ jobs:
           python -B pipeline/tools/check_upstream_resources.py \
             --nextflow-command-file "$RUNNER_TEMP/resource-nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-upstream-resource-policy"
+      - name: Verify Dardel Slurm wrappers and explicit user overrides without HPC jobs
+        env:
+          NXF_OFFLINE: 'true'
+        run: |
+          python -B pipeline/tools/check_pdc_resources.py \
+            --nextflow-command-file "$RUNNER_TEMP/resource-nextflow-command.json" \
+            --outdir "$RUNNER_TEMP/katana-pdc-resource-policy"
       - name: Verify reference exclusions
         run: python -B -m unittest discover -s pipeline/tests -p test_reference_filter.py -v
       - name: Verify strandedness classification and contrast gates
@@ -128,6 +135,9 @@ jobs:
             ${{ runner.temp }}/katana-upstream-resource-policy/acceptance.receipt.json
             ${{ runner.temp }}/katana-upstream-resource-policy/*/stdout.txt
             ${{ runner.temp }}/katana-upstream-resource-policy/*/stderr.txt
+            ${{ runner.temp }}/katana-pdc-resource-policy/acceptance.json
+            ${{ runner.temp }}/katana-pdc-resource-policy/*/stdout.txt
+            ${{ runner.temp }}/katana-pdc-resource-policy/*/stderr.txt
             ${{ runner.temp }}/katana-rmats-sample-reuse/receipt.json
             ${{ runner.temp }}/katana-rmats-sample-reuse/*/*.log
             ${{ runner.temp }}/katana-rmats-sample-reuse/*/*.tsv

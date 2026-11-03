@@ -407,7 +407,9 @@ significance. See [MOTIFTRACE.md](MOTIFTRACE.md).
 | `--katana_stage_containers` | `{}` | Advanced map of execution groups to compatible images. Main control still requires the full image. Use a structured params file, not an unvalidated shell string. |
 | `--flow_executable` | `katana-flow` | Container profiles permit only `katana-flow` or `/opt/conda/bin/katana-flow`; mounted host launchers are rejected. |
 | `--slurm_account` | unset | Account passed to Slurm when configured. |
-| `--slurm_partition` | unset | Slurm queue/partition. |
+| `--slurm_partition` | unset | Explicit Slurm queue/partition; overrides automatic Dardel routing. |
+| `--pdc_shared_max_cpus` | 64 | Packaged pdc_kth profile only: prefer shared up to this memory-adjusted CPU reservation, not a concurrency limit. |
+| `--pdc_shared_memory_per_cpu_mb` | 888 | Packaged pdc_kth profile only: MiB per shared CPU used for queue selection. |
 | `--max_cpus` | unset | Optional per-task CPU ceiling, not a global concurrency cap. |
 | `--max_memory` | unset | Optional per-task memory ceiling, with unit e.g. `128.GB`/`128 GB` as accepted by Nextflow. |
 | `--max_time` | unset | Optional per-task time ceiling, e.g. `24.h`/`24 h`. |
@@ -418,7 +420,7 @@ Recognized image execution-group keys are `control`, `report`, `audit`,
 `network_followup`, `interaction`, `mapp_prepare`, `mapp`. Unknown keys or empty
 image references fail early.
 
-Profiles are `local`, `docker`, `singularity`, `apptainer`, `conda`, `slurm`.
+Profiles are `local`, `docker`, `singularity`, `apptainer`, `conda`, `slurm`, `pdc_kth`.
 Combine scheduler and engine, for example `-profile slurm,apptainer`. Do not
 mix engines. The Conda profile enables module recipes; install the full native
 environment explicitly for Katana standalone/native execution.
@@ -433,8 +435,13 @@ Important first-attempt resource requests:
 | Upstream `process_high` | 12 | 72 GB | 16 h |
 | STAR index override | 16 | 96 GB; 128 GB on allowed retry | Inherited matching process-label time; inspect resolved task. |
 | Katana control | 1 | 4 GB | 2 h |
-| Katana downstream task | task `spec.resources.cpus`, else 1 | task setting, else 8 GB | task setting, else 12 h |
+| Katana downstream task | task setting, else execution group (1/2/6/12) | task setting, else execution group (4/12/36/72 GB) | task setting, else execution group (2/4/8/12/16 h) |
 | Katana report | 2 | 12 GB | 8 h |
+
+The [complete per-tool inventory](RESOURCE_ALLOCATION.md) lists refinements to
+these label defaults: trimming 8 CPUs/8 GB, FastQC 2 CPUs/4 GB, serial imports
+1 CPU and fixed CPU worker counts on retry. The opt-in pdc_kth profile provides
+memory-aware shared/main/long routing. Other clusters keep their site policy.
 
 Actual process labels, selectors and task specs can override general defaults.
 Check the trace and scheduler allocation. Never assume a theoretical override

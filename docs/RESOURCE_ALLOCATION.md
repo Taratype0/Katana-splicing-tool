@@ -14,13 +14,15 @@ usage. A complete scientific run was not restarted to collect resource metrics.
 
 | Task | CPU | Memory | Time | Pinned source or exception |
 |---|---:|---:|---:|---|
-| Trim Galore | 8 | 4 GB | 8 h | rnaseq 3.27.0 explicit CPU/memory override and medium time |
-| FastQC, including BAM alias | 2 | 12 GB | 4 h | rnaseq 3.27.0 / rnasplice 2.0.0 low label |
+| Trim Galore | 8 | 8 GB | 8 h | rnaseq workers; measured 4.1 GiB peak requires more than the upstream 4 GiB starting request |
+| FastQC, including BAM alias | 2 | 4 GB | 4 h | Measured 1.1 GiB peak in 12 mouse libraries, with headroom |
 | DEXSeq annotation / per-sample counting | 1 | 6 GB | 4 h | rnasplice 2.0.0 single label |
 | DEXSeq exon / DTU models | 6 | 36 GB | 8 h | rnasplice 2.0.0 medium label |
 | DESeq2 contrast / normalization | 1 | 6 GB | 4 h | differentialabundance single label; normalization is serial |
 | FASTA index / lane staging | 1 | 6 GB | 4 h | rnaseq single label; serial Katana lane adapter |
-| tximport | 6 | 36 GB | 8 h | rnasplice medium request retained |
+| tximport / DRIMSeq filtering / stageR / serial SUPPA operations | 1 | 36 GB | 8 h | Serial invocations; retain conservative upstream RAM/time |
+| Reference/metadata streaming | 1 | 4 GB | inherited | Observed reference tasks below 0.8 GiB; no extra full input copies |
+| BAM evidence streaming | 2 | 6 GB | 8 h | Samtools decompression plus a serial AWK accumulator |
 | Salmon projection / samtools sort | 6 | 36 GB | 8 h | Corresponding rnaseq medium requests retained |
 | STAR alignment | 12 | 72 GB | 16 h | rnaseq high label retained |
 | STAR genome index | 16 | 96 GB | 16 h | Existing GRCm39 measured-memory exception; 128 GB on retry |
@@ -76,26 +78,62 @@ These modules have no interchangeable resource configuration in the three
 upstream pipelines. Their allocations are identified separately rather than
 claimed as inherited nf-core defaults. Memory needs vary with event count,
 model count, annotation and cohort size. Downstream retries increase memory and
-time without automatically increasing CPU count or changing partition.
+time without automatically increasing CPU count. The selected site profile can
+choose a different partition for the larger request; scientific task arguments stay unchanged.
 
 ## Site and user configuration
 
-Pass site/user settings with normal Nextflow `-c` files. Katana does not choose
-a cluster partition or edit a user's configuration. Exact `withName` selectors
-can override CPU, memory, time and queue; fully qualified names can distinguish
-a specific invocation. Generic label overrides have lower priority than
-process-name overrides. No Dardel-specific memory-per-CPU rule is built in.
+The generic profiles leave partition selection to the site. For Dardel select
+the packaged `pdc_kth` profile:
 
-The native print-only probe loads the production configuration and checks all
-61 process declarations, the BAM FastQC alias, downstream execution groups,
-retry requests and independent synthetic user overrides. It simulates local
-executor capacity because it prints requests without allocating those resources.
-It is not a Slurm benchmark or a real-data performance measurement.
+```bash
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110304 \
+  -profile singularity,pdc_kth -c custom.config --project YOUR_ALLOCATION \
+  ...
+```
 
-For real runs, retain Nextflow trace/report and compare Slurm requested vs
-allocated CPU/memory and peak RSS. A scheduler may allocate extra CPUs to satisfy
-its memory-per-CPU policy; pipeline worker threads and charged allocation can
-differ. `Priority` is a queue reason, not proof of quota exhaustion.
+This replaces the separate `-c pdc_kth.config`; do not load both site policies.
+Your existing `custom.config` stays unchanged. Named CPU, RAM, time and queue
+overrides remain supported. `--slurm_partition` explicitly selects a partition;
+an explicit `--partition` in `--clusterOptions` is preserved without a second
+partition directive. In imported-project mode use `--slurm_account` for the
+allocation, since `--project` identifies the project file.
+
+The profile accounts for the observed Dardel shared memory policy:
+`shared-equivalent CPUs = max(tool CPUs, ceil(memory MiB / 888))`.
+It prefers shared up to 64 such CPUs and 111 GiB. This 64-CPU preference is
+configurable, not a scheduler limit or a limit on the number of concurrent tasks.
+It leaves moderate jobs on shared while moving larger reservations to main.
+For example, STAR's 12-worker/72-GiB request needs 84 shared CPUs and is routed
+to main. CoSplice and rMATS post have the same initial reservation. FastQC,
+trimming, per-BAM rMATS prep, DEXSeq counting and 36-GiB MotifTrace/MAPP requests
+remain eligible for shared. A user-specified 256-GiB STAR index also goes to main.
+
+Main is a whole-node allocation, limited here to 24 h/894 GiB. Longer jobs use
+long when within 7 days/222 GiB. Larger or incompatible requests need an explicit
+site override; Katana never selects memory automatically. Shared routing can be
+adjusted with `--pdc_shared_max_cpus` (64) and
+`--pdc_shared_memory_per_cpu_mb` (888 MiB). Other servers do not load this policy.
+Partition choice cannot guarantee a shorter queue; admission remains Slurm's decision.
+
+CPU worker counts remain fixed during memory retries, including named FastQC,
+trimming and DEXSeq overrides. Existing retry eligibility/counts and scientific
+commands are unchanged. Trace output records requested CPU/RAM/time, partition,
+attempt, timestamps and peak RSS so future adjustments can use measurements.
+No live jobs are cancelled or resubmitted by a profile update.
+
+The native print-only probe checks all 61 declared processes and every wired
+alias, including downstream execution groups and synthetic user overrides.
+A separate test uses Nextflow's real Slurm executor with fake scheduler commands
+to inspect the generated `#SBATCH` headers, routing boundaries and explicit
+partition overrides. These checks allocate no HPC resources and run no scientific
+data. Retained-cache and installed-package checks run separately in CI.
+
+Memory requests for unmeasured heavy tasks remain conservative. The recorded
+FastQC/trimming/reference measurements come from this mouse study, not a claim
+that every species, depth or future dataset needs the same memory. Compare the
+trace with Slurm allocation and peak RSS for each new workload. `Priority` means
+waiting for scheduling priority; it is not proof of quota exhaustion.
 
 ## Sources
 
@@ -103,3 +141,5 @@ differ. `Priority` is a queue reason, not proof of quota exhaustion.
 - [rnasplice 2.0.0 modules](https://github.com/nf-core/rnasplice/tree/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules)
 - [differentialabundance 2.0.0 DESeq2](https://github.com/nf-core/differentialabundance/blob/30ed7741fc392127156c2fb10cfa3d69d216b54b/modules/nf-core/deseq2/differential/main.nf)
 - [Nextflow selector precedence](https://www.nextflow.io/docs/latest/config.html#process-selectors)
+
+- [PDC job scheduling and node capacities](https://pdc-web.eecs.kth.se/doc/run_jobs/job_scheduling/)
