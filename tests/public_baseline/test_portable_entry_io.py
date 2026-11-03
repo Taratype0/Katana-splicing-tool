@@ -133,3 +133,64 @@ def test_owned_native_import_survives_work_removal_and_borrowed_input_is_indepen
     expected = retained.read_bytes()
     shutil.rmtree(work)
     assert retained.read_bytes() == expected
+
+
+def test_digest_accepts_metadata_only_transition_after_identical_stable_recheck(tmp_path, monkeypatch):
+    source = tmp_path / 'completed.tsv'; source.write_bytes(b'unchanged native result')
+    initial = file_io.identity(source); phase = [0]; reads = []
+    real = file_io.hashlib.file_digest
+    monkeypatch.setattr(file_io, 'identity', lambda path: [*initial[:4], initial[4] + phase[0]])
+    monkeypatch.setenv('KATANA_VERIFY_CONTENT', '1')
+    def read(handle, algorithm):
+        value = real(handle, algorithm); reads.append(True); phase[0] = 1
+        return value
+    monkeypatch.setattr(file_io.hashlib, 'file_digest', read)
+    assert file_io.digest(source) == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert len(reads) == 2
+
+
+def test_digest_rejects_real_same_size_content_change_during_verification(tmp_path, monkeypatch):
+    source = tmp_path / 'changed.tsv'; source.write_bytes(b'original')
+    initial = file_io.identity(source); phase = [0]; stat = source.stat()
+    real = file_io.hashlib.file_digest
+    monkeypatch.setattr(file_io, 'identity', lambda path: [*initial[:4], initial[4] + phase[0]])
+    monkeypatch.setenv('KATANA_VERIFY_CONTENT', '1')
+    def read(handle, algorithm):
+        value = real(handle, algorithm)
+        if phase[0] == 0:
+            source.write_bytes(b'modified')
+            os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+            phase[0] = 1
+        return value
+    monkeypatch.setattr(file_io.hashlib, 'file_digest', read)
+    with pytest.raises(ValueError, match='File changed during content verification'):
+        file_io.digest(source)
+
+
+def test_digest_rejects_unsettled_identity_without_unbounded_retries(tmp_path, monkeypatch):
+    source = tmp_path / 'unstable.tsv'; source.write_bytes(b'constant')
+    initial = file_io.identity(source); reads = []
+    def identity(path):
+        reads.append(True); return [*initial[:4], initial[4] + len(reads)]
+    monkeypatch.setattr(file_io, 'identity', identity)
+    monkeypatch.setenv('KATANA_VERIFY_CONTENT', '1')
+    with pytest.raises(ValueError, match='File changed during content verification'):
+        file_io.digest(source)
+    assert len(reads) == 3
+
+
+def test_generated_projection_checksum_uses_written_bytes_and_preserves_existing_file(tmp_path, monkeypatch):
+    target = tmp_path / 'projection.tsv'; content = b'gene\tevent\tpvalue\nG1\tE1\t1e-310\n' * 1000
+    monkeypatch.setattr(file_io.hashlib, 'file_digest', lambda *args: (_ for _ in ()).throw(AssertionError('projection reread')))
+    checksum = file_io.write_verified(target, content)
+    assert target.read_bytes() == content
+    assert checksum == hashlib.sha256(content).hexdigest()
+    with pytest.raises(FileExistsError): file_io.write_verified(target, b'replacement')
+    assert target.read_bytes() == content
+
+
+def test_generated_projection_flush_failure_does_not_return_success(tmp_path, monkeypatch):
+    def fail(fd): raise OSError('simulated flush failure')
+    monkeypatch.setattr(file_io.os, 'fsync', fail)
+    with pytest.raises(OSError, match='simulated flush failure'):
+        file_io.write_verified(tmp_path / 'partial.tsv', b'result')

@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path, PurePosixPath
 
 from .model import file_sha256, read_json, write_json
-from .file_io import copy_verified, identity, remember
+from .file_io import copy_verified, identity, remember, write_verified
 
 
 def _upstream_metadata(source, paths):
@@ -242,16 +242,17 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None, ana
             remember(destination, verified)
         if file_sha256(path) != file_sha256(destination):
             raise ValueError("Imported native bytes changed while copying")
+    normalized_checksums = {}
     for relative, content in normalized_members.items():
         destination = out / "bundle" / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(content)
+        normalized_checksums[relative] = write_verified(destination, content)
     write_json(out / "project.json", payload)
     write_json(out / "import.receipt.json", {"schema": "katana.flow.import/v1", "status": "completed",
                "source_manifest_sha256": file_sha256(bundle / "manifest.json"), "samples": len(samples),
                "comparisons": len(comparisons), "files_verified": len(paths), "mode": chosen_mode,
                "source_statistics_refitted": False,
                "not_selected_resource_ids": skipped_resources,
-               "format_projections": [{"path": relative, "sha256": file_sha256(out / "bundle" / relative)}
+               "format_projections": [{"path": relative, "sha256": normalized_checksums[relative]}
                                       for relative in normalized_members]})
     return out / "project.json"

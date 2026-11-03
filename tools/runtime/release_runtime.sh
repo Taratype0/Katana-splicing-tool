@@ -10,9 +10,10 @@ prepare)
   test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
   gh run view "$SOFTWARE_RUN" --json headSha,jobs > /tmp/katana-software-checks.json
   python - <<'PYCHECK'
-import json
+import json,os
 from pathlib import Path
 run=json.loads(Path('/tmp/katana-software-checks.json').read_text())
+assert run['headSha']==os.environ['GITHUB_SHA'], 'Software checks must match release source'
 required={'package-wheel','installed-native-import (linux)','installed-native-import (windows)'}
 passed={j['name'] for j in run['jobs'] if j['status']=='completed' and j['conclusion']=='success'}
 assert required <= passed, (required-passed)
@@ -74,7 +75,8 @@ summaries={name:json.loads(Path(path).read_text()) for name,path in {
   'native_runtime':'native-runtime/acceptance.receipt.json',
   'standalone_models':'standalone-models/acceptance.json',
   'native_models':'native-models/acceptance.json',
-  'environment':'environment/acceptance.json'}.items()}
+  'environment':'environment/acceptance.json',
+  'import_content':'import-content/acceptance.json'}.items()}
 assert all(s['status']=='passed' for s in summaries.values())
 Path('docker.acceptance.json').write_text(json.dumps(dict(status='passed',candidate=os.environ['GITHUB_SHA'],wheel_sha256=os.environ['WHEEL_SHA'],software_run=os.environ['SOFTWARE_RUN'],checks=summaries),indent=2))
 with tarfile.open('docker-validation.tar.gz','w:gz') as archive:
@@ -106,6 +108,7 @@ PYACCEPT
   sudo apptainer build "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" "docker-archive://$ROOT/runtime.tar"
   sudo chown "$(id -u):$(id -g)" output/*.sif
   apptainer exec --cleanenv --bind "$ROOT/output:/acceptance,$GITHUB_WORKSPACE/scripts:/checks:ro" "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" python /checks/check_downstream_environment.py --out /acceptance/apptainer-environment
+  apptainer exec --cleanenv --bind "$ROOT/output:/acceptance,$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" python /checks/check_import_content.py --outdir /acceptance/apptainer-import-content
   ;;
 collect)
   cd "$ROOT/output"
@@ -117,9 +120,12 @@ receipt=json.loads(Path('docker.acceptance.json').read_text())
 sif=json.loads(Path('apptainer-environment/acceptance.json').read_text())
 assert receipt['status']=='passed' and sif['status']=='passed'
 receipt['apptainer']=sif
+import_check=json.loads(Path('apptainer-import-content/acceptance.json').read_text()); assert import_check['status']=='passed'
+receipt['apptainer_import_content']=import_check
 Path('runtime.acceptance.json').write_text(json.dumps(receipt,indent=2))
 with tarfile.open('apptainer-validation.tar.gz','w:gz') as archive:
   archive.add('apptainer-environment')
+  archive.add('apptainer-import-content')
 PYACCEPT
   test "$(gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
   gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" *.sif runtime-SHA256SUMS apptainer-validation.tar.gz runtime.acceptance.json

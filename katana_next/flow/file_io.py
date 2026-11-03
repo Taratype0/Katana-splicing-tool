@@ -102,9 +102,18 @@ def digest(path):
             return checksum
     with path.open('rb') as handle:
         value = hashlib.file_digest(handle, 'sha256').hexdigest()
-    if identity(path) != before:
-        raise ValueError(f'File changed during content verification: {path}')
-    remember(path, value, before)
+    after = identity(path)
+    if after != before:
+        # Link/permission changes and delayed filesystem timestamps do not by
+        # themselves establish changed bytes. Recheck only this exceptional
+        # case, with a stable identity and identical content required.
+        if before[:3] != after[:3]:
+            raise ValueError(f'File changed during content verification: {path}')
+        with path.open('rb') as handle:
+            confirmed = hashlib.file_digest(handle, 'sha256').hexdigest()
+        if identity(path) != after or confirmed != value:
+            raise ValueError(f'File changed during content verification: {path}')
+    remember(path, value, after)
     return value
 
 
@@ -157,3 +166,29 @@ def retain_owned_file(source, destination):
         # created private tree and is checked above.
         shutil.copy2(source, destination)
     return str(destination)
+
+
+def write_verified(path, content):
+    """Write a new owned byte payload and return its checksum without rereading.
+
+    Used for importer-generated format projections, never borrowed inputs.
+    A failed or short write leaves diagnostic bytes but returns no checksum.
+    """
+    path = Path(path)
+    checksum = hashlib.sha256()
+    with path.open('xb') as handle:
+        view = memoryview(content)
+        for start in range(0, len(view), 8 * 1024 * 1024):
+            block = view[start:start + 8 * 1024 * 1024]
+            if handle.write(block) != len(block):
+                raise OSError('Incomplete generated-file write: ' + str(path))
+            checksum.update(block)
+        handle.flush()
+        os.fsync(handle.fileno())
+        written = os.fstat(handle.fileno())
+    current = path.stat()
+    if (current.st_dev, current.st_ino, current.st_size) != (written.st_dev, written.st_ino, len(view)):
+        raise ValueError('Generated file changed during writing: ' + str(path))
+    value = checksum.hexdigest()
+    remember(path, value)
+    return value

@@ -69,7 +69,7 @@ The interactive browser adds adjustable thresholds, result filtering, gene/event
 Supply the sample sheet, comparison sheet, references and analysis resources. One Nextflow run schedules read processing, differential analysis, Katana, the report and the reusable browser project. Internal configuration files are generated automatically:
 
 ```sh
-nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110306 \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110307 \
   -profile docker --input inputs/samples.csv --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
   --species Mus_musculus --reference_build GRCm39 \

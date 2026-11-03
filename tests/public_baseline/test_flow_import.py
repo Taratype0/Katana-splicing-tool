@@ -58,11 +58,18 @@ def test_import_rejects_ambiguous_rmats_sample_vectors(tmp_path):
         import_bundle(root, template, tmp_path / "bad")
 
 
-def test_native_dexseq_csv_preserves_exons_and_separate_gene_screen(tmp_path):
+def test_native_dexseq_csv_preserves_exons_and_separate_gene_screen(tmp_path, monkeypatch):
     import csv
     from katana_next.infrastructure.manifest_store import ManifestStore
     from katana_next.workflows.bulk import _audit_asset
     root, manifest, template = bundle(tmp_path)
+    from katana_next.flow import importer
+    original_hash = importer.file_sha256
+    def native_only_hash(path):
+        if str(path).endswith('.dexseq-exons.tsv'):
+            raise AssertionError('Generated projection must use its write-time checksum')
+        return original_hash(path)
+    monkeypatch.setattr(importer, 'file_sha256', native_only_hash)
     members = [
         ('dexseq', 'perGeneQValue.B_vs_A.csv', 'groupID,padj\ng1,0.02\n'),
         ('auxiliary', 'DEXSeqResults.B_vs_A.csv',
