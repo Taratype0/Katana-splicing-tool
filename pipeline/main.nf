@@ -138,7 +138,7 @@ Required calculations are verified before the fixed seven-section report is acce
             error('Katana stage containers require known execution-group keys and nonempty image references')
         }
         if ((params.mode != 'upstream-only' || params.managed_preflight) && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !params.katana_container) {
-            error('No Katana container is configured; restore the release defaults or supply --katana_container.')
+            error('No Katana container is configured; host fallback is disabled. Restore the release defaults or supply --katana_container.')
         }
         if ((params.mode != 'upstream-only' || params.managed_preflight) && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !(params.flow_executable in ['katana-flow', '/opt/conda/bin/katana-flow'])) {
             error('Container profiles require the image launcher katana-flow or /opt/conda/bin/katana-flow; mounted host launchers are not allowed')
