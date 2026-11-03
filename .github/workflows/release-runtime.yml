@@ -19,7 +19,7 @@ permissions:
   actions: read
 jobs:
   docker-runtime:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 150
     env:
       GH_TOKEN: ${{ github.token }}
@@ -45,10 +45,8 @@ jobs:
       - name: Verify installed native DAG, models, report, delivery and resume
         run: |
           "$CONTROLLER/python/bin/python3" -I tools/runtime/check_native_models.py --image "katana-downstream:$RUNTIME_VERSION" --nextflow "$CONTROLLER/bin/nextflow" --outdir "$RUNNER_TEMP/katana-release/output/native-models"
-      - name: Build and verify matching Apptainer image
-        run: bash tools/runtime/release_runtime.sh apptainer
-      - name: Preserve validated artifacts in draft release
-        run: bash tools/runtime/release_runtime.sh collect
+      - name: Preserve validated Docker runtime in draft release
+        run: bash tools/runtime/release_runtime.sh collect-docker
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -57,5 +55,31 @@ jobs:
             ${{ runner.temp }}/katana-release/output/**/*.json
             ${{ runner.temp }}/katana-release/output/**/*.log
             ${{ runner.temp }}/katana-release/output/**/*.tsv
+            ${{ runner.temp }}/katana-release/output/*SUMS
+          retention-days: 7
+
+  apptainer-runtime:
+    needs: docker-runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      WHEEL_SHA: ${{ inputs.wheel_sha256 }}
+      SOFTWARE_RUN: ${{ inputs.software_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and verify SIF from the accepted Docker archive
+        run: bash tools/runtime/release_runtime.sh apptainer
+      - name: Preserve complete runtime acceptance in draft release
+        run: bash tools/runtime/release_runtime.sh collect
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-apptainer-checks
+          path: |
+            ${{ runner.temp }}/katana-release/output/**/*.json
+            ${{ runner.temp }}/katana-release/output/**/*.log
             ${{ runner.temp }}/katana-release/output/*SUMS
           retention-days: 7

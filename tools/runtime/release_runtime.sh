@@ -60,38 +60,66 @@ models)
   S="$ROOT/output"
   docker run --rm --network=none --user "$(id -u):$(id -g)" -e NUMBA_CACHE_DIR=/tmp/numba -e MPLCONFIGDIR=/tmp/matplotlib -e OMP_NUM_THREADS=2 -e OPENBLAS_NUM_THREADS=2 -e MKL_NUM_THREADS=2 -v "$S:$S" -v "$GITHUB_WORKSPACE/scripts:/checks:ro" -w "$S" "$IMAGE" python /checks/check_unified_engines.py --out "$S/standalone-models" 2>&1 | tee "$S/standalone-models.log"
   ;;
-apptainer)
-  cd "$ROOT"
-  curl --fail --location --retry 3 -o apptainer.deb https://github.com/apptainer/apptainer/releases/download/v1.4.3/apptainer_1.4.3_amd64.deb
-  echo 'c3c05120baab7ece2e81d40c1d1be63cc3fd1f5a25f379a4f2b2f99a0f6a1100  apptainer.deb' | sha256sum --check --strict
-  sudo apt-get update -qq
-  sudo apt-get install -y ./apptainer.deb
-  docker save "$IMAGE" -o runtime.tar
-  sudo apptainer build "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" "docker-archive://$ROOT/runtime.tar"
-  sudo chown "$(id -u):$(id -g)" output/*.sif
-  apptainer exec --cleanenv --bind "$ROOT/output:/acceptance,$GITHUB_WORKSPACE/scripts:/checks:ro" "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" python /checks/check_downstream_environment.py --out /acceptance/apptainer-environment
-  gzip -1 runtime.tar
-  mv runtime.tar.gz "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.docker.tar.gz"
-  ;;
-collect)
+collect-docker)
   cd "$ROOT/output"
-  sha256sum *.docker.tar.gz *.sif > runtime-SHA256SUMS
-  python - <<'PY'
+  docker save "$IMAGE" | gzip -1 > "katana-downstream-$RUNTIME_VERSION-linux-amd64.docker.tar.gz"
+  sha256sum *.docker.tar.gz > docker-SHA256SUMS
+  python - <<'PYDOCKER'
 from pathlib import Path
 import json,os,tarfile
 summaries={name:json.loads(Path(path).read_text()) for name,path in {
   'native_runtime':'native-runtime/acceptance.receipt.json',
   'standalone_models':'standalone-models/acceptance.json',
-  'native_models':'native-models/acceptance.json'}.items()}
+  'native_models':'native-models/acceptance.json',
+  'environment':'environment/acceptance.json'}.items()}
 assert all(s['status']=='passed' for s in summaries.values())
-Path('runtime.acceptance.json').write_text(json.dumps(dict(status='passed',candidate=os.environ['GITHUB_SHA'],wheel_sha256=os.environ['WHEEL_SHA'],software_run=os.environ['SOFTWARE_RUN'],checks=summaries),indent=2))
-with tarfile.open('runtime-validation.tar.gz','w:gz') as archive:
+Path('docker.acceptance.json').write_text(json.dumps(dict(status='passed',candidate=os.environ['GITHUB_SHA'],wheel_sha256=os.environ['WHEEL_SHA'],software_run=os.environ['SOFTWARE_RUN'],checks=summaries),indent=2))
+with tarfile.open('docker-validation.tar.gz','w:gz') as archive:
   for path in Path('.').rglob('*'):
     if path.is_file() and path.suffix in ('.json','.tsv','.log','.txt') and path.stat().st_size<5000000:
       archive.add(path,arcname=str(path))
-PY
+PYDOCKER
   test "$(gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
-  gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" *.docker.tar.gz *.sif runtime-SHA256SUMS runtime-validation.tar.gz runtime.acceptance.json
+  gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" *.docker.tar.gz docker-SHA256SUMS docker-validation.tar.gz docker.acceptance.json
+  ;;
+apptainer)
+  mkdir -p "$ROOT/output"
+  cd "$ROOT/output"
+  gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" -p "katana-downstream-$RUNTIME_VERSION-linux-amd64.docker.tar.gz" -p docker-SHA256SUMS -p docker.acceptance.json
+  sha256sum --check --strict docker-SHA256SUMS
+  python - <<'PYACCEPT'
+import json,os
+from pathlib import Path
+r=json.loads(Path('docker.acceptance.json').read_text())
+assert r['status']=='passed' and r['wheel_sha256']==os.environ['WHEEL_SHA']
+assert r['candidate']==os.environ['GITHUB_SHA']
+PYACCEPT
+  cd "$ROOT"
+  curl --fail --location --retry 3 -o apptainer.deb https://github.com/apptainer/apptainer/releases/download/v1.4.3/apptainer_1.4.3_amd64.deb
+  echo 'c3c05120baab7ece2e81d40c1d1be63cc3fd1f5a25f379a4f2b2f99a0f6a1100  apptainer.deb' | sha256sum --check --strict
+  sudo apt-get update -qq
+  sudo apt-get install -y ./apptainer.deb
+  gzip -dc "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.docker.tar.gz" > runtime.tar
+  sudo apptainer build "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" "docker-archive://$ROOT/runtime.tar"
+  sudo chown "$(id -u):$(id -g)" output/*.sif
+  apptainer exec --cleanenv --bind "$ROOT/output:/acceptance,$GITHUB_WORKSPACE/scripts:/checks:ro" "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" python /checks/check_downstream_environment.py --out /acceptance/apptainer-environment
+  ;;
+collect)
+  cd "$ROOT/output"
+  sha256sum *.docker.tar.gz *.sif > runtime-SHA256SUMS
+  python - <<'PYACCEPT'
+from pathlib import Path
+import json,os,tarfile
+receipt=json.loads(Path('docker.acceptance.json').read_text())
+sif=json.loads(Path('apptainer-environment/acceptance.json').read_text())
+assert receipt['status']=='passed' and sif['status']=='passed'
+receipt['apptainer']=sif
+Path('runtime.acceptance.json').write_text(json.dumps(receipt,indent=2))
+with tarfile.open('apptainer-validation.tar.gz','w:gz') as archive:
+  archive.add('apptainer-environment')
+PYACCEPT
+  test "$(gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+  gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" *.sif runtime-SHA256SUMS apptainer-validation.tar.gz runtime.acceptance.json
   ;;
 *) echo 'Unknown release acceptance phase' >&2; exit 2;;
 esac
