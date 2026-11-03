@@ -13,6 +13,7 @@ import json
 import math
 import os
 import urllib.request
+import urllib.error
 import tempfile
 import gzip
 from collections import defaultdict
@@ -88,6 +89,13 @@ def fetch_resource(item, cache):
             os.replace(temporary, target)
             remember(target, checksum, identity(target))
         return target
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError(
+            f"Unable to download resource {name} from {url}. "
+            "KATANA_FLOW_CONFIGURE should run locally on the Nextflow launch host; "
+            "that host needs network access or a pre-populated --resource_cache. "
+            f"Existing cached resources were retained. Cause: {exc}"
+        ) from exc
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)

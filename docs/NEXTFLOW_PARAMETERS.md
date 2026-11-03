@@ -403,7 +403,7 @@ significance. See [MOTIFTRACE.md](MOTIFTRACE.md).
 | Parameter | Default | Effect |
 | --- | --- | --- |
 | `--katana_container` | published Katana runtime | Optional compatible image override; downloaded automatically. |
-| `--dexseq_tools_container` | pinned upstream HTSeq 2.0.2 image | Optional compatible image override. Nextflow downloads the default automatically and stages the original DEXSeq scripts; no Katana DEXSeq image build is required. |
+| `--dexseq_tools_container` | published Katana DEXSeq tools image | Optional compatible image override. Nextflow downloads the pinned Docker image or SIF automatically; no manual download or build is required. |
 | `--katana_stage_containers` | `{}` | Advanced map of execution groups to compatible images. Main control still requires the full image. Use a structured params file, not an unvalidated shell string. |
 | `--flow_executable` | `katana-flow` | Container profiles permit only `katana-flow` or `/opt/conda/bin/katana-flow`; mounted host launchers are rejected. |
 | `--slurm_account` | unset | Account passed to Slurm when configured. |

@@ -19,8 +19,11 @@ def stableCountVersion(counts, versions) {
     def version_directories = versions.map { path -> tuple(path.parent.toString(), path) }
     sample_directories.join(version_directories, failOnDuplicate: true, failOnMismatch: true)
         .toSortedList { a, b -> a[1] <=> b[1] }
+        // Upstream failure can close both channels before any count task runs.
+        // Emit no version in that case; retain the original task failure.
+        .filter { rows -> !rows.isEmpty() }
         .map { rows ->
-            if (!rows || rows.collect { it[1] }.unique(false).size() != rows.size()) {
+            if (rows.collect { it[1] }.unique(false).size() != rows.size()) {
                 error('DEXSeq count version selection requires unique sample identities')
             }
             rows[0][2]

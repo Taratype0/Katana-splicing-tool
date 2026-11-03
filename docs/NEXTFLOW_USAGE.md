@@ -33,7 +33,7 @@ fetches the versioned containers, while selected analysis databases use the
 shared resource cache. Replace paths and site settings with your own.
 
 ```bash
-nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103 \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110303 \
   -profile singularity -c pdc_kth.config -c custom.config \
   --project YOUR_ALLOCATION \
   --input /data/project/samples.csv --contrasts /data/project/contrasts.csv \

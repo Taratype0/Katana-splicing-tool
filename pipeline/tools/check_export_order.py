@@ -69,6 +69,9 @@ workflow {
         counts = counts.reverse()
         versions = versions.reverse()
     }
+    if (params.empty) { counts = []; versions = [] }
+    if (params.duplicate) counts[1][0].id = counts[0][0].id
+    if (params.mismatch) versions = versions.tail()
     selected = stableCountVersion(Channel.fromList(counts), Channel.fromList(versions))
     selected.view { "selected_version=${it}" }
     with_version = Channel.value([artifacts: rows]).combine(selected).map { container, version ->
@@ -78,7 +81,7 @@ workflow {
 }
 '''
     (root / 'main.nf').write_text(helper + version_helper + script)
-    (root / 'nextflow.config').write_text('params.reverse=false\nprocess.executor="local"\n')
+    (root / 'nextflow.config').write_text('params.reverse=false\nparams.empty=false\nparams.duplicate=false\nparams.mismatch=false\nprocess.executor="local"\n')
     evidence = []
     for name, extra in [('first', []), ('reverse', ['--reverse', 'true', '-resume'])]:
         trace = root / (name + '.tsv')
@@ -92,6 +95,23 @@ workflow {
         assert len(rows) == 1 and rows[0]['status'] == ('COMPLETED' if name == 'first' else 'CACHED'), rows
         evidence.append({'run': name, 'status': rows[0]['status'], 'hash': rows[0]['hash']})
     assert evidence[0]['hash'] == evidence[1]['hash']
+    boundaries = {}
+    for case in ('empty', 'duplicate', 'mismatch'):
+        trace = root / (case + '.tsv')
+        result = subprocess.run(runtime + ['run', str(root / 'main.nf'), '--inputs', str(inputs),
+            '--' + case, 'true', '-ansi-log', 'false', '-with-trace', str(trace)],
+            cwd=root, text=True, capture_output=True, timeout=120)
+        log = result.stdout + result.stderr
+        (root / (case + '.log')).write_text(log)
+        if case == 'empty':
+            assert result.returncode == 0, log
+            assert 'selected_version=' not in log and 'unique sample identities' not in log, log
+            assert not list(csv.DictReader(trace.open(), delimiter='\t'))
+        else:
+            assert result.returncode != 0, log
+            expected = 'unique sample identities' if case == 'duplicate' else 'mismatch'
+            assert expected in log.lower(), log
+        boundaries[case] = {'exit_code': result.returncode, 'expected_behavior_verified': True}
     output = list((root / 'work').glob('*/*/ordered.json'))
     assert len(output) == 1
     assert json.loads(output[0].read_text()) == [
@@ -100,6 +120,7 @@ workflow {
     assert before == {p.relative_to(inputs).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                       for p in inputs.rglob('*') if p.is_file()}
     receipt = {'status': 'passed', 'native_runs': evidence, 'metadata_file_pairs_preserved': True,
+               'empty_duplicate_and_mismatch_boundaries': boundaries,
                'inputs_unchanged': True, 'version_representative': 'A1',
                'version_arrival_and_work_directory_order_ignored': True,
                'production_helper_sha256': hashlib.sha256(helper.encode()).hexdigest(),

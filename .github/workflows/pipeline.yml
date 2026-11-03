@@ -63,6 +63,9 @@ jobs:
         run: |
           runtime_command=$(python -c 'import json,os; print(json.dumps(["java", "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "-cp", os.environ["RUNNER_TEMP"] + "/nextflow-25.10.4-dist", "nextflow.cli.Launcher"]))')
           printf '%s\n' "$runtime_command" > "$RUNNER_TEMP/nextflow-command.json"
+          python -B pipeline/tools/check_launch_download.py \
+            --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
+            --outdir "$RUNNER_TEMP/katana-launch-download"
           python -B pipeline/tools/check_native_parameters.py \
             --nextflow-command-json "$RUNNER_TEMP/nextflow-command.json" \
             --repository-entry --outdir "$RUNNER_TEMP/katana-flat-parameters"
@@ -128,6 +131,10 @@ jobs:
             ${{ runner.temp }}/katana-rmats-sample-reuse/*/*.log
             ${{ runner.temp }}/katana-rmats-sample-reuse/*/*.tsv
             ${{ runner.temp }}/katana-flat-parameters/*.txt
+            ${{ runner.temp }}/katana-launch-download/acceptance.json
+            ${{ runner.temp }}/katana-launch-download/*.log
+            ${{ runner.temp }}/katana-export-order/acceptance.json
+            ${{ runner.temp }}/katana-export-order/*.log
           retention-days: 7
 
   paired-native-models:
@@ -135,14 +142,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Verify unmodified DEXSeq scripts in the upstream HTSeq image
+      - name: Verify the published Katana DEXSeq image and original staged scripts
         run: |
           mkdir -p "$RUNNER_TEMP/paired-models"
+          image='docker.io/j387735517/katana-dexseq-tools@sha256:20efe62e4679d6437c21938c624f7fdb18cc3c7fa8289456e1a73d9086b29717'
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD/containers:/checks:ro" "$image" \
+            python /checks/dexseq-tools/check_runtime.py > "$RUNNER_TEMP/paired-models/katana-dexseq-bundled.json"
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
             -e KATANA_DEXSEQ_SCRIPTS=/pipeline/vendor/dexseq \
             -v "$PWD/pipeline:/pipeline:ro" -v "$PWD/containers:/checks:ro" \
-            quay.io/biocontainers/htseq@sha256:ada151195080772235556fa8678c5e213e4e98b10b8c0e1c64ec9209db730222 \
-            python /checks/dexseq-tools/check_runtime.py > "$RUNNER_TEMP/paired-models/upstream-htseq.json"
+            "$image" \
+            python /checks/dexseq-tools/check_runtime.py > "$RUNNER_TEMP/paired-models/katana-dexseq-staged.json"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'

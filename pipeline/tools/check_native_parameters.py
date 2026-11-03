@@ -72,6 +72,7 @@ def main():
         "--contrasts", str(inputs / "contrasts.csv"), "--fasta", str(inputs / "genome.fa"),
         "--gtf", str(inputs / "genes.gtf"), "--species", "Mus musculus"], success=False)
     assert "--gene_sets" in failed.stdout + failed.stderr, failed.stdout[-6000:] + failed.stderr[-2000:]
+    assert "DEXSeq count version selection" not in failed.stdout + failed.stderr
     assert raw_rows and all(r["name"].endswith("KATANA_FLOW_CONFIGURE") for r in raw_rows)
     (root / "acceptance.json").write_text(json.dumps({"status": "passed", "checks": results,
         "scope": "Native Nextflow configuration generation, task handoff, early rejection and resume; no biological calculations or container execution."}, indent=2))

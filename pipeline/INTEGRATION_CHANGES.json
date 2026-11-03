@@ -264,7 +264,7 @@
     {
       "path": "subworkflows/local/dexseq_deu.nf",
       "snapshot_sha256": "990fa7c14cf60ab85e37b4b0b5bf0f635337e9f2e0abc4b15487bc96c2b59323",
-      "integrated_sha256": "871ac306dc274a56e9154b0c4e86ebe613efb78842ce13a084769e7ec81f642b",
+      "integrated_sha256": "0ef5bc59f1b7d0c0d4fb43801ddb65a3ba75c308e4112e97086e5638544aec3d",
       "integration_revisions": [
         {
           "revision": "upstream-rmats-dexseq-20261103",
@@ -277,6 +277,12 @@
           "previous_integrated_sha256": "3f4958886d2d1c3ad4ad9aece3083b3a2e7b0e90f87a0344e8718f38a432ccb7",
           "integrated_sha256": "871ac306dc274a56e9154b0c4e86ebe613efb78842ce13a084769e7ec81f642b",
           "scope": "Resolve staged scripts relative to actual pipeline project directory, consistent with existing bundled helpers."
+        },
+        {
+          "revision": "launch-download-dexseq-empty-20261103",
+          "previous_integrated_sha256": "871ac306dc274a56e9154b0c4e86ebe613efb78842ce13a084769e7ec81f642b",
+          "integrated_sha256": "0ef5bc59f1b7d0c0d4fb43801ddb65a3ba75c308e4112e97086e5638544aec3d",
+          "scope": "Suppress version emission for zero DEXSeq producers after upstream abort; retain duplicate and producer-mismatch failures. No scientific model changes."
         }
       ]
     },

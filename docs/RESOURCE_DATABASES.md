@@ -32,6 +32,19 @@ A changed upstream snapshot produces a clear download error instead of silently
 changing the scientific reference. Use custom files or a newer reviewed catalog
 when changing database versions.
 
+## Launch-host downloads
+
+`KATANA_FLOW_CONFIGURE` uses the local executor on the host running Nextflow.
+This keeps database downloads off network-isolated compute nodes. It still
+runs as a native Nextflow task in the selected Katana container. Scientific
+tasks continue through the configured scheduler; no external coordinator or
+additional user configuration file is needed. The launch host must support
+the selected container runtime and network access, or have a populated cache.
+
+If a source cannot be reached, the error identifies its filename and URL.
+Completed cached resources are retained. Correct connectivity, then use
+`-resume`; an aborted run with no DEXSeq counts does not imply duplicate samples.
+
 ## Overrides and offline use
 
 Set `--resource_cache /project/cache/katana/resources` to share downloads between

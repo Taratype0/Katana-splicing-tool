@@ -42,10 +42,18 @@ subject order preserved for paired models. The existing rMATS 4.1.2 / PAIRADISE
 runtime and scientific arguments are retained. Historical group-prep modules
 remain in the source snapshot but are not called by the current workflow.
 
-DEXSeq annotation and counting use the upstream HTSeq 2.0.2 BioContainer and
-the same unmodified scripts as before, staged by Nextflow from
-`pipeline/vendor/dexseq`. No separately built Katana DEXSeq image is required.
-The statistical fits still use their upstream Bioconductor DEXSeq container.
+DEXSeq annotation and counting use the published Katana DEXSeq tools image
+(HTSeq 2.0.2 and the unchanged upstream GPL scripts). Nextflow downloads its
+pinned Docker image or published SIF automatically. No local build is needed.
+The original scripts are staged explicitly from `pipeline/vendor/dexseq`;
+statistical fits still use the existing Bioconductor DEXSeq container.
+
+`KATANA_FLOW_CONFIGURE` runs on the Nextflow launch host, including database
+download and cache lookup. Only this small configuration task uses the local
+executor; alignment, counting, models and other scientific tasks retain the
+site executor. Generic `process.executor = 'slurm'` settings do not move the
+download to network-isolated compute nodes. Launch where containers can run
+and outbound network is available, or supply a pre-populated resource cache.
 
 The existing STAR-index request is also explicit: recorded GRCm39 index peak
 memory was about 68.3 GB, so the already approved 96 GB first attempt is retained.
