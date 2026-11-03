@@ -7,6 +7,7 @@ their requests. No large allocation, tool, container or cluster job is started.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from pathlib import Path
 import re
@@ -62,9 +63,12 @@ LABELS
     """
 }
 '''.replace('NAME', name).replace('LABELS', labels)
+        if name == 'RMATS_POST':
+            text = text.replace('    val spec\n', '    val spec\n    val contrast\n    val rmats_paired_stats\n')
         (modules / f'{name}.nf').write_text(text)
         include.append(f"include {{ {name} }} from './probes/{name}'")
-        calls.append(f"    {name}(Channel.of([id:'{name}', execution_group:'summary', workflow_id:'fixture', retry:{str(name == 'TRIMGALORE').lower()}]))")
+        extras = ", Channel.value('probe'), Channel.value([probe:false])" if name == 'RMATS_POST' else ''
+        calls.append(f"    {name}(Channel.of([id:'{name}', execution_group:'summary', workflow_id:'fixture', retry:{str(name in ('TRIMGALORE','DIFFSPLICE')).lower()}]){extras})")
         value = record['initial']
         expected[name] = ([2, '12 GB', '4h', 'unset', 1] if value['cpus'] == 'task-dependent' else
                           [int(value['cpus']), f"{value['memory_gib']} GB", f"{value['time_hours']}h", 'unset', 1])
@@ -79,6 +83,9 @@ LABELS
         if original in ('KATANA_FLOW_TASK', 'KATANA_FLOW_RESOURCE_TASK'):
             setting = catalog['downstream_groups'][group]
             expected[alias] = [setting['cpus'], f"{setting['memory_gib']} GB", f"{setting['time_hours']}h", 'unset', 1]
+    include.append("include { RMATS_POST as RMATS_POST_PAIRED_PROBE } from './probes/RMATS_POST'")
+    calls.append("    RMATS_POST_PAIRED_PROBE(Channel.of([id:'RMATS_POST_PAIRED_PROBE']), Channel.value('matched'), Channel.value([matched:true]))")
+    expected['RMATS_POST_PAIRED_PROBE'] = [12, '72 GB', '16h', 'unset', 1]
     (root / 'main.nf').write_text('nextflow.enable.dsl=2\n' + '\n'.join(include) +
         '\nworkflow KATANA_CORE {\n' + '\n'.join(calls) +
         '\n}\nworkflow KATANA_PIPELINE { KATANA_CORE() }\nworkflow { KATANA_PIPELINE() }\n')
@@ -88,6 +95,46 @@ executor.memory = '4 TB'
 process { withName: '.*' { container = null; publishDir = [enabled: false] } }
 ''')
     return expected
+
+
+def memory_only_resume(root, command):
+    """A resource reduction must not invalidate an unchanged successful task."""
+    root.mkdir()
+    (root / 'payload.txt').write_text('generated resource-cache fixture\n')
+    (root / 'main.nf').write_text('''process DIFFSPLICE {
+    label 'process_high'
+    input:
+    path payload
+    output:
+    path 'result.txt'
+    script:
+    """
+    cat "$payload" > result.txt
+    """
+}
+workflow { DIFFSPLICE(Channel.value(file("${projectDir}/payload.txt"))) }
+''')
+    (root / 'capacity.config').write_text("executor.cpus=1024\nexecutor.memory='4 TB'\n")
+    (root / 'previous.config').write_text("process { withName: 'DIFFSPLICE' { memory=72.GB; time=16.h } }\n")
+    records = {}
+    for case in ('previous', 'measured'):
+        trace = root / f'{case}.trace.tsv'
+        extra = ['-c', str(root/'previous.config')] if case == 'previous' else ['-resume']
+        result = subprocess.run([*command, 'run', str(root/'main.nf'),
+            '-c', str(PIPELINE/'nextflow.config'), '-c', str(root/'capacity.config'), *extra,
+            '-profile', 'local', '--output_layout', 'legacy', '--outdir', str(root/'results'),
+            '-work-dir', str(root/'work'), '-with-trace', str(trace), '-ansi-log', 'false'],
+            cwd=root, text=True, capture_output=True, timeout=120)
+        (root/f'{case}.stdout.txt').write_text(result.stdout)
+        (root/f'{case}.stderr.txt').write_text(result.stderr)
+        assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-2000:]
+        with trace.open() as stream:
+            rows = list(csv.DictReader(stream, delimiter='\t'))
+        assert len(rows) == 1, rows
+        assert rows[0]['status'] == ('COMPLETED' if case == 'previous' else 'CACHED'), rows
+        records[case] = rows[0]
+    assert records['previous']['hash'] == records['measured']['hash'], records
+    return records
 
 
 def main():
@@ -104,6 +151,7 @@ def main():
         run = root / case
         expected = fixture(run, catalog)
         expected['TRIMGALORE'] = [8, '16 GB', '16h', 'unset', 2]
+        expected['DIFFSPLICE'] = [1, '8 GB', '4h', 'unset', 2]
         extra = []
         if case == 'user_overrides':
             user = run / 'user.config'
@@ -141,12 +189,15 @@ def main():
             if key == 'TRIMGALORE':
                 assert len(observed) == 2, observed
                 assert observed[0] == ([8, '8 GB', '8h', 'unset', 1] if case == 'defaults' else [3, '5 GB', '3h', 'user-trim', 1]), observed
+            elif key == 'DIFFSPLICE':
+                assert observed == [[1, '4 GB', '2h', 'unset', 1], [1, '8 GB', '4h', 'unset', 2]], observed
             else:
                 assert len(observed) == 1, (key, observed)
         proof[case] = rows
+    cache = memory_only_resume(root/'memory-only-resume', command)
     receipt = {'status': 'passed', 'declared_processes': len(catalog['processes']),
         'scope': 'Native request rendering, aliases, retry and user overrides; no scientific or Slurm jobs',
-        'local_capacity_simulated': True, 'allocations': proof}
+        'local_capacity_simulated': True, 'allocations': proof, 'memory_only_resume': cache}
     (root / 'acceptance.receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps({'status': 'passed', 'declared_processes': len(catalog['processes']), 'cases': list(proof)}))
 

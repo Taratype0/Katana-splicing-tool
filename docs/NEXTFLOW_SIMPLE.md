@@ -13,7 +13,7 @@ required by your selected analyses. FASTA and GTF remain explicit inputs.
 ## 1. FASTQ or BAM to analysis and report
 
 ```bash
-nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110304 \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110305 \
   -profile singularity -c /path/to/site.config \
   --input /data/study/samples.csv \
   --contrasts /data/study/contrasts.csv \

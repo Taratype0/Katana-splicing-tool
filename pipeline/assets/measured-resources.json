@@ -1,0 +1,356 @@
+{
+  "schema": "katana.measured_resources/v1",
+  "observation_date": "2026-11-03",
+  "science_recomputed": false,
+  "source_digests": {
+    "sacct-historical.stdout.txt": "c75a72ec4050814ec7bb85a958dfd6ee55c8eae4ab8cbf29e249d37f55d74a28",
+    "sacct-trace.stdout.txt": "763166fb3b015d5b6f7157e4fd25d4b00025209f52d487b68f12fdb4a0c74252"
+  },
+  "sampling_limit": "MaxRSS is sampled, not an exact bound. Missing/zero peaks and unfinished/failed jobs are not calibration successes. Short-job shell-only samples cannot establish application headroom.",
+  "upstream": {
+    "ADAPT_SUPPA_CONTRASTS": {
+      "completed_jobs": 9,
+      "peak_rss_mib": 16.9,
+      "max_elapsed_s": 7,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "FILTER_ANALYSIS_GTF": {
+      "completed_jobs": 4,
+      "peak_rss_mib": 130.0,
+      "max_elapsed_s": 57,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "ANALYSIS_TRANSCRIPTS": {
+      "completed_jobs": 4,
+      "peak_rss_mib": 571.4,
+      "max_elapsed_s": 36,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "AUDIT_GENOME_BAM": {
+      "completed_jobs": 56,
+      "peak_rss_mib": 20.9,
+      "max_elapsed_s": 24,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "CAPTURE_BAM_AUDIT": {
+      "completed_jobs": 67,
+      "peak_rss_mib": 87.8,
+      "max_elapsed_s": 3919,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "COLLATE_GENOME_BAM": {
+      "completed_jobs": 56,
+      "peak_rss_mib": 1577.16,
+      "max_elapsed_s": 450,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "CREATE_BAMLIST": {
+      "completed_jobs": 25,
+      "peak_rss_mib": 7.04,
+      "max_elapsed_s": 24,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "DEXSEQ_ANNOTATION": {
+      "completed_jobs": 8,
+      "peak_rss_mib": 762.38,
+      "max_elapsed_s": 106,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "DEXSEQ_COUNT": {
+      "completed_jobs": 44,
+      "peak_rss_mib": 4345.01,
+      "max_elapsed_s": 5730,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "DEXSEQ_DTU": {
+      "completed_jobs": 6,
+      "peak_rss_mib": 2328.91,
+      "max_elapsed_s": 6094,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "DEXSEQ_EXON": {
+      "completed_jobs": 1,
+      "peak_rss_mib": 6741.65,
+      "max_elapsed_s": 18297,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "DRIMSEQ_FILTER": {
+      "completed_jobs": 4,
+      "peak_rss_mib": 473.2,
+      "max_elapsed_s": 38,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "GFFREAD_TX2GENE": {
+      "completed_jobs": 8,
+      "peak_rss_mib": 307.1,
+      "max_elapsed_s": 36,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "GFFREAD_STRAND_MODELS": {
+      "completed_jobs": 4,
+      "peak_rss_mib": 216.9,
+      "max_elapsed_s": 25,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "RSEQC_INFEREXPERIMENT": {
+      "completed_jobs": 18,
+      "peak_rss_mib": 64.6,
+      "max_elapsed_s": 19,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "KATANA_TXIMPORT": {
+      "completed_jobs": 4,
+      "peak_rss_mib": 696.96,
+      "max_elapsed_s": 174,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "KATANA_DESEQ2_CONTRAST": {
+      "completed_jobs": 5,
+      "peak_rss_mib": 1024.0,
+      "max_elapsed_s": 29,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "KATANA_NORMALIZE": {
+      "completed_jobs": 2,
+      "peak_rss_mib": 723.8,
+      "max_elapsed_s": 17,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "KATANA_DESEQ2_METADATA": {
+      "completed_jobs": 2,
+      "peak_rss_mib": 17.4,
+      "max_elapsed_s": 13,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "KATANA_EXPORT": {
+      "completed_jobs": 1,
+      "peak_rss_mib": 114.66,
+      "max_elapsed_s": 411,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "PREPARE_REFERENCES": {
+      "completed_jobs": 8,
+      "peak_rss_mib": 584.5,
+      "max_elapsed_s": 90,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "REFERENCE_FAIDX": {
+      "completed_jobs": 8,
+      "peak_rss_mib": 256.72,
+      "max_elapsed_s": 36,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "RESOLVE_SAMPLE_STRANDEDNESS": {
+      "completed_jobs": 2,
+      "peak_rss_mib": 24.9,
+      "max_elapsed_s": 7,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "RMATS_POST": {
+      "completed_jobs": 20,
+      "peak_rss_mib": 1431.7,
+      "max_elapsed_s": 100,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "RMATS_PREP": {
+      "completed_jobs": 20,
+      "peak_rss_mib": 1619.98,
+      "max_elapsed_s": 787,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "SALMON_GENOME_PROJECTION": {
+      "completed_jobs": 56,
+      "peak_rss_mib": 3788.8,
+      "max_elapsed_s": 309,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "SPLIT_CONTRASTS": {
+      "completed_jobs": 15,
+      "peak_rss_mib": 18.0,
+      "max_elapsed_s": 14,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "STAGE_FASTQ": {
+      "completed_jobs": 83,
+      "peak_rss_mib": 121.06,
+      "max_elapsed_s": 140,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "STAGER": {
+      "completed_jobs": 24,
+      "peak_rss_mib": 476.4,
+      "max_elapsed_s": 30,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "DIFFSPLICE": {
+      "completed_jobs": 40,
+      "peak_rss_mib": 596.66,
+      "max_elapsed_s": 959,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "GENERATE_EVENTS": {
+      "completed_jobs": 16,
+      "peak_rss_mib": 866.43,
+      "max_elapsed_s": 93,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "PSIPEREVENT": {
+      "completed_jobs": 4,
+      "peak_rss_mib": 418.7,
+      "max_elapsed_s": 27,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "PSIPERISOFORM": {
+      "completed_jobs": 4,
+      "peak_rss_mib": 834.7,
+      "max_elapsed_s": 47,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "SPLIT_FILES": {
+      "completed_jobs": 12,
+      "peak_rss_mib": 151.2,
+      "max_elapsed_s": 24,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "TXIMPORT": {
+      "completed_jobs": 8,
+      "peak_rss_mib": 1040.21,
+      "max_elapsed_s": 174,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "VALIDATE_INPUTS": {
+      "completed_jobs": 9,
+      "peak_rss_mib": 30.9,
+      "max_elapsed_s": 24,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "VALIDATE_REFERENCE": {
+      "completed_jobs": 6,
+      "peak_rss_mib": 103.21,
+      "max_elapsed_s": 144,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "FASTQC": {
+      "completed_jobs": 69,
+      "peak_rss_mib": 2099.97,
+      "max_elapsed_s": 579,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "SAMTOOLS_INDEX": {
+      "completed_jobs": 56,
+      "peak_rss_mib": 110.46,
+      "max_elapsed_s": 81,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "SAMTOOLS_SORT": {
+      "completed_jobs": 56,
+      "peak_rss_mib": 52633.6,
+      "max_elapsed_s": 599,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "STAR_ALIGN": {
+      "completed_jobs": 42,
+      "peak_rss_mib": 33296.55,
+      "max_elapsed_s": 6398,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "STAR_GENOMEGENERATE": {
+      "completed_jobs": 5,
+      "peak_rss_mib": 68934.02,
+      "max_elapsed_s": 1338,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "TRIMGALORE": {
+      "completed_jobs": 51,
+      "peak_rss_mib": 6289.55,
+      "max_elapsed_s": 2194,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    },
+    "RMATS_PREP_BAM": {
+      "completed_jobs": 12,
+      "peak_rss_mib": 601.48,
+      "max_elapsed_s": 702,
+      "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+      "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+    }
+  },
+  "noncomparable": [
+    {
+      "task": "network_fit",
+      "historical_peak_mib": 178656.63,
+      "reason": "Historical per-contrast network, not current whole-study CoSplice 4.3; cannot justify reducing the new engine allocation."
+    },
+    {
+      "task": "motiftrace",
+      "historical_peak_mib": 6114.6,
+      "reason": "Historical engine/model scope differs from current MotifTrace; not direct calibration for current model families."
+    },
+    {
+      "task": "CLUSTEREVENTS",
+      "reason": "Optional clustering branch has no completed comparable MaxRSS evidence; do not infer it from differential testing."
+    }
+  ],
+  "downstream": {
+    "mapp_prepare": {
+      "completed_jobs": 435,
+      "peak_rss_mib": 4548.67,
+      "max_elapsed_s": 1336,
+      "scope": "Existing completed native bulk stage; unchanged prepare/fit unit. Not a universal input-size bound."
+    },
+    "mapp": {
+      "completed_jobs": 326,
+      "peak_rss_mib": 1934.3,
+      "max_elapsed_s": 2004,
+      "scope": "Existing completed native bulk stage; unchanged prepare/fit unit. Not a universal input-size bound."
+    },
+    "report": {
+      "completed_jobs": 1,
+      "peak_rss_mib": 1474.41,
+      "max_elapsed_s": 523,
+      "scope": "Existing completed native bulk stage; unchanged prepare/fit unit. Not a universal input-size bound."
+    }
+  }
+}

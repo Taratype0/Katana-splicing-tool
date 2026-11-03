@@ -1,6 +1,6 @@
 {
   "schema": "katana.resource_policy/v1",
-  "scope": "Complete task/alias resource policy; selected measured initial refinements, not universal measured peaks",
+  "scope": "Recorded successful task peaks and explicit comparable/noncomparable dispositions; not a claim that every optional or changed engine has measured production coverage.",
   "sources": [
     {
       "repository": "nf-core/rnaseq",
@@ -63,6 +63,13 @@
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 9,
+        "peak_rss_mib": 16.9,
+        "max_elapsed_s": 7,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
       }
     },
     {
@@ -79,7 +86,14 @@
       "disposition": "katana-specific retained",
       "rationale": "Inherited nf-core base label",
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 4,
+        "peak_rss_mib": 130.0,
+        "max_elapsed_s": 57,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "ANALYSIS_TRANSCRIPTS",
@@ -100,6 +114,13 @@
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 4,
+        "peak_rss_mib": 571.4,
+        "max_elapsed_s": 36,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
       }
     },
     {
@@ -110,15 +131,27 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 12,
-        "time_hours": 4
+        "memory_gib": 2,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 56 distinct jobs, sampled peak 20.9 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
       "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
       "previous_initial": {
         "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 56,
+        "peak_rss_mib": 20.9,
+        "max_elapsed_s": 24,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
         "memory_gib": 12,
         "time_hours": 4
       }
@@ -142,6 +175,13 @@
         "cpus": 6,
         "memory_gib": 36,
         "time_hours": 8
+      },
+      "measurement": {
+        "completed_jobs": 67,
+        "peak_rss_mib": 87.8,
+        "max_elapsed_s": 3919,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
       }
     },
     {
@@ -152,13 +192,25 @@
       ],
       "initial": {
         "cpus": 6,
+        "memory_gib": 8,
+        "time_hours": 4
+      },
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 56 distinct jobs, sampled peak 1577.16 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 56,
+        "peak_rss_mib": 1577.16,
+        "max_elapsed_s": 450,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 6,
         "memory_gib": 36,
         "time_hours": 8
-      },
-      "disposition": "katana-specific retained",
-      "rationale": "Inherited nf-core base label",
-      "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      }
     },
     {
       "process": "CREATE_BAMLIST",
@@ -182,7 +234,14 @@
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/local/createbamlist/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 25,
+        "peak_rss_mib": 7.04,
+        "max_elapsed_s": 24,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "CREATE_BAMLIST_SINGLE",
@@ -231,7 +290,14 @@
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/prepareannotation/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 8,
+        "peak_rss_mib": 762.38,
+        "max_elapsed_s": 106,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "DEXSEQ_COUNT",
@@ -244,8 +310,8 @@
         "memory_gib": 6,
         "time_hours": 4
       },
-      "disposition": "matched",
-      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "disposition": "measured headroom retained",
+      "rationale": "Completed-task sampled peak 4345.01 MiB; retain current initial headroom across variable read/reference sizes. No rerun for calibration.",
       "upstream_process": "DEXSEQ_COUNT",
       "upstream": {
         "repository": "nf-core/rnasplice",
@@ -256,7 +322,14 @@
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/count/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 44,
+        "peak_rss_mib": 4345.01,
+        "max_elapsed_s": 5730,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "DEXSEQ_DTU",
@@ -266,11 +339,11 @@
       ],
       "initial": {
         "cpus": 6,
-        "memory_gib": 36,
+        "memory_gib": 8,
         "time_hours": 8
       },
-      "disposition": "matched",
-      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 6 distinct jobs, sampled peak 2328.91 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream_process": "DEXSEQ_DTU",
       "upstream": {
         "repository": "nf-core/rnasplice",
@@ -281,7 +354,19 @@
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/dtu/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 6,
+        "peak_rss_mib": 2328.91,
+        "max_elapsed_s": 6094,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      }
     },
     {
       "process": "DEXSEQ_EXON",
@@ -291,11 +376,11 @@
       ],
       "initial": {
         "cpus": 6,
-        "memory_gib": 36,
+        "memory_gib": 16,
         "time_hours": 8
       },
-      "disposition": "matched",
-      "rationale": "Resource-only mapping; current commands and software versions retained.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 1 distinct jobs, sampled peak 6741.65 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream_process": "DEXSEQ_EXON",
       "upstream": {
         "repository": "nf-core/rnasplice",
@@ -306,7 +391,19 @@
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/dexseq/exon/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 1,
+        "peak_rss_mib": 6741.65,
+        "max_elapsed_s": 18297,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      }
     },
     {
       "process": "DRIMSEQ_FILTER",
@@ -316,11 +413,11 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 36,
-        "time_hours": 8
+        "memory_gib": 4,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 4 distinct jobs, sampled peak 473.2 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -333,6 +430,18 @@
       "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
       "previous_initial": {
         "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "measurement": {
+        "completed_jobs": 4,
+        "peak_rss_mib": 473.2,
+        "max_elapsed_s": 38,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       }
@@ -441,13 +550,24 @@
       ],
       "initial": {
         "cpus": 2,
+        "memory_gib": 8,
+        "time_hours": 8
+      },
+      "disposition": "measured execution allocation",
+      "rationale": "Completed native report peak 1474.41 MiB; 8 GiB headroom. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "previous_initial_0304": {
+        "cpus": 2,
         "memory_gib": 12,
         "time_hours": 8
       },
-      "disposition": "katana-specific retained",
-      "rationale": "Katana control/report or per-task resource policy",
-      "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "measurement": {
+        "completed_jobs": 1,
+        "peak_rss_mib": 1474.41,
+        "max_elapsed_s": 523,
+        "scope": "Existing completed native bulk stage; unchanged prepare/fit unit. Not a universal input-size bound."
+      }
     },
     {
       "process": "KATANA_FLOW_RETAIN",
@@ -540,6 +660,13 @@
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 8,
+        "peak_rss_mib": 307.1,
+        "max_elapsed_s": 36,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
       }
     },
     {
@@ -556,7 +683,14 @@
       "disposition": "katana-specific retained",
       "rationale": "Existing serial inference override",
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 4,
+        "peak_rss_mib": 216.9,
+        "max_elapsed_s": 25,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "RSEQC_INFEREXPERIMENT",
@@ -572,7 +706,14 @@
       "disposition": "katana-specific retained",
       "rationale": "Existing serial inference override",
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 18,
+        "peak_rss_mib": 64.6,
+        "max_elapsed_s": 19,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "KATANA_TXIMPORT",
@@ -582,11 +723,11 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 36,
-        "time_hours": 8
+        "memory_gib": 4,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 4 distinct jobs, sampled peak 696.96 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -599,6 +740,18 @@
       "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
       "previous_initial": {
         "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "measurement": {
+        "completed_jobs": 4,
+        "peak_rss_mib": 696.96,
+        "max_elapsed_s": 174,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       }
@@ -626,7 +779,14 @@
         "url": "https://github.com/nf-core/differentialabundance/blob/30ed7741fc392127156c2fb10cfa3d69d216b54b/modules/nf-core/deseq2/differential/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 5,
+        "peak_rss_mib": 1024.0,
+        "max_elapsed_s": 29,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "KATANA_NORMALIZE",
@@ -651,7 +811,14 @@
         "url": "https://github.com/nf-core/differentialabundance/blob/30ed7741fc392127156c2fb10cfa3d69d216b54b/modules/nf-core/deseq2/differential/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 2,
+        "peak_rss_mib": 723.8,
+        "max_elapsed_s": 17,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "KATANA_DESEQ2_METADATA",
@@ -667,7 +834,14 @@
       "disposition": "katana-specific retained",
       "rationale": "Inherited nf-core base label",
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 2,
+        "peak_rss_mib": 17.4,
+        "max_elapsed_s": 13,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "KATANA_EXPORT",
@@ -678,15 +852,27 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 12,
+        "memory_gib": 4,
         "time_hours": 4
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 1 distinct jobs, sampled peak 114.66 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
       "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
       "previous_initial": {
         "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 1,
+        "peak_rss_mib": 114.66,
+        "max_elapsed_s": 411,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
         "memory_gib": 12,
         "time_hours": 4
       }
@@ -710,6 +896,13 @@
         "cpus": 1,
         "memory_gib": 12,
         "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 8,
+        "peak_rss_mib": 584.5,
+        "max_elapsed_s": 90,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
       }
     },
     {
@@ -735,7 +928,14 @@
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/samtools/faidx/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 8,
+        "peak_rss_mib": 256.72,
+        "max_elapsed_s": 36,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "RESOLVE_SAMPLE_STRANDEDNESS",
@@ -751,7 +951,14 @@
       "disposition": "katana-specific retained",
       "rationale": "Inherited nf-core base label",
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 2,
+        "peak_rss_mib": 24.9,
+        "max_elapsed_s": 7,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "RMATS_POST",
@@ -761,11 +968,11 @@
       ],
       "initial": {
         "cpus": 12,
-        "memory_gib": 72,
-        "time_hours": 16
+        "memory_gib": 8,
+        "time_hours": 4
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 20 distinct jobs, sampled peak 1431.7 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable. These measurements cover unpaired post only. Paired PAIRADISE retains 72 GiB/16 h until comparable completed measurements exist.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -775,7 +982,24 @@
         "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_post.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 20,
+        "peak_rss_mib": 1431.7,
+        "max_elapsed_s": 100,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
+      },
+      "paired_initial": {
+        "cpus": 12,
+        "memory_gib": 72,
+        "time_hours": 16
+      }
     },
     {
       "process": "RMATS_POST_SINGLE",
@@ -788,8 +1012,8 @@
         "memory_gib": 72,
         "time_hours": 16
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
+      "disposition": "inactive compatibility declaration",
+      "rationale": "Not called by the current workflow. Live prep uses RMATS_PREP_BAM and live post uses RMATS_POST; do not treat this compatibility declaration as a live resource reservation.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -812,8 +1036,8 @@
         "memory_gib": 72,
         "time_hours": 16
       },
-      "disposition": "historical declaration, not used by current workflow",
-      "rationale": "Preserved source module; current RMATS workflow calls RMATS_PREP_BAM once per sample instead. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
+      "disposition": "inactive compatibility declaration",
+      "rationale": "Not called by the current workflow. Live prep uses RMATS_PREP_BAM and live post uses RMATS_POST; do not treat this compatibility declaration as a live resource reservation.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -823,7 +1047,14 @@
         "url": "https://github.com/nf-core/rnasplice/blob/1d0494ae3402d1a46e0adadad24f81a0ff855c77/modules/local/rmats_prep.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 20,
+        "peak_rss_mib": 1619.98,
+        "max_elapsed_s": 787,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "RMATS_PREP_SINGLE",
@@ -836,8 +1067,8 @@
         "memory_gib": 72,
         "time_hours": 16
       },
-      "disposition": "historical declaration, not used by current workflow",
-      "rationale": "Preserved source module; current RMATS workflow calls RMATS_PREP_BAM once per sample instead. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
+      "disposition": "inactive compatibility declaration",
+      "rationale": "Not called by the current workflow. Live prep uses RMATS_PREP_BAM and live post uses RMATS_POST; do not treat this compatibility declaration as a live resource reservation.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -857,11 +1088,11 @@
       ],
       "initial": {
         "cpus": 6,
-        "memory_gib": 36,
-        "time_hours": 8
+        "memory_gib": 12,
+        "time_hours": 4
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 56 distinct jobs, sampled peak 3788.8 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnaseq",
         "tag": "3.27.0",
@@ -871,7 +1102,19 @@
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/salmon/quant/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 56,
+        "peak_rss_mib": 3788.8,
+        "max_elapsed_s": 309,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      }
     },
     {
       "process": "SPLIT_CONTRASTS",
@@ -887,7 +1130,14 @@
       "disposition": "katana-specific retained",
       "rationale": "Inherited nf-core base label",
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 15,
+        "peak_rss_mib": 18.0,
+        "max_elapsed_s": 14,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "STAGE_FASTQ",
@@ -912,7 +1162,14 @@
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/cat/fastq/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "serial invocation or tool default; no explicit task.cpus setting"
+      "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
+      "measurement": {
+        "completed_jobs": 83,
+        "peak_rss_mib": 121.06,
+        "max_elapsed_s": 140,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "STAGER",
@@ -922,11 +1179,11 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 36,
-        "time_hours": 8
+        "memory_gib": 4,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 24 distinct jobs, sampled peak 476.4 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -939,6 +1196,18 @@
       "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
       "previous_initial": {
         "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "measurement": {
+        "completed_jobs": 24,
+        "peak_rss_mib": 476.4,
+        "max_elapsed_s": 30,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       }
@@ -954,8 +1223,8 @@
         "memory_gib": 72,
         "time_hours": 16
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "optional unmeasured clustering",
+      "rationale": "Disabled by default. No comparable completed clustering memory evidence; differential-testing peaks cannot calibrate clustering. 72 GiB retained explicitly, not claimed optimized.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -1004,11 +1273,11 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 72,
-        "time_hours": 16
+        "memory_gib": 4,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 40 distinct jobs, sampled peak 596.66 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -1023,6 +1292,18 @@
         "cpus": 12,
         "memory_gib": 72,
         "time_hours": 16
+      },
+      "measurement": {
+        "completed_jobs": 40,
+        "peak_rss_mib": 596.66,
+        "max_elapsed_s": 959,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
+        "memory_gib": 72,
+        "time_hours": 16
       }
     },
     {
@@ -1033,11 +1314,11 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 12,
-        "time_hours": 4
+        "memory_gib": 4,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 16 distinct jobs, sampled peak 866.43 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -1052,6 +1333,18 @@
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 16,
+        "peak_rss_mib": 866.43,
+        "max_elapsed_s": 93,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
+        "memory_gib": 12,
+        "time_hours": 4
       }
     },
     {
@@ -1062,11 +1355,11 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 36,
-        "time_hours": 8
+        "memory_gib": 4,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 4 distinct jobs, sampled peak 418.7 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -1081,6 +1374,18 @@
         "cpus": 6,
         "memory_gib": 36,
         "time_hours": 8
+      },
+      "measurement": {
+        "completed_jobs": 4,
+        "peak_rss_mib": 418.7,
+        "max_elapsed_s": 27,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
+        "memory_gib": 36,
+        "time_hours": 8
       }
     },
     {
@@ -1091,11 +1396,11 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 36,
-        "time_hours": 8
+        "memory_gib": 4,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 4 distinct jobs, sampled peak 834.7 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -1110,6 +1415,18 @@
         "cpus": 6,
         "memory_gib": 36,
         "time_hours": 8
+      },
+      "measurement": {
+        "completed_jobs": 4,
+        "peak_rss_mib": 834.7,
+        "max_elapsed_s": 47,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
+        "memory_gib": 36,
+        "time_hours": 8
       }
     },
     {
@@ -1120,15 +1437,27 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 12,
-        "time_hours": 4
+        "memory_gib": 2,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 12 distinct jobs, sampled peak 151.2 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
       "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
       "previous_initial": {
         "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 12,
+        "peak_rss_mib": 151.2,
+        "max_elapsed_s": 24,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
         "memory_gib": 12,
         "time_hours": 4
       }
@@ -1141,11 +1470,11 @@
       ],
       "initial": {
         "cpus": 1,
-        "memory_gib": 36,
-        "time_hours": 8
+        "memory_gib": 4,
+        "time_hours": 2
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Serial invocation: one worker; retain upstream memory/time unless separately supported.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 8 distinct jobs, sampled peak 1040.21 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "2.0.0",
@@ -1158,6 +1487,18 @@
       "threading_review": "serial invocation or tool default; no explicit task.cpus setting",
       "previous_initial": {
         "cpus": 6,
+        "memory_gib": 36,
+        "time_hours": 8
+      },
+      "measurement": {
+        "completed_jobs": 8,
+        "peak_rss_mib": 1040.21,
+        "max_elapsed_s": 174,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 1,
         "memory_gib": 36,
         "time_hours": 8
       }
@@ -1181,6 +1522,13 @@
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 9,
+        "peak_rss_mib": 30.9,
+        "max_elapsed_s": 24,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
       }
     },
     {
@@ -1202,6 +1550,13 @@
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 6,
+        "peak_rss_mib": 103.21,
+        "max_elapsed_s": 144,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
       }
     },
     {
@@ -1215,8 +1570,8 @@
         "memory_gib": 4,
         "time_hours": 4
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Observed 1.1 GiB peak across 12 full mouse libraries; initial 4 GiB headroom, retry 8 GiB.",
+      "disposition": "measured headroom retained",
+      "rationale": "Completed-task sampled peak 2099.97 MiB; retain current initial headroom across variable read/reference sizes. No rerun for calibration.",
       "upstream_process": "FASTQC",
       "upstream": {
         "repository": "nf-core/rnaseq",
@@ -1232,6 +1587,13 @@
         "cpus": 2,
         "memory_gib": 12,
         "time_hours": 4
+      },
+      "measurement": {
+        "completed_jobs": 69,
+        "peak_rss_mib": 2099.97,
+        "max_elapsed_s": 579,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
       }
     },
     {
@@ -1242,11 +1604,11 @@
       ],
       "initial": {
         "cpus": 2,
-        "memory_gib": 12,
-        "time_hours": 4
+        "memory_gib": 2,
+        "time_hours": 2
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "measured execution allocation",
+      "rationale": "Native completed bulk tasks: 56 distinct jobs, sampled peak 110.46 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable.",
       "upstream": {
         "repository": "nf-core/rnaseq",
         "tag": "3.27.0",
@@ -1256,7 +1618,19 @@
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/samtools/index/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 56,
+        "peak_rss_mib": 110.46,
+        "max_elapsed_s": 81,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      },
+      "previous_initial_0304": {
+        "cpus": 2,
+        "memory_gib": 12,
+        "time_hours": 4
+      }
     },
     {
       "process": "SAMTOOLS_SORT",
@@ -1269,8 +1643,8 @@
         "memory_gib": 36,
         "time_hours": 8
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit.",
+      "disposition": "retain memory-coupled buffer budget",
+      "rationale": "Observed peak up to 51.4 GiB came from larger user-overridden sort buffers. The command derives -m from task.memory: do not transfer that peak to the 36 GiB default or alter completed-task command hashes. User override remains authoritative.",
       "upstream": {
         "repository": "nf-core/rnaseq",
         "tag": "3.27.0",
@@ -1280,7 +1654,14 @@
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/samtools/sort/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 56,
+        "peak_rss_mib": 52633.6,
+        "max_elapsed_s": 599,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "STAR_ALIGN",
@@ -1293,8 +1674,8 @@
         "memory_gib": 72,
         "time_hours": 16
       },
-      "disposition": "upstream-equivalent retained",
-      "rationale": "Matching upstream label; existing task-specific overrides remain explicit. Conservative unmeasured memory retained; opt-in Dardel profile routes large shared-equivalent allocations to main.",
+      "disposition": "measured headroom retained",
+      "rationale": "Completed-task sampled peak 33296.55 MiB; retain current initial headroom across variable read/reference sizes. No rerun for calibration.",
       "upstream": {
         "repository": "nf-core/rnaseq",
         "tag": "3.27.0",
@@ -1304,7 +1685,14 @@
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/star/align/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 42,
+        "peak_rss_mib": 33296.55,
+        "max_elapsed_s": 6398,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "STAR_GENOMEGENERATE",
@@ -1317,8 +1705,8 @@
         "memory_gib": 96,
         "time_hours": 16
       },
-      "disposition": "measured index exception retained",
-      "rationale": "Existing 16 CPU/96 GB initial request and 128 GB retry retained: recorded GRCm39 index peak 68.3 GB exceeded 48/64 GB. Other assemblies can override it.",
+      "disposition": "measured headroom retained",
+      "rationale": "Completed-task sampled peak 68934.02 MiB; retain current initial headroom across variable read/reference sizes. No rerun for calibration.",
       "upstream": {
         "repository": "nf-core/rnaseq",
         "tag": "3.27.0",
@@ -1328,7 +1716,14 @@
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/star/genomegenerate/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 5,
+        "peak_rss_mib": 68934.02,
+        "max_elapsed_s": 1338,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     },
     {
       "process": "TRIMGALORE",
@@ -1341,8 +1736,8 @@
         "memory_gib": 8,
         "time_hours": 8
       },
-      "disposition": "execution-only refinement",
-      "rationale": "Observed peak 4.1 GiB across 12 libraries; initial 8 GiB headroom, retry 16 GiB with fixed 8 workers.",
+      "disposition": "measured headroom retained",
+      "rationale": "Completed-task sampled peak 6289.55 MiB; retain current initial headroom across variable read/reference sizes. No rerun for calibration.",
       "upstream_process": "TRIMGALORE",
       "upstream": {
         "repository": "nf-core/rnaseq",
@@ -1358,6 +1753,13 @@
         "cpus": 8,
         "memory_gib": 4,
         "time_hours": 8
+      },
+      "measurement": {
+        "completed_jobs": 51,
+        "peak_rss_mib": 6289.55,
+        "max_elapsed_s": 2194,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
       }
     },
     {
@@ -1406,7 +1808,14 @@
         "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/rmats/prep/main.nf"
       },
       "cpu_retry_policy": "fixed worker count; memory/time may grow",
-      "threading_review": "explicit task.cpus worker/thread setting"
+      "threading_review": "explicit task.cpus worker/thread setting",
+      "measurement": {
+        "completed_jobs": 12,
+        "peak_rss_mib": 601.48,
+        "max_elapsed_s": 702,
+        "source": "Completed Slurm job steps; maximum with available Nextflow peak_rss",
+        "scope": "Existing mouse bulk RNA-seq runs; inputs and matrix sizes vary. Not a bound for arbitrary cohorts."
+      }
     }
   ],
   "unchanged_science": true,
@@ -1475,12 +1884,12 @@
     },
     "mapp_prepare": {
       "cpus": 6,
-      "memory_gib": 36,
+      "memory_gib": 12,
       "time_hours": 8
     },
     "mapp": {
       "cpus": 6,
-      "memory_gib": 36,
+      "memory_gib": 8,
       "time_hours": 8
     },
     "network_followup": {
@@ -1511,5 +1920,26 @@
     "automatic_memory_partition": false,
     "other_sites_unchanged": true,
     "rationale": "Shared-first preference up to one quarter of a 256-logical-CPU Dardel node; configurable, not a Slurm limit or guaranteed queue acceleration."
+  },
+  "measurement_source": "measured-resources.json",
+  "downstream_measurements": {
+    "mapp_prepare": {
+      "completed_jobs": 435,
+      "peak_rss_mib": 4548.67,
+      "max_elapsed_s": 1336,
+      "scope": "Existing completed native bulk stage; unchanged prepare/fit unit. Not a universal input-size bound."
+    },
+    "mapp": {
+      "completed_jobs": 326,
+      "peak_rss_mib": 1934.3,
+      "max_elapsed_s": 2004,
+      "scope": "Existing completed native bulk stage; unchanged prepare/fit unit. Not a universal input-size bound."
+    },
+    "report": {
+      "completed_jobs": 1,
+      "peak_rss_mib": 1474.41,
+      "max_elapsed_s": 523,
+      "scope": "Existing completed native bulk stage; unchanged prepare/fit unit. Not a universal input-size bound."
+    }
   }
 }
