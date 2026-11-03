@@ -61,6 +61,7 @@ jobs:
           NXF_OFFLINE: 'true'
         shell: bash
         run: |
+          python -m pip install 'pydantic>=2.9,<3'
           runtime_command=$(python -c 'import json,os; print(json.dumps(["java", "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "-cp", os.environ["RUNNER_TEMP"] + "/nextflow-25.10.4-dist", "nextflow.cli.Launcher"]))')
           printf '%s\n' "$runtime_command" > "$RUNNER_TEMP/nextflow-command.json"
           python -B pipeline/tools/check_launch_download.py \
