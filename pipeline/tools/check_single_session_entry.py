@@ -73,9 +73,11 @@ workflow KATANA_PIPELINE {
         for attempt in ('first', 'resume'):
             trace = case / (attempt + '.tsv')
             with (case / (attempt + '.log')).open('w') as log:
-                subprocess.run([*command, '-with-trace', str(trace), *(['-resume'] if attempt == 'resume' else [])],
+                result = subprocess.run([*command, '-with-trace', str(trace), *(['-resume'] if attempt == 'resume' else [])],
                                cwd=case, env={**os.environ, 'NXF_OFFLINE': 'true'},
-                               stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+                               stdout=log, stderr=subprocess.STDOUT, check=False, timeout=180)
+            if result.returncode or not trace.exists():
+                raise AssertionError((case / (attempt + '.log')).read_text()[-12000:])
             rows = list(csv.DictReader(trace.open(), delimiter='\t'))
             assert rows and all(r['status'] == ('CACHED' if attempt == 'resume' else 'COMPLETED') for r in rows)
             names = [r['name'] for r in rows]

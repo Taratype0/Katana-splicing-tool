@@ -121,8 +121,8 @@ def test_mounted_launcher_cannot_certify_its_own_prefix(image, tmp_path, monkeyp
 def test_singularity_clean_environment_scoped_to_katana_labels():
     root = Path(__file__).resolve().parents[2]
     config = (root / "pipeline/nextflow.config").read_text(encoding="utf-8")
-    assert "withLabel: /katana_(control|downstream|report)/" in config
-    assert "['singularity', 'apptainer'] ? '--cleanenv'" in config
+    assert "withLabel: /katana_(control|downstream|report|io)/" in config
+    assert "['singularity', 'apptainer'] ? \"--cleanenv ${mounts}\"" in config
     main = (root / "pipeline/main.nf").read_text(encoding="utf-8")
     assert "params.flow_executable in ['katana-flow', '/opt/conda/bin/katana-flow']" in main
 

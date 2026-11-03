@@ -27,6 +27,7 @@ def main() -> None:
         if command_name == 'preflight':
             entry.add_argument('--out', type=Path, required=True)
         else:
+            entry.add_argument('--owned-link-root', type=Path)
             entry.add_argument('--bundle', type=Path, required=True)
             entry.add_argument('--outdir', type=Path, required=True)
     plan = sub.add_parser("plan")

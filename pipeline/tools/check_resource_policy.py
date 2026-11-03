@@ -28,7 +28,8 @@ def main():
     for name, options in [('portable', {}), ('site', {
         'defaults': {'queue': 'fallback'},
         'labels': {'katana_downstream': {'queue': 'shared-test'}},
-        'processes': {'NETWORK_FIT': {'queue': 'parallel-test'}}
+        'processes': {'NETWORK_FIT': {'queue': 'parallel-test', 'cpus': 1, 'memory': '32 MB', 'time': '2m'},
+                      'DEXSEQ_COUNT': {'cpus': 2}}
     })]:
         run_dir = root / name
         run_dir.mkdir()
@@ -49,8 +50,8 @@ def main():
         assert rows['gene-body'] == ['1', '4 GB', '12h', serial_queue], rows
         assert rows['sequencing-summary'] == ['1', '4 GB', '2h', serial_queue], rows
         assert rows['annotation'] == ['1', '4 GB', '2h', serial_queue], rows
-        assert rows['parallel-fixture'] == ['2', '16 MB', '1m', 'parallel-test' if name == 'site' else 'unset'], rows
-        assert rows['serial-upstream-fixture'] == ['1', '16 MB', '1m', serial_queue], rows
+        assert rows['parallel-fixture'] == (['1', '32 MB', '2m', 'parallel-test'] if name == 'site' else ['2', '16 MB', '1m', 'unset']), rows
+        assert rows['serial-upstream-fixture'] == ['2' if name == 'site' else '1', '16 MB', '1m', serial_queue], rows
         proof[name] = rows
     receipt = {'status': 'passed', 'scope': 'native local allocation and queue-selector regression, not Slurm or scientific execution',
         'completed_tasks': 10, 'allocations': proof}

@@ -349,5 +349,17 @@
   },
   "native_delivery": {
     "type": "bool"
+  },
+  "resource_bundle": {
+    "type": "string"
+  },
+  "resource_cache": {
+    "type": "path"
+  },
+  "digest_cache": {
+    "type": "path"
+  },
+  "verify_content": {
+    "type": "bool"
   }
 }
