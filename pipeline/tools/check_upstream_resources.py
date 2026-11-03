@@ -84,8 +84,8 @@ LABELS
             setting = catalog['downstream_groups'][group]
             expected[alias] = [setting['cpus'], f"{setting['memory_gib']} GB", f"{setting['time_hours']}h", 'unset', 1]
     include.append("include { RMATS_POST as RMATS_POST_PAIRED_PROBE } from './probes/RMATS_POST'")
-    calls.append("    RMATS_POST_PAIRED_PROBE(Channel.of([id:'RMATS_POST_PAIRED_PROBE']), Channel.value('matched'), Channel.value([matched:true]))")
-    expected['RMATS_POST_PAIRED_PROBE'] = [12, '72 GB', '16h', 'unset', 1]
+    calls.append("    RMATS_POST_PAIRED_PROBE(Channel.of([id:'RMATS_POST_PAIRED_PROBE', retry:true]), Channel.value('matched'), Channel.value([matched:true]))")
+    expected['RMATS_POST_PAIRED_PROBE'] = [12, '16 GB', '16h', 'unset', 1]
     (root / 'main.nf').write_text('nextflow.enable.dsl=2\n' + '\n'.join(include) +
         '\nworkflow KATANA_CORE {\n' + '\n'.join(calls) +
         '\n}\nworkflow KATANA_PIPELINE { KATANA_CORE() }\nworkflow { KATANA_PIPELINE() }\n')
@@ -152,6 +152,7 @@ def main():
         expected = fixture(run, catalog)
         expected['TRIMGALORE'] = [8, '16 GB', '16h', 'unset', 2]
         expected['DIFFSPLICE'] = [1, '8 GB', '4h', 'unset', 2]
+        expected['RMATS_POST_PAIRED_PROBE'] = [12, '32 GB', '1d 8h', 'unset', 2]
         extra = []
         if case == 'user_overrides':
             user = run / 'user.config'
@@ -191,6 +192,8 @@ def main():
                 assert observed[0] == ([8, '8 GB', '8h', 'unset', 1] if case == 'defaults' else [3, '5 GB', '3h', 'user-trim', 1]), observed
             elif key == 'DIFFSPLICE':
                 assert observed == [[1, '4 GB', '2h', 'unset', 1], [1, '8 GB', '4h', 'unset', 2]], observed
+            elif key == 'RMATS_POST_PAIRED_PROBE':
+                assert observed == [[12, '16 GB', '16h', 'unset', 1], [12, '32 GB', '1d 8h', 'unset', 2]], observed
             else:
                 assert len(observed) == 1, (key, observed)
         proof[case] = rows

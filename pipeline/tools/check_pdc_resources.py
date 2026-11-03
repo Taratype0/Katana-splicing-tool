@@ -132,9 +132,9 @@ exit 0
             rows.setdefault(name, []).append(dict(cpus=cpus, memory=memory, time=time,
                 attempt=int(attempt), partition=queue, shared_equivalent_cpus=inflated))
         assert set(rows) == set(expected), set(rows)^set(expected)
-        for name in ('STAR_ALIGN', 'NETWORK_FIT', 'RMATS_POST_PAIRED_PROBE', 'STAR_GENOMEGENERATE'):
+        for name in ('STAR_ALIGN', 'NETWORK_FIT', 'STAR_GENOMEGENERATE'):
             assert rows[name][0]['partition'] == ('user-star' if case=='user_override' and name=='STAR_ALIGN' else 'main')
-        for name in ('TRIMGALORE','FASTQC','DEXSEQ_COUNT','MOTIFTRACE','MAPP','QC','KATANA_FLOW_REPORT','RMATS_POST','DIFFSPLICE','DIFFSPLICE_IOE','DIFFSPLICE_IOI','TXIMPORT','DEXSEQ_EXON','DEXSEQ_DTU'):
+        for name in ('TRIMGALORE','FASTQC','DEXSEQ_COUNT','MOTIFTRACE','MAPP','QC','KATANA_FLOW_REPORT','RMATS_POST','RMATS_POST_PAIRED_PROBE','DIFFSPLICE','DIFFSPLICE_IOE','DIFFSPLICE_IOI','TXIMPORT','DEXSEQ_EXON','DEXSEQ_DTU'):
             assert all(r['partition']=='shared' for r in rows[name]), (name, rows[name])
         proof[case] = rows
     receipt = dict(status='passed', scope='Native Nextflow Slurm wrappers; fake scheduler; no scientific jobs',

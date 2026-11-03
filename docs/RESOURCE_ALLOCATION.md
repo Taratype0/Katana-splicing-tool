@@ -32,7 +32,7 @@ usage. A complete scientific run was not restarted to collect resource metrics.
 | STAR genome index | 16 | 96 GB | 16 h | Existing GRCm39 measured-memory exception; 128 GB on retry |
 | rMATS prep, per BAM | 1 | 6 GB | 4 h | rnasplice 2.0.0 single label and per-BAM granularity |
 | rMATS post, unpaired contrast | 12 | 8 GB | 4 h | Completed post-only peak 1.40 GiB |
-| rMATS post, paired contrast | 12 | 72 GB | 16 h | PAIRADISE production peak is not established; explicitly retained, not calibrated from unpaired tests |
+| rMATS post, paired contrast | 12 | 16 GB | 16 h | Engineering starting request, not a measured paired peak; existing OOM retry requests 32 GB / 32 h, with unchanged workers and model |
 
 DEXSeq exon models now start at 16 GiB (observed 6.59 GiB), and DTU models at
 8 GiB (observed 2.28 GiB), both retaining six workers and the eight-hour limit.
@@ -118,7 +118,7 @@ The generic profiles leave partition selection to the site. For Dardel select
 the packaged `pdc_kth` profile:
 
 ```bash
-nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110305 \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110306 \
   -profile singularity,pdc_kth -c custom.config --project YOUR_ALLOCATION \
   ...
 ```
@@ -136,8 +136,8 @@ It prefers shared up to 64 such CPUs and 111 GiB. This 64-CPU preference is
 configurable, not a scheduler limit or a limit on the number of concurrent tasks.
 It leaves moderate jobs on shared while moving larger reservations to main.
 For example, STAR's 12-worker/72-GiB request needs 84 shared CPUs and is routed
-to main. CoSplice and paired rMATS post have the same initial reservation. FastQC,
-trimming, per-BAM rMATS prep, unpaired rMATS post, SUPPA differential tests,
+to main. CoSplice has the same initial reservation. FastQC,
+trimming, per-BAM rMATS prep, paired and unpaired rMATS post, SUPPA differential tests,
 DEXSeq models, 36-GiB MotifTrace and the reduced MAPP requests
 remain eligible for shared. A user-specified 256-GiB STAR index also goes to main.
 

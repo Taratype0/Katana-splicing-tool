@@ -10,7 +10,7 @@ Katana installation path is used.
 
 ## Standalone downstream and browser users
 
-Install the wheel from the matching [release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev2026110305)
+Install the wheel from the matching [release](https://github.com/Taratype0/Katana-splicing-tool/releases/tag/v2.0.0-beta.5.dev2026110306)
 into an isolated Python environment. The standalone scientific dependencies and
 Conda instructions are in [installation](INSTALL.md). The Python API, `katana-flow`
 and target-analysis commands remain available independently of Nextflow.
@@ -24,7 +24,7 @@ in the release manifest. Check `SHA256SUMS` once when installing, then extract:
 
 ```bash
 mkdir -p tools
-tar -xzf katana-controller-2.0.0b5.dev2026110305-linux-x86_64.tar.gz -C tools
+tar -xzf katana-controller-2.0.0b5.dev2026110306-linux-x86_64.tar.gz -C tools
 export PATH="$PWD/tools/katana-controller/bin:$PATH"
 nextflow run tools/katana-controller/pipeline/main.nf --help
 ```

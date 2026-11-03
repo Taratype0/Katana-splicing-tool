@@ -972,7 +972,7 @@
         "time_hours": 4
       },
       "disposition": "measured execution allocation",
-      "rationale": "Native completed bulk tasks: 20 distinct jobs, sampled peak 1431.7 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable. These measurements cover unpaired post only. Paired PAIRADISE retains 72 GiB/16 h until comparable completed measurements exist.",
+      "rationale": "Native completed bulk tasks: 20 distinct jobs, sampled peak 1431.7 MiB; headroom retained. Worker count, tool invocation and scientific parameters unchanged; memory/time remain user-overridable. These measurements cover unpaired post only. Paired PAIRADISE starts at 16 GiB/16 h as a user-overridable engineering default, not a measured paired peak; the existing one OOM retry requests 32 GiB/32 h with unchanged workers and model.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -997,7 +997,7 @@
       },
       "paired_initial": {
         "cpus": 12,
-        "memory_gib": 72,
+        "memory_gib": 16,
         "time_hours": 16
       }
     },

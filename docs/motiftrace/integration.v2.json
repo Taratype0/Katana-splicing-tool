@@ -656,6 +656,18 @@
           "scope": "Package version; native measured resource overrides, no scientific source changes."
         }
       ]
+    },
+    {
+      "revision": "paired-rmats-resources-20261103",
+      "scientific_sources_changed": false,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "8af0296dc36ed03f76a0b0c09298fc170723b7ad6083ad051dcd2d818c7451b0",
+          "sha256": "6f1d0bf022526069341afc9a0097636af892374a97febf4ac6de01a78cac7ff0",
+          "scope": "Package version; paired rMATS execution memory only, unchanged science and report."
+        }
+      ]
     }
   ]
 }
