@@ -29,7 +29,8 @@ sys.path.insert(0,"/checks")
 from check_unified_engines import fixture
 p,m=fixture(Path.cwd()/"source")
 cfg={"design_factors":["condition"],"contrast_ids":["perturbation-vs-baseline","rescue-vs-baseline"],"analyses":{"coverage":False,"mapp":False,"motif_binding":False,"interaction":False,"sequencing_qc":False},"parameters":{"prioritize.motiftrace_consequences":{"custom_motif_path":str(m),"cluster_permutations":99}}}
-Path("flow.json").write_text(json.dumps(cfg))
+Path("config").mkdir()
+Path("config/flow.json").write_text(json.dumps(cfg))
 '''
     subprocess.run(['docker', 'run', '--rm', '--network=none', '--user',
         f'{os.getuid()}:{os.getgid()}', '-v', f'{root}:{root}', '-v',
@@ -41,7 +42,7 @@ Path("flow.json").write_text(json.dumps(cfg))
     (root / 'acceptance.config').write_text('executor.cpus = 4\nexecutor.memory = "6 GB"\n')
     base = [args.nextflow, 'run', str(root / 'pipeline/main.nf'), '-profile', 'docker',
         '--mode', 'downstream-only', '--project', str(root / 'source/katana.project.json'),
-        '--flow_config', str(root / 'flow.json'), '--outdir', str(root / 'results'),
+        '--flow_config', str(root / 'config/flow.json'), '--outdir', str(root / 'results'),
         '--storage_mode', 'lean', '--katana_container', args.image,
         '--max_cpus', '2', '--max_memory', '4 GB', '-c', str(root / 'acceptance.config'),
         '-work-dir', str(root / 'work'), '-ansi-log', 'false']
