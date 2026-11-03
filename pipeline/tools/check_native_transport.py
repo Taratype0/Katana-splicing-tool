@@ -141,10 +141,12 @@ def main() -> None:
 
     raw_without_image = root / "raw-missing-dexseq-image"
     raw_without_image.mkdir()
+    missing_dexseq = raw_without_image / "missing-image.config"
+    missing_dexseq.write_text("params.dexseq_tools_container = null\n")
     rejected = run([*nextflow, "run", str(PIPELINE / "main.nf"), "--mode", "upstream-only",
                     "--input", "absent.csv", "--contrasts", "absent-contrasts.csv",
                     "--fasta", "absent.fa", "--gtf", "absent.gtf", "-profile", "docker",
-                    "-ansi-log", "false"], raw_without_image, "missing-dexseq-container", successful=False)
+                    "-c", str(missing_dexseq), "-ansi-log", "false"], raw_without_image, "missing-dexseq-container", successful=False)
     assert "requires --dexseq_tools_container" in rejected.stdout + rejected.stderr
     assert not list((raw_without_image / "work").glob("**/.command.sh"))
 
