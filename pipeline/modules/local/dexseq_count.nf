@@ -7,6 +7,7 @@ process DEXSEQ_COUNT {
     input:
     tuple val(meta), path(bam), path (gff)
     val alignment_quality                   // val params.alignment_quality
+    path dexseq_script
 
     output:
     tuple val(meta), path("*.clean.count.txt"), emit: dexseq_clean_txt
@@ -34,7 +35,7 @@ process DEXSEQ_COUNT {
     }
 
     """
-    dexseq_count.py $gff $read_type -f bam $bam -r pos ${prefix}.clean.count.txt $alignment_quality $strandedness
+    python $dexseq_script $gff $read_type -f bam $bam -r pos ${prefix}.clean.count.txt $alignment_quality $strandedness
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

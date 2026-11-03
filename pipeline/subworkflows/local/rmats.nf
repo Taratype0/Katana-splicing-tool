@@ -3,11 +3,10 @@
 //
 
 include { CREATE_BAMLIST         } from '../../modules/local/create_bamlist.nf'
-include { RMATS_PREP             } from '../../modules/local/rmats_prep.nf'
+include { RMATS_PREP_BAM         } from '../../modules/local/rmats_prep_bam.nf'
 include { RMATS_POST             } from '../../modules/local/rmats_post.nf'
 
 include { CREATE_BAMLIST_SINGLE  } from '../../modules/local/create_bamlist_single.nf'
-include { RMATS_PREP_SINGLE      } from '../../modules/local/rmats_prep_single.nf'
 include { RMATS_POST_SINGLE      } from '../../modules/local/rmats_post_single.nf'
 
 workflow RMATS {
@@ -27,6 +26,19 @@ workflow RMATS {
     main:
 
     ch_versions = Channel.empty()
+
+    // Prepare every sample once, regardless of how many contrasts use it.
+    // Preserve each condition's ordered metadata/BAM pairing for paired POST.
+    ch_sample_bams = ch_genome_bam_conditions.flatMap { condition, metas, bams ->
+        if (metas.size() != bams.size()) error("rMATS metadata/BAM mismatch: ${condition}")
+        metas.withIndex().collect { meta, index -> tuple(meta, bams[index]) }
+    }.unique { meta, bam -> meta.id }
+    RMATS_PREP_BAM(ch_sample_bams, gtf, rmats_read_len, rmats_splice_diff_cutoff,
+        rmats_novel_splice_site, rmats_min_intron_len, rmats_max_exon_len)
+    ch_prepared = RMATS_PREP_BAM.out.rmats_temp.toList().map { rows ->
+        rows.collectEntries { meta, record -> [(meta.id): record] }
+    }
+    ch_versions = ch_versions.mix(RMATS_PREP_BAM.out.versions)
 
     //
     // Create contrasts channel for RMATS input
@@ -85,17 +97,13 @@ workflow RMATS {
         // Run rMATS prep step
         //
 
-        RMATS_PREP_SINGLE (
-            gtf,
-            ch_contrasts_bamlist,
-            rmats_read_len,
-            rmats_splice_diff_cutoff,
-            rmats_novel_splice_site,
-            rmats_min_intron_len,
-            rmats_max_exon_len
-        )
-
-        ch_rmats_temp = RMATS_PREP_SINGLE.out.rmats_temp
+        ch_rmats_temp = ch_contrasts.combine(ch_prepared).map { row, prepared ->
+            def records = row.meta1.collect { meta ->
+                if (!prepared.containsKey(meta.id)) error("Missing rMATS prep: ${meta.id}")
+                prepared[meta.id]
+            }
+            tuple(row.contrast, records)
+        }
 
         //
         // Join rmats temp with contrasts
@@ -129,8 +137,8 @@ workflow RMATS {
 
         ch_versions         = ch_versions.mix(RMATS_POST_SINGLE.out.versions)
 
-        ch_rmats_prep       = RMATS_PREP_SINGLE.out.rmats_temp  //    path: rmats_temp/*
-        ch_rmats_prep_log   = RMATS_PREP_SINGLE.out.log         //    path: rmats_prep.log
+        ch_rmats_prep       = ch_rmats_temp
+        ch_rmats_prep_log   = RMATS_PREP_BAM.out.log
         ch_rmats_post       = RMATS_POST_SINGLE.out.rmats_post  //    path: rmats_post/*
         ch_rmats_post_log   = RMATS_POST_SINGLE.out.log         //    path: rmats_post.log
 
@@ -171,17 +179,13 @@ workflow RMATS {
         // Run rMATS prep step
         //
 
-        RMATS_PREP (
-            gtf,
-            ch_contrasts_bamlist,
-            rmats_read_len,
-            rmats_splice_diff_cutoff,
-            rmats_novel_splice_site,
-            rmats_min_intron_len,
-            rmats_max_exon_len
-        )
-
-        ch_rmats_temp = RMATS_PREP.out.rmats_temp
+        ch_rmats_temp = ch_contrasts.combine(ch_prepared).map { row, prepared ->
+            def records = (row.meta1 + row.meta2).collect { meta ->
+                if (!prepared.containsKey(meta.id)) error("Missing rMATS prep: ${meta.id}")
+                prepared[meta.id]
+            }
+            tuple(row.contrast, records)
+        }
 
         //
         // Join rmats temp with contrasts
@@ -215,8 +219,8 @@ workflow RMATS {
 
         ch_versions         = ch_versions.mix(RMATS_POST.out.versions)
 
-        ch_rmats_prep       = RMATS_PREP.out.rmats_temp     //    path: rmats_prep/*
-        ch_rmats_prep_log   = RMATS_PREP.out.log            //    path: rmats_prep.log
+        ch_rmats_prep       = ch_rmats_temp
+        ch_rmats_prep_log   = RMATS_PREP_BAM.out.log
         ch_rmats_post       = RMATS_POST.out.rmats_post     //    path: rmats_post/*
         ch_rmats_post_log   = RMATS_POST.out.log            //    path: rmats_post.log
 

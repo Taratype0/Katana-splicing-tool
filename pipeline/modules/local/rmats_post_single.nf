@@ -62,7 +62,7 @@ process RMATS_POST_SINGLE {
 
     """
     rmats.py \\
-        --b1 $bam1 \\
+        --b1 $bam1_text \\
         -t $read_type \\
         --libType $strandedness \\
         --nthread $task.cpus \\
@@ -71,8 +71,7 @@ process RMATS_POST_SINGLE {
         --readLength $rmats_read_len \\
         --variable-read-length \\
         --cstat $rmats_splice_diff_cutoff \\
-        --task post \\
-        $paired_stats \\
+        --task post --statoff \\
         $novel_splice_sites \\
         $min_intron_len \\
         $max_exon_len \\

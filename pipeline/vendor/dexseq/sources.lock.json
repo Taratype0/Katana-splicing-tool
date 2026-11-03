@@ -1,0 +1,18 @@
+{
+  "schema": "katana.dexseq_sources/v1",
+  "base_image": "quay.io/biocontainers/htseq@sha256:ada151195080772235556fa8678c5e213e4e98b10b8c0e1c64ec9209db730222",
+  "source_url_prefix": "https://raw.githubusercontent.com/nf-core/rnasplice/1d0494ae3402d1a46e0adadad24f81a0ff855c77/bin/",
+  "source_commit": "1d0494ae3402d1a46e0adadad24f81a0ff855c77",
+  "files": [
+    {
+      "name": "dexseq_count.py",
+      "url": "https://raw.githubusercontent.com/nf-core/rnasplice/1d0494ae3402d1a46e0adadad24f81a0ff855c77/bin/dexseq_count.py",
+      "sha256": "d0cb14bfddc2bc7cba95e0adcca56df363f073a82c19cff7937ecb854543e36e"
+    },
+    {
+      "name": "dexseq_prepare_annotation.py",
+      "url": "https://raw.githubusercontent.com/nf-core/rnasplice/1d0494ae3402d1a46e0adadad24f81a0ff855c77/bin/dexseq_prepare_annotation.py",
+      "sha256": "8faec3a78d15e8abd8465adb6ee4bd45d5577aa9e650bc2b09c8ea8107d952e6"
+    }
+  ]
+}

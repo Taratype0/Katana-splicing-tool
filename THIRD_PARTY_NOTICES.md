@@ -11,6 +11,14 @@ its nf-core revision, RSeQC/gffread versions and adaptations in
 RSeQC and gffread execute from their declared external tool environments; their
 source is not included in this adapter and retains its own licensing.
 
+## DEXSeq annotation and counting scripts
+
+`pipeline/vendor/dexseq` contains two unmodified GPL-3.0 scripts from
+nf-core/rnasplice 1.0.4. Copyright belongs to Simon Anders and Alejandro Reyes,
+EMBL (see each source file). The complete GPL text and immutable source hashes
+are included beside the scripts. These separate command-line tools retain
+their license and are not covered by Katana's MIT license.
+
 ## DJExpress author core
 
 The original DJExpress core is included under `katana_next/vendor/DJExpress` at the recorded upstream revision `a0396272fd0522565190d97f4ecd2e9ba8a98366`. Copyright is held by Lina Gallego-Paez. Its MIT notices are preserved in [LICENSE](katana_next/vendor/DJExpress/LICENSE) and [LICENSE.md](katana_next/vendor/DJExpress/LICENSE.md). The original DESCRIPTION, NAMESPACE and [source-hash manifest](katana_next/vendor/DJExpress_SOURCE_SHA256.json) remain with that source. Katana does not claim authorship of this method.

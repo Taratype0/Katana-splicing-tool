@@ -693,8 +693,8 @@
         "memory_gib": 72,
         "time_hours": 16
       },
-      "disposition": "granularity exception retained",
-      "rationale": "Katana retains rnasplice 1.0.4 contrast-level preparation of both BAM groups. rnasplice 2.0.0 process_single is one BAM per task, so its 1 CPU/6 GB reservation cannot be copied as an equivalent contrast-level allocation. No unit/granularity change or scientific rerun in this resource patch.",
+      "disposition": "historical declaration, not used by current workflow",
+      "rationale": "Preserved source module; current RMATS workflow calls RMATS_PREP_BAM once per sample instead.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -715,8 +715,8 @@
         "memory_gib": 72,
         "time_hours": 16
       },
-      "disposition": "granularity exception retained",
-      "rationale": "Katana retains rnasplice 1.0.4 contrast-level preparation of both BAM groups. rnasplice 2.0.0 process_single is one BAM per task, so its 1 CPU/6 GB reservation cannot be copied as an equivalent contrast-level allocation. No unit/granularity change or scientific rerun in this resource patch.",
+      "disposition": "historical declaration, not used by current workflow",
+      "rationale": "Preserved source module; current RMATS workflow calls RMATS_PREP_BAM once per sample instead.",
       "upstream": {
         "repository": "nf-core/rnasplice",
         "tag": "1.0.4",
@@ -1157,6 +1157,28 @@
         "path": "modules/nf-core/untar/main.nf",
         "sha256": "037665c6bdc42ddcc75e30a293c629c53a1d245ce7c8c7791f18ef3c1069f62d",
         "url": "https://github.com/nf-core/rnaseq/blob/a1fcdddd3b826fe46eb46f0479f2ff8a7815af05/modules/nf-core/untar/main.nf"
+      }
+    },
+    {
+      "process": "RMATS_PREP_BAM",
+      "source": "pipeline/modules/local/rmats_prep_bam.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 6,
+        "time_hours": 4
+      },
+      "disposition": "upstream per-BAM preparation",
+      "rationale": "One BAM per task, shared across contrasts; rnasplice 2.0.0 task granularity and process_single. Existing rMATS 4.1.2 analysis arguments and paired post model retained.",
+      "upstream": {
+        "repository": "nf-core/rnasplice",
+        "tag": "2.0.0",
+        "commit": "aceb47ab77cf0edfb290a44035328ed5b7eb0be8",
+        "path": "modules/nf-core/rmats/prep/main.nf",
+        "sha256": "d7e45bf022db6b474ffe555b80d3f173814311f8e23ba193ff4a2d862b3504d9",
+        "url": "https://github.com/nf-core/rnasplice/blob/aceb47ab77cf0edfb290a44035328ed5b7eb0be8/modules/nf-core/rmats/prep/main.nf"
       }
     }
   ],

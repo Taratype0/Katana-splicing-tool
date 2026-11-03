@@ -2,6 +2,8 @@
 import hashlib
 import json
 import platform
+import os
+import sys
 import subprocess
 import tempfile
 from pathlib import Path
@@ -12,10 +14,12 @@ import pysam
 
 assert HTSeq.__version__ == '2.0.2'
 assert pkg_resources.get_distribution('htseq').version == '2.0.2'
+scripts = Path(os.environ.get('KATANA_DEXSEQ_SCRIPTS', '/usr/local/bin'))
+license_path = scripts / 'LICENSE.GPL-3.0' if 'KATANA_DEXSEQ_SCRIPTS' in os.environ else Path('/usr/share/doc/kanata-dexseq-tools/LICENSE.GPL-3.0')
 expected_source = {
-    '/usr/local/bin/dexseq_prepare_annotation.py': '8faec3a78d15e8abd8465adb6ee4bd45d5577aa9e650bc2b09c8ea8107d952e6',
-    '/usr/local/bin/dexseq_count.py': 'd0cb14bfddc2bc7cba95e0adcca56df363f073a82c19cff7937ecb854543e36e',
-    '/usr/share/doc/kanata-dexseq-tools/LICENSE.GPL-3.0': '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986',
+    str(scripts / 'dexseq_prepare_annotation.py'): '8faec3a78d15e8abd8465adb6ee4bd45d5577aa9e650bc2b09c8ea8107d952e6',
+    str(scripts / 'dexseq_count.py'): 'd0cb14bfddc2bc7cba95e0adcca56df363f073a82c19cff7937ecb854543e36e',
+    str(license_path): '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986',
 }
 for name, wanted in expected_source.items():
     assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == wanted, name
@@ -31,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix='kanata-dexseq-software-fixture-') as te
     header = {'HD':{'VN':'1.6','SO':'coordinate'},'SQ':[{'SN':'X','LN':1000}]}
     observed = {}
     commands = []
-    prepare = ['dexseq_prepare_annotation.py',str(gtf),str(gff)]
+    prepare = [sys.executable, str(scripts / 'dexseq_prepare_annotation.py'),str(gtf),str(gff)]
     subprocess.run(prepare,check=True)
     commands.append(prepare)
     for paired in (False,True):
@@ -56,7 +60,7 @@ with tempfile.TemporaryDirectory(prefix='kanata-dexseq-software-fixture-') as te
                 output.write(read)
         pysam.index(str(bam))
         counts = root/f'{mode}.clean.count.txt'
-        command = ['dexseq_count.py',str(gff)]
+        command = [sys.executable, str(scripts / 'dexseq_count.py'),str(gff)]
         if paired:
             command.extend(['-p','yes'])
         command.extend(['-f','bam',str(bam),'-r','pos',str(counts),'-a','10','-s','no'])

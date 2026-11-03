@@ -7,6 +7,7 @@ process DEXSEQ_ANNOTATION {
     input:
     path gtf         // path gtf file
     val aggregation  // val params.aggregation
+    path dexseq_script
 
     output:
     path "*.gff"        , emit: gff
@@ -23,7 +24,7 @@ process DEXSEQ_ANNOTATION {
     def aggregation = aggregation ? '' : '-r no'
 
     """
-    dexseq_prepare_annotation.py $gtf ${prefix}.gff $aggregation
+    python $dexseq_script $gtf ${prefix}.gff $aggregation
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

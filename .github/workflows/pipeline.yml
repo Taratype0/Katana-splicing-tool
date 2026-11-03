@@ -82,6 +82,9 @@ jobs:
             --nextflow-command-json "$runtime_command" \
             --outdir "$RUNNER_TEMP/katana-managed-storage"
           printf '%s\n' "$runtime_command" > "$RUNNER_TEMP/nextflow-command.json"
+          python -B pipeline/tools/check_rmats_sample_reuse.py \
+            --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
+            --outdir "$RUNNER_TEMP/katana-rmats-sample-reuse"
           python -B pipeline/tools/check_native_lanes.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --pipeline pipeline --outdir "$RUNNER_TEMP/katana-native-lanes"
@@ -120,6 +123,9 @@ jobs:
             ${{ runner.temp }}/katana-upstream-resource-policy/acceptance.receipt.json
             ${{ runner.temp }}/katana-upstream-resource-policy/*/stdout.txt
             ${{ runner.temp }}/katana-upstream-resource-policy/*/stderr.txt
+            ${{ runner.temp }}/katana-rmats-sample-reuse/receipt.json
+            ${{ runner.temp }}/katana-rmats-sample-reuse/*/*.log
+            ${{ runner.temp }}/katana-rmats-sample-reuse/*/*.tsv
           retention-days: 7
 
   paired-native-models:
@@ -127,6 +133,14 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Verify unmodified DEXSeq scripts in the upstream HTSeq image
+        run: |
+          mkdir -p "$RUNNER_TEMP/paired-models"
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -e KATANA_DEXSEQ_SCRIPTS=/pipeline/vendor/dexseq \
+            -v "$PWD/pipeline:/pipeline:ro" -v "$PWD/containers:/checks:ro" \
+            quay.io/biocontainers/htseq@sha256:ada151195080772235556fa8678c5e213e4e98b10b8c0e1c64ec9209db730222 \
+            python /checks/dexseq-tools/check_runtime.py > "$RUNNER_TEMP/paired-models/upstream-htseq.json"
       - name: Fit generated paired counts in the upstream DEXSeq runtime
         run: |
           mkdir -p "$RUNNER_TEMP/paired-models"

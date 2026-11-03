@@ -5,7 +5,7 @@ nf-core/rnasplice 2.0.0 and nf-core/differentialabundance 2.0.0. Copying the gen
 `process_high` label alone is not equivalent to inheriting a pipeline's effective
 settings: rnaseq has a separate Trim Galore override.
 
-This is a resource-only integration. The existing tool versions, model formulas,
+This integrates upstream resource requests and per-BAM rMATS preparation. The existing tool versions, model formulas,
 paired design, analysis arguments and approved report format are unchanged.
 These defaults are requests, not measurements of every study's actual CPU/RAM
 usage. A complete scientific run was not restarted to collect resource metrics.
@@ -24,10 +24,11 @@ usage. A complete scientific run was not restarted to collect resource metrics.
 | Salmon projection / samtools sort | 6 | 36 GB | 8 h | Corresponding rnaseq medium requests retained |
 | STAR alignment | 12 | 72 GB | 16 h | rnaseq high label retained |
 | STAR genome index | 16 | 96 GB | 16 h | Existing GRCm39 measured-memory exception; 128 GB on retry |
-| rMATS prep / post | 12 | 72 GB | 16 h | Current contrast-level implementation; see below |
+| rMATS prep, per BAM | 1 | 6 GB | 4 h | rnasplice 2.0.0 single label and per-BAM granularity |
+| rMATS post, per contrast | 12 | 72 GB | 16 h | rnasplice 2.0.0 high label |
 
-The [complete inventory](resource-allocation-audit.csv) covers all 60 declared
-processes, including optional branches. Each row records its upstream source or
+The [complete inventory](resource-allocation-audit.csv) covers all 61 declared
+processes, including optional and retained historical declarations. Each row records its upstream source or
 states that the task is Katana-specific. The machine-readable
 [policy](../pipeline/assets/resource-policy.json) pins repository commits and
 source hashes. Runtime aliases and downstream execution groups are additionally
@@ -35,12 +36,16 @@ covered by the native allocation probe.
 
 ### Preserve the unit of work when borrowing a request
 
-Katana's current rMATS prep still processes both groups for one contrast, as in
-rnasplice 1.0.4. rnasplice 2.0.0 uses `process_single` for **one BAM per prep task**.
-Applying the newer single-BAM reservation to the older multi-BAM task would not
-be an equivalent resource mapping. The contrast-level allocation is retained
-explicitly; this patch does not silently change preparation granularity or
-rerun completed results.
+Katana follows rnasplice 2.0.0: **one BAM per prep task**, reused by every contrast
+that includes that sample. Post remains one task per contrast, with explicit
+subject order preserved for paired models. The existing rMATS 4.1.2 / PAIRADISE
+runtime and scientific arguments are retained. Historical group-prep modules
+remain in the source snapshot but are not called by the current workflow.
+
+DEXSeq annotation and counting use the upstream HTSeq 2.0.2 BioContainer and
+the same unmodified scripts as before, staged by Nextflow from
+`pipeline/vendor/dexseq`. No separately built Katana DEXSeq image is required.
+The statistical fits still use their upstream Bioconductor DEXSeq container.
 
 The existing STAR-index request is also explicit: recorded GRCm39 index peak
 memory was about 68.3 GB, so the already approved 96 GB first attempt is retained.
@@ -74,7 +79,7 @@ a specific invocation. Generic label overrides have lower priority than
 process-name overrides. No Dardel-specific memory-per-CPU rule is built in.
 
 The native print-only probe loads the production configuration and checks all
-60 process declarations, the BAM FastQC alias, downstream execution groups,
+61 process declarations, the BAM FastQC alias, downstream execution groups,
 retry requests and independent synthetic user overrides. It simulates local
 executor capacity because it prints requests without allocating those resources.
 It is not a Slurm benchmark or a real-data performance measurement.

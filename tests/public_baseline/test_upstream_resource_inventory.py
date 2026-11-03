@@ -23,7 +23,7 @@ def test_inventory_covers_all_declarations_and_labels():
         assert records[name]['rationale']
 
 
-def test_upstream_links_are_immutable_and_granularity_exceptions_explicit():
+def test_upstream_links_are_immutable_and_per_bam_prep_inherits_single():
     policy = json.loads((ROOT / 'pipeline/assets/resource-policy.json').read_text())
     commits = {source['commit'] for source in policy['sources']}
     for record in policy['processes']:
@@ -32,10 +32,11 @@ def test_upstream_links_are_immutable_and_granularity_exceptions_explicit():
             assert source['commit'] in commits
             assert re.fullmatch('[0-9a-f]{64}', source['sha256'])
             assert f"/blob/{source['commit']}/" in source['url']
-    prep = [r for r in policy['processes'] if r['process'].startswith('RMATS_PREP')]
-    assert len(prep) == 2
-    assert all(r['disposition'] == 'granularity exception retained' for r in prep)
-    assert all('one BAM' in r['rationale'] for r in prep)
+    prep = next(r for r in policy['processes'] if r['process'] == 'RMATS_PREP_BAM')
+    assert prep['initial'] == {'cpus':1, 'memory_gib':6, 'time_hours':4}
+    workflow = (ROOT / 'pipeline/subworkflows/local/rmats.nf').read_text()
+    assert 'RMATS_PREP_BAM(ch_sample_bams' in workflow
+    assert 'RMATS_PREP (' not in workflow and 'RMATS_PREP_SINGLE (' not in workflow
 
 
 def test_allocation_policy_does_not_change_science_or_select_a_cluster():

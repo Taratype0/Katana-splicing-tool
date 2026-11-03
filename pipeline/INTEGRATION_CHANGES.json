@@ -65,17 +65,41 @@
     {
       "path": "modules/local/create_bamlist_single.nf",
       "snapshot_sha256": "29f525cf9bb47f0af719f02e84c15160280f58ab6eae219f352c1b37d914eea1",
-      "integrated_sha256": "81980869fbe208f9ad432717a5615521e0de276800bb7d425c096583be4f8646"
+      "integrated_sha256": "999b59f49595a0a444789a0d1aa790f14c8412996aa4f310cbefcc94310de162",
+      "integration_revisions": [
+        {
+          "revision": "upstream-rmats-dexseq-20261103",
+          "previous_integrated_sha256": "81980869fbe208f9ad432717a5615521e0de276800bb7d425c096583be4f8646",
+          "integrated_sha256": "999b59f49595a0a444789a0d1aa790f14c8412996aa4f310cbefcc94310de162",
+          "scope": "Per-BAM preparation reuse, single-condition argument repair, explicit staged DEXSeq tools with upstream HTSeq; statistical models and report format unchanged."
+        }
+      ]
     },
     {
       "path": "modules/local/dexseq_annotation.nf",
       "snapshot_sha256": "6fcb415962fdabea96c8371b7fc3bd26a4d164d3d1a4b532253bd6c59126a883",
-      "integrated_sha256": "25df195c7411f9125fdea2e9566cd9f0ea3d89af63891f0628d5fe3b600a9038"
+      "integrated_sha256": "cd9e5efb74003590d9e953b268b969de431c4c93573ed47ed01ae8f35a381656",
+      "integration_revisions": [
+        {
+          "revision": "upstream-rmats-dexseq-20261103",
+          "previous_integrated_sha256": "25df195c7411f9125fdea2e9566cd9f0ea3d89af63891f0628d5fe3b600a9038",
+          "integrated_sha256": "cd9e5efb74003590d9e953b268b969de431c4c93573ed47ed01ae8f35a381656",
+          "scope": "Per-BAM preparation reuse, single-condition argument repair, explicit staged DEXSeq tools with upstream HTSeq; statistical models and report format unchanged."
+        }
+      ]
     },
     {
       "path": "modules/local/dexseq_count.nf",
       "snapshot_sha256": "c39fc80454f7624bfd685854037fb5a6f7dc0c3ec5148875168f8b993684cbfd",
-      "integrated_sha256": "515a7dfa209a9778d244ff58f9765778a461c328c8bfa3da14af0d3582607178"
+      "integrated_sha256": "0e8d3fa3257a0f6d4eeef478784dcd209bb8becd9fef3556424c2b25b1f02619",
+      "integration_revisions": [
+        {
+          "revision": "upstream-rmats-dexseq-20261103",
+          "previous_integrated_sha256": "515a7dfa209a9778d244ff58f9765778a461c328c8bfa3da14af0d3582607178",
+          "integrated_sha256": "0e8d3fa3257a0f6d4eeef478784dcd209bb8becd9fef3556424c2b25b1f02619",
+          "scope": "Per-BAM preparation reuse, single-condition argument repair, explicit staged DEXSeq tools with upstream HTSeq; statistical models and report format unchanged."
+        }
+      ]
     },
     {
       "path": "modules/local/dexseq_dtu.nf",
@@ -128,7 +152,15 @@
     {
       "path": "modules/local/rmats_post_single.nf",
       "snapshot_sha256": "16cc1616a73265134ad79d3597e462ffcdcdf45002e67d074f99ae0f2a0820fc",
-      "integrated_sha256": "ba9692686d4828b639eee2983995dac40d875411c478af636f70ae37f407735f"
+      "integrated_sha256": "7e266d0858b9604069d6877fe39aebe0935569fdb1ae1291dc3e9b66a745e92a",
+      "integration_revisions": [
+        {
+          "revision": "upstream-rmats-dexseq-20261103",
+          "previous_integrated_sha256": "ba9692686d4828b639eee2983995dac40d875411c478af636f70ae37f407735f",
+          "integrated_sha256": "7e266d0858b9604069d6877fe39aebe0935569fdb1ae1291dc3e9b66a745e92a",
+          "scope": "Per-BAM preparation reuse, single-condition argument repair, explicit staged DEXSeq tools with upstream HTSeq; statistical models and report format unchanged."
+        }
+      ]
     },
     {
       "path": "modules/local/rmats_prep.nf",
@@ -226,7 +258,15 @@
     {
       "path": "subworkflows/local/dexseq_deu.nf",
       "snapshot_sha256": "990fa7c14cf60ab85e37b4b0b5bf0f635337e9f2e0abc4b15487bc96c2b59323",
-      "integrated_sha256": "531c7592e015a4890210e4d9aa6dd3618db1d5c5fd86d15740121ef1aeebb6b5"
+      "integrated_sha256": "3f4958886d2d1c3ad4ad9aece3083b3a2e7b0e90f87a0344e8718f38a432ccb7",
+      "integration_revisions": [
+        {
+          "revision": "upstream-rmats-dexseq-20261103",
+          "previous_integrated_sha256": "531c7592e015a4890210e4d9aa6dd3618db1d5c5fd86d15740121ef1aeebb6b5",
+          "integrated_sha256": "3f4958886d2d1c3ad4ad9aece3083b3a2e7b0e90f87a0344e8718f38a432ccb7",
+          "scope": "Per-BAM preparation reuse, single-condition argument repair, explicit staged DEXSeq tools with upstream HTSeq; statistical models and report format unchanged."
+        }
+      ]
     },
     {
       "path": "workflows/katana_core.nf",
@@ -347,6 +387,19 @@
           "previous_integrated_sha256": "043edc643971d40977758f046145865222927330572e9d7b0022270bb709af0b",
           "integrated_sha256": "71165d973fcfe4e0fa88590cf66895e4a43bb7594fc8fb0e5771f74eebcb94e9",
           "scope": "Single-pass export checksums and task-owned hardlink handoff; data bytes and scientific methods unchanged."
+        }
+      ]
+    },
+    {
+      "path": "subworkflows/local/rmats.nf",
+      "snapshot_sha256": "df6df4f92c81bdd2009b36b1aa6f43ee2784ebec0979bd0a616a65d5eb03bf65",
+      "integrated_sha256": "bc4a0b0fafdcf17b472296fd9951fc241e7d0472c916150ee8430dfe387e406f",
+      "integration_revisions": [
+        {
+          "revision": "upstream-rmats-dexseq-20261103",
+          "previous_integrated_sha256": "df6df4f92c81bdd2009b36b1aa6f43ee2784ebec0979bd0a616a65d5eb03bf65",
+          "integrated_sha256": "bc4a0b0fafdcf17b472296fd9951fc241e7d0472c916150ee8430dfe387e406f",
+          "scope": "Per-BAM preparation reuse, single-condition argument repair, explicit staged DEXSeq tools with upstream HTSeq; statistical models and report format unchanged."
         }
       ]
     }
