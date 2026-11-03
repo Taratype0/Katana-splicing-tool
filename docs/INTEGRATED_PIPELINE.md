@@ -69,12 +69,13 @@ nextflow run pipeline/main.nf -profile docker \
   --outdir /data/study/results -resume
 ```
 
-`--mode upstream-only` also requires `--dexseq_tools_container` with a container
-profile. It produces the verified native bundle and does not claim
-to have completed Katana analysis or its report. The examples use a locally
-built or loaded image; they do not refer to a public registry. For a cluster,
-use `-profile slurm,apptainer` or `slurm,singularity` and set
-`--katana_container` to the matching image/SIF accessible to compute nodes.
+`--mode upstream-only` publishes native upstream results without running the
+Katana report. Container profiles automatically download the declared upstream
+HTSeq image for DEXSeq annotation/counting and the Bioconductor image for fitting.
+No custom DEXSeq container build or explicit image parameter is needed. The
+image parameters shown above remain optional overrides for offline installations.
+For complete/downstream execution, the published Katana runtime is also selected
+automatically. Site configuration selects the scheduler and queue.
 Slurm account/partition settings belong in site configuration. The executor
 controls admission; there is no hidden four-task concurrency cap. Standalone
 local execution without containers uses `-profile local` with the native

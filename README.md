@@ -125,7 +125,7 @@ Katana is an independently maintained Nextflow workflow that reuses nf-core modu
 
 ## Documentation
 
-[Quick start](docs/QUICKSTART.md) 路 [Input and comparison tables](docs/NEXTFLOW_USAGE.md) 路 [Parameters](docs/NEXTFLOW_PARAMETERS.md) 路 [Existing results](docs/EXISTING_RESULTS.md) 路 [Target reports](docs/TARGET_COMMANDS.md) 路 [Methods](docs/METHODS.md) 路 [Installation](docs/INSTALL.md)
+[Quick start](docs/QUICKSTART.md) · [Input and comparison tables](docs/NEXTFLOW_USAGE.md) · [Parameters](docs/NEXTFLOW_PARAMETERS.md) · [Existing results](docs/EXISTING_RESULTS.md) · [Target reports](docs/TARGET_COMMANDS.md) · [Methods](docs/METHODS.md) · [Installation](docs/INSTALL.md)
 
 ## License
 

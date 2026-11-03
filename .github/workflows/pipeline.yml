@@ -141,6 +141,13 @@ jobs:
             -v "$PWD/pipeline:/pipeline:ro" -v "$PWD/containers:/checks:ro" \
             quay.io/biocontainers/htseq@sha256:ada151195080772235556fa8678c5e213e4e98b10b8c0e1c64ec9209db730222 \
             python /checks/dexseq-tools/check_runtime.py > "$RUNNER_TEMP/paired-models/upstream-htseq.json"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compare grouped and per-BAM rMATS prep on generated junction reads
+        run: |
+          python -m pip install pysam==0.23.3
+          python -B pipeline/tools/check_rmats_prep_equivalence.py --outdir "$RUNNER_TEMP/paired-models/rmats-equivalence"
       - name: Fit generated paired counts in the upstream DEXSeq runtime
         run: |
           mkdir -p "$RUNNER_TEMP/paired-models"

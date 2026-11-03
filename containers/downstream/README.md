@@ -1,3 +1,8 @@
+> Current native Nextflow releases use upstream HTSeq plus staged DEXSeq
+> scripts for annotation/counting and upstream Bioconductor DEXSeq for fitting.
+> The older separate `katana-dexseq-tools` image below is retained only for
+> historical runs; users do not need to build or install it.
+
 # Katana downstream image
 
 Normal Nextflow runs download the matching image automatically: choose

@@ -3,7 +3,7 @@
 The two Python tools are downloaded at build time from nf-core/rnasplice commit
 `1d0494ae3402d1a46e0adadad24f81a0ff855c77`. Their complete source files and
 original copyright/GPLv3 notices are included unchanged in the resulting image.
-They are not included in the MIT workflow or Katana wheel. The download URLs
+Newer releases also distribute these separate GPL tools in `pipeline/vendor/dexseq`, with their full license. They are not relicensed under MIT. The download URLs
 and exact SHA256 values are recorded in [sources.lock.json](sources.lock.json).
 
 - `dexseq_count.py`: Simon Anders and Alejandro Reyes, EMBL, copyright 2010-2013.
