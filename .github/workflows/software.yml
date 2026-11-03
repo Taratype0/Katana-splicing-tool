@@ -28,6 +28,10 @@ jobs:
         run: python -m pip install -e ".[next,next-dev]"
       - name: Validate installed dependencies
         run: python -m pip check
+      - name: Verify target archive file handles and partial restoration
+        run: >-
+          python -m pytest -q tests/public_baseline/test_target_restore.py
+          -k "releases_arrow_files or releases_file_on_parse_failure or partial_completion"
       - name: Validate software, scientific readers and report routes
         run: >-
           python -m pytest -q

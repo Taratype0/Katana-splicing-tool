@@ -186,6 +186,44 @@ def test_partial_completion_remains_partial_after_local_restore(tmp_path):
     assert {target['target_id']: target['reusable'] for target in plan['tasks']} == {'gene-G1': True, 'event-G2': False}
 
 
+def test_request_validation_releases_arrow_files_before_archive_cleanup(tmp_path, monkeypatch):
+    from katana_next.targets import bundle
+    request, _, _ = _fixture(tmp_path)
+    reader = bundle.pq.read_table
+    streams = []
+
+    def tracked_read(source, *args, **kwargs):
+        # A path-owned Arrow dataset hides the descriptor from the caller and
+        # allowed Windows cleanup to race with deferred Arrow destruction.
+        assert hasattr(source, 'closed'), 'Portable validation must own its file descriptor'
+        streams.append(source)
+        return reader(source, *args, **kwargs)
+
+    monkeypatch.setattr(bundle.pq, 'read_table', tracked_read)
+    with bundle.open_bundle(request) as opened:
+        extracted = opened.root
+        assert opened.request['targets']
+        assert streams and all(stream.closed for stream in streams)
+    assert not extracted.exists()
+
+
+def test_portable_reader_releases_file_on_parse_failure(tmp_path, monkeypatch):
+    from katana_next.targets import bundle
+    evidence = tmp_path / 'broken.parquet'
+    evidence.write_bytes(b'invalid')
+    streams = []
+
+    def failing_read(stream):
+        streams.append(stream)
+        raise ValueError('invalid parquet')
+
+    monkeypatch.setattr(bundle.pq, 'read_table', failing_read)
+    with pytest.raises(ValueError, match='invalid parquet'):
+        bundle._read_portable_table(evidence)
+    assert len(streams) == 1 and streams[0].closed
+    evidence.unlink()
+
+
 def test_simultaneous_restores_cannot_share_or_overwrite_the_same_local_owner(tmp_path, complete_products):
     from concurrent.futures import ThreadPoolExecutor
     output = tmp_path / 'one-owner'

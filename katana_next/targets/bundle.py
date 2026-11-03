@@ -61,6 +61,14 @@ def _digest(path):
     return h.hexdigest()
 
 
+def _read_portable_table(path):
+    # Own the descriptor explicitly: Arrow's path/dataset reader can retain a
+    # Windows handle until collection, beyond TemporaryDirectory cleanup.
+    # Evidence members are individual Parquet files, not partitioned datasets.
+    with Path(path).open("rb") as stream:
+        return pq.read_table(stream)
+
+
 def _request_id(request):
     return "targets-" + hashlib.sha256(_canonical({k: v for k, v in request.items()
                                                  if k != "request_id"})).hexdigest()
@@ -635,7 +643,7 @@ def validate_request(request, root, *, verify_files=True):
             raise ValueError("Evidence source or target identity is incomplete")
         evidence_paths.append(name)
         if verify_files:
-            table = pq.read_table(_member(root, name))
+            table = _read_portable_table(_member(root, name))
             _, redactions = _sanitize_table(table, {})
             if redactions:
                 raise ValueError("Portable evidence cannot contain machine absolute paths")
@@ -669,7 +677,7 @@ def validate_request(request, root, *, verify_files=True):
             if len(matching) != 1:
                 raise ValueError("Selected source must be authenticated by its exact portable evidence")
             if verify_files:
-                source_table = pq.read_table(_member(root, matching[0]["path"]))
+                source_table = _read_portable_table(_member(root, matching[0]["path"]))
                 if "row_id" not in source_table.column_names or not set(selection["row_ids"]).issubset(set(source_table["row_id"].to_pylist())):
                     raise ValueError("Selected exact rows are absent from their portable source evidence")
     return {"schema": SCHEMA, "valid": True, "request_id": request["request_id"],
