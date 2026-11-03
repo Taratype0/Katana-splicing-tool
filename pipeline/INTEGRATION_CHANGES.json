@@ -25,7 +25,7 @@
     {
       "path": "conf/upstream_modules.config",
       "snapshot_sha256": "0a32f38bce21b712643f68335fbd12cad61a9a083c84c00e00dcbedd18055284",
-      "integrated_sha256": "04ee645dfb26290ced915fc0305d1854278985ebac5d5879e4278a3e8421e0b3",
+      "integrated_sha256": "d52f4cab3c33ce0ffcda45a23a5526adf6a0666bf7b949e46ed9d3adce8420a0",
       "integration_revisions": [
         {
           "revision": "lean-upstream-publication-20261026",
@@ -44,6 +44,12 @@
           "shared_or_original_inputs_deleted": false,
           "validation_contract": "tests/test_storage_publish.py",
           "configuration_resolution": "Resolve output paths using path closures; resolve parameter-dependent mode/enabled/pattern options with lazy GStrings containing direct params expressions supported by Nextflow 25.10.4 setters and config -flat export; preserve saveAs closures. This includes later profile and extra -c parameter overrides."
+        },
+        {
+          "revision": "per-bam-prep-publication-20261103",
+          "previous_integrated_sha256": "04ee645dfb26290ced915fc0305d1854278985ebac5d5879e4278a3e8421e0b3",
+          "integrated_sha256": "d52f4cab3c33ce0ffcda45a23a5526adf6a0666bf7b949e46ed9d3adce8420a0",
+          "scope": "Apply existing prep publication/lean-cache policy to the per-BAM process name."
         }
       ]
     },
