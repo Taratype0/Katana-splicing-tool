@@ -20,7 +20,8 @@ usage. A complete scientific run was not restarted to collect resource metrics.
 | DEXSeq exon / DTU models | 6 | 36 GB | 8 h | rnasplice 2.0.0 medium label |
 | DESeq2 contrast / normalization | 1 | 6 GB | 4 h | differentialabundance single label; normalization is serial |
 | FASTA index / lane staging | 1 | 6 GB | 4 h | rnaseq single label; serial Katana lane adapter |
-| tximport / DRIMSeq filtering / stageR / serial SUPPA operations | 1 | 36 GB | 8 h | Serial invocations; retain conservative upstream RAM/time |
+| tximport / DRIMSeq filtering / stageR | 1 | 36 GB | 8 h | Serial invocations; retain conservative upstream RAM/time |
+| Serial SUPPA operations | 1 | 12 / 36 / 72 GB | 4 / 8 / 16 h | Per-operation upstream RAM/time retained; see complete inventory |
 | Reference/metadata streaming | 1 | 4 GB | inherited | Observed reference tasks below 0.8 GiB; no extra full input copies |
 | BAM evidence streaming | 2 | 6 GB | 8 h | Samtools decompression plus a serial AWK accumulator |
 | Salmon projection / samtools sort | 6 | 36 GB | 8 h | Corresponding rnaseq medium requests retained |
@@ -77,7 +78,8 @@ It is not presented as a universal requirement for every reference genome.
 These modules have no interchangeable resource configuration in the three
 upstream pipelines. Their allocations are identified separately rather than
 claimed as inherited nf-core defaults. Memory needs vary with event count,
-model count, annotation and cohort size. Downstream retries increase memory and
+model count, annotation and cohort size. Downstream automatic retries remain
+disabled by default. If enabled explicitly, retry requests increase memory and
 time without automatically increasing CPU count. The selected site profile can
 choose a different partition for the larger request; scientific task arguments stay unchanged.
 
