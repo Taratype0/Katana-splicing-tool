@@ -31,7 +31,14 @@ class StoragePublicationContractTests(unittest.TestCase):
         revision = next(row for row in entry["integration_revisions"] if row["revision"] == "lean-upstream-publication-20261026")
         self.assertEqual(revision["previous_integrated_sha256"], "030e98a102ec950c8989f3b7b9d28846c85769b0b284b7034c1d0f3a6a64e47f")
         self.assertEqual(entry["integrated_sha256"], hashlib.sha256(CONFIG.read_bytes()).hexdigest())
-        self.assertEqual(revision["integrated_sha256"], entry["integrated_sha256"])
+        # The frozen publication revision remains in history. Later, explicitly
+        # recorded adaptations must form a continuous chain to the current file.
+        revisions = entry["integration_revisions"]
+        expected = revision["integrated_sha256"]
+        for subsequent in revisions[revisions.index(revision) + 1:]:
+            self.assertEqual(subsequent["previous_integrated_sha256"], expected)
+            expected = subsequent["integrated_sha256"]
+        self.assertEqual(expected, entry["integrated_sha256"])
         for name in ("scientific_modules_modified", "scientific_parameters_changed", "statistical_algorithms_changed", "bundle_artifact_inventory_changed"):
             self.assertIs(revision[name], False)
 
@@ -112,6 +119,7 @@ def _fixture(root: Path, mode: str, *, full_config=False):
         "DEXSEQ_DTU": ["DEXSeqResults.B-A.tsv", "DEXSeqResults.B-A.rds", "DEXSeqDataSet.B-A.rds", "versions.yml"],
         "STAGER": ["getAdjustedPValues.B-A.tsv", "getAdjustedPValues.B-A.rds", "stageRTx.B-A.rds", "versions.yml"],
         "RMATS_PREP": ["pair/rmats_temp/task.rmats", "pair/rmats_prep.log", "versions.yml"],
+        "RMATS_PREP_BAM": ["S1.rmats", "S1.rmats_prep.log", "versions.yml"],
         "RMATS_POST": ["pair/rmats_post/SE.MATS.JCEC.txt", "pair/rmats_post/tmp/temporary.bin", "versions.yml"],
         "CAPTURE_BAM_AUDIT": ["katana_source.bam", "audit.header.sam", "audit.primary_metrics.tsv", "versions.yml"],
         "GENERIC_STATS": ["statistic.tsv", "unregistered-model.rds", "unregistered-archive.zip", "events.ioe", "native.dpsi", "native.psivec", "versions.yml"],
@@ -329,6 +337,8 @@ workflow {
                     self.assertTrue((output / "upstream/generic_stats/native.dpsi").is_file())
                     self.assertTrue((output / "upstream/generic_stats/native.psivec").is_file())
                     self.assertTrue(any((output / "upstream/rmats_prep").rglob("rmats_prep.log")))
+                    self.assertTrue((output / "upstream/rmats_prep_bam/S1.rmats_prep.log").is_file())
+                    self.assertEqual((output / "upstream/rmats_prep_bam/S1.rmats").exists(), mode == "retain")
                     self.assertFalse(any(output.rglob("katana_source.bam")))
                     if mode == "lean":
                         self.assertFalse(any(path.is_symlink() for path in output.rglob("*")))
