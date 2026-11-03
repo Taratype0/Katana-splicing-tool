@@ -2,7 +2,7 @@
 
 ## New studies: one native Nextflow run
 
-Use `nextflow run pipeline/main.nf --outdir results -work-dir work` with your
+Use `nextflow -bg run Taratype0/Katana-splicing-tool --outdir results -work-dir work` with your
 study parameters. All stages and final delivery are native Nextflow tasks.
 The [standard outputs](NATIVE_OUTPUTS.md) are copied outside work; raw/trimmed
 FASTQ and generated STAR indexes are not published as extra delivery copies.
@@ -13,6 +13,24 @@ After complete delivery and `katana-flow verify-retained --directory
 results/katana/project`, preview removal with `nextflow clean <run-name> -n`
 and apply with `nextflow clean <run-name> -f`. This removes that run's recovery
 cache, not delivered results. Do not clean an active run.
+
+### Copying and checksums
+
+Large export files are copied and hashed in one pass. Within an owned completed
+Nextflow workspace, immutable files can be handed off by hardlink; across file
+systems, or for borrowed inputs, Katana makes an independent copy. Published
+results remain usable after work removal. Source inputs and reference files are
+not deleted by these handoffs.
+
+Repeated checks reuse SHA values when device/inode, size, modification time and
+change time are unchanged. `--digest_cache` selects one small shared checksum
+database; changed files are read again. Use `--verify_content true` when a full
+content reread is desired. First-download checksums and native result checks
+remain enabled. No per-file checksum sidecar collection is created.
+
+`--clean_work true` enables Nextflow cleanup after the complete DAG succeeds,
+including report and retained-project delivery. Image and database caches remain
+outside work and can be reused by another study.
 
 ## Historical managed sessions
 

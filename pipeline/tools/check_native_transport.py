@@ -147,7 +147,7 @@ def main() -> None:
                     "--input", "absent.csv", "--contrasts", "absent-contrasts.csv",
                     "--fasta", "absent.fa", "--gtf", "absent.gtf", "-profile", "docker",
                     "-c", str(missing_dexseq), "-ansi-log", "false"], raw_without_image, "missing-dexseq-container", successful=False)
-    assert "requires --dexseq_tools_container" in rejected.stdout + rejected.stderr
+    assert "No DEXSeq container is configured" in rejected.stdout + rejected.stderr
     assert not list((raw_without_image / "work").glob("**/.command.sh"))
 
     # Actual stdlib GTF filtering in its own native Nextflow process.
