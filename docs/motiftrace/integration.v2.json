@@ -216,7 +216,7 @@
     "katana_motiftrace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
     "katana_next/client.py": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
     "katana_next/services/selection_routes.py": "f84bae21e008589ed1af1afcc7409b90ec1757dcc18675d98e29659630732da1",
-    "pyproject.toml": "1dc6200a40f00d3f92c7f3fe83be7c431106856f5b624499decfda44adae8d08",
+    "pyproject.toml": "016b1f2474aaa128c68d0c7e81d8be004e36f8ca91448df0655ee4e3bceb88f7",
     "katana_next/workflows/motiftrace_consequences.py": "f5afcb85c3841ea4e82ac927ea53219f725fcc78e948c92f527677ba18d7825d",
     "katana_next/workflows/rbp_mechanism.py": "f8a149a3cf641c25b30c2808346639afc91d0b0895968d4a0d5e71abbc4cd2ad",
     "katana_next/science/motiftrace_execution.py": "e4fa92e2f008e0c3c1d3d2d9cacdaf3d1d553907658d1ac73ef79947b7164564",
@@ -598,5 +598,24 @@
     "default_engine": "eventgraph_20261030",
     "statistical_family_split": false
   },
-  "source_scope": "No numerical changes to the approved imported EventGraph or retained legacy kernels; default engine switches explicitly to EventGraph."
+  "source_scope": "No numerical changes to the approved imported EventGraph or retained legacy kernels; default engine switches explicitly to EventGraph.",
+  "packaging_revisions": [
+    {
+      "revision": "upstream-resources-dexseq-license-20261103",
+      "scientific_calculation_changes": false,
+      "scientific_parameter_changes": false,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "1dc6200a40f00d3f92c7f3fe83be7c431106856f5b624499decfda44adae8d08",
+          "current_sha256": "016b1f2474aaa128c68d0c7e81d8be004e36f8ca91448df0655ee4e3bceb88f7",
+          "changed_toml_fields": [
+            "project.version",
+            "project.license-files"
+          ],
+          "change_kind": "distribution version and preserved vendored DEXSeq GPL license"
+        }
+      ]
+    }
+  ]
 }
