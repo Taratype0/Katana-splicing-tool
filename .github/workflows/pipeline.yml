@@ -62,6 +62,10 @@ jobs:
         shell: bash
         run: |
           runtime_command=$(python -c 'import json,os; print(json.dumps(["java", "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "-cp", os.environ["RUNNER_TEMP"] + "/nextflow-25.10.4-dist", "nextflow.cli.Launcher"]))')
+          printf '%s\n' "$runtime_command" > "$RUNNER_TEMP/nextflow-command.json"
+          python -B pipeline/tools/check_native_parameters.py \
+            --nextflow-command-json "$RUNNER_TEMP/nextflow-command.json" \
+            --repository-entry --outdir "$RUNNER_TEMP/katana-flat-parameters"
           python -B pipeline/tools/check_native_transport.py \
             --nextflow-command-json "$runtime_command" \
             --outdir "$RUNNER_TEMP/katana-native-transport"
@@ -103,9 +107,6 @@ jobs:
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-cache-scope"
 
-          python -B pipeline/tools/check_native_parameters.py \
-            --nextflow-command-json "$RUNNER_TEMP/nextflow-command.json" \
-            --repository-entry --outdir "$RUNNER_TEMP/katana-flat-parameters"
           python -B pipeline/tools/check_unified_cleanup.py \
             --nextflow-command-file "$RUNNER_TEMP/nextflow-command.json" \
             --outdir "$RUNNER_TEMP/katana-unified-cleanup"
@@ -126,6 +127,7 @@ jobs:
             ${{ runner.temp }}/katana-rmats-sample-reuse/receipt.json
             ${{ runner.temp }}/katana-rmats-sample-reuse/*/*.log
             ${{ runner.temp }}/katana-rmats-sample-reuse/*/*.tsv
+            ${{ runner.temp }}/katana-flat-parameters/*.txt
           retention-days: 7
 
   paired-native-models:

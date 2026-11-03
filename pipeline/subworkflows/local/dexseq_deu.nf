@@ -53,7 +53,7 @@ workflow DEXSEQ_DEU {
         DEXSEQ_ANNOTATION (
             gtf,
             aggregation,
-            file("${moduleDir}/../../vendor/dexseq/dexseq_prepare_annotation.py", checkIfExists: true)
+            file("${projectDir}/vendor/dexseq/dexseq_prepare_annotation.py", checkIfExists: true)
         )
 
         ch_versions = ch_versions.mix(DEXSEQ_ANNOTATION.out.versions.first())
@@ -71,7 +71,7 @@ workflow DEXSEQ_DEU {
     DEXSEQ_COUNT (
         ch_genome_bam_gff,
         alignment_quality,
-        file("${moduleDir}/../../vendor/dexseq/dexseq_count.py", checkIfExists: true)
+        file("${projectDir}/vendor/dexseq/dexseq_count.py", checkIfExists: true)
     )
 
     ch_versions = ch_versions.mix(stableCountVersion(DEXSEQ_COUNT.out.dexseq_clean_txt, DEXSEQ_COUNT.out.versions))

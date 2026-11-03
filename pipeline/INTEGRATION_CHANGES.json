@@ -258,13 +258,19 @@
     {
       "path": "subworkflows/local/dexseq_deu.nf",
       "snapshot_sha256": "990fa7c14cf60ab85e37b4b0b5bf0f635337e9f2e0abc4b15487bc96c2b59323",
-      "integrated_sha256": "3f4958886d2d1c3ad4ad9aece3083b3a2e7b0e90f87a0344e8718f38a432ccb7",
+      "integrated_sha256": "871ac306dc274a56e9154b0c4e86ebe613efb78842ce13a084769e7ec81f642b",
       "integration_revisions": [
         {
           "revision": "upstream-rmats-dexseq-20261103",
           "previous_integrated_sha256": "531c7592e015a4890210e4d9aa6dd3618db1d5c5fd86d15740121ef1aeebb6b5",
           "integrated_sha256": "3f4958886d2d1c3ad4ad9aece3083b3a2e7b0e90f87a0344e8718f38a432ccb7",
           "scope": "Per-BAM preparation reuse, single-condition argument repair, explicit staged DEXSeq tools with upstream HTSeq; statistical models and report format unchanged."
+        },
+        {
+          "revision": "dexseq-pipeline-relative-input-20261103",
+          "previous_integrated_sha256": "3f4958886d2d1c3ad4ad9aece3083b3a2e7b0e90f87a0344e8718f38a432ccb7",
+          "integrated_sha256": "871ac306dc274a56e9154b0c4e86ebe613efb78842ce13a084769e7ec81f642b",
+          "scope": "Resolve staged scripts relative to actual pipeline project directory, consistent with existing bundled helpers."
         }
       ]
     },
