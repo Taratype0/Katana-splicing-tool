@@ -60,13 +60,16 @@ def calculate(assignment,annotation,terms,out):
         for token in (gene,row.get('gene_symbol')):
             if single_gene(token):aliases.setdefault(token,set()).add(gene)
     unique={token:next(iter(ids)) for token,ids in aliases.items() if len(ids)==1}
-    mapped_terms=[]; token_audit=[]
+    mapped_terms=[]; token_audit=[]; seen_tokens=set()
     for term in terms:
         mapped=set()
         for token in sorted(term['genes']):
             gene=unique.get(token)
             if gene is not None:mapped.add(gene)
-            token_audit.append(dict(library=term['library'],token=token,gene_id=gene or '',status='mapped' if gene is not None else 'ambiguous' if token in aliases else 'unmapped'))
+            identity=(term['library'],token)
+            if identity not in seen_tokens:
+                seen_tokens.add(identity)
+                token_audit.append(dict(library=term['library'],token=token,gene_id=gene or '',status='mapped' if gene is not None else 'ambiguous' if token in aliases else 'unmapped'))
         mapped_terms.append({**term,'genes':mapped})
     terms=mapped_terms
     pd.DataFrame(token_audit,columns=['library','token','gene_id','status']).drop_duplicates().to_csv(out/'enrichment_identifier_mapping.tsv',sep='\t',index=False)
