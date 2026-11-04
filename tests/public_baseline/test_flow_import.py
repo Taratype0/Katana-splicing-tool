@@ -221,3 +221,20 @@ def test_actual_exporter_importer_preserves_declarations_without_claiming_valida
     assert project["metadata"]["upstream_metadata"]["reference_declarations"] == declarations
     assert project["metadata"]["upstream_metadata"]["gene_exclusions"] == exclusions
     assert project["metadata"]["annotation_release"] == "declared-release"
+
+
+@pytest.mark.parametrize('direction', ['control/treatment', 'control_over_treatment_native_header_authoritative'])
+def test_dexseq_report_uses_the_same_gene_identity_as_the_result_reader(tmp_path, direction):
+    from pathlib import Path
+    from types import SimpleNamespace
+    import pandas as pd
+    from katana_next.reports.comparisons import _usage_effect
+    from katana_next.science.bulk import normalize_gene_id
+    genes = ['ENSMUSG00000000001.5', 'ENSMUSG00000000002.3+ENSMUSG00000000003.7', 'custom.gene.2']
+    path = tmp_path / 'native.dexseq.tsv'
+    pd.DataFrame({'groupID':genes,'featureID':['E001']*3,'padj':[.01,.02,.03], 'log2fold_A_B':[-.2,.4,-.6]}).to_csv(path, sep='\t', index=False)
+    view = SimpleNamespace(project={'assets':[{'kind':'dexseq_result','path':str(path), 'metadata':{'contrast_id':'B_vs_A','native_fold_change_direction':direction}}]},input=Path)
+    frame = pd.DataFrame({'gene_id':[normalize_gene_id(g) for g in genes], 'transcript_id':['E001']*3})
+    result, effect = _usage_effect(view, frame, 'B_vs_A')
+    assert effect == 'log2fold_A_B'
+    assert result[effect].tolist() == [-.2,.4,-.6]

@@ -311,7 +311,8 @@ def _usage_effect(view, frame, comparison):
     if len(effects) != 1 or not {"groupID", "featureID"}.issubset(header):
         return frame, None
     raw = pd.read_csv(path, sep="\t", usecols=[c for c in header if c in {"groupID", "featureID", "pvalue", "padj", "exonBaseMean", *effects}])
-    raw["gene_id"] = raw.groupID.astype(str).str.replace(r"\.\d+$", "", regex=True)
+    from katana_next.science.bulk import normalize_gene_id
+    raw["gene_id"] = raw.groupID.map(normalize_gene_id)
     raw["transcript_id"] = raw.featureID.astype(str)
     raw = raw.rename(columns={"pvalue": "native_pvalue", "padj": "native_padj", "exonBaseMean": "native_exonBaseMean"})
     merged = frame.merge(raw.drop(columns=["groupID", "featureID"]), on=["gene_id", "transcript_id"], how="left", validate="many_to_one")
