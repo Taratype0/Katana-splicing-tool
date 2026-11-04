@@ -531,6 +531,8 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
     project['report_contrast_groups'] = selection['groups']
     project['report_native_contrast_ids'] = project.get('report_native_contrast_ids', selection['native_contrast_ids'])
     view = _Views(project, [_dict(a) for a in artifacts], destination)
+    from .gene_names import report_gene_names, annotate_report_genes
+    gene_names = report_gene_names(project, view.artifacts, destination)
     exact_memberships = {policy: [] for policy in POLICIES}
     dexseq_memberships = []
     dexseq_available = set()
@@ -554,6 +556,7 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
         as_frame, deg, usage = (view.frame(sources[key], comparison) for key in ("DAS", "DEG", "USAGE"))
         sets, backgrounds = {}, {}
         if not deg.empty:
+            deg = annotate_report_genes(deg, gene_names)
             deg["report_significant"] = _native_significance(deg, "deg_fdr", "log2fc", effect_cutoff=float((sources["DEG"].get("parameters") or {}).get("min_abs_log2fc", 1.)))
             full = view.table(deg, "DEG-full", comparison, "gene")
             ranked = view.top(deg, "DEG", comparison, "deg_fdr", "log2fc", "gene", full_table=full)

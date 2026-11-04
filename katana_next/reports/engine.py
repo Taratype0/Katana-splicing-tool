@@ -309,6 +309,16 @@ class Builder:
                   'output_only': output_only or artifact.get('output_only', False) or artifact.get('metadata', {}).get('display_in_main') is False, 'metadata': artifact.get('metadata', {}),
                   'policy': artifact.get('policy') or artifact.get('metadata', {}).get('event_set')}
         record['report_origin'] = artifact.get('report_origin', 'native')
+        from .native_enrichment import native_enrichment_scope
+        enrichment_scope = native_enrichment_scope(artifact)
+        if enrichment_scope and not artifact.get('output_only') and record['metadata'].get('display_in_main') is not False:
+            record['output_only'] = False
+            record['policy'] = enrichment_scope['policy']
+            record['title'] = ('GO / pathways | ' + enrichment_scope['foreground'].upper()
+                               + ' | ' + enrichment_scope['contrast_id'])
+            record['caption'] += (' Foreground: ' + enrichment_scope['foreground']
+                                  + '; detected/testable background: ' + enrichment_scope['background']
+                                  + ', intersected with the declared library. Completed native P/FDR retained.')
         if record['metadata'].get('das_scope', {}).get('mode') in {'rs_required', 'fixed_completed_result'}:
             record['policy'] = None
         if record['report_origin'] == 'native' and not self.source.get('report_native_figures_in_main', True):

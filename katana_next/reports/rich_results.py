@@ -589,6 +589,9 @@ def copy_rich_asset(asset: dict[str, Any], destination: Path) -> dict[str, Any]:
     if meta.get("network_view_role") == "module_browser":
         from .network_display_upgrade import upgrade_copied_network_browser
         presentation_refresh = upgrade_copied_network_browser(asset, bounded[source])
+    if meta.get("report_role") == "whole_study_chapter":
+        from .cosplice_presentation import refresh_cosplice_copy
+        presentation_refresh = refresh_cosplice_copy(bounded[source])
     rows = []
     for path, target in bounded.items():
         size, stamp, digest = before[path]
