@@ -22,7 +22,7 @@ def add_projection(payload, work, *, legacy=True):
     upstream, manifest, template = bundle(work)
     native = upstream / 'dexseq_exon/DEXSeqResults.B_vs_A.csv'
     native.parent.mkdir()
-    native.write_bytes(b'groupID,featureID,pvalue,padj,log2fold_A_B\r\ng1,E001,1e-310,2e-310,-0.7\r\ng1,E002,NA,NA,0.5\r\n')
+    native.write_bytes(b'\xef\xbb\xbfgroupID,featureID,pvalue,padj,log2fold_A_B,note\r\ng1,E001,1e-310,2e-310,-0.7,"first\r\nsecond"\r\ng1,E002,NA,NA,0.5,"quoted,comma"\r\n')
     manifest['artifacts'] = [{'kind': 'auxiliary', 'relative_path': 'dexseq_exon/' + native.name,
         'comparison_id': 'B_vs_A', 'status': 'available', 'bytes': native.stat().st_size,
         'sha256': file_sha256(native)}]
@@ -63,7 +63,7 @@ def test_import_collect_retain_relocate_preserves_csv_and_tsv(tmp_path, legacy):
     assert native.is_relative_to(moved) and native.read_bytes() in before.values()
     assert native_sha == asset.metadata['upstream_sha256']
     assert projected_sha == file_sha256(asset.path) == asset.metadata['sha256']
-    assert list(csv.reader(io.StringIO(native.read_text()))) == list(csv.reader(io.StringIO(asset.path.read_text()), delimiter='\t'))
+    assert list(csv.reader(io.StringIO(native.read_text(encoding='utf-8-sig')))) == list(csv.reader(io.StringIO(asset.path.read_text()), delimiter='\t'))
 
 
 @pytest.mark.parametrize('corruption', ['native', 'projected', 'declared', 'escape'])

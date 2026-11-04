@@ -36,7 +36,9 @@ def dexseq_projection_identity(asset, input_root):
     native_sha = hashlib.sha256(content).hexdigest()
     if native_sha != projection.get("native_sha256") or native_sha != metadata.get("upstream_sha256"):
         raise ValueError("Native projection source SHA256 mismatch")
-    rows = list(csv.reader(io.StringIO(content.decode("utf-8-sig")), delimiter=","))
+    # The original importer uses Path.read_text(), including universal newline
+    # translation inside quoted fields. Reproduce that exact serialization.
+    rows = list(csv.reader(io.StringIO(content.decode("utf-8-sig"), newline=None), delimiter=","))
     if (not rows or not {"groupID", "featureID", "padj"}.issubset(rows[0]) or
             len(rows[0]) != len(set(rows[0])) or any(len(row) != len(rows[0]) for row in rows[1:])):
         raise ValueError("Invalid native DEXSeq projection source")
