@@ -60,6 +60,21 @@ Path("config/flow.json").write_text(json.dumps(cfg))
             rows = list(csv.DictReader(stream, delimiter='\t'))
         assert rows and all(r['status'] == expected for r in rows), rows
         records[label] = {'tasks': len(rows), 'status': expected}
+    # A delivery-only image update must not invalidate successful science.
+    delivery_image = args.image + '-retention-resume'
+    subprocess.run(['docker', 'tag', args.image, delivery_image], check=True)
+    trace = root / 'retention-resume.tsv'
+    with (root / 'retention-resume.log').open('w') as stream:
+        run = subprocess.run([*base, '--retention_container', delivery_image,
+            '-with-trace', str(trace), '-resume'], cwd=root, stdout=stream,
+            stderr=subprocess.STDOUT, timeout=3600)
+    assert run.returncode == 0, (root / 'retention-resume.log').read_text()[-24000:]
+    with trace.open() as stream:
+        delivery_rows = list(csv.DictReader(stream, delimiter='\t'))
+    changed = {'KATANA_FLOW_RETAIN', 'KATANA_FLOW_DELIVERY'}
+    assert {r['name'].split(':')[-1] for r in delivery_rows if r['status'] == 'COMPLETED'} == changed
+    assert all(r['status'] == ('COMPLETED' if r['name'].split(':')[-1] in changed else 'CACHED') for r in delivery_rows)
+    records['retention_resume'] = {'completed': 2, 'cached': len(delivery_rows)-2, 'scientific_tasks_rerun': 0}
     results = root / 'results'
     receipt = json.loads((results / 'pipeline_info/delivery.receipt.json').read_text())
     assert receipt['status'] == 'completed', receipt

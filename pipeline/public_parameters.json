@@ -35,6 +35,9 @@
   "katana_container": {
     "type": "string"
   },
+  "retention_container": {
+    "type": "string"
+  },
   "dexseq_tools_container": {
     "type": "string"
   },
