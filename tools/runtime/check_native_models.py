@@ -39,7 +39,9 @@ Path("config/flow.json").write_text(json.dumps(cfg))
     from katana_next.flow.distribution import export_pipeline
     from katana_next.flow.storage_project import validate_retained_project
     export_pipeline(root / 'pipeline')
-    (root / 'acceptance.config').write_text('executor.cpus = 4\nexecutor.memory = "6 GB"\n')
+    # Exercise the exact local candidate in every stage, including the separately
+    # versioned report runtime (which is not published until these checks pass).
+    (root / 'acceptance.config').write_text('executor.cpus = 4\nexecutor.memory = "6 GB"\nparams.katana_stage_containers = [:]\n')
     base = [args.nextflow, 'run', str(root / 'pipeline/main.nf'), '-profile', 'docker',
         '--mode', 'downstream-only', '--project', str(root / 'source/katana.project.json'),
         '--flow_config', str(root / 'config/flow.json'), '--outdir', str(root / 'results'),

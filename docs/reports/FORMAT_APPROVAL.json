@@ -1,6 +1,6 @@
 {
   "schema": "katana.approved_report_format/v1",
-  "specification_version": "1.1",
+  "specification_version": "1.2",
   "approval_date": "2026-10-25",
   "approval_timezone": "Europe/Berlin",
   "previous_design_approval_date": "2026-10-22",
@@ -16,7 +16,7 @@
   "default_das": "RS-DAS; ordinary DAS switch retained report-wide where supported",
   "complete_results_storage": "canonical byte-identical copies and lossless complete-table compression; no row truncation",
   "specification_file": "docs/REPORT_SPECIFICATION.md",
-  "specification_sha256": "b5baa9c1ddfd3215ed1fa52fbef91fc6b0534f0a52a93d5affd28ec6d131ad1c",
+  "specification_sha256": "e9ec5b45afab2159077a8977dd52b56ba208a6d725e7b08930122633b53b5817",
   "implementation_commit_at_approval": "c6f6cd790404e5eae2ba0e85b0598ce2cbda8df4",
   "format_source_sha256": {
     "katana_next/reports/assets/report.css": "fc5b8bbf599f462270e002ca25712a1ceee90955f5c3c8962ed8fb190f33ff73",
@@ -54,5 +54,28 @@
     "science_changed": false,
     "pipeline_integration_complete": false,
     "specification_sha256": "bb90f1c9619b07085cffa63307c762f02ec03243181b53d2be10da7f70fb4c74"
+  },
+  "approved_revision_20261104": {
+    "facets": [
+      "BP",
+      "CC",
+      "MF",
+      "KEGG"
+    ],
+    "dummy_archive_sha256": "fc4700bca652c72b72b17e0041f6a05569db030662eb930d5fee4b92963d578d",
+    "visible_network_chapter": 7,
+    "decision": "User approved the faceted chapter 05 dummy and requested this report as the pipeline and main default.",
+    "scientific_recomputation": false,
+    "colour": "original adjusted P",
+    "chapter5_renderer": "go-kegg-facets-v1",
+    "dummy_commit": "e762f60c8fbf7c528140125501dacdb1653f1c2a",
+    "bubble_area": "Count",
+    "x": "Gene Ratio",
+    "mapp_axis": "condition plus sample ID; no averaging",
+    "approval_date": "2026-11-04",
+    "significant_terms_per_facet": 5,
+    "all_module_browsing": true,
+    "implementation": "Shared Python report engine used by katana-report and katana-flow report",
+    "runtime_version": "2.0.0b5.dev2026110404"
   }
 }

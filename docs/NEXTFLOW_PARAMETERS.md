@@ -13,6 +13,7 @@ delivery are part of this one Nextflow session. See [outputs](NATIVE_OUTPUTS.md)
 | `--digest_cache` | launch/.katana-cache/checksums | One checksum database for unchanged-file reuse across tasks. |
 | `--verify_content` | false | Force full file rereads instead of metadata-validated digest reuse. |
 | `--katana_container` | release image | Optional override; default Docker image or SIF is downloaded by Nextflow. |
+| `--katana_stage_containers` | versioned report image | Optional per-stage image map. The report stage uses the approved 4 November renderer; analysis stages keep their existing image so report updates do not invalidate completed scientific tasks. |
 | `--retention_container` | analysis image | Optional compatible image override for final project retention and delivery only. Supports a delivery repair while keeping the original analysis image and `-resume` cache identities. |
 | `--dexseq_tools_container` | pinned DEXSeq image | Optional override; default is downloaded by Nextflow. |
 | `--bundle` | unset | Existing upstream bundle; select downstream-only instead of raw inputs. |

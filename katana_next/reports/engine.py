@@ -383,6 +383,18 @@ class Builder:
         all_artifacts = [*self.source['artifacts'], *self.source.get('extra_assets', [])]
         for supplemental in self.source.get('supplemental', []):
             all_artifacts.extend(supplemental['artifacts'])
+        from .native_enrichment import build_native_enrichment_facets
+        native_facets = build_native_enrichment_facets(all_artifacts, self.output)
+        self.add_views(native_facets)
+        self.derived_audits.extend(native_facets['audit'])
+        for panel in self.panels:
+            metadata = panel.get('metadata', {})
+            if metadata.get('renderer') == 'go-kegg-facets-v1':
+                continue
+            key = (panel.get('source_run', ''), panel.get('contrast_id'),
+                   metadata.get('foreground_source'), panel.get('policy'), panel.get('cell_type', 'all'))
+            if panel.get('chapter') == 5 and key in native_facets['replaced']:
+                panel['output_only'] = True
         self.enrichment_summaries = build_rbp_summaries(all_artifacts) + build_motif_hit_summaries(all_artifacts, self.output)
         replaced = {(r['source_run'], r['contrast_id']) for r in self.enrichment_summaries}
         for record in self.enrichment_summaries:

@@ -1,6 +1,6 @@
 # Approved Katana report specification
 
-Specification: **1.1 — presentation revision approved 2 November 2026**.
+Specification: **1.2 — presentation approved 4 November 2026**.
 
 The 25 October format remains the baseline. The approved revision moves RBP/MotifTrace to section 6 and the shared study network to section 7, and adopts the reviewed sequence-first motif cards. Scientific computation is unchanged.
 
@@ -29,6 +29,24 @@ versions, source records, output locations and Katana citation information.
 Do not invent a publication or DOI.
 
 ## Presentation and result access
+
+- Chapter 5 uses the approved four vertically stacked **BP / CC / MF / KEGG**
+  bubble facets with grey category strips: x = Gene Ratio, bubble area = Count,
+  colour = original adjusted P (smaller values red, larger values blue). Each
+  comparison and DEG / DAS policy / DTU / DEXSeq input set is displayed separately.
+  Show up to five significant terms per category, ranked by original adjusted P
+  then term. These are display selections only; never recalculate FDR after
+  selecting categories. Link full tests, hit genes, foreground and the detected /
+  testable background. Missing classified tests are distinct from nonsignificance.
+- CoSplice remains chapter 7 and shared across comparison selection. All recorded
+  modules, networks and member lists remain browsable even when no association is
+  significant. Only the association and pathway significance views filter on FDR.
+  Show recorded score coverage and unavailable estimates without inventing values.
+- DEG labels resolve gene names from the recorded project annotation while keeping
+  native gene IDs and statistics. Ambiguous mappings retain the original ID.
+  MAPP activity axes show condition plus sample ID, with group separators; sample
+  columns are neither averaged nor reordered. MotifTrace distinguishes tests with
+  no significant findings from comparisons without estimable tests.
 
 - Reports are generated in English. The approved report palette is B blue/red:
   positive `#C63F4A`, negative `#2863A5`, other/unassigned `#CDD1D6`, and a
