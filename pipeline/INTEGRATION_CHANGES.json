@@ -6,7 +6,7 @@
     {
       "path": "bin/katana_bundle.py",
       "snapshot_sha256": "c63b8681f0253cc3c0ca24ea8c75e8083fec8951254f8384c07ba450be8e1f15",
-      "integrated_sha256": "cf24b86fb82693581f192754fd418e76c2899bc7f26766acb96b9fcc88eb9b43",
+      "integrated_sha256": "6459c398bcf89346f2e0a7990a6b8464c32f804c20d323f02a8d2381aa7f001d",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
@@ -19,6 +19,12 @@
           "previous_integrated_sha256": "68898422ccd46993a6a0340056986017444ae10e69788f3735803b4380a3db8f",
           "integrated_sha256": "cf24b86fb82693581f192754fd418e76c2899bc7f26766acb96b9fcc88eb9b43",
           "scope": "Single-pass export checksums and task-owned hardlink handoff; data bytes and scientific methods unchanged."
+        },
+        {
+          "revision": "contrast-sample-exclusions-20261104",
+          "previous_integrated_sha256": "cf24b86fb82693581f192754fd418e76c2899bc7f26766acb96b9fcc88eb9b43",
+          "integrated_sha256": "6459c398bcf89346f2e0a7990a6b8464c32f804c20d323f02a8d2381aa7f001d",
+          "scope": "Explicit per-contrast sample exclusions preserve complete pairs and other study samples; statistical formulas and thresholds unchanged."
         }
       ]
     },
@@ -196,13 +202,19 @@
     {
       "path": "modules/local/suppa_diffsplice.nf",
       "snapshot_sha256": "449ed8b6a5c97cdd0ebfa5a2456809c2c7424653fe23c930d3ab955d28aa8650",
-      "integrated_sha256": "50790912d8b317a51c94f975ba67387b0a4b61c776c7e7b3416484cb8af2d167",
+      "integrated_sha256": "1ef54822663db70279b01e1f3a7b491e788deb24a8c5b3b4ae08f36a85bdc065",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
           "previous_integrated_sha256": "0a09b855a9d2168b021375315a9f88d44f96344bf30234f28add55899246f6e2",
           "integrated_sha256": "50790912d8b317a51c94f975ba67387b0a4b61c776c7e7b3416484cb8af2d167",
           "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        },
+        {
+          "revision": "contrast-sample-exclusions-20261104",
+          "previous_integrated_sha256": "50790912d8b317a51c94f975ba67387b0a4b61c776c7e7b3416484cb8af2d167",
+          "integrated_sha256": "1ef54822663db70279b01e1f3a7b491e788deb24a8c5b3b4ae08f36a85bdc065",
+          "scope": "Explicit per-contrast sample exclusions preserve complete pairs and other study samples; statistical formulas and thresholds unchanged."
         }
       ]
     },
@@ -289,7 +301,7 @@
     {
       "path": "workflows/katana_core.nf",
       "snapshot_sha256": "b24f048ef030786cc4d9f1673b706f359a46095360996098575a54e7dfbab731",
-      "integrated_sha256": "9f2bc8daf0918f76bad3111a124a15c0cbfa69dcaa68d64f5857614b8d18d899",
+      "integrated_sha256": "6c1210d7b309cebd1fd97f87717952e40bf05834147cc53b41c248dbeb55f06b",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
@@ -314,13 +326,19 @@
           "previous_integrated_sha256": "583f4e349b7a8f8db2d0179fb6109b6d6517ea8b4abcae2377e5caf724bc012f",
           "integrated_sha256": "9f2bc8daf0918f76bad3111a124a15c0cbfa69dcaa68d64f5857614b8d18d899",
           "scope": "Pass the original DEXSeq annotation script as a staged path in the primary workflow call."
+        },
+        {
+          "revision": "contrast-sample-exclusions-20261104",
+          "previous_integrated_sha256": "9f2bc8daf0918f76bad3111a124a15c0cbfa69dcaa68d64f5857614b8d18d899",
+          "integrated_sha256": "6c1210d7b309cebd1fd97f87717952e40bf05834147cc53b41c248dbeb55f06b",
+          "scope": "Explicit per-contrast sample exclusions preserve complete pairs and other study samples; statistical formulas and thresholds unchanged."
         }
       ]
     },
     {
       "path": "bin/katana_validate_inputs.py",
       "snapshot_sha256": "0d679b57d85dc61863ca509ed57932469e07137bd815b02e1330260f6f493195",
-      "integrated_sha256": "3e25d3334b34a97f7117d18a1f77aad0b3c5fb3b6ef9269470b3c611b57ad40e",
+      "integrated_sha256": "1f9d792cae5c9ac7d3b4d6eb48e4a935672f84159813be218ff7d3da9eaac53e",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
@@ -333,32 +351,50 @@
           "previous_integrated_sha256": "60a4c2c586db76cc6cf6b803fc2ffe7c02dc9acdd652acedb2f5f7a57c30bbeb",
           "integrated_sha256": "3e25d3334b34a97f7117d18a1f77aad0b3c5fb3b6ef9269470b3c611b57ad40e",
           "scope": "Group explicit lane rows into one biological sample and concatenate gzip members per mate in a native Nextflow task. Scientific models and paired identities unchanged."
+        },
+        {
+          "revision": "contrast-sample-exclusions-20261104",
+          "previous_integrated_sha256": "3e25d3334b34a97f7117d18a1f77aad0b3c5fb3b6ef9269470b3c611b57ad40e",
+          "integrated_sha256": "1f9d792cae5c9ac7d3b4d6eb48e4a935672f84159813be218ff7d3da9eaac53e",
+          "scope": "Explicit per-contrast sample exclusions preserve complete pairs and other study samples; statistical formulas and thresholds unchanged."
         }
       ]
     },
     {
       "path": "bin/run_dexseq_dtu.R",
       "snapshot_sha256": "3e47b62506218201558bd0c50354ae5103bebc8a75031ff05763f17f04ead5fc",
-      "integrated_sha256": "2613f7e53650fcaa29a34427ba5c0b9cd576812b28c81b959fa21081d792bc30",
+      "integrated_sha256": "a8d3dc94f5ef886cd77f8759390f91a98253b575ac6af752e076d18c2fa57e50",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
           "previous_integrated_sha256": "3e47b62506218201558bd0c50354ae5103bebc8a75031ff05763f17f04ead5fc",
           "integrated_sha256": "2613f7e53650fcaa29a34427ba5c0b9cd576812b28c81b959fa21081d792bc30",
           "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        },
+        {
+          "revision": "contrast-sample-exclusions-20261104",
+          "previous_integrated_sha256": "2613f7e53650fcaa29a34427ba5c0b9cd576812b28c81b959fa21081d792bc30",
+          "integrated_sha256": "a8d3dc94f5ef886cd77f8759390f91a98253b575ac6af752e076d18c2fa57e50",
+          "scope": "Explicit per-contrast sample exclusions preserve complete pairs and other study samples; statistical formulas and thresholds unchanged."
         }
       ]
     },
     {
       "path": "bin/run_dexseq_exon.R",
       "snapshot_sha256": "8cac8e8c316837c9daf36ddd2add6e7792592e5192e0bf62a734c74088219053",
-      "integrated_sha256": "9810c9ad83e48d582e03292f8d34ee3e7dc8460da607adb2246bc54a8bf5b1e8",
+      "integrated_sha256": "9b34ef4cf8ed3a64eef12a98e3bbf532408b6ce3cc982a6da8d54a1bcf0b3cf7",
       "integration_revisions": [
         {
           "revision": "paired-design-20261028",
           "previous_integrated_sha256": "8cac8e8c316837c9daf36ddd2add6e7792592e5192e0bf62a734c74088219053",
           "integrated_sha256": "9810c9ad83e48d582e03292f8d34ee3e7dc8460da607adb2246bc54a8bf5b1e8",
           "scope": "Explicit per-contrast pairing, subject order, subject-by-exon nuisance models and metadata preservation; independent models retained."
+        },
+        {
+          "revision": "contrast-sample-exclusions-20261104",
+          "previous_integrated_sha256": "9810c9ad83e48d582e03292f8d34ee3e7dc8460da607adb2246bc54a8bf5b1e8",
+          "integrated_sha256": "9b34ef4cf8ed3a64eef12a98e3bbf532408b6ce3cc982a6da8d54a1bcf0b3cf7",
+          "scope": "Explicit per-contrast sample exclusions preserve complete pairs and other study samples; statistical formulas and thresholds unchanged."
         }
       ]
     },
@@ -417,13 +453,32 @@
     {
       "path": "subworkflows/local/rmats.nf",
       "snapshot_sha256": "df6df4f92c81bdd2009b36b1aa6f43ee2784ebec0979bd0a616a65d5eb03bf65",
-      "integrated_sha256": "bc4a0b0fafdcf17b472296fd9951fc241e7d0472c916150ee8430dfe387e406f",
+      "integrated_sha256": "580cd7d517157487b74ff3c4012243caae98a1fbde06a466d44f633390901d72",
       "integration_revisions": [
         {
           "revision": "upstream-rmats-dexseq-20261103",
           "previous_integrated_sha256": "df6df4f92c81bdd2009b36b1aa6f43ee2784ebec0979bd0a616a65d5eb03bf65",
           "integrated_sha256": "bc4a0b0fafdcf17b472296fd9951fc241e7d0472c916150ee8430dfe387e406f",
           "scope": "Per-BAM preparation reuse, single-condition argument repair, explicit staged DEXSeq tools with upstream HTSeq; statistical models and report format unchanged."
+        },
+        {
+          "revision": "contrast-sample-exclusions-20261104",
+          "previous_integrated_sha256": "bc4a0b0fafdcf17b472296fd9951fc241e7d0472c916150ee8430dfe387e406f",
+          "integrated_sha256": "580cd7d517157487b74ff3c4012243caae98a1fbde06a466d44f633390901d72",
+          "scope": "Explicit per-contrast sample exclusions preserve complete pairs and other study samples; statistical formulas and thresholds unchanged."
+        }
+      ]
+    },
+    {
+      "path": "bin/katana_differential.R",
+      "snapshot_sha256": "15b4e365e02cdbc7d346b8eea5d7095e019bc424609aa046a530f68d8e1b7b3c",
+      "integrated_sha256": "200c044fe0dcb617a83b0164e0be0172acaadec499a7c3f94e03c4df676d0717",
+      "integration_revisions": [
+        {
+          "revision": "contrast-sample-exclusions-20261104",
+          "previous_integrated_sha256": "15b4e365e02cdbc7d346b8eea5d7095e019bc424609aa046a530f68d8e1b7b3c",
+          "integrated_sha256": "200c044fe0dcb617a83b0164e0be0172acaadec499a7c3f94e03c4df676d0717",
+          "scope": "Explicit per-contrast sample exclusions preserve complete pairs and other study samples; statistical formulas and thresholds unchanged."
         }
       ]
     }

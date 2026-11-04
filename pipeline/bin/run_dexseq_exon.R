@@ -132,6 +132,7 @@ files <- paste0(counts, "/", samples$sample, ".clean.count.txt")
 
 # Create DEXSeqDataSet object
 
+samples$katana_sample_id <- as.character(samples$sample)
 object <- DEXSeqDataSetFromHTSeq(
     countfiles = files,
     sampleData = samples,

@@ -127,6 +127,7 @@ counts <- counts[, samples$sample, drop = FALSE]
 
 # Create DEXSeqDataSet object
 
+samples$katana_sample_id <- as.character(samples$sample)
 object <- DEXSeqDataSet(
     countData = counts,
     sampleData = samples,
