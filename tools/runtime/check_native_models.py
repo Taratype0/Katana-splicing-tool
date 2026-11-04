@@ -41,7 +41,11 @@ Path("config/flow.json").write_text(json.dumps(cfg))
     export_pipeline(root / 'pipeline')
     # Exercise the exact local candidate in every stage, including the separately
     # versioned report runtime (which is not published until these checks pass).
-    (root / 'acceptance.config').write_text('executor.cpus = 4\nexecutor.memory = "6 GB"\nparams.katana_stage_containers = [:]\n')
+    # Nextflow merges maps across config files; an empty map does not remove
+    # the published report entry, so override that key with the local image.
+    (root / 'acceptance.config').write_text(
+        'executor.cpus = 4\nexecutor.memory = "6 GB"\n'
+        f'params.katana_stage_containers = [report: {json.dumps(args.image)}]\n')
     base = [args.nextflow, 'run', str(root / 'pipeline/main.nf'), '-profile', 'docker',
         '--mode', 'downstream-only', '--project', str(root / 'source/katana.project.json'),
         '--flow_config', str(root / 'config/flow.json'), '--outdir', str(root / 'results'),
