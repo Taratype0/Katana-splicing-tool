@@ -19,9 +19,16 @@ def main():
             assert page.locator('#chapter-5 .exhibit:not(.scope-hidden)').count()>=4
             assert page.locator('.top10:not(.scope-hidden)').count()>=4
         page.locator('#contrastSelect').select_option(manifest['contrasts'][0])
+        for image in page.locator('figure:not(.scope-hidden) img').all():
+            image.scroll_into_view_if_needed()
+            image.evaluate('(img) => img.decode()')
         page.locator('#chapter-5').screenshot(path=str(shots/'05-enrichment.png'))
         page.locator('.motif-significance:not(.scope-hidden)').screenshot(path=str(shots/'06-motif.png'))
         page.locator('[id$="-mapp"]:not(.scope-hidden)').screenshot(path=str(shots/'06-mapp.png'))
+        title='MAEI motif activity | '+manifest['contrasts'][0]
+        page.get_by_role('button',name=title,exact=True).click()
+        assert page.locator('#modalTitle').inner_text()==title
+        page.locator('#closeFigure').click()
         page.locator('#report-das-selection').select_option('significant')
         assert page.locator('.top10[data-policy="significant"]:not(.scope-hidden)').count()==1
         assert page.locator('.top10[data-policy="stable_significant"]:not(.scope-hidden)').count()==0

@@ -42,6 +42,17 @@ def _cell(value):
     return esc(value)
 
 
+def _image_dimensions(output, image):
+    """Reserve the existing image ratio before lazy loading; no visual redesign."""
+    path = Path(output) / image
+    if path.suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
+        return ''
+    from PIL import Image
+    with Image.open(path) as asset:
+        width, height = asset.size
+    return f' width="{width}" height="{height}"'
+
+
 def _analysis(record):
     title = record.get('title', '')
     for name in ('DEXSeq', 'DTU', 'DEG'):
@@ -156,7 +167,7 @@ def render(builder):
                 from .motif_sequences import card_html
                 sequence_details = card_html(item['metadata']['sequence_evidence'])
             if item.get('selection_scope'): links += '<span class="selection-note">Recorded result scope; see provenance</span>'
-            blocks.append('<figure class="exhibit wide" id="'+esc(item['id'])+'"'+_scope(item)+'><div class="exhibit-head"><span class="exhibit-no">'+str(display_number)+'.'+str(index)+'</span><h3>'+esc(item['title'])+'</h3></div><button class="plot-button"><img loading="lazy" src="'+esc(item['image'])+'" alt="'+esc(item['title'])+'"></button><figcaption><p class="fig-notes">'+esc(item.get('caption', ''))+'</p>'+sequence_details+'<div class="fig-links">'+links+'</div></figcaption></figure>')
+            blocks.append('<figure class="exhibit wide" id="'+esc(item['id'])+'"'+_scope(item)+'><div class="exhibit-head"><span class="exhibit-no">'+str(display_number)+'.'+str(index)+'</span><h3>'+esc(item['title'])+'</h3></div><button class="plot-button"><img loading="lazy"'+_image_dimensions(output,item['image'])+' src="'+esc(item['image'])+'" alt="'+esc(item['title'])+'"></button><figcaption><p class="fig-notes">'+esc(item.get('caption', ''))+'</p>'+sequence_details+'<div class="fig-links">'+links+'</div></figcaption></figure>')
             if number == 3:
                 group = (item.get('contrast_id'), _analysis(item))
                 following = chapter_items[index] if index < len(chapter_items) else None

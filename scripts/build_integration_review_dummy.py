@@ -53,7 +53,7 @@ def main():
     project = dict(project_id='katana-integration-dummy-20261102',
         name='Katana | SYNTHETIC DEMONSTRATION - NOT BIOLOGICAL RESULTS',
         samples=samples, contrasts=contrasts, assets=[],
-        annotation={'genome_build':'GRCh38','annotation_release':'Dummy annotation; no FASTA or GTF analysed','species':'Homo sapiens'},
+        annotation={'genome_build':'GRCh38','release':'Dummy annotation; no FASTA or GTF analysed','species':'Homo sapiens'},
         metadata={'species':'Homo sapiens','synthetic':True,'gene_filter_policy':{'footnote_en':'Dummy pre-analysis exclusion: mitochondrial and pseudogene entries excluded; complete detection universe retained.'}})
     def table(name, frame, chapter, cid='all'):
         path = source/(name+'.tsv'); frame.to_csv(path,sep='\t',index=False)
@@ -107,6 +107,8 @@ def main():
             effect=rng.normal(0,.2 if layer in ['DAS','DTU'] else 1.2,100)
             q=10**(-rng.uniform(.05,5,100)); order=np.argsort(q)
             frame=pd.DataFrame({'gene':genes[:100], 'object_id':[f'DEMO_{layer}_{i:03}' for i in range(100)],'effect':effect,'P':q/2,'FDR':q})
+            if args.content_review:
+                frame.loc[order, 'gene'] = genes[:100]
             if layer=='DAS': frame['event_type']=np.resize(types,100)
             for policy in (['stable_significant','significant'] if layer=='DAS' else [None]):
                 subset=frame.iloc[:80] if policy=='stable_significant' else frame
