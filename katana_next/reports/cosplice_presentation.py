@@ -25,6 +25,8 @@ def refresh_cosplice_copy(target):
         text = text.replace(f'<span class="chapter-number">6.{n}</span>',
                             f'<span class="chapter-number">7.{n}</span>')
     text = text.replace('Module in selected evidence view', 'Module (all discovered modules)')
+    text = text.replace('<details><summary>Optional: inspect connections between splicing events</summary>',
+                        '<details open><summary>Network connections between splicing events</summary>')
     text = text.replace('How does a selected module change over time?',
                         'How does a selected module vary across conditions?')
     text = text.replace('Choose a module to see its overall time response.',

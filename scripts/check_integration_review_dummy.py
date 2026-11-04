@@ -14,7 +14,7 @@ class Links(HTMLParser):
     def handle_starttag(self, tag, attrs):
         a=dict(attrs)
         if a.get('id'): self.ids.append(a['id'])
-        for key in ('src','href'):
+        for key in ('src','href','data-src'):
             if a.get(key): self.refs.append(a[key])
 
 
@@ -22,12 +22,13 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--directory',type=Path,required=True)
     ap.add_argument('--receipt',type=Path,required=True)
+    ap.add_argument('--content-review',action='store_true')
     a=ap.parse_args(); root=a.directory.resolve()
     manifest=json.loads((root/'report-manifest.json').read_text('utf8'))
     assert manifest['dummy'] is True
     assert manifest['figure_data_links']['main_figures_with_plot_data']==len(manifest['panels'])
     assert not manifest['figure_data_links']['unbound_main_figures']
-    assert len(manifest['contrasts'])==3
+    assert len(manifest['contrasts'])==(4 if a.content_review else 3)
     checked=0; missing=[]; escaping=[]
     for page in root.rglob('*.html'):
         if page.relative_to(root).as_posix()=='assets/table-template.html':
@@ -45,9 +46,11 @@ def main():
     assert not missing,missing
     assert not escaping,escaping
     summaries={m['contrast_id']:m['sequence_report'] for m in manifest['motif_summaries']}
-    assert [summaries[c]['displayed_models'] for c in manifest['contrasts']]==[10,5,0]
-    assert summaries['C_vs_A']['window_significant_models']==0
-    assert summaries['C_vs_A']['regional_significant_regions']==5
+    expected=[10,5,0,0] if a.content_review else [10,5,0]
+    assert [summaries[c]['displayed_models'] for c in manifest['contrasts']]==expected
+    regional=manifest['contrasts'][1]
+    assert summaries[regional]['window_significant_models']==0
+    assert summaries[regional]['regional_significant_regions']==5
     assert all(m['regional_FWER_is_window_FDR'] is False for m in manifest['motif_summaries'])
     assert all(m['native_statistics_unchanged'] for m in summaries.values())
     for t in manifest['top10']:
@@ -63,11 +66,11 @@ def main():
         members=len(files)
     result=dict(status='passed',scope='synthetic presentation and portable files only',
         science_acceptance=False,native_pipeline_acceptance=False,
-        chapters=7,comparisons=3,panels=len(manifest['panels']),
+        chapters=7,comparisons=len(manifest['contrasts']),panels=len(manifest['panels']),
         panels_with_data=len(manifest['panels']),top10_tables=len(manifest['top10']),
         complete_output_records=len(manifest['complete_results']),local_links_checked=checked,
         missing_local_files=missing,links_outside_report=escaping,
-        motif_models_displayed=[10,5,0],network_browsers=1,zip_members=members,
+        motif_models_displayed=expected,network_browsers=1,zip_members=members,
         zip_bytes=archive.stat().st_size,zip_sha256=hashlib.sha256(archive.read_bytes()).hexdigest())
     a.receipt.write_text(json.dumps(result,indent=2),encoding='utf8')
     print(json.dumps(result))

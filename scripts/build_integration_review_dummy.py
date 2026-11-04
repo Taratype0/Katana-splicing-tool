@@ -22,7 +22,8 @@ import pandas as pd
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--outdir', type=Path, required=True)
-    ap.add_argument('--network-demo', type=Path, required=True)
+    ap.add_argument('--network-demo', type=Path)
+    ap.add_argument('--content-review', action='store_true', help='Four-comparison report-content review with a generated whole-study network and MAPP views.')
     args = ap.parse_args()
     root = args.outdir.resolve()
     root.mkdir(parents=True, exist_ok=False)
@@ -40,6 +41,15 @@ def main():
     contrasts = [dict(contrast_id=cid, label=f'{conditions[n]} versus {conditions[d]}',
         numerator={'label':conditions[n],'sample_ids':[s['sample_id'] for s in samples if s['condition']==conditions[n]]},
         denominator={'label':conditions[d],'sample_ids':[s['sample_id'] for s in samples if s['condition']==conditions[d]]}) for cid,n,d in contrast_specs]
+    if args.content_review:
+        conditions = ['CONTROL_BASE','MUT_BASE','CONTROL_TREATED','MUT_TREATED']
+        samples = [dict(sample_id=f'S{i+1:02}', biological_sample_id=f'{"BASE" if i<6 else "TREATED"}_PAIR{i%3+1}', condition=conditions[i//3]) for i in range(12)]
+        contrast_specs = [('MUT_TREATED_vs_CONTROL_TREATED',3,2), ('MUT_BASE_vs_CONTROL_BASE',1,0),
+                          ('CONTROL_TREATED_vs_CONTROL_BASE',2,0), ('MUT_TREATED_vs_MUT_BASE',3,1)]
+        contrasts = [dict(contrast_id=cid, label=cid.replace('_vs_',' versus '),
+            numerator={'label':conditions[n],'sample_ids':[s['sample_id'] for s in samples if s['condition']==conditions[n]]},
+            denominator={'label':conditions[d],'sample_ids':[s['sample_id'] for s in samples if s['condition']==conditions[d]]}) for cid,n,d in contrast_specs]
+    sample_count = len(samples)
     project = dict(project_id='katana-integration-dummy-20261102',
         name='Katana | SYNTHETIC DEMONSTRATION - NOT BIOLOGICAL RESULTS',
         samples=samples, contrasts=contrasts, assets=[],
@@ -72,22 +82,23 @@ def main():
         'denominator_samples':';'.join(x['denominator']['sample_ids'])} for x in contrasts]),1)
     qc=pd.DataFrame({'cycle':range(1,151),'mean_phred':36-np.linspace(0,4,150)+rng.normal(0,.15,150)})
     plot('sequencing_quality','Sequencing quality by cycle',1,qc,lambda a:a.plot(qc.cycle,qc.mean_phred,color=blue))
-    qc=pd.DataFrame({'sample_id':[s['sample_id'] for s in samples],'mapped_percent':rng.uniform(88,97,36),'read_length':150})
-    plot('mapping_quality','Read mapping and sample quality',1,qc,lambda a:(a.bar(range(36),qc.mapped_percent,color=blue),a.set_ylabel('Mapped reads (%)')))
+    qc=pd.DataFrame({'sample_id':[s['sample_id'] for s in samples],'mapped_percent':rng.uniform(88,97,sample_count),'read_length':150})
+    plot('mapping_quality','Read mapping and sample quality',1,qc,lambda a:(a.bar(range(sample_count),qc.mapped_percent,color=blue),a.set_ylabel('Mapped reads (%)')))
     cov=pd.DataFrame({'gene_body_percent':range(0,101),'relative_coverage':1+.1*np.sin(np.linspace(0,np.pi*2,101))})
     plot('gene_body','Gene-body coverage | 5-prime to 3-prime',1,cov,lambda a:(a.plot(cov.gene_body_percent,cov.relative_coverage,color=blue),a.set_xlabel('Gene body (%)')))
     pca=pd.DataFrame({'sample_id':[s['sample_id'] for s in samples],'condition':[s['condition'] for s in samples],
-        'PC1':np.repeat([-2,-1,0,1,2,3],6)+rng.normal(0,.3,36),'PC2':rng.normal(0,1,36)})
-    plot('psi_pca','PSI PCA | all 36 individual samples',2,pca,lambda a:[a.scatter(g.PC1,g.PC2,label=k) for k,g in pca.groupby('condition')]+[a.legend(fontsize=8)])
-    psi=rng.uniform(.1,.9,(35,36)); matrix=pd.DataFrame(psi,columns=[s['sample_id'] for s in samples]); matrix.insert(0,'event_id',[f'DEMO_EVENT_{i}' for i in range(35)])
+        'PC1':np.repeat(np.arange(len(conditions))-2,sample_count//len(conditions))+rng.normal(0,.3,sample_count),'PC2':rng.normal(0,1,sample_count)})
+    plot('psi_pca',f'PSI PCA | all {sample_count} individual samples',2,pca,lambda a:[a.scatter(g.PC1,g.PC2,label=k) for k,g in pca.groupby('condition')]+[a.legend(fontsize=8)])
+    psi=rng.uniform(.1,.9,(35,sample_count)); matrix=pd.DataFrame(psi,columns=[s['sample_id'] for s in samples]); matrix.insert(0,'event_id',[f'DEMO_EVENT_{i}' for i in range(35)])
     plot('psi_heatmap','PSI heatmap | individual samples',2,matrix,lambda a:heat(a,(psi-.5)*4))
-    clusters=pd.DataFrame({'sample_index':range(36),'pattern_1':np.sin(np.arange(36)/6),'pattern_2':np.cos(np.arange(36)/6)})
+    clusters=pd.DataFrame({'sample_index':range(sample_count),'pattern_1':np.sin(np.arange(sample_count)/6),'pattern_2':np.cos(np.arange(sample_count)/6)})
     plot('splicing_patterns','Splicing pattern clusters',2,clusters,lambda a:(a.plot(clusters.sample_index,clusters.pattern_1,color=blue,label='Pattern 1'),a.plot(clusters.sample_index,clusters.pattern_2,color=red,label='Pattern 2'),a.legend()))
-    concord=pd.DataFrame({'sample_id':[s['sample_id'] for s in samples],'within_group_correlation':rng.uniform(.78,.98,36)})
-    plot('replicate_consistency','Within-group consistency and sample diagnostics',2,concord,lambda a:(a.bar(range(36),concord.within_group_correlation,color=blue),a.set_ylim(0,1)))
+    concord=pd.DataFrame({'sample_id':[s['sample_id'] for s in samples],'within_group_correlation':rng.uniform(.78,.98,sample_count)})
+    plot('replicate_consistency','Within-group consistency and sample diagnostics',2,concord,lambda a:(a.bar(range(sample_count),concord.within_group_correlation,color=blue),a.set_ylim(0,1)))
     types=['SE','A5SS','A3SS','MXE','RI']
     genes=['PTBP1','SRSF1','HNRNPA1','RBFOX2','MBNL1','QKI','ELAVL1','SRSF3','U2AF2','YTHDC1']+[f'DEMO_GENE_{i:03}' for i in range(490)]
     table('detected_testable_gene_background',pd.DataFrame({'gene':genes,'detected':True,'mitochondrial':False,'pseudogene':False}),5)
+    artifacts = []
     for ci,(cid,_,_) in enumerate(contrast_specs):
         comp=pd.DataFrame({'event_type':types,'raw':[900,230,280,160,210],'read_support':[650,170,190,125,160]})
         plot(cid+'_composition','Raw and read-support event types | '+cid,2,comp,lambda a:(a.bar(np.arange(5)-.18,comp.raw,.36,color=blue,label='Raw'),a.bar(np.arange(5)+.18,comp.read_support,.36,color=red,label='Read support'),a.set_xticks(range(5),types),a.legend()),cid)
@@ -108,8 +119,9 @@ def main():
                     a.set(xlabel='Effect (delta PSI / delta proportion or log2 fold change)',ylabel='-log10 FDR')
                     for r in f.nsmallest(5,'FDR').itertuples(): a.annotate(r.gene,(r.effect,-np.log10(r.FDR)),fontsize=8)
                 plot(token+'_volcano',label+' volcano | '+cid,3,subset,volcano,cid,policy)
-                hm=rng.normal(0,1,(10,12)); hmf=pd.DataFrame(hm); hmf.insert(0,'gene',subset.nsmallest(10,'FDR').gene.to_list())
-                plot(token+'_heatmap',label+' sample-level heatmap | '+cid,3,hmf,lambda a,v=hm,g=hmf.gene.to_list():heat(a,v,g),cid,policy)
+                ids=contrasts[ci]['numerator']['sample_ids']+contrasts[ci]['denominator']['sample_ids']
+                hm=rng.normal(0,1,(10,len(ids))); hmf=pd.DataFrame(hm,columns=ids); hmf.insert(0,'gene',subset.nsmallest(10,'FDR').gene.to_list())
+                plot(token+'_heatmap',label+' sample-level heatmap | '+cid,3,hmf,lambda a,v=hm,g=hmf.gene.to_list(),ids=ids:(heat(a,v,g),a.set_xticks(range(len(ids)),ids,rotation=45)),cid,policy)
                 complete=source/(token+'_volcano.tsv')
                 top=subset.nsmallest(10,'FDR').rename(columns={'gene':'gene_symbol','object_id':'event_id' if layer=='DAS' else 'feature_id','FDR':'fdr'})
                 views['top10'].append(dict(id=token,layer=layer,kind=label,title=label+' Top 10 | '+cid,chapter=3,contrast_id=cid,
@@ -123,9 +135,13 @@ def main():
         table(cid+'_enrichment_input_genes',pd.DataFrame({'gene':genes[:40],'selection':'RS-DAS unique genes'}),5,cid)
         rbp=pd.DataFrame({'set':['RBP','Splicing factors'],'P':[.001,.004],'FDR':[.002,.004],
             'hit_genes':['PTBP1;SRSF1;HNRNPA1;RBFOX2','SRSF1;SRSF3;U2AF2'],'background':'500 detected/testable genes'})
-        plot(cid+'_rbp_identity','RBP gene-set enrichment | '+cid,7,rbp,lambda a:a.barh(rbp['set'],-np.log10(rbp.FDR),color=blue),cid,'stable_significant')
+        if not args.content_review:
+            plot(cid+'_rbp_identity','RBP gene-set enrichment | '+cid,7,rbp,lambda a:a.barh(rbp['set'],-np.log10(rbp.FDR),color=blue),cid,'stable_significant')
         # Deliberately supplied layout records. No native statistical receipt is invented.
         folder=source/cid; folder.mkdir()
+        if args.content_review:
+            from report_content_fixture import add_mapp_and_rbp
+            add_mapp_and_rbp(project, cid, ci, folder, views, artifacts, rng)
         words=['UUUCUCU','UGCAUG','ACUAAC','GGAGGA','CUCUCU','UAAUAA','AGGAAG','CCUCCU','UGUGUG','AUAAUA','GCUAGC','CACACA']
         models={f'DEMO_PWM_{i:02}':{'kind':'PWM','matrix':[[.85 if b==c else .05 for b in 'ACGU'] for c in w],
             'RBPs':['PTBP1','RBFOX2','QKI','SRSF1'][i%4],
@@ -134,8 +150,8 @@ def main():
         (folder/'ANALYSIS_PLAN_BEFORE_SCORING.json').write_text(json.dumps(plan),encoding='utf8')
         rows=[]; windows=[]; events=[]; changes=[]; matches=[]
         for i,token in enumerate(models):
-            q=.6 if ci==2 else (.001*(i+1) if ci==0 else .4)
-            p=.7 if ci==2 else (.002*(i+1) if ci==0 else .01*(i+1))
+            q=.6 if ci>=2 else (.001*(i+1) if ci==0 else .4)
+            p=.7 if ci>=2 else (.002*(i+1) if ci==0 else .01*(i+1))
             rows.append(dict(model_id=token,event_type=types[i%5],direction='inclusion_up' if i%2==0 else 'inclusion_down',
                 layer='affected_sequence' if i<8 else 'regulatory_pre_mRNA',region='affected_inclusion' if i<8 else 'acceptor_flank',
                 covered_region_start0=i*5,covered_region_end0=i*5+20,cluster_P_FWER_new_family=p,synthetic=True))
@@ -146,9 +162,17 @@ def main():
                 events.append(dict(event_id=eid,gene_id=genes[i+j],gene_symbol=genes[i+j],event_type=types[i%5]))
                 matches.append(dict(foreground_event=eid,status='matched',foreground_gene=genes[i+j],background_gene=f'DEMO_BG_{i}_{j}'))
                 changes.append(dict(event_id=eid,model_id=token,instance_state='inclusion_only',consequence_direction='increased'))
+        if args.content_review:
+            if ci==3:
+                rows=[]; windows=[]
+                events=events[:4]; matches=matches[:4]; changes=changes[:4]
+            (folder/'RESULTS.json').write_text(json.dumps({'comparison_id':cid,'eligible_new_window_tests':len(windows),
+                'synthetic':True,'reason':'insufficient independent gene blocks' if ci==3 else 'synthetic completed tests'}),encoding='utf8')
         for name,data in [('NEW_CLUSTER_FWER.tsv',rows),('NEW_WINDOW_AND_FULL_SEQUENCE_TESTS.tsv.gz',windows),
             ('FROZEN_SELECTED_EVENTS.tsv',events),('MATCHING_ALL_SELECTED_WITH_LOSSES.tsv',matches),('PAIRED_FORM_INSTANCE_CHANGES.tsv.gz',changes)]:
-            pd.DataFrame(data).to_csv(folder/name,sep='\t',index=False)
+            columns = (['model_id','cluster_P_FWER_new_family'] if name=='NEW_CLUSTER_FWER.tsv'
+                       else ['model_id','q_new_window_family','status']) if not data else None
+            pd.DataFrame(data,columns=columns).to_csv(folder/name,sep='\t',index=False)
         for path in folder.iterdir(): views['tables'].append(dict(name=path.name,path=str(path),chapter=7,contrast_id=cid,kind='file',metadata={'synthetic':True}))
     overlaps=pd.DataFrame({'intersection':['B only','C only','E only','B & C','B & E','C & E','B & C & E'],'events':[43,35,22,28,17,11,9]})
     plot('exact_event_intersections','Exact-event cross-comparison intersections',4,overlaps,lambda a:a.bar(overlaps.intersection,overlaps.events,color=blue))
@@ -158,7 +182,13 @@ def main():
     plot('interaction','Declared-factor interaction | illustrative output',4,interaction,lambda a:a.barh(interaction.gene,interaction.interaction_effect,color=blue))
     # Import the user's current CoSplice dummy as a portable artifact. Its own
     # source files explicitly identify synthetic modules/statistics and no fit.
-    network=source/'cosplice'; shutil.copytree(args.network_demo,network,ignore=shutil.ignore_patterns('*.zip','*.png','__pycache__'))
+    network=source/'cosplice'
+    if args.content_review:
+        from report_content_fixture import build_network
+        build_network(network, project)
+    else:
+        if not args.network_demo: ap.error('--network-demo is required outside --content-review')
+        shutil.copytree(args.network_demo,network,ignore=shutil.ignore_patterns('*.zip','*.png','__pycache__'))
     pages=list(network.glob('*.html'))
     preferred=next((p for p in pages if p.name=='REPORT.html'),pages[0])
     # The copied page advertises its portable ZIP; keep that relative link valid.
@@ -174,7 +204,7 @@ def main():
     views.update(project_id=project['project_id'],status='completed',
         source_project_manifest_sha256=hashlib.sha256(json.dumps(project,sort_keys=True,separators=(',',':'),default=str).encode()).hexdigest(),
         synthetic=True,audit={'scope':'generated presentation fixture; no scientific execution'})
-    descriptor=dict(project=project,artifacts=[artifact],extra_views=[views],synthetic=True,
+    descriptor=dict(project=project,artifacts=[artifact,*artifacts],extra_views=[views],synthetic=True,
         report_contrast_groups=[{'group_id':'selected','label':'Declared demonstration comparisons','contrast_ids':[c[0] for c in contrast_specs]}])
     (root/'descriptor.json').write_text(json.dumps(descriptor,indent=2),encoding='utf8')
     from katana_next.reports.cli import main as render
@@ -192,7 +222,7 @@ def main():
     banner=('<p class="policy-explanation"><strong>Synthetic demonstration.</strong> '
         'All values, statistical tests and network memberships shown here are generated display fixtures. '
         'No biological analysis or end-to-end pipeline acceptance is claimed. '
-        'Optional MAPP and matched CLIP calculations are not represented. '
+        + ('MAPP activities and CLIP tracks are synthetic display examples; no fitting or binding evidence is claimed. ' if args.content_review else 'Optional MAPP and matched CLIP calculations are not represented. ')+
         'See the appendix for the unmodified renderer availability records.</p>')
     page=page.replace('<div class="scopebar">',banner+'<div class="scopebar">',1)
     details=('<details><summary>Real-analysis availability records (expected for this dummy)</summary>'
@@ -210,7 +240,7 @@ def main():
     (root/'DUMMY_SCOPE.json').write_text(json.dumps(dict(synthetic=True,science_run=False,
         purpose='Seven-chapter presentation review; not evidence of native pipeline integration',
         renderer_file=__import__('katana_next.reports.engine',fromlist=['x']).__file__,
-        samples=36,contrasts=3,network='Imported synthetic whole-study module fixture',
+        samples=sample_count,contrasts=len(contrasts),network='Synthetic whole-study module fixture',
         motif='12 supplied dummy PWM models per contrast: positive, regional-only and null examples',
         main_changed=False,real_data_read=False),indent=2),encoding='utf8')
 
