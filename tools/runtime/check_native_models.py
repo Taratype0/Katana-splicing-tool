@@ -80,9 +80,13 @@ Path("config/flow.json").write_text(json.dumps(cfg))
     assert receipt['status'] == 'completed', receipt
     retained = validate_retained_project(results / 'katana/project')
     from katana_next.flow.projections import dexseq_projection_identity
-    projections = [dexseq_projection_identity(a, retained.manifest.input_root)
-                   for a in retained.manifest.assets if a.kind == 'dexseq_result']
-    assert len(projections) == 2 and all(projections)
+    exon_assets = [a for a in retained.manifest.assets if a.kind == 'dexseq_result']
+    # The source project has three contrasts; only two were selected for new
+    # analysis. Retention must preserve all three existing input tables.
+    assert {a.metadata['contrast_id'] for a in exon_assets} == {
+        'perturbation-vs-baseline', 'rescue-vs-baseline', 'rescue-vs-perturbation'}
+    projections = [dexseq_projection_identity(a, retained.manifest.input_root) for a in exon_assets]
+    assert len(projections) == 3 and all(projections)
     assert all(native.is_relative_to(results / 'katana/project') for native, _, _ in projections)
     report = results / 'report'
     manifest = json.loads((report / 'report-manifest.json').read_text())
