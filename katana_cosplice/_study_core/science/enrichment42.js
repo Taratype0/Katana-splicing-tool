@@ -9,7 +9,7 @@ function renderEnrichment39(){
  }
  for(const r of significant){
   const section=document.createElement('article');section.className='enrichment39';section.dataset.module=r.module;
-  const collections=info.supplied_libraries||[...new Set(info.libraries.map(a=>a.library))].map(library=>({library,categories:[library]}));
+  const collections=info.supplied_libraries||[...new Set(info.libraries.map(a=>a.library))].map(library=>({library,categories:library==='GO'?['GO BP','GO MF','GO CC']:[library]}));
   const categories=[...new Set(collections.flatMap(a=>a.categories))];
   section.innerHTML='<h3>'+E(r.module)+' — functional enrichment</h3><div class="controls"><label>Annotation library <select aria-label="'+r.module+' enrichment library">'+categories.map(c=>'<option>'+c+'</option>').join('')+'</select></label></div><div class="ora42-content"></div>';
   host.append(section);const select=section.querySelector('select'),body=section.querySelector('.ora42-content');let page=0;

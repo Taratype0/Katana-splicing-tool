@@ -2,6 +2,8 @@
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+import subprocess
 
 import numpy as np
 import pandas as pd
@@ -90,3 +92,31 @@ def test_ambiguous_symbols_not_arbitrarily_assigned(engine,tmp_path):
 def test_invalid_gmt_remains_an_error(engine,tmp_path,content):
     path=tmp_path/'bad.gmt';path.write_text(content)
     with pytest.raises(ValueError):engine.read_gmt(path,'GO','GO')
+
+
+def test_report_distinguishes_unestimable_and_preserves_legacy_go_categories():
+    from katana_cosplice import _study_core
+    node=shutil.which('node')
+    if not node:pytest.skip('Node is required for JavaScript report behavior')
+    source=(Path(_study_core.__file__).parent/'science/enrichment42.js').read_text('utf8')
+    harness=r'''
+const vm=require('vm'),assert=require('assert');
+function run(info){
+ const elements={pathwayContext:{},pathwayTable:{replaceChildren(){},append(x){this.child=x}}};
+ const select={value:'GO BP'},body={};
+ const context={D:{result:{pathway_enrichment:info},pathways:[]},significant:[{module:'M1'}],
+  $:id=>elements[id],E:x=>x,document:{createElement:()=>({dataset:{},querySelector:s=>s==='select'?select:body})}};
+ vm.runInNewContext(SOURCE+'\nrenderEnrichment39()',context);
+ return {elements,body};
+}
+const base={background_genes:40,network_events:40,tests:0,tested_modules:0,libraries:[]};
+const empty=run({...base,status:'not_estimable',reasons:['no_eligible_terms']});
+assert(empty.elements.pathwayContext.textContent.includes('not estimable'));
+assert(empty.elements.pathwayContext.textContent.includes('No P values or FDR were computed'));
+assert(!empty.elements.pathwayContext.textContent.includes('No significant'));
+const legacy=run({...base,tests:1,tested_modules:1,libraries:[{module:1,library:'GO',status:'tested',module_genes:10,all_module_genes:15,background_genes:30,network_genes:40}]});
+assert(legacy.elements.pathwayTable.child.innerHTML.includes('<option>GO BP</option>'));
+assert(legacy.elements.pathwayTable.child.innerHTML.includes('<option>GO MF</option>'));
+assert(legacy.body.innerHTML.includes('No significant terms'));
+'''
+    subprocess.run([node,'-e','const SOURCE='+json.dumps(source)+';\n'+harness],check=True,capture_output=True,text=True)
