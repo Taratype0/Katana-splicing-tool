@@ -127,7 +127,9 @@ workflow KATANA_PIPELINE {
     ch_contrasts_container = ch_contrasts.map { [records: it] }
     ch_rmats_pairing = ch_contrasts.map { rows -> rows.collectEntries { [(it.contrast): it.paired.toBoolean()] } }.first()
     // SUPPA input order is control then treatment for treatment-minus-control.
-    ch_suppa_pairing = ch_contrasts.map { rows -> rows.collectEntries { [(it.control + '\t' + it.treatment): it.paired.toBoolean()] } }.first()
+    ch_suppa_pairing = ch_contrasts.map { rows -> rows.collectEntries {
+        [(it.control + '\t' + it.treatment): [paired: it.paired.toBoolean(), exclude_samples: it.exclude_samples ?: '']]
+    } }.first()
     ch_rmats_read_length = ch_rows.map { rows ->
         def values = rows.collect { it.read_length as int }.unique()
         if (values.size() != 1) error('Complete mode currently requires a single declared read_length across the study')

@@ -59,6 +59,42 @@ txi <- list(counts=gene_counts, abundance=gene_counts+0., length=matrix(1000,nro
 saveRDS(txi,"gene_txi.rds")
 run("katana_differential.R",c("--stage","differential","--samples","samples.csv","--contrasts","contrasts.csv",
                             "--gene-rds","gene_txi.rds","--outdir","deg"))
+# One missing treated observation; retain its control elsewhere in the study.
+# Per-contrast exclusion must match fitting only the four complete observations.
+dir.create("subset"); setwd("subset")
+subset_samples <- samples[1:5, , drop=FALSE]
+subset_comparison <- comparison
+subset_comparison$exclude_samples <- "S3"
+write.csv(subset_samples, "samples.csv", row.names=FALSE, quote=FALSE)
+write.table(setNames(subset_samples,c("sample_id","condition","subject")),"samples.tsv",sep="\t",row.names=FALSE,quote=FALSE)
+write.csv(subset_comparison,"contrasts.csv",row.names=FALSE,quote=FALSE)
+subset_txi <- txi
+for (key in c('counts','abundance','length')) subset_txi[[key]] <- txi[[key]][,1:5,drop=FALSE]
+saveRDS(subset_txi,'gene_txi.rds')
+write.table(data.frame(gene_id=genes,feature_id=feature,counts[,1:5]),"counts.tsv",sep="\t",row.names=FALSE,quote=FALSE)
+run("run_dexseq_dtu.R",c("samples.tsv","contrasts.csv","counts.tsv","0"))
+subset_fit <- readRDS("DEXSeqDataSet.treated-control.rds")
+stopifnot(setequal(as.character(unique(colData(subset_fit)$sample)), c("S1","S2","S4","S5")))
+run("run_dexseq_exon.R",c("../exon-counts","../annotation.gff","samples.csv","contrasts.csv","0"))
+subset_exon <- readRDS("DEXSeqDataSet.treated_vs_control.rds")
+stopifnot(setequal(as.character(unique(colData(subset_exon)$sample)), c("S1","S2","S4","S5")))
+run("katana_differential.R",c("--stage","differential","--samples","samples.csv","--contrasts","contrasts.csv",
+                            "--gene-rds","gene_txi.rds","--outdir","deg"))
+selected_dds <- readRDS("deg/treated_vs_control.dds.rds")
+stopifnot(setequal(colnames(selected_dds), c("S1","S2","S4","S5")))
+write.csv(subset_samples[subset_samples$sample != 'S3',],"manual-pairs.csv",row.names=FALSE,quote=FALSE)
+write.csv(comparison,"manual-contrast.csv",row.names=FALSE,quote=FALSE)
+manual_txi <- txi
+for (key in c('counts','abundance','length')) manual_txi[[key]] <- txi[[key]][,c(1,2,4,5),drop=FALSE]
+saveRDS(manual_txi,'manual_txi.rds')
+run("katana_differential.R",c("--stage","differential","--samples","manual-pairs.csv","--contrasts","manual-contrast.csv",
+                            "--gene-rds","manual_txi.rds","--outdir","manual-deg"))
+got <- read.delim("deg/treated_vs_control.deseq2.results.tsv")
+expected <- read.delim("manual-deg/treated_vs_control.deseq2.results.tsv")
+stopifnot(isTRUE(all.equal(got,expected,tolerance=1e-12)))
+writeLines(c('status=passed','selected=S1,S2,S4,S5','S3_retained_in_study=true','DEG_matches_explicit_four_sample_fit=true'),
+           'sample-subset.receipt.txt')
+setwd('..')
 writeLines(c("status=passed",paste0("DEXSeq=",packageVersion("DEXSeq")),paste0("DESeq2=",packageVersion("DESeq2")),
              "subjects=3","observations=6","real_study_data_used=false","DEXSeq_order_invariance=passed",
              "native_DTU_DEU_DEG_fits=passed"),"paired-models.receipt.txt")

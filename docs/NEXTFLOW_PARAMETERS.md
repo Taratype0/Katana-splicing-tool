@@ -166,6 +166,20 @@ Windows users may use an already configured WSL/Linux execution environment.
 for subject; a `batch` column alone does not add batch adjustment. Complete pairs
 are aligned by identity, not row order. See [paired model details](validation/paired-entry-20261028.md).
 
+The optional contrastsheet column `exclude_samples` contains semicolon-separated
+sample IDs to omit from that comparison only. Other comparisons, sample QC and
+whole-study network discovery retain these samples. For example, after removing
+one failed library globally, explicitly exclude its unmatched partner from the
+paired comparison while retaining that partner in an independent comparison.
+Complete pairs are still required; unknown IDs, duplicate exclusions and arms
+with fewer than two samples are rejected. No unmatched sample is dropped
+implicitly. The same selection reaches DEG, rMATS, SUPPA, DEXSeq, imported
+contrast metadata and module associations. A whole-study network uses available
+full-condition measurement tables; subset tables remain in the native results.
+Individual methods retain their estimability rules: a two-pair comparison can
+be accepted by differential models while CoSplice association inference reports
+NA under its existing three-unit minimum.
+
 The upstream analysis-reference policy excludes annotated pseudogenes and
 mitochondrial-encoded genes before fitting, preserving the full original
 annotation and the decisions. No public top-level exclusion toggle is currently

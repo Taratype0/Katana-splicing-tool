@@ -222,6 +222,8 @@ def prepare_project_network(project_path, out, parameters, sha):
         (root / "bamlist" / (aliases[group]+"_bamlist.txt")).write_text(",".join(ids)+"\n",encoding="utf-8")
     contrasts = {c.contrast_id:c for c in manifest.contrasts}
     mapping,slots = [],{}
+    excluded_measurement_sources = []
+    covered_group_events = set()
     for asset in manifest.assets:
         if asset.kind != "rmats_result" or str(asset.metadata.get("mode",mode)).upper() != mode:
             continue
@@ -233,6 +235,7 @@ def prepare_project_network(project_path, out, parameters, sha):
             raise ValueError(f"rMATS resource has an undeclared comparison: {asset.asset_id}")
         contrast = contrasts[cid]
         arms = {}
+        incomplete_cohort_arm = False
         for arm in ("numerator","denominator"):
             declared = list(getattr(contrast,arm).sample_ids)
             observed = list(metadata.get(arm+"_sample_ids") or [])
@@ -243,13 +246,21 @@ def prepare_project_network(project_path, out, parameters, sha):
                 raise ValueError(f"{cid}: one rMATS arm must represent one declared condition")
             condition = next(iter(labels))
             if set(groups[condition]) != set(observed):
-                raise ValueError(f"{cid}: rMATS arms differ from the scoped network samples")
+                if identity['network_scope'] == 'whole_study' and set(observed) < set(groups[condition]):
+                    incomplete_cohort_arm = True
+                else:
+                    raise ValueError(f"{cid}: rMATS arms differ from the scoped network samples")
             arms[arm] = (condition,observed)
+        if incomplete_cohort_arm:
+            excluded_measurement_sources.append({'contrast_id': cid, 'asset_id': asset.asset_id,
+                'reason': 'Contrast-specific subset; whole-study measurement sources must cover full conditions. Native result retained.'})
+            continue
         order = ("denominator","numerator") if metadata.get("reverse_direction",False) else ("numerator","denominator")
         first,second = (arms[arm] for arm in order)
         event = str(metadata.get("event_type") or asset.path.name.split(".")[0])
         if event not in {"SE","A3SS","A5SS","MXE","RI"}:
             raise ValueError(f"Unknown rMATS event class: {event}")
+        covered_group_events.update((condition, event) for condition, _ in (first, second))
         destination = root / (aliases[first[0]]+"-"+aliases[second[0]]) / "rmats_post" / f"{event}.MATS.{mode}.txt"
         source_sha = sha(asset.path)
         expected = metadata.get("upstream_sha256") or metadata.get("sha256")
@@ -287,11 +298,14 @@ def prepare_project_network(project_path, out, parameters, sha):
                         "vector_order_transport_changed":changed,"statistics_refitted":False})
     if not mapping:
         raise ValueError("No compatible existing rMATS measurements are declared for the network")
+    missing_group_events = {(group, event) for group in groups for event in ('SE', 'A3SS', 'A5SS', 'MXE', 'RI')} - covered_group_events
+    if missing_group_events:
+        raise ValueError(f"Whole-condition rMATS measurements missing for network samples: {sorted(missing_group_events)}")
     available = {row["event_type"] for row in mapping}
     if available != {"SE","A3SS","A5SS","MXE","RI"}:
         raise ValueError("The network measurement source must retain all five rMATS event-class schemas")
     mapping_path = out / "rmats_projection.mapping.json"
-    mapping_path.write_text(json.dumps({"projection":mapping,"condition_aliases":aliases,"network_identity":identity,
+    mapping_path.write_text(json.dumps({"projection":mapping,"excluded_measurement_sources":excluded_measurement_sources,"condition_aliases":aliases,"network_identity":identity,
                            "sample_identity_preserved":True,"source_results_modified":False},indent=2),encoding="utf-8")
     config = CoSpliceConfig(project_name=manifest.name,rmats_root=root,sample_metadata=samples_path,
         output_dir=out / "engine",gtf=manifest.annotation.gtf,genome_fasta=manifest.annotation.genome_fasta,

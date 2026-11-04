@@ -13,7 +13,7 @@ from pathlib import Path
 
 SAMPLE_COLUMNS = ["sample", "condition", "source", "assay", "fastq_1", "fastq_2", "genome_bam", "transcriptome_bam", "strandedness", "single_end", "read_length", "subject", "batch", "fastq_lanes"]
 CONTRAST_COLUMNS = ["contrast", "treatment", "control"]
-SUPPORTED_CONTRAST_COLUMNS = frozenset(CONTRAST_COLUMNS + ["paired", "blocking", "design", "formula", "description"])
+SUPPORTED_CONTRAST_COLUMNS = frozenset(CONTRAST_COLUMNS + ["paired", "blocking", "design", "formula", "description", "exclude_samples"])
 SAFE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 SAFE_CONDITION = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 REMOTE_URI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
@@ -170,13 +170,13 @@ def validate_samples(rows: list[dict[str, str]], base: Path, *, check: bool, rea
 def validate_contrasts(rows: list[dict[str, str]], samples: list[dict[str, str]], *, design: str, analysis_purpose: str) -> tuple[list[dict[str, str]], list[dict]]:
     unknown_columns = sorted({column for row in rows for column in row} - SUPPORTED_CONTRAST_COLUMNS)
     if unknown_columns:
-        raise InputError(f"Unsupported contrastsheet columns: {', '.join(unknown_columns)}. Supported columns are contrast,treatment,control,paired,blocking,design,formula,description; unsupported models, aliases and sample selections are not silently ignored.")
+        raise InputError(f"Unsupported contrastsheet columns: {', '.join(unknown_columns)}. Supported columns are contrast,treatment,control,paired,blocking,design,formula,description,exclude_samples; unsupported models, aliases and sample selections are not silently ignored.")
     supported = {"~condition": False, "~subject+condition": True}
     if re.sub(r"\s+", "", design) not in supported:
         raise InputError("Complete entry supports '~ condition' or '~ subject + condition'; other models need method-specific support")
-    groups: dict[str, list[dict[str, str]]] = {}
+    all_groups: dict[str, list[dict[str, str]]] = {}
     for row in samples:
-        groups.setdefault(row["condition"], []).append(row)
+        all_groups.setdefault(row["condition"], []).append(row)
     seen: set[str] = set()
     seen_pairs: dict[tuple[str, str], str] = {}
     audit = []
@@ -184,6 +184,7 @@ def validate_contrasts(rows: list[dict[str, str]], samples: list[dict[str, str]]
     for source_row in rows:
         row = dict(source_row)
         name, treatment, control = (row[field] for field in CONTRAST_COLUMNS)
+        groups = all_groups
         if not SAFE_ID.fullmatch(name) or name in seen:
             raise InputError(f"Invalid or duplicate contrast ID {name!r}")
         seen.add(name)
@@ -193,6 +194,12 @@ def validate_contrasts(rows: list[dict[str, str]], samples: list[dict[str, str]]
         if pair in seen_pairs:
             raise InputError(f"{name}: repeated treatment/control pair {treatment}/{control} already declared as {seen_pairs[pair]}; use one contrast ID per directional comparison")
         seen_pairs[pair] = name
+        excluded = [sid.strip() for sid in row.get("exclude_samples", "").split(";") if sid.strip()]
+        available = {member["sample"] for condition in (treatment, control) for member in groups[condition]}
+        if len(excluded) != len(set(excluded)) or set(excluded) - available:
+            raise InputError(f"{name}: exclude_samples must contain unique sample IDs from the two declared conditions")
+        groups = {condition: [member for member in members if member["sample"] not in excluded]
+                  for condition, members in all_groups.items()}
         declared = [re.sub(r"\s+", "", row[field]) for field in ("design", "formula") if row.get(field)]
         if len(set(declared)) > 1 or any(value not in supported for value in declared):
             raise InputError(f"{name}: conflicting or unsupported design/formula")
@@ -241,6 +248,7 @@ def validate_contrasts(rows: list[dict[str, str]], samples: list[dict[str, str]]
                       "rmats_group2_samples": [member["sample"] for member in ordered[control]],
                       "effect_direction": "treatment_minus_control", "design": row["design"], "paired": paired,
                       "pair_ids": sorted(left_subjects) if paired else [],
+                      "excluded_samples": excluded,
                       "covariates_adjusted": ["subject"] if paired else [], "analysis_purpose": analysis_purpose})
     return validated, audit
 

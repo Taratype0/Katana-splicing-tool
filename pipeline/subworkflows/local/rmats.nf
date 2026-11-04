@@ -55,6 +55,16 @@ workflow RMATS {
         .map { it -> [it['control'], it] }
         .combine ( ch_genome_bam_conditions, by: 0 )
         .map { it -> it[1] + ['meta2': it[2], 'bam2': it[3]] }
+        .map { row ->
+            def excluded = (row.exclude_samples ?: '').tokenize(';').collect { it.trim() }
+            def selected = row + [:]
+            [1, 2].each { side ->
+                def indices = row["meta${side}"].withIndex().findAll { meta, i -> !excluded.contains(meta.id) }.collect { it[1] }
+                selected["meta${side}"] = indices.collect { row["meta${side}"][it] }
+                selected["bam${side}"] = indices.collect { row["bam${side}"][it] }
+            }
+            selected
+        }
 
     //
     // Run RMATS in single or contrast mode

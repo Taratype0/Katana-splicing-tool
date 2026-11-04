@@ -109,9 +109,17 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None, ana
         cid, numerator, denominator = row["comparison_id"], row["treatment"], row["control"]
         if cid in contrast_index or numerator not in groups or denominator not in groups:
             raise ValueError("Invalid declared comparison in upstream bundle")
+        excluded = row.get("excluded_samples", [])
+        if (not isinstance(excluded, list) or any(not isinstance(sid, str) for sid in excluded)
+                or len(excluded) != len(set(excluded))
+                or set(excluded) - set(groups[numerator] + groups[denominator])):
+            raise ValueError("Invalid contrast-specific sample exclusions in upstream bundle")
+        arms = {group: [sid for sid in groups[group] if sid not in excluded] for group in (numerator, denominator)}
+        if any(not ids for ids in arms.values()):
+            raise ValueError("Contrast-specific exclusions emptied a comparison arm")
         comparison = {"contrast_id": cid, "label": template.get("contrast_labels", {}).get(cid, cid),
-                      "numerator": {"label": numerator, "sample_ids": groups[numerator]},
-                      "denominator": {"label": denominator, "sample_ids": groups[denominator]}}
+                      "numerator": {"label": numerator, "sample_ids": arms[numerator]},
+                      "denominator": {"label": denominator, "sample_ids": arms[denominator]}}
         comparisons.append(comparison)
         contrast_index[cid] = row
         project_metadata["comparison_designs"][cid] = {
@@ -196,8 +204,8 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None, ana
                         raise ValueError("Native rMATS vector order must cover exactly the declared biological samples")
                 metadata.update(event_type=item.get("event_type") or PurePosixPath(relative).name.split(".")[0],
                                 mode=mode, reverse_direction=left != row["treatment"],
-                                numerator_sample_ids=source["rmats_sample_order"][row["treatment"]],
-                                denominator_sample_ids=source["rmats_sample_order"][row["control"]])
+                                numerator_sample_ids=[sid for sid in source["rmats_sample_order"][row["treatment"]] if sid not in row.get("excluded_samples", [])],
+                                denominator_sample_ids=[sid for sid in source["rmats_sample_order"][row["control"]] if sid not in row.get("excluded_samples", [])])
             elif kind == "deg":
                 metadata["reverse_direction"] = row["deg_target"] != row["treatment"]
         assets.append({"asset_id": f"native-{index}", "kind": mapped, "path": asset_relative, "required": True, "metadata": metadata})

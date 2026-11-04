@@ -8,6 +8,7 @@ import argparse
 import csv
 import json
 import subprocess
+import shutil
 from pathlib import Path
 
 
@@ -44,10 +45,15 @@ pathlib.Path(out+'.psivec').write_text('generated transport check')
         path = bin_dir / name
         path.write_text(text)
         path.chmod(0o755)
+    shutil.copy2(source/'bin/katana_subset_suppa.py', bin_dir/'katana_subset_suppa.py')
+    (bin_dir/'katana_subset_suppa.py').chmod(0o755)
     inputs = root / 'inputs'
     inputs.mkdir()
     for name in ('ref.gtf', 'events.ioe', 'A.tpm', 'B.tpm', 'A.psi', 'B.psi', 'A.bam', 'B.bam', 'A.list', 'B.list', 'fixture.rmats'):
         (inputs / name).write_text('generated transport fixture\n')
+    for suffix in ('tpm', 'psi'):
+        (inputs/f'A.{suffix}').write_text('A1\tA2\tA3\ne1\t0.1\t0.2\t0.9\n')
+        (inputs/f'B.{suffix}').write_text('B1\tB2\ne1\t0.4\t0.5\n')
     template = '''
 include { RMATS_POST } from '__SOURCE__/modules/local/rmats_post'
 include { DIFFSPLICE } from '__SOURCE__/modules/local/suppa_diffsplice'
@@ -61,7 +67,7 @@ workflow {
     RMATS_POST(p.call('ref.gtf'),rmats,150,0.0001,false,50,500,flags)
     tpm = Channel.fromList(['paired','independent']).map { id -> tuple(id+'A',id+'B',p.call('A.tpm'),p.call('B.tpm')) }
     psi = Channel.fromList(['paired','independent']).map { id -> tuple(id+'A',id+'B',p.call('A.psi'),p.call('B.psi')) }
-    suppaFlags = [('pairedA\\tpairedB'):true, ('independentA\\tindependentB'):false]
+    suppaFlags = [('pairedA\\tpairedB'):[paired:true,exclude_samples:'A3'], ('independentA\\tindependentB'):false]
     DIFFSPLICE(p.call('events.ioe'),tpm,psi,'event','empirical',1000,0.05,0.05,1,0,true,suppaFlags,false)
 }
 '''
@@ -84,6 +90,9 @@ workflow {
             argv = json.loads(path.read_text())
             assert (flag in argv) == paired, (path, argv)
             records.append({'file': str(path.relative_to(root)), 'paired': paired, 'flag': flag})
+            if flag == '-pa' and paired:
+                assert (path.parent/'selected-1.psi').read_text() == 'A1\tA2\ne1\t0.1\t0.2\n'
+                assert (path.parent/'selected-2.psi').read_text() == 'B1\tB2\ne1\t0.4\t0.5\n'
     (root / 'receipt.json').write_text(json.dumps({'status': 'passed', 'scope': 'native argument transport only',
         'statistical_model_validation': False, 'tasks': len(rows), 'records': records}, indent=2) + '\n')
     print('Paired/independent rMATS and SUPPA transport: 4 native tasks passed')

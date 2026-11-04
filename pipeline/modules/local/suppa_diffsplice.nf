@@ -35,10 +35,18 @@ process DIFFSPLICE {
     def gc     = diffsplice_gene_correction ? "-gc" : ''
     def is_paired = diffsplice_paired instanceof Map ? diffsplice_paired[cond1 + '\t' + cond2] : diffsplice_paired
     if (is_paired == null) error("Missing paired-model declaration for ${cond1}-${cond2}")
+    def excluded = is_paired instanceof Map ? (is_paired.exclude_samples ?: '') : ''
+    is_paired = is_paired instanceof Map ? is_paired.paired : is_paired
+    def selected_tpm1 = excluded ? 'selected-1.tpm' : tpm1
+    def selected_tpm2 = excluded ? 'selected-2.tpm' : tpm2
+    def selected_psi1 = excluded ? 'selected-1.psi' : psi1
+    def selected_psi2 = excluded ? 'selected-2.psi' : psi2
+    def select_columns = excluded ? "python3 \"\$(command -v katana_subset_suppa.py)\" --exclude '${excluded}' '${tpm1}' '${selected_tpm1}' '${tpm2}' '${selected_tpm2}' '${psi1}' '${selected_psi1}' '${psi2}' '${selected_psi2}'" : ''
     def pa     = is_paired ? "-pa" : ''
     def median = diffsplice_median ? "-me" : ''
 
     """
+    ${select_columns}
     suppa.py \\
         diffSplice \\
         -m $diffsplice_method \\
@@ -49,8 +57,8 @@ process DIFFSPLICE {
         -th $diffsplice_tpm_threshold \\
         -nan $diffsplice_nan_threshold \\
         -i $events \\
-        -p $psi1 $psi2 \\
-        -e $tpm1 $tpm2 \\
+        -p $selected_psi1 $selected_psi2 \\
+        -e $selected_tpm1 $selected_tpm2 \\
         -o ${cond1}-${cond2}_${prefix}_diffsplice
 
     cat <<-END_VERSIONS > versions.yml

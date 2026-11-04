@@ -1,6 +1,13 @@
 # Paired DEXSeq adaptation: subject-specific exon usage in BOTH LRT models.
 # Native estimateExonFoldChanges remains a descriptive condition-only estimate.
 katana_dexseq_fit <- function(object, record) {
+    excluded <- if ("exclude_samples" %in% names(record) && !is.na(record$exclude_samples[[1]]))
+        trimws(strsplit(as.character(record$exclude_samples[[1]]), ";", fixed=TRUE)[[1]]) else character()
+    if (length(excluded)) {
+        object <- object[, !as.character(colData(object)$sample) %in% excluded, drop=FALSE]
+        for (name in intersect(c("sample", "subject", "condition"), names(colData(object))))
+            if (is.factor(colData(object)[[name]])) colData(object)[[name]] <- droplevels(colData(object)[[name]])
+    }
     paired <- "paired" %in% names(record) && tolower(as.character(record$paired)) %in% c("true", "1", "yes")
     if (!paired) return(DEXSeq(object))  # Preserve the existing independent route.
     full <- ~ sample + exon + condition:exon

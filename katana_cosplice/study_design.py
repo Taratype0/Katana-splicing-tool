@@ -72,5 +72,9 @@ def project_study_design(manifest, *, paired=False, association_contrast_ids=Non
                 raise ValueError(f"{c.contrast_id}: paired analysis needs one observation per unit in each arm")
         elif units_a & units_b:
             raise ValueError(f"{c.contrast_id}: repeated units require paired=true for this comparison")
-        rows.append({"contrast_id": c.contrast_id, "factor": "condition", "a": a, "b": b, "paired": declared})
+        row = {"contrast_id": c.contrast_id, "factor": "condition", "a": a, "b": b, "paired": declared}
+        selected_samples = list(c.numerator.sample_ids) + list(c.denominator.sample_ids)
+        if set(selected_samples) != set(samples.loc[samples.condition.isin([a, b]), "sample_id"]):
+            row["sample_ids"] = selected_samples
+        rows.append(row)
     return policy, rows

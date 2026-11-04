@@ -118,7 +118,7 @@ samples <- unique(samples)
 
 contrasts <- read.csv(contrasts, check.names = FALSE)
 
-contrasts <- contrasts[, intersect(c("contrast", "treatment", "control", "paired", "design"), names(contrasts)), drop = FALSE]
+contrasts <- contrasts[, intersect(c("contrast", "treatment", "control", "paired", "design", "exclude_samples"), names(contrasts)), drop = FALSE]
 
 contrasts <- unique(contrasts)
 if (Sys.getenv("KANATA_SINGLE_CONTRAST", "") == "1" && nrow(contrasts) != 1L)

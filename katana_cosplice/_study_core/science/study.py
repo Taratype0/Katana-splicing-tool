@@ -316,7 +316,14 @@ def analyze(run,cfg,out):
         for c in contrasts:
             row={'module':module,'kind':'contrast',**c,'effect':np.nan,'p_value':np.nan,'status':'NA'}
             try:
-                row.update(contrast(y,meta,c['factor'],c['a'],c['b'],covariates,paired=c.get('paired',False)))
+                selected_meta = meta
+                if 'sample_ids' in c:
+                    ids = c['sample_ids']
+                    if (not isinstance(ids, list) or len(ids) != len(set(ids))
+                            or not set(ids) <= set(meta.index)):
+                        raise ValueError('Contrast sample_ids must name unique observed samples')
+                    selected_meta = meta.loc[ids]
+                row.update(contrast(y.reindex(selected_meta.index),selected_meta,c['factor'],c['a'],c['b'],covariates,paired=c.get('paired',False)))
                 row['status']='estimated' if np.isfinite(row['p_value']) else 'NA'
             except (ValueError,np.linalg.LinAlgError) as exc:row['reason']=str(exc)
             rows.append(row)

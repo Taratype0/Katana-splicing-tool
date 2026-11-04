@@ -209,7 +209,8 @@ def make_matrices(root: Path, artifacts: list[dict], comparisons: list[dict], or
     for (comparison_id, mode), sources in sorted(groups.items()):
         comparison = by_comparison[comparison_id]
         group1, group2 = comparison["rmats_group1"], comparison["rmats_group2"]
-        ids1, ids2 = order[group1], order[group2]
+        excluded = set(comparison.get("excluded_samples", []))
+        ids1, ids2 = ([sid for sid in order[group] if sid not in excluded] for group in (group1, group2))
         paths = {key: root / "matrices" / comparison_id / mode / f"{key}.tsv" for key in ("psi", "ijc", "sjc")}
         handles = {}
         try:
@@ -270,6 +271,12 @@ def export_bundle(source_map_path: Path, output_dir: Path, samples_path: Path, c
                       "design": contrast.get("design") or "~ condition",
                       "rmats_group1": override.get("rmats_group1", treatment), "rmats_group2": override.get("rmats_group2", control),
                       "deg_target": override.get("deg_target", treatment), "deg_reference": override.get("deg_reference", control)}
+        excluded = [sid.strip() for sid in contrast.get("exclude_samples", "").split(";") if sid.strip()]
+        eligible = {row["sample_id"] for row in samples if row["condition"] in (treatment, control)}
+        if len(excluded) != len(set(excluded)) or set(excluded) - eligible:
+            raise ValueError(f"Invalid contrast-specific sample exclusions: {comparison_id}")
+        if excluded:
+            comparison["excluded_samples"] = excluded
         if {comparison["rmats_group1"], comparison["rmats_group2"]} != {treatment, control} or {comparison["deg_target"], comparison["deg_reference"]} != {treatment, control}:
             raise ValueError(f"Comparison source direction does not match the declared biological contrast: {comparison_id}")
         comparisons.append(comparison)

@@ -117,7 +117,10 @@ validate_design <- function(samples, treatment, control, design) {
 validate_contrasts <- function(samples, contrasts, design) {
     lapply(seq_len(nrow(contrasts)), function(i) {
         declared <- if ("design" %in% names(contrasts) && nzchar(contrasts$design[[i]])) contrasts$design[[i]] else design
-        tryCatch(validate_design(samples, contrasts$treatment[[i]], contrasts$control[[i]], declared),
+        excluded <- if ("exclude_samples" %in% names(contrasts) && !is.na(contrasts$exclude_samples[[i]]))
+            trimws(strsplit(contrasts$exclude_samples[[i]], ";", fixed=TRUE)[[1]]) else character()
+        selected_samples <- samples[!samples$sample %in% excluded, , drop=FALSE]
+        tryCatch(validate_design(selected_samples, contrasts$treatment[[i]], contrasts$control[[i]], declared),
                  error = function(e) fail("Contrast ", contrasts$contrast[[i]], ": ", conditionMessage(e)))
     })
 }
