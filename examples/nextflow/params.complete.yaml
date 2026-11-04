@@ -18,6 +18,8 @@ fasta: "/data/reference/genome.fa"
 gtf: "/data/reference/annotation.gtf"
 project: null
 katana_container: "/data/images/katana-matching-version.sif"
+# Optional delivery-only repair; leave null for an ordinary complete run.
+retention_container: null
 dexseq_tools_container: "/data/images/dexseq-tools.sif"
 katana_stage_containers: {}
 outdir: "/data/study/results"
