@@ -7,11 +7,7 @@ import re
 
 
 def build_mapp_views(root, plan, receipts, transport):
-    import numpy as np
     import pandas as pd
-    from matplotlib.figure import Figure
-    from matplotlib.backends.backend_agg import FigureCanvasAgg
-    from matplotlib.colors import LinearSegmentedColormap
     from .model import file_sha256, read_json, write_json
     from .runtime import canonical_hash
     root = Path(root).resolve()
@@ -91,7 +87,6 @@ def build_mapp_views(root, plan, receipts, transport):
                             "reason": "The complete measured SE/transcript eligibility audit found no exact mapped included/skipped TPM targets for this native window. No native model or P value was fabricated.",
                             "metadata": {"component": "mapp_native", "reason_code": "no_exact_mapped_se",
                                          "measured_events": proof["measured_events"], "eligible_events": 0}})
-    cmap = LinearSegmentedColormap.from_list("katana-maei", ["#2863A5", "#FFFFFF", "#C63F4A"])
     for cid, entries in families.items():
         directory = root / "presentation" / "mapp" / (re.sub(r"[^A-Za-z0-9_.-]", "_", cid)[:70] + "-" + canonical_hash(cid)[:12])
         directory.mkdir(parents=True, exist_ok=True)
@@ -111,26 +106,14 @@ def build_mapp_views(root, plan, receipts, transport):
                       "contrast_id": cid, "policy": None, "unit": "native motif/window fit"})
         tables.extend({"chapter": 7, "name": f"Native MAPP MAEI | {cid} | {task['id']}", "path": str(path),
                        "analysis_id": "prioritize.mapp_native", "contrast_id": cid} for task, path, _ in entries)
-        activity_cols = [c for c in preview if str(c).startswith("activities_")]
-        values = preview[activity_cols].apply(pd.to_numeric, errors="coerce").to_numpy()
-        labels = [str(site) + " | " + str(model) for site, model in zip(preview.site, preview.native_model_id)]
-        finite = np.abs(values[np.isfinite(values)])
-        bound = float(finite.max()) if len(finite) else 1.0
-        fig = Figure(figsize=(10, max(4, .28 * len(preview))))
-        FigureCanvasAgg(fig)
-        ax = fig.subplots()
-        image = ax.imshow(np.ma.masked_invalid(values), cmap=cmap, vmin=-bound or -1, vmax=bound or 1, aspect="auto")
-        ax.set_xticks(range(len(activity_cols)), [c.removeprefix("activities_") for c in activity_cols], rotation=45, ha="right")
-        ax.set_yticks(range(len(preview)), labels, fontsize=7)
-        ax.set_title("Native MAEI motif activity | " + cid)
-        fig.colorbar(image, ax=ax, label="Original native sample activity")
-        fig.tight_layout()
         path = directory / "native_activity_heatmap.png"
-        fig.savefig(path, dpi=150); fig.clear()
+        from katana_next.reports.mapp_activity import render_activity
+        axis = render_activity(preview, project, cid, path)
         panels.append({"id": "native-maei-" + cid, "chapter": 7, "contrast_id": cid,
                        "title": "Native MAPP MAEI motif activities | " + cid, "path": str(path),
                        "data_links": links,
                        "metadata": {"analysis_id": "prioritize.mapp_native", "component": "mapp_native",
+                                    "activity_axis": axis,
                                     "fit_task_ids": [task["id"] for task, _, _ in entries],
                                     "fit_receipt_sha256": {task["id"]: receipts[task["id"]][1]["receipt_sha256"]
                                                            for task, _, _ in entries},

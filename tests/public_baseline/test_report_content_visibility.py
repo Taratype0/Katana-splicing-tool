@@ -11,6 +11,31 @@ import pytest
 from katana_next.reports.native_enrichment import native_enrichment_scope
 from katana_next.reports.cosplice_presentation import refresh_cosplice_copy
 from katana_next.reports.gene_names import annotate_report_genes
+from katana_next.reports.mapp_activity import activity_axis, refresh_activity_panel
+
+
+def test_maei_labels_follow_declared_conditions_without_averaging_or_reordering(tmp_path):
+    from hashlib import sha256
+    project = {'samples': [{'sample_id': 'R4', 'condition': 'MUT_DEL_KA'},
+                           {'sample_id': 'R2', 'condition': 'MUT_DEL_PBS'}]}
+    columns = ['activities_R4', 'activities_R2']
+    axis = activity_axis(columns, project)
+    assert [x['label'] for x in axis] == ['MUT_DEL_KA\nR4', 'MUT_DEL_PBS\nR2']
+    assert [x['column'] for x in axis] == columns
+    assert activity_axis(['activities_unknown'], project)[0]['label'] == 'unknown'
+    path = tmp_path/'native.tsv'
+    frame = pd.DataFrame({'site':['3ss'], 'native_model_id':['model1'],
+                          'activities_R4':[1.25], 'activities_R2':[-.75], 'pvalue':[.2]})
+    frame.to_csv(path,sep='\t',index=False)
+    before = path.read_bytes()
+    panel = {'contrast_id':'KA_vs_PBS','metadata':{'component':'mapp_native',
+             'native_plot_data_sha256':sha256(before).hexdigest()},
+             'data_links':[{'role':'plot_data','path':str(path)}]}
+    rendered, audit = refresh_activity_panel(panel, project, tmp_path/'report')
+    assert Path(rendered['path']).is_file()
+    assert audit['activity_axis'] == axis
+    assert audit['new_fits'] == 0 and audit['native_values_unchanged']
+    assert path.read_bytes() == before
 
 
 def test_completed_ora_selection_requires_measured_background_and_current_rs():

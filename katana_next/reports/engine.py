@@ -449,6 +449,9 @@ class Builder:
             from .mapp_catalogs import prepare_portable_mapp_panel
             panel, mapp_audit = prepare_portable_mapp_panel(panel, report_root=self.output, copy_file=self.copy)
             if mapp_audit: self.derived_audits.append(mapp_audit)
+            from .mapp_activity import refresh_activity_panel
+            panel, activity_audit = refresh_activity_panel(panel, self.source['project'], self.output)
+            if activity_audit: self.derived_audits.append(activity_audit)
             path = Path(panel.pop('path', panel.get('image', '')))
             if not path.is_absolute(): path = self.output/path
             panel['image'] = path.relative_to(self.output).as_posix() if path.is_relative_to(self.output) else self.copy(path, prefix='figures')
