@@ -119,11 +119,22 @@ class _Views:
         self.snapshots[path] = (stat.st_size, stat.st_mtime_ns)
         return path
 
-    def source(self, analysis, name):
+    def source(self, analysis, name, comparison=None):
         found = [item for item in self.artifacts if item.get("analysis_id") == analysis and item.get("name") == name
                  and Path(item.get("path", "")).is_file()]
+        if comparison is not None:
+            scoped = [item for item in found if comparison in (item.get("contrast_ids") or [])]
+            # Legacy combined tables authenticate their rows through comparison_id.
+            # A table explicitly bound to another comparison is never a fallback.
+            found = scoped or [item for item in found if not item.get("contrast_ids")
+                               and not self.frame(item, comparison).empty]
+            unique = {str(Path(item["path"]).resolve()): item for item in found}
+            found = list(unique.values())
+            if len(found) > 1:
+                raise ValueError("Multiple completed result tables match " + analysis + " / " + comparison)
         if not found:
-            self.audit.append({"analysis": analysis, "source": name, "status": "not_computed"})
+            self.audit.append({"analysis": analysis, "source": name, "comparison_id": comparison,
+                               "status": "not_computed"})
             return None
         record = found[0]
         self.input(record["path"])
@@ -520,10 +531,6 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
     project['report_contrast_groups'] = selection['groups']
     project['report_native_contrast_ids'] = project.get('report_native_contrast_ids', selection['native_contrast_ids'])
     view = _Views(project, [_dict(a) for a in artifacts], destination)
-    sources = {key: view.source(analysis, name) for key, analysis, name in (
-        ("DAS", "differential.as", "Differential AS events"),
-        ("DEG", "differential.deg", "Differentially expressed genes"),
-        ("USAGE", "differential.dtu", "DTU and exon-usage evidence"))}
     exact_memberships = {policy: [] for policy in POLICIES}
     dexseq_memberships = []
     dexseq_available = set()
@@ -540,6 +547,10 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
             counts = None
     for contrast in project.get("contrasts", []):
         comparison = contrast["contrast_id"]
+        sources = {key: view.source(analysis, name, comparison) for key, analysis, name in (
+            ("DAS", "differential.as", "Differential AS events"),
+            ("DEG", "differential.deg", "Differentially expressed genes"),
+            ("USAGE", "differential.dtu", "DTU and exon-usage evidence"))}
         as_frame, deg, usage = (view.frame(sources[key], comparison) for key in ("DAS", "DEG", "USAGE"))
         sets, backgrounds = {}, {}
         if not deg.empty:

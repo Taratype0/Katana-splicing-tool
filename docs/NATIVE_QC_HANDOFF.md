@@ -24,3 +24,9 @@ it does not establish that its downstream analyses or final report are complete.
 DEXSeq report handoff also accepts the native-header-authoritative direction
 marker emitted by the pipeline importer. Original effect columns, direction and
 P/FDR are retained in the existing volcano, Top 10 and downloadable tables.
+
+Independently scheduled comparisons are selected by their own result scope when
+building molecular panels and Top 10 tables. Combined legacy tables remain
+supported through their comparison column. A result from another comparison
+is never substituted for missing data. The runtime check verifies all four
+molecular layers for both generated comparisons.

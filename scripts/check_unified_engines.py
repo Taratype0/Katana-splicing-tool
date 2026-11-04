@@ -145,6 +145,9 @@ def main():
     assert {p['contrast_id'] for p in manifest['panels'] if p['title'].startswith('DEXSeq | ')} == {'perturbation-vs-baseline','rescue-vs-baseline'}
     summary = next(t for t in manifest['complete_results'] if 'Resolved library strandedness' in t['name'])
     assert summary['rows'] == 15
+    for analysis in ('DEG','DAS','DTU','DEXSeq'):
+        assert {t['comparison_id'] for t in manifest['top10'] if t['analysis']==analysis} == {'perturbation-vs-baseline','rescue-vs-baseline'}
+
     assert (root/'report' / summary['source']).is_file()
 
     # Test actual public CLI, explicit three-pair design, and cache reuse.

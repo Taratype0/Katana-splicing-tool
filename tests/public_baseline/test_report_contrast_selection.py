@@ -164,3 +164,30 @@ def test_twelve_selected_axes_form_three_groups_and_leave_sixteen_native_results
             assert set(members.comparison_id) == set(group['contrast_ids'])
             assert members.fdr.min() == 5e-310
     assert sha256(source.read_bytes()).hexdigest() == before_sha and project == before_project
+
+
+@pytest.mark.parametrize('layout', ['split-scoped','split-row-scoped','combined'])
+def test_each_comparison_selects_its_own_completed_result_and_parameters(tmp_path, layout):
+    artifacts=[]
+    groups=[['A','B']] if layout=='combined' else [['A'],['B']]
+    for i, ids in enumerate(groups):
+        path=tmp_path/f'results-{i}.parquet'
+        pd.DataFrame({'comparison_id':ids,'gene_id':['gene-'+c for c in ids],'deg_fdr':[.01]*len(ids)}).to_parquet(path)
+        artifacts.append({'analysis_id':'differential.deg','name':'Differentially expressed genes','path':str(path),
+            'contrast_ids':ids if layout=='split-scoped' else [],'parameters':{'fdr':.01+i*.01}})
+    view=_Views({'contrasts':[{'contrast_id':c} for c in ['A','B','C']]},artifacts,tmp_path/'report')
+    for cid in ['A','B']:
+        selected=view.source('differential.deg','Differentially expressed genes',cid)
+        assert view.frame(selected,cid).gene_id.tolist()==['gene-'+cid]
+        assert selected['parameters']['fdr']==(.02 if cid=='B' and layout!='combined' else .01)
+    assert view.source('differential.deg','Differentially expressed genes','C') is None
+
+
+def test_ambiguous_same_comparison_results_are_not_silently_mixed(tmp_path):
+    artifacts=[]
+    for i in range(2):
+        path=tmp_path/f'results-{i}.tsv';path.write_text('comparison_id\tgene_id\nA\tg1\n')
+        artifacts.append({'analysis_id':'differential.deg','name':'Differentially expressed genes','path':str(path),'contrast_ids':['A']})
+    view=_Views({'contrasts':[{'contrast_id':'A'}]},artifacts,tmp_path/'report')
+    with pytest.raises(ValueError,match='Multiple completed result tables'):
+        view.source('differential.deg','Differentially expressed genes','A')
