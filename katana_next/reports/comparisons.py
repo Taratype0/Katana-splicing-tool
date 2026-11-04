@@ -301,7 +301,9 @@ def _asset(project, kind, comparison=None):
 def _usage_effect(view, frame, comparison):
     """Attach exact native DEXSeq fields only when its declared direction exists."""
     asset = _asset(view.project, "dexseq_result", comparison)
-    if asset is None or asset.get("metadata", {}).get("native_fold_change_direction") != "control/treatment":
+    if asset is None or asset.get("metadata", {}).get("native_fold_change_direction") not in {
+        "control/treatment", "control_over_treatment_native_header_authoritative"
+    }:
         return frame, None
     path = view.input(asset["path"])
     header = list(pd.read_csv(path, sep="\t", nrows=0))

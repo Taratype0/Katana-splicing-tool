@@ -95,8 +95,8 @@ def fixture(root, paired=False):
         pd.DataFrame({'groupID':[f'ENSMUSG{i:011d}.1' for i in range(1,41)],
                       'featureID':[f'E{i:03}' for i in range(1,41)],
                       'padj':[.005 if i<10 else .8 for i in range(40)],
-                      'log2fold':[.6 if i<10 else .01 for i in range(40)]}).to_csv(exon,sep='\t',index=False)
-        exon_assets.append(InputAsset(asset_id='synthetic-exons-'+c.contrast_id,kind='dexseq_result',path=exon,metadata={'contrast_id':c.contrast_id}))
+                      'log2fold_'+c.denominator.label+'_'+c.numerator.label:[.6 if i<10 else .01 for i in range(40)]}).to_csv(exon,sep='\t',index=False)
+        exon_assets.append(InputAsset(asset_id='synthetic-exons-'+c.contrast_id,kind='dexseq_result',path=exon,metadata={'contrast_id':c.contrast_id,'native_fold_change_direction':'control_over_treatment_native_header_authoritative'}))
     (inputs/'fixture.pathways.gmt').write_text(''.join(f'Synthetic_set{k}\tgenerated\t'+'\t'.join([f'GENE{i}' for i in range(k*20+1,k*20+21)]+[f'ENSMUSG{i:011d}' for i in range(k*20+1,k*20+21)])+'\n' for k in range(12)),encoding='utf8')
     meme=inputs/'synthetic-models.meme'
     meme.write_text('MEME version 4\nALPHABET= ACGU\n' + ''.join(f'MOTIF {name} Synthetic_{name}\nletter-probability matrix: alength= 4 w= 2\n{a}\n{b}\n' for name,a,b in [('AC','1 0 0 0','0 1 0 0'),('GU','0 0 1 0','0 0 0 1')]),encoding='utf8')
@@ -142,6 +142,11 @@ def main():
     manifest=read_json(root/'report/report-manifest.json')
     assert manifest['presentation']['chapter_order']==[1,2,3,4,5,7,6]
     assert manifest['network_browsers'][0]['whole_study'] is True
+    assert {p['contrast_id'] for p in manifest['panels'] if p['title'].startswith('DEXSeq | ')} == {'perturbation-vs-baseline','rescue-vs-baseline'}
+    summary = next(t for t in manifest['complete_results'] if 'Resolved library strandedness' in t['name'])
+    assert summary['rows'] == 15
+    assert (root/'report' / summary['source']).is_file()
+
     # Test actual public CLI, explicit three-pair design, and cache reuse.
     paired,_=fixture(root/'paired-source',paired=True)
     command=['katana-cosplice','--project',str(paired),'run']

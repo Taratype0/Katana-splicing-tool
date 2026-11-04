@@ -20,3 +20,7 @@ explicitly disabled sequencing QC, leaving this producer/consumer gap untested.
 
 A real project's successful plan preflight establishes input readiness only;
 it does not establish that its downstream analyses or final report are complete.
+
+DEXSeq report handoff also accepts the native-header-authoritative direction
+marker emitted by the pipeline importer. Original effect columns, direction and
+P/FDR are retained in the existing volcano, Top 10 and downloadable tables.

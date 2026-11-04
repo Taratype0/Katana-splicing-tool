@@ -68,6 +68,11 @@ Path("config/flow.json").write_text(json.dumps(cfg))
     manifest = json.loads((report / 'report-manifest.json').read_text())
     assert manifest['presentation']['chapter_order'] == [1, 2, 3, 4, 5, 7, 6]
     assert manifest['network_browsers'][0]['whole_study'] is True
+    assert {p['contrast_id'] for p in manifest['panels'] if p['title'].startswith('DEXSeq | ')} == {'perturbation-vs-baseline','rescue-vs-baseline'}
+    summary = next(t for t in manifest['complete_results'] if 'Resolved library strandedness' in t['name'])
+    assert summary['rows'] == 15
+    assert (report / summary['source']).is_file()
+
     assert (report / 'REPORT.html').stat().st_size > 0
     assert (report / 'REPORT.zip').stat().st_size > 0
     (root / 'acceptance.json').write_text(json.dumps(dict(status='passed',

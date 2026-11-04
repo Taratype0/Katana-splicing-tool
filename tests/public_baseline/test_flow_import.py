@@ -96,6 +96,17 @@ def test_native_dexseq_csv_preserves_exons_and_separate_gene_screen(tmp_path, mo
     assert before == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in before}
     assert (project.parent / 'bundle/dexseq_exon/DEXSeqResults.B_vs_A.csv').read_bytes() == before[root / 'dexseq_exon/DEXSeqResults.B_vs_A.csv'][0]
     assert len(json.loads((project.parent / 'import.receipt.json').read_text())['format_projections']) == 1
+    # The importer metadata and native header must reach the approved DEXSeq plot.
+    from types import SimpleNamespace
+    from katana_next.science.bulk import load_dtu_results
+    from katana_next.reports.comparisons import _usage_effect
+    usage = load_dtu_results(SimpleNamespace(manifest=imported), ['B_vs_A'])
+    view = SimpleNamespace(project={'assets':[{'kind':exon.kind,'path':str(exon.path),'metadata':exon.metadata}]}, input=Path)
+    plotted, effect = _usage_effect(view, usage, 'B_vs_A')
+    assert effect == 'log2fold_A_B'
+    assert list(plotted[effect]) == [-0.7, 0.5]
+    assert plotted.native_effect_direction.str.startswith('control/treatment').all()
+
 
 
 def test_stager_confirmation_is_not_replaced_or_duplicated_by_native_dtu(tmp_path):
