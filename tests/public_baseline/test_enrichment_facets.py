@@ -59,10 +59,11 @@ def test_public_report_cli_uses_native_full_tables_and_preserves_statistics(tmp_
                     das_selection={'event_set':'stable_significant','read_support_policy':'bulk-all-samples-counts-v1'})))
     project=tmp_path/'source.json'
     project.write_text(json.dumps({'project':{'project_id':'native-report-fixture','name':'Native saved ORA fixture',
-        'samples':[],'contrasts':[{'contrast_id':cid,'label':cid} for cid in ('B_vs_A','D_vs_C')]},
+        'samples':[],'contrasts':[{'contrast_id':cid,'label':cid,'numerator':{'label':cid.split('_vs_')[0],'sample_ids':[]},'denominator':{'label':cid.split('_vs_')[1],'sample_ids':[]}} for cid in ('B_vs_A','D_vs_C')]},
         'artifacts':artifacts,'report_require_plot_data':True}),encoding='utf8')
     out=tmp_path/'report'
-    subprocess.run([sys.executable,'-m','katana_next.reports.cli','--project',str(project),'--outdir',str(out)],check=True,capture_output=True,text=True)
+    result=subprocess.run([sys.executable,'-m','katana_next.reports.cli','--project',str(project),'--outdir',str(out)],capture_output=True,text=True)
+    assert result.returncode==0, result.stderr+result.stdout
     manifest=json.loads((out/'report-manifest.json').read_text())
     panels=[p for p in manifest['panels'] if p.get('metadata',{}).get('renderer')=='go-kegg-facets-v1']
     assert len(panels)==8
