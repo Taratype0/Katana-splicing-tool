@@ -89,6 +89,8 @@ def test_native_dexseq_csv_preserves_exons_and_separate_gene_screen(tmp_path, mo
     _, imported = ManifestStore().load(project)
     exon = next(a for a in imported.assets if a.kind == 'dexseq_result')
     gene = next(a for a in imported.assets if a.kind == 'dexseq_gene_result')
+    assert exon.metadata['sha256'] == file_sha256(exon.path)
+    assert exon.metadata['sha256'] != exon.metadata['upstream_sha256']
     assert _audit_asset(exon.kind, exon.path)[0] == 'pass'
     assert gene.metadata['native_table_projection']['unit'] == 'gene'
     actual = list(csv.reader(exon.path.open(), delimiter='\t'))

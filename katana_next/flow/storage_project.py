@@ -478,8 +478,22 @@ def retain_collection_project(collection, source_project, destination, *, owned_
             if prior and (prior["sha256"], prior["size_bytes"]) != (item["sha256"], item["size_bytes"]):
                 raise ValueError("Original task proofs contain conflicting input identities")
             execution_inputs[path] = item
-    declared_hashes = {asset.path.resolve(): asset.metadata.get("upstream_sha256") or asset.metadata.get("sha256")
-                       for asset in source.assets}
+    from .projections import dexseq_projection_identity
+    declared_hashes = {}
+    for index, asset in enumerate(source.assets):
+        projection = dexseq_projection_identity(asset, source.input_root)
+        if projection is not None:
+            native, native_sha, projected_sha = projection
+            declared_hashes[native] = native_sha
+            declared_hashes[asset.path.resolve()] = projected_sha
+            # Preserve native CSV provenance and make its pointer relocatable.
+            # Do not edit the source project or original execution receipts.
+            payload["assets"][index]["metadata"]["native_table_projection"]["native_path"] = retain(native)
+            payload["assets"][index]["metadata"]["sha256"] = projected_sha
+        else:
+            declared_hashes[asset.path.resolve()] = asset.metadata.get("upstream_sha256") or asset.metadata.get("sha256")
+            if asset.metadata.get("native_table_projection"):
+                payload["assets"][index]["metadata"]["native_table_projection"]["native_path"] = retain(asset.path)
     declared_hashes.update(bundle_hashes)
     input_proofs = []
     verified_input_hashes = {}

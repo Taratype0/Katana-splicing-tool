@@ -63,7 +63,12 @@ Path("config/flow.json").write_text(json.dumps(cfg))
     results = root / 'results'
     receipt = json.loads((results / 'pipeline_info/delivery.receipt.json').read_text())
     assert receipt['status'] == 'completed', receipt
-    validate_retained_project(results / 'katana/project')
+    retained = validate_retained_project(results / 'katana/project')
+    from katana_next.flow.projections import dexseq_projection_identity
+    projections = [dexseq_projection_identity(a, retained.manifest.input_root)
+                   for a in retained.manifest.assets if a.kind == 'dexseq_result']
+    assert len(projections) == 2 and all(projections)
+    assert all(native.is_relative_to(results / 'katana/project') for native, _, _ in projections)
     report = results / 'report'
     manifest = json.loads((report / 'report-manifest.json').read_text())
     assert manifest['presentation']['chapter_order'] == [1, 2, 3, 4, 5, 7, 6]
@@ -80,7 +85,8 @@ Path("config/flow.json").write_text(json.dumps(cfg))
     assert (report / 'REPORT.zip').stat().st_size > 0
     (root / 'acceptance.json').write_text(json.dumps(dict(status='passed',
         generated_data_only=True, native_runs=records, retained_project_readback=True,
-        unchanged_report_format=True, network_and_motiftrace_enabled=True, sequencing_qc_enabled=True), indent=2) + '\n')
+        unchanged_report_format=True, network_and_motiftrace_enabled=True, sequencing_qc_enabled=True,
+        legacy_dexseq_csv_projections_retained=len(projections)), indent=2) + '\n')
 
 
 if __name__ == '__main__':

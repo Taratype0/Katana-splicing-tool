@@ -96,7 +96,17 @@ def fixture(root, paired=False):
                       'featureID':[f'E{i:03}' for i in range(1,41)],
                       'padj':[.005 if i<10 else .8 for i in range(40)],
                       'log2fold_'+c.denominator.label+'_'+c.numerator.label:[.6 if i<10 else .01 for i in range(40)]}).to_csv(exon,sep='\t',index=False)
-        exon_assets.append(InputAsset(asset_id='synthetic-exons-'+c.contrast_id,kind='dexseq_result',path=exon,metadata={'contrast_id':c.contrast_id,'native_fold_change_direction':'control_over_treatment_native_header_authoritative'}))
+        import csv, io, hashlib
+        native = exon.with_suffix('.csv')
+        rows = list(csv.reader(io.StringIO(exon.read_text()), delimiter='\t'))
+        buffer = io.StringIO(newline='')
+        csv.writer(buffer, lineterminator='\n').writerows(rows)
+        native.write_bytes(buffer.getvalue().encode())
+        native_sha = hashlib.sha256(native.read_bytes()).hexdigest()
+        # Match already-imported projects from releases before 2026110403:
+        # upstream_sha256 identifies the CSV, not the lossless TSV projection.
+        exon_assets.append(InputAsset(asset_id='synthetic-exons-'+c.contrast_id,kind='dexseq_result',path=exon,metadata={'contrast_id':c.contrast_id,'native_fold_change_direction':'control_over_treatment_native_header_authoritative',
+            'upstream_sha256':native_sha,'native_table_projection':{'native_path':native.name,'native_sha256':native_sha,'unit':'exon_bin','native_delimiter':',','native_statistics_recomputed':False}}))
     # Public mouse libraries contain symbols, while network event IDs are
     # Ensembl IDs. Do not put both namespaces in the fixture to mask mapping.
     (inputs/'fixture.pathways.gmt').write_text(''.join(f'Synthetic_set{k}\tgenerated\t'+'\t'.join(f'GENE{i}' for i in range(k*20+1,k*20+21))+'\n' for k in range(12)),encoding='utf8')

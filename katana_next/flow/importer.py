@@ -247,6 +247,11 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None, ana
         destination = out / "bundle" / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         normalized_checksums[relative] = write_verified(destination, content)
+    for asset in payload["assets"]:
+        if asset["path"] in normalized_checksums:
+            # upstream_sha256 describes native CSV bytes; sha256 describes
+            # the actual TSV asset. Keep both identities and original bytes.
+            asset["metadata"]["sha256"] = normalized_checksums[asset["path"]]
     write_json(out / "project.json", payload)
     write_json(out / "import.receipt.json", {"schema": "katana.flow.import/v1", "status": "completed",
                "source_manifest_sha256": file_sha256(bundle / "manifest.json"), "samples": len(samples),

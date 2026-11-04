@@ -216,7 +216,7 @@
     "katana_motiftrace/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
     "katana_next/client.py": "38c55ee1aab2cc4bbb9ebf3b086693d9afb6905760004c1232a57b477cbcd6da",
     "katana_next/services/selection_routes.py": "f84bae21e008589ed1af1afcc7409b90ec1757dcc18675d98e29659630732da1",
-    "pyproject.toml": "56c78e68e72478590fc0653651b1dbd95bbb80a2a44b7885ff3b68cee716c0ed",
+    "pyproject.toml": "8d8c60c28e71bad4cf0b1029ce9bfa1404738ad42403e5c9a081c38c7e0e52d6",
     "katana_next/workflows/motiftrace_consequences.py": "f5afcb85c3841ea4e82ac927ea53219f725fcc78e948c92f527677ba18d7825d",
     "katana_next/workflows/rbp_mechanism.py": "f8a149a3cf641c25b30c2808346639afc91d0b0895968d4a0d5e71abbc4cd2ad",
     "katana_next/science/motiftrace_execution.py": "e4fa92e2f008e0c3c1d3d2d9cacdaf3d1d553907658d1ac73ef79947b7164564",
@@ -573,6 +573,18 @@
           "previous_sha256": "8070ae5ced554c0aaa9661d1a8ea72204e8db4d2b8a8aa2b343f52070d8144e5",
           "sha256": "56c78e68e72478590fc0653651b1dbd95bbb80a2a44b7885ff3b68cee716c0ed",
           "scope": "Package version for CoSplice gene ID and multi-library handoff; MotifTrace scientific sources unchanged."
+        }
+      ]
+    },
+    {
+      "revision": "retained-projection-20261104",
+      "scientific_sources_changed": false,
+      "changes": [
+        {
+          "path": "pyproject.toml",
+          "previous_sha256": "56c78e68e72478590fc0653651b1dbd95bbb80a2a44b7885ff3b68cee716c0ed",
+          "sha256": "8d8c60c28e71bad4cf0b1029ce9bfa1404738ad42403e5c9a081c38c7e0e52d6",
+          "scope": "Package version for lossless native-table retention; no scientific changes."
         }
       ]
     }
