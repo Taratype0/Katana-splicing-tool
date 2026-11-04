@@ -13,14 +13,15 @@ def main():
         browser=p.chromium.launch();page=browser.new_page(viewport={'width':1440,'height':1050},device_scale_factor=1)
         errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         page.goto((root/'REPORT.html').as_uri());page.wait_for_function('window.reportReady === true')
-        assert page.locator('section.chapter').count()==7
+        assert page.locator('section.chapter[id^="chapter-"]').count()==7
         for cid in manifest['contrasts']:
             page.locator('#contrastSelect').select_option(cid)
             assert page.locator('#chapter-5 .exhibit:not(.scope-hidden)').count()>=4
             assert page.locator('.top10:not(.scope-hidden)').count()>=4
         page.locator('#contrastSelect').select_option(manifest['contrasts'][0])
         page.locator('#chapter-5').screenshot(path=str(shots/'05-enrichment.png'))
-        page.locator('#chapter-6').screenshot(path=str(shots/'06-motif.png'))
+        page.locator('.motif-significance:not(.scope-hidden)').screenshot(path=str(shots/'06-motif.png'))
+        page.locator('[id$="-mapp"]:not(.scope-hidden)').screenshot(path=str(shots/'06-mapp.png'))
         page.locator('#report-das-selection').select_option('significant')
         assert page.locator('.top10[data-policy="significant"]:not(.scope-hidden)').count()==1
         assert page.locator('.top10[data-policy="stable_significant"]:not(.scope-hidden)').count()==0
