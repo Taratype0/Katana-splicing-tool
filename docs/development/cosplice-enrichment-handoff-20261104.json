@@ -1,0 +1,33 @@
+{
+  "scope": "CoSplice identifier and library integration, explicit unestimable enrichment reporting",
+  "base_commit": "61b73514f744c782e30696d08ea233088c590359",
+  "core_network_algorithms_changed": false,
+  "thresholds_changed": false,
+  "modified_sources": [
+    {
+      "path": "katana_cosplice/_study_core/science/enrichment42.js",
+      "before_sha256": "3bd11dd7e35ffbc21121a41d99f000faa5d8551e58a82f38fdb7a951237176f2",
+      "after_sha256": "9c986709655cc2843439b69326a1bf52fc66a0a02709ba6faa74de3b7a3adcca"
+    },
+    {
+      "path": "katana_cosplice/_study_core/science/enrichment42.py",
+      "before_sha256": "c0a3a082a3f8126bc3e6b09c83a0479e549796f12555c2ab3efccbe2dbeae635",
+      "after_sha256": "35d740a69f28c039addf18307a91a81d677a6daefb361c3e605ffd0d73ee81e5"
+    },
+    {
+      "path": "katana_cosplice/_study_core/science/product.py",
+      "before_sha256": "f0c3d9398db9d3d11a489d64b9ee02b44558761adba3afa87d6e81cbbf81689f",
+      "after_sha256": "0d2554ba5baab0f16a413484a75f322d68deda97a1d587c12dc653aed5a4b26a"
+    },
+    {
+      "path": "katana_cosplice/_study_core/science/study_report.py",
+      "before_sha256": "802967eefbef803d417fe6cc848a7bebc071d58e79f1a35db777a6737bcc01a2",
+      "after_sha256": "633f16576ac68ca017e8cd54b9e562fa0b0568beee6f53798d40714fbe9155f4"
+    },
+    {
+      "path": "katana_next/workflows/cosplice_study.py",
+      "before_sha256": "851afc160e0770d8726017cef0e2293a45e7b967fc17dcd5b52c795fb61dfff3",
+      "after_sha256": "7a52a0075c6700cadd9f512499589bc97a6c06be6e446208d688a4d1328a039e"
+    }
+  ]
+}

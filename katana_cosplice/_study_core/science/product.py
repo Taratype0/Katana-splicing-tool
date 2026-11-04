@@ -367,16 +367,22 @@ def run(cfg,out):
         if cfg.get('condition_a') and cfg.get('condition_b'):
             status['stage']='differential';write_json(out/'status.json',status)
             summary['differential']=differential_edges(complete,meta,edges,out,cfg['condition_a'],cfg['condition_b'],cfg.get('permutations',199))
-        if cfg.get('gene_sets'):
+        if cfg.get('gene_sets') or cfg.get('gene_set_libraries'):
             if genes is None:raise ValueError('Gene-set interpretation requires event-to-gene annotation')
-            from enrichment42 import enrich_single
+            from enrichment42 import enrich_libraries
             status.update(stage='functional_interpretation');write_json(out/'status.json',status)
-            annotation=pd.read_csv(cfg['annotation'],sep='\t',dtype=str).set_index('event_key').gene_id
+            annotation=pd.read_csv(cfg['annotation'],sep='\t',dtype=str).set_index('event_key')
             # Actual network input, including module 0; do not use QC-only genes
             # that had no chance to enter a module under the event limit.
-            summary['pathway_enrichment']=enrich_single(assignment.reindex(complete.index),annotation,cfg['gene_sets'],out)
-            summary['pathway_enrichment']['gene_set_collection']=Path(cfg['gene_sets']).name
-            summary['inputs']['gene_sets']={'path':str(cfg['gene_sets']),'sha256':hashlib.file_digest(Path(cfg['gene_sets']).open('rb'),'sha256').hexdigest()}
+            libraries=cfg.get('gene_set_libraries') or [{'path':cfg['gene_sets']}]
+            summary['pathway_enrichment']=enrich_libraries(assignment.reindex(complete.index),annotation,libraries,out)
+            sources=[]
+            for item in libraries:
+                path=Path(item['path'])
+                with path.open('rb') as handle:digest=hashlib.file_digest(handle,'sha256').hexdigest()
+                sources.append({**item,'sha256':digest})
+            summary['inputs']['gene_set_libraries']=sources
+            if cfg.get('gene_sets'):summary['inputs']['gene_sets']=sources[0]
         write_json(out/'summary.json',summary);status.update(stage='report');write_json(out/'status.json',status)
         write_report(out,summary)
         status.update(status='completed',stage='complete',seconds=time.time()-status['started']);write_json(out/'status.json',status)

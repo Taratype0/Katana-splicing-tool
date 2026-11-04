@@ -96,7 +96,7 @@ def build(run, destination, interpretation=None, summary=None):
         'gene_balanced_recovery.tsv':run/'validation/gene_balanced_recovery.tsv',
         'refit_gene_recovery.tsv':run/'validation/refit_gene_recovery.tsv'}
     sources['resolution_validation.json']=run/'resolution_validation.json'
-    for name in ['enrichment_manifest.json','enrichment_sources.json','enrichment_backgrounds.tsv','enrichment_network_genes.tsv','enrichment_gene_mapping.tsv']:
+    for name in ['enrichment_manifest.json','enrichment_sources.json','enrichment_backgrounds.tsv','enrichment_network_genes.tsv','enrichment_gene_mapping.tsv','enrichment_identifier_mapping.tsv']:
         sources[name]=run/name
     if analysis.get('inference_mode')=='donor_trajectory':
         for name in ['trajectory_components.tsv','donor_coefficients.tsv','legacy_associations.tsv','legacy_summary.json']:

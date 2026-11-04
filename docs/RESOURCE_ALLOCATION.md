@@ -118,7 +118,7 @@ The generic profiles leave partition selection to the site. For Dardel select
 the packaged `pdc_kth` profile:
 
 ```bash
-nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110401 \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110402 \
   -profile singularity,pdc_kth -c custom.config --project YOUR_ALLOCATION \
   ...
 ```

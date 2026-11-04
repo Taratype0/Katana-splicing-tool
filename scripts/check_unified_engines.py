@@ -87,7 +87,7 @@ def fixture(root, paired=False):
     Path(str(fasta)+'.fai').write_text(''.join(index),encoding='ascii',newline='\n')
     psi=inputs/'synthetic-psi.tsv'; events=inputs/'synthetic-events.tsv'
     pd.DataFrame(values,index=keys,columns=ids).to_csv(psi,sep='\t',index_label='event_key')
-    pd.DataFrame({'event_key':keys,'gene_id':[f'ENSMUSG{i+1:011d}' for i in range(len(keys))], 'event_type':'SE'}).to_csv(events,sep='\t',index=False)
+    pd.DataFrame({'event_key':keys,'gene_id':[f'ENSMUSG{i+1:011d}' for i in range(len(keys))], 'gene_symbol':[f'GENE{i+1}' for i in range(len(keys))], 'event_type':'SE'}).to_csv(events,sep='\t',index=False)
     # Generated DEXSeq-format results complete the four-layer input fixture.
     exon_assets=[]
     for c in manifest.contrasts:
@@ -97,12 +97,17 @@ def fixture(root, paired=False):
                       'padj':[.005 if i<10 else .8 for i in range(40)],
                       'log2fold_'+c.denominator.label+'_'+c.numerator.label:[.6 if i<10 else .01 for i in range(40)]}).to_csv(exon,sep='\t',index=False)
         exon_assets.append(InputAsset(asset_id='synthetic-exons-'+c.contrast_id,kind='dexseq_result',path=exon,metadata={'contrast_id':c.contrast_id,'native_fold_change_direction':'control_over_treatment_native_header_authoritative'}))
-    (inputs/'fixture.pathways.gmt').write_text(''.join(f'Synthetic_set{k}\tgenerated\t'+'\t'.join([f'GENE{i}' for i in range(k*20+1,k*20+21)]+[f'ENSMUSG{i:011d}' for i in range(k*20+1,k*20+21)])+'\n' for k in range(12)),encoding='utf8')
+    # Public mouse libraries contain symbols, while network event IDs are
+    # Ensembl IDs. Do not put both namespaces in the fixture to mask mapping.
+    (inputs/'fixture.pathways.gmt').write_text(''.join(f'Synthetic_set{k}\tgenerated\t'+'\t'.join(f'GENE{i}' for i in range(k*20+1,k*20+21))+'\n' for k in range(12)),encoding='utf8')
+    second=inputs/'synthetic-second-library.gmt'
+    second.write_text(''.join(f'Second_set{k}\tgenerated\t'+'\t'.join(f'GENE{i}' for i in range(k*20+1,k*20+21))+'\n' for k in range(12)),encoding='utf8')
     meme=inputs/'synthetic-models.meme'
     meme.write_text('MEME version 4\nALPHABET= ACGU\n' + ''.join(f'MOTIF {name} Synthetic_{name}\nletter-probability matrix: alength= 4 w= 2\n{a}\n{b}\n' for name,a,b in [('AC','1 0 0 0','0 1 0 0'),('GU','0 0 1 0','0 0 0 1')]),encoding='utf8')
     Path(str(meme)+'.metadata.tsv').write_text('motif_id\tRBP\tspecies\tevidence\tsource\nAC\tR1\tMus_musculus\tuser_defined\tsynthetic\nGU\tR2\tMus_musculus\tuser_defined\tsynthetic\n',encoding='utf8')
     assets=tuple(a for a in manifest.assets if a.kind not in {'psi_matrix','event_annotation','cosplice_config'}) + tuple(exon_assets) + (
-        InputAsset(asset_id='generated-psi',kind='psi_matrix',path=psi),InputAsset(asset_id='generated-events',kind='event_annotation',path=events))
+        InputAsset(asset_id='generated-psi',kind='psi_matrix',path=psi),InputAsset(asset_id='generated-events',kind='event_annotation',path=events),
+        InputAsset(asset_id='generated-second-library',kind='gene_sets_gmt',path=second,metadata={'species':'Mus_musculus','semantics':'Generated validation library'}))
     manifest=manifest.model_copy(update={'assets':assets,'metadata':{**manifest.metadata,'species':'Mus_musculus'}})
     ManifestStore().save(manifest,path)
     from qc_fixture import add_native_qc
@@ -135,6 +140,11 @@ def main():
     browser=next(a for a in network['generated_artifacts'] if a.get('metadata',{}).get('report_role')=='whole_study_chapter')
     native=Path(browser['path']).parent
     assert read_json(native/'status.json')['status']=='completed'
+    enrichment=read_json(native/'enrichment_manifest.json')
+    assert enrichment['status']=='completed' and enrichment['tests']>0
+    assert len(enrichment['supplied_libraries'])==2
+    assert 'generated-second-library' in {x['library'] for x in enrichment['supplied_libraries']}
+    assert pd.read_csv(native/'pathway_enrichment.tsv',sep='\t').library.nunique()==2
     associations=pd.read_csv(native/'interpretations/default/associations.tsv',sep='\t')
     assert set(associations.loc[associations.kind.eq('contrast'),'contrast_id'])==set(selected)
     assert (native/'model/native_model.rds').stat().st_size>0

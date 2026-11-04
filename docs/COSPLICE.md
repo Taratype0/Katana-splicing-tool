@@ -21,6 +21,19 @@ The project can supply a PSI matrix and event annotation, native rMATS results
 with their sample identities, or an existing compatible CoSplice input config.
 Gene-set resources are supplied separately; no example-study database is used.
 
+All registered gene-set libraries are included. Event annotations retain both
+`gene_id` and `gene_symbol`: symbol-based GMT libraries are mapped back to native
+gene IDs using exact, unambiguous aliases. Mapping records and contributing gene
+IDs are downloadable. Ambiguous aliases are excluded rather than guessed.
+
+For each library, the background is the unique genes from all selected network
+events, including unassigned events, intersected with that library's annotations.
+Each module uses all its annotated genes. The existing 10–500 background-gene
+term size and minimum five annotated module genes are unchanged. One BH correction
+covers all eligible module-by-term tests across the supplied libraries, including
+zero-overlap and nonsignificant tests. If no tests are estimable, the report states
+the reason and retains the network; this is distinct from no significant enrichment.
+
 ## Pairing and sample counts
 
 Pairing is optional. A contrast declared `paired=true` retains the matching

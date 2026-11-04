@@ -37,7 +37,7 @@ for entry in INVENTORY["workflows"]:
     if entry["workflow_id"] in {"programs.cosplice", "programs.psi_network"}:
         # Approved study-wide engine and optional paired design replace the
         # default fit entry. The preserved legacy calculations retain tests.
-        entry["version"] = "4.3.3"
+        entry["version"] = "4.3.4"
         entry["parameter_defaults"] = {
             "paired": False, "association_contrast_ids": None,
             "min_module_size": 20, "merge_cut_height": .25,

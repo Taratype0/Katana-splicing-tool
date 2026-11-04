@@ -13,7 +13,7 @@ PARAMETERS=(ParameterDefinition('paired','Paired observations','boolean',False,'
     ParameterDefinition('bootstrap_iterations','Optional stability refits','number',0,'Off by default: one whole-study WGCNA + kME fit. Opt-in unit-deletion refits assess stability separately; kME is not stability validation.',minimum=0,maximum=500))
 
 class CoSpliceWorkflow(WorkflowBase):
-    version='4.3.3'
+    version='4.3.4'
     definition=WorkflowDefinition('programs.cosplice','programs','CoSplice: whole-study network','Which splicing modules vary across all comparable study samples?',
         'One WGCNA/TOM + kME network using all declared project samples, followed by module association and stability analysis.',
         'Study modules, per-module genes/events, sample scores, continuous kME and study report','individual sample',parameters=PARAMETERS,optional_asset_kinds=('cosplice_config','psi_matrix','event_annotation','rmats_result'),supports_contrast_selection=False,
@@ -119,6 +119,14 @@ class CoSpliceWorkflow(WorkflowBase):
                     table=pd.read_csv(support,sep='\t',index_col=0).reindex(matrix.index);support=inputs/'filtered_support.tsv.gz';table.to_csv(support,sep='\t',index_label='event_key')
         config={'method':'wgcna','feature_cap':int(parameters['max_events']),'bootstrap':int(parameters['bootstrap_iterations']),'qc_profile':'unit_robust','merge_modules':False,'value_kind':'usage','study_id':context.manifest.project_id,'cohort_scope':'All declared comparable project samples; one shared network across every condition','cohort_complete':True,'cohort_design':context.manifest.metadata.get('cosplice_cohort_design','comparable_samples'),'psi':str(psi),'samples':str(inputs/'samples.tsv'),'annotation':str(annotation),'read_support':str(support) if support else None,'gene_sets':str(assets['gene_sets_gmt']) if 'gene_sets_gmt' in assets else None,'expression':None,'condition_a':None,'condition_b':None,'genome_build':context.manifest.annotation.genome_build}
         config.update(paired=sample_policy['paired'],sample_size_policy=sample_policy,contrasts=contrasts,min_module_size=parameters['min_module_size'],merge_cut_height=parameters['merge_cut_height'])
+        libraries=[a for a in context.manifest.assets if a.kind=='gene_sets_gmt']
+        if libraries:
+            # Use every declared library and its existing species/content checks.
+            # A kind-to-path dictionary silently retains only the last asset.
+            from katana_next.science.enrichment import declared_gene_sets
+            declared_gene_sets(context.manifest,'gene_sets_gmt')
+            config['gene_sets']=None
+            config['gene_set_libraries']=[{'path':str(a.path),'library':a.asset_id,'category':a.asset_id} for a in libraries]
         if 'study_id' in samples and samples.study_id.nunique()==1:config['study_id']=str(samples.study_id.iloc[0])
         (target/'config.json').write_text(json.dumps(config,indent=2),encoding='utf8')
         from katana_cosplice import _study_core
