@@ -132,7 +132,15 @@ def main():
                 'hit_genes':[';'.join(genes[i:i+8]) for i in range(6)],'input_genes':40,'background_genes':500,'comparison':cid})
             plot(cid+'_'+lib,lib.replace('_',' ')+' | RS-DAS genes | '+cid,5,terms,
                 lambda a,t=terms:(a.barh(t.term,-np.log10(t.FDR),color=blue),a.set_xlabel('-log10 FDR')),cid,'stable_significant')
-        table(cid+'_enrichment_input_genes',pd.DataFrame({'gene':genes[:40],'selection':'RS-DAS unique genes'}),5,cid)
+        foreground=table(cid+'_enrichment_input_genes',pd.DataFrame({'gene':genes[:40],'selection':'RS-DAS unique genes'}),5,cid)
+        for panel in views['panels']:
+            if panel.get('chapter')==5 and panel.get('contrast_id')==cid:
+                panel['data_links'] += [dict(role='foreground',path=str(foreground),label='Input unique genes',contrast_id=cid),
+                    dict(role='background',path=str(source/'detected_testable_gene_background.tsv'),label='Detected/testable gene background',contrast_id=cid)]
+        if args.content_review:
+            clip=pd.DataFrame({'position_nt':range(-100,101),'synthetic_overlap':np.exp(-np.linspace(-3,3,201)**2)})
+            plot(cid+'_clip','Matched CLIP overlap | synthetic example | '+cid,7,clip,
+                 lambda a,t=clip:(a.plot(t.position_nt,t.synthetic_overlap,color=blue),a.set(xlabel='Position relative to splice boundary (nt)',ylabel='Illustrative overlap')),cid,'stable_significant')
         rbp=pd.DataFrame({'set':['RBP','Splicing factors'],'P':[.001,.004],'FDR':[.002,.004],
             'hit_genes':['PTBP1;SRSF1;HNRNPA1;RBFOX2','SRSF1;SRSF3;U2AF2'],'background':'500 detected/testable genes'})
         if not args.content_review:
@@ -174,7 +182,10 @@ def main():
                        else ['model_id','q_new_window_family','status']) if not data else None
             pd.DataFrame(data,columns=columns).to_csv(folder/name,sep='\t',index=False)
         for path in folder.iterdir(): views['tables'].append(dict(name=path.name,path=str(path),chapter=7,contrast_id=cid,kind='file',metadata={'synthetic':True}))
-    overlaps=pd.DataFrame({'intersection':['B only','C only','E only','B & C','B & E','C & E','B & C & E'],'events':[43,35,22,28,17,11,9]})
+    overlap_labels=['C1 only','C2 only','C3 only','C4 only','C1 & C2','C3 & C4','All four'] if args.content_review else ['B only','C only','E only','B & C','B & E','C & E','B & C & E']
+    overlaps=pd.DataFrame({'intersection':overlap_labels,'events':[43,35,22,28,17,11,9]})
+    if args.content_review:
+        table('intersection_comparison_key',pd.DataFrame({'key':[f'C{i+1}' for i in range(4)],'contrast_id':[c[0] for c in contrast_specs]}),4)
     plot('exact_event_intersections','Exact-event cross-comparison intersections',4,overlaps,lambda a:a.bar(overlaps.intersection,overlaps.events,color=blue))
     dex=pd.DataFrame({'intersection':overlaps.intersection,'exon_bins':[32,24,21,18,12,8,5]})
     plot('exon_intersections','DEXSeq exon-bin cross-comparison intersections',4,dex,lambda a:a.bar(dex.intersection,dex.exon_bins,color=blue))

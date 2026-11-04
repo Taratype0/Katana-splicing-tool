@@ -30,6 +30,7 @@ jobs:
       - run: python -m pytest -q tests/public_baseline/test_report_content_visibility.py
       - run: python scripts/build_integration_review_dummy.py --content-review --outdir dummy-review
       - run: python scripts/check_integration_review_dummy.py --content-review --directory dummy-review/report --receipt dummy-review/acceptance.json
+      - run: python scripts/check_report_dummy_browser.py --directory dummy-review/report
       - uses: actions/upload-artifact@v4
         if: always()
         with:
