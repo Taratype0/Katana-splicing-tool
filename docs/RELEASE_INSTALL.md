@@ -20,10 +20,11 @@ Python package can also use the [Conda environment](RUNTIME_ENVIRONMENTS.md).
 [Run guide](NEXTFLOW_SIMPLE.md) | [Parameters](NEXTFLOW_PARAMETERS.md) 路
 [Samples and contrasts](NEXTFLOW_USAGE.md) | [Outputs and recovery](NATIVE_OUTPUTS.md)
 
-The launch-download and DEXSeq recovery update uses wheel/controller `2.0.0b5.dev2026110404`.
-It intentionally reuses the validated `20261103` downstream image and database
-catalog: Python/R scientific code is unchanged. The new Nextflow source carries
-the updated task allocations; upgrading only an image does not update a workflow.
+The approved-report update uses wheel/controller `2.0.0b5.dev2026110404`.
+The report stage uses its matching image. Analysis and retention keep the
+validated `2.0.0b5.dev2026110403` image and existing database catalog, so a
+report-only upgrade preserves their cache identities. Python/R scientific code
+and task allocations are unchanged.
 See [task allocations and upstream versions](RESOURCE_ALLOCATION.md).
 
 The approved seven-chapter report uses the 4 November faceted GO/KEGG layout. The report stage is pinned separately to runtime 2.0.0b5.dev2026110404; other analysis stages retain 2.0.0b5.dev2026110403 for cache reuse. Native completed enrichment tables are redrawn without refitting. All network modules remain browsable; association and pathway significance are separate filters.
