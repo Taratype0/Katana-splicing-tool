@@ -102,6 +102,15 @@ def test_unknown_cosplice_template_is_not_silently_partially_rewritten(tmp_path)
     assert target.read_text(encoding='utf-8') == text
 
 
+def test_zero_eligible_motif_tests_are_not_labelled_nonsignificant():
+    from katana_next.reports.motif_sequences import summary_html
+    result = summary_html(dict(regional_counts={'affected_sequence':0,'regulatory_pre_mRNA':0},
+        regional_available=False,window_test_count=0,window_estimable_models=0,
+        window_significant_models=0,displayed_models=0,eligible_models=0,selection_rule='Recorded native tests only'))
+    assert 'not estimable for this comparison' in result
+    assert 'completed, no significant' not in result
+
+
 def test_browser_can_inspect_modules_when_no_association_is_significant(tmp_path):
     if not __import__('os').environ.get('KATANA_REPORT_BROWSER_TEST'):
         pytest.skip('Run in the dedicated Linux Chromium job')

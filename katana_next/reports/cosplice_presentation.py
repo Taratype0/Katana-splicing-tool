@@ -31,6 +31,11 @@ def refresh_cosplice_copy(target):
                         'How does a selected module vary across conditions?')
     text = text.replace('Choose a module to see its overall time response.',
                         'Choose any discovered module to inspect its sample-level measurements.')
+    # Show the actual saved score coverage. Missing scores are not null effects.
+    old_sample = "renderTable('sampleTable',D.samples,[{key:'sample_id',label:'Sample'},{key:'biological_sample_id',label:'Biological unit'},{key:'condition',label:'Condition'}])"
+    new_sample = "renderTable('sampleTable',D.samples.map(s=>({...s,score_coverage:D.modules.filter(m=>num(bySample[s.sample_id]?.[m.module])).length+' / '+D.modules.length})),[{key:'sample_id',label:'Sample'},{key:'biological_sample_id',label:'Biological unit'},{key:'condition',label:'Condition'},{key:'score_coverage',label:'Available module scores'}])"
+    text = text.replace(old_sample, new_sample)
+    text = text.replace('<div id="sampleTable"', '<p class="thin">Score coverage is counted from saved module scores. Missing scores can make associations not estimable; they are not evidence of no difference.</p><div id="sampleTable"')
     start = text.find("$('moduleSelect').replaceChildren();for(let r of significant)")
     end = text.find('\nfunction network()', start)
     if start < 0 or end < 0:

@@ -232,6 +232,9 @@ def summary_html(summary):
     if counts.get('unclassified'): regional += f" {counts['unclassified']} significant regions have no recorded biological layer."
     title = ('Motif consequences: significant affected-RNA regions' if counts['affected_sequence'] else
              'Motif consequences: completed, no significant affected-RNA regions' if summary['regional_available'] else 'Motif consequences: regional results unavailable')
+    if summary.get('window_test_count') == 0 and not summary['regional_available']:
+        title = 'Motif consequences: not estimable for this comparison'
+        regional = 'No eligible native window/full-sequence tests were recorded. Regional significance is unavailable; this is not a nonsignificant result.'
     window = f"{summary['window_significant_models']} motif models have a recorded window/full-sequence test with BH FDR ≤ 0.05."
     if not summary.get('window_estimable_models') and not summary.get('window_test_count'):
         window = 'No estimable native window/full-sequence P/q values are available; this is not a measured zero-discovery result.'
