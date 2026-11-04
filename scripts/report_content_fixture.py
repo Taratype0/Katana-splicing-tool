@@ -22,7 +22,7 @@ def add_mapp_and_rbp(project, cid, ci, folder, views, artifacts, rng):
         chapter=7, contrast_id=cid, path=str(path),
         caption='SYNTHETIC DISPLAY FIXTURE. Six individual samples; condition labels and group separator. No MAPP fit performed.',
         metadata={'synthetic': True, 'activity_axis': axis},
-        data_links=[dict(role='plot_data', path=str(data), label='All displayed synthetic activities', contrast_id=cid, unit='sample')]))
+        data_links=[dict(role='plot_data', path=str(data), label='All displayed synthetic activities', contrast_id=cid, policy=None, unit='sample')]))
     rows=[]
     for i, genes in enumerate(['PTBP1;SRSF1;HNRNPA1;RBFOX2','SRSF1;SRSF3;U2AF2','QKI;MBNL1']):
         rows.append(dict(term=['RBP identity','Splicing factors','Custom declared RBP set'][i],

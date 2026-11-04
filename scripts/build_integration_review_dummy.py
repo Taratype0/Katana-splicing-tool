@@ -135,8 +135,8 @@ def main():
         foreground=table(cid+'_enrichment_input_genes',pd.DataFrame({'gene':genes[:40],'selection':'RS-DAS unique genes'}),5,cid)
         for panel in views['panels']:
             if panel.get('chapter')==5 and panel.get('contrast_id')==cid:
-                panel['data_links'] += [dict(role='foreground',path=str(foreground),label='Input unique genes',contrast_id=cid),
-                    dict(role='background',path=str(source/'detected_testable_gene_background.tsv'),label='Detected/testable gene background',contrast_id=cid)]
+                panel['data_links'] += [dict(role='foreground',path=str(foreground),label='Input unique genes',contrast_id=cid,policy='stable_significant',unit='gene'),
+                    dict(role='background',path=str(source/'detected_testable_gene_background.tsv'),label='Detected/testable gene background',contrast_id=cid,policy='stable_significant',unit='gene')]
         if args.content_review:
             clip=pd.DataFrame({'position_nt':range(-100,101),'synthetic_overlap':np.exp(-np.linspace(-3,3,201)**2)})
             plot(cid+'_clip','Matched CLIP overlap | synthetic example | '+cid,7,clip,
