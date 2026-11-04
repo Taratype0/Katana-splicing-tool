@@ -23,6 +23,11 @@ def main():
             image.scroll_into_view_if_needed()
             image.evaluate('(img) => img.decode()')
         page.locator('#chapter-5').screenshot(path=str(shots/'05-enrichment.png'))
+        page.locator('#chapter-5 figure:not(.scope-hidden)').first.screenshot(path=str(shots/'05-enrichment-detail.png'))
+        enrichment=[p for p in manifest['panels'] if p['chapter']==5]
+        assert len(enrichment)==16
+        assert all(p['metadata'].get('renderer')=='go-kegg-facets-v1' for p in enrichment)
+        assert all(p['metadata']['facet_order']==['BP','CC','MF','KEGG'] for p in enrichment)
         page.locator('.motif-significance:not(.scope-hidden)').screenshot(path=str(shots/'06-motif.png'))
         page.locator('[id$="-mapp"]:not(.scope-hidden)').screenshot(path=str(shots/'06-mapp.png'))
         title='MAEI motif activity | '+manifest['contrasts'][0]

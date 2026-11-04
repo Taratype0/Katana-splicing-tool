@@ -129,14 +129,17 @@ def main():
                 views['top10'].append(dict(id=token,layer=layer,kind=label,title=label+' Top 10 | '+cid,chapter=3,contrast_id=cid,
                     policy=policy,columns=list(top.columns),rows=top.to_dict('records'),
                     full_path=str(complete),total_rows=len(subset),ranking='Illustrative FDR ascending; effect retained'))
-        for lib in ['GO_BP','GO_MF','GO_CC','KEGG']:
+        if args.content_review:
+            from report_content_fixture import add_enrichment_facets
+            add_enrichment_facets(project,cid,source,views,genes,rng)
+        for lib in ([] if args.content_review else ['GO_BP','GO_MF','GO_CC','KEGG']):
             terms=pd.DataFrame({'term':[lib+' demo term '+str(i+1) for i in range(6)],'FDR':[.0003,.001,.004,.008,.02,.04],
                 'hit_genes':[';'.join(genes[i:i+8]) for i in range(6)],'input_genes':40,'background_genes':500,'comparison':cid})
             plot(cid+'_'+lib,lib.replace('_',' ')+' | RS-DAS genes | '+cid,5,terms,
                 lambda a,t=terms:(a.barh(t.term,-np.log10(t.FDR),color=blue),a.set_xlabel('-log10 FDR')),cid,'stable_significant')
         foreground=table(cid+'_enrichment_input_genes',pd.DataFrame({'gene':genes[:40],'selection':'RS-DAS unique genes'}),5,cid)
         for panel in views['panels']:
-            if panel.get('chapter')==5 and panel.get('contrast_id')==cid:
+            if not args.content_review and panel.get('chapter')==5 and panel.get('contrast_id')==cid:
                 panel['data_links'] += [dict(role='foreground',path=str(foreground),label='Input unique genes',contrast_id=cid,policy='stable_significant',unit='gene'),
                     dict(role='background',path=str(source/'detected_testable_gene_background.tsv'),label='Detected/testable gene background',contrast_id=cid,policy='stable_significant',unit='gene')]
         if args.content_review:

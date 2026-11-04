@@ -7,6 +7,45 @@ import numpy as np
 import pandas as pd
 
 
+def add_enrichment_facets(project, cid, source, views, genes, rng):
+    from katana_next.reports.enrichment_facets import render_enrichment_facets
+    import hashlib
+    rng=np.random.default_rng(int(hashlib.sha256(cid.encode()).hexdigest()[:8],16))
+    terms={
+        'BP':['Extracellular structure organization','Extracellular matrix organization','Chromosome segregation','Mitotic nuclear division','RNA splicing','Cell differentiation'],
+        'CC':['Collagen-containing extracellular matrix','Chromosome, centromeric region','Collagen trimer','Condensed chromosome, centromeric region','Apical plasma membrane','Tight junction'],
+        'MF':['Extracellular matrix structural constituent','Microtubule binding','Integrin binding','RNA binding','Transmembrane receptor protein kinase activity','Catalytic activity'],
+        'KEGG':['Protein digestion and absorption','ECM-receptor interaction','Phagosome','Cell cycle','RNA transport','Spliceosome']}
+    for layer in ['DEG','RS-DAS','DTU','DEXSeq']:
+        policy='stable_significant' if layer=='RS-DAS' else None
+        token=cid+'_'+layer+'_faceted_enrichment'
+        rows=[]
+        for category,names in terms.items():
+            for i,name in enumerate(names):
+                count=int(rng.integers(3,16));q=float(rng.uniform(.001,.045)) if i<5 else .25
+                rows.append({'category':category,'term':name,'Count':count,'GeneRatio':count/40,
+                    'p.adjust':q,'P':q/2,'input_genes':40,'background_genes':500,
+                    'hit_genes':';'.join(genes[i:i+count]),'contrast_id':cid,'evidence':layer,
+                    'fdr_family':'Synthetic '+cid+' / '+layer+' / '+('GO' if category!='KEGG' else 'KEGG')})
+        frame=pd.DataFrame(rows);image=source/(token+'.png')
+        displayed=render_enrichment_facets(frame,image,title=layer+' | '+cid,top_n=5)
+        complete=source/(token+'-complete.tsv');frame.to_csv(complete,sep='\t',index=False)
+        data=source/(token+'-plotted.tsv');displayed.to_csv(data,sep='\t',index=False)
+        foreground=source/(token+'-input-genes.tsv')
+        pd.DataFrame({'gene':genes[:40],'selection':layer+' unique genes (synthetic)'}).to_csv(foreground,sep='\t',index=False)
+        background=source/'detected_testable_gene_background.tsv'
+        links=[dict(role=role,path=str(path),label=label,contrast_id=cid,policy=policy,unit=unit)
+            for role,path,label,unit in [('plot_data',data,'Plotted terms, counts, adjusted P and hit genes','term'),
+                ('full_results',complete,'All tested GO / KEGG terms','term'),('foreground',foreground,'Input unique genes','gene'),
+                ('background',background,'Detected/testable background genes','gene')]]
+        views['panels'].append(dict(id=token,title='GO / KEGG enrichment | '+layer+' | '+cid,
+            chapter=5,contrast_id=cid,policy=policy,path=str(image),data_links=links,
+            caption='SYNTHETIC DATA. BP, CC, MF and KEGG facets. Gene Ratio = hit genes / input genes mapped to the library; bubble area = Count; colour = recorded adjusted P (smaller values red). Up to five significant terms per facet, ranked by adjusted P; complete tests and original correction families retained.',
+            metadata={'synthetic':True,'renderer':'go-kegg-facets-v1','foreground_source':layer,
+                      'facet_order':['BP','CC','MF','KEGG'],'adjusted_p_recomputed':False}))
+        views['tables'].append(dict(name=token+' complete tests',path=str(complete),chapter=5,contrast_id=cid,metadata={'synthetic':True}))
+
+
 def add_mapp_and_rbp(project, cid, ci, folder, views, artifacts, rng):
     from katana_next.reports.mapp_activity import render_activity
     contrast = project['contrasts'][ci]
