@@ -82,3 +82,51 @@ def test_whole_study_association_carries_explicit_subset_without_removing_discov
     assert policy['samples'] == 8
     assert rows[0]['sample_ids'] == ['B1', 'B2', 'A1', 'A2']
     assert 'A3' in [s.sample_id for s in project.samples]
+
+
+def test_bundle_expands_only_the_samples_present_in_native_vectors(tmp_path):
+    exporter = load('subset_bundle', 'pipeline/bin/katana_bundle.py')
+    root = tmp_path/'bundle'
+    root.mkdir()
+    native = root/'SE.MATS.JC.txt'
+    coordinates = exporter.COORDINATES['SE']
+    record = dict(GeneID='G', chr='chr1', strand='+', **{key: str(i+100) for i, key in enumerate(coordinates)})
+    record.update(IncLevel1='0.1,0.2', IncLevel2='0.5,0.6', IJC_SAMPLE_1='10,11', IJC_SAMPLE_2='12,13', SJC_SAMPLE_1='20,21', SJC_SAMPLE_2='22,23')
+    with native.open('w', newline='') as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(record), delimiter='\t')
+        writer.writeheader(); writer.writerow(record)
+    artifacts = [dict(kind='rmats', relative_path=native.name, status='available', comparison_id='B_vs_A', mode='JC', event_type='SE')]
+    comparisons = [dict(comparison_id='B_vs_A', rmats_group1='B', rmats_group2='A', excluded_samples=['A3'])]
+    exporter.make_matrices(root, artifacts, comparisons, {'B':['B1','B2'], 'A':['A1','A2','A3']})
+    rows = list(csv.reader((root/'matrices/B_vs_A/JC/psi.tsv').open(), delimiter='\t'))
+    assert rows[0] == ['event_key','B1','B2','A1','A2']
+    assert rows[1][1:] == ['0.1','0.2','0.5','0.6']
+
+
+def test_full_network_uses_full_condition_sources_and_retains_all_samples(tmp_path):
+    import pandas as pd
+    from katana_next.full_fixture import create_full_fixture
+    from katana_next.infrastructure.manifest_store import ManifestStore
+    from katana_next.flow.network_inputs import prepare_project_network
+    from katana_next.flow.model import file_sha256
+    from katana_cosplice.matrix import build_sample_matrices
+    path = create_full_fixture(tmp_path/'study')
+    _, manifest = ManifestStore().load(path)
+    original = manifest.contrasts[0]
+    partial = original.model_copy(update={
+        'contrast_id':'subset',
+        'numerator':original.numerator.model_copy(update={'sample_ids':original.numerator.sample_ids[:2]}),
+        'denominator':original.denominator.model_copy(update={'sample_ids':original.denominator.sample_ids[:2]})})
+    duplicate = [a.model_copy(update={'asset_id':a.asset_id+'-subset', 'metadata':{**a.metadata,
+        'contrast_id':'subset', 'numerator_sample_ids':list(partial.numerator.sample_ids),
+        'denominator_sample_ids':list(partial.denominator.sample_ids)}})
+        for a in manifest.assets if a.kind=='rmats_result' and a.metadata.get('contrast_id')==original.contrast_id]
+    manifest = manifest.model_copy(update={'contrasts':tuple(manifest.contrasts)+(partial,), 'assets':tuple(manifest.assets)+tuple(duplicate)})
+    path = ManifestStore().save(manifest, tmp_path/'subset.project.json')
+    config, proof, _ = prepare_project_network(path, tmp_path/'projection', {'network_scope':'whole_study','rmats_mode':'JC'}, file_sha256)
+    matrix = build_sample_matrices(config)
+    assert set(matrix.psi.columns) == {s.sample_id for s in manifest.samples}
+    mapping = json.loads(Path(proof['projection_mapping']).read_text())
+    assert len(mapping['excluded_measurement_sources']) == 5
+    assert all(row['contrast_id']=='subset' for row in mapping['excluded_measurement_sources'])
+    assert 'subset' not in {row['contrast_id'] for row in mapping['projection']}
