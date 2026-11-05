@@ -130,12 +130,11 @@ Required calculations are verified before the fixed seven-section report is acce
             error('--bundle selects completed upstream results; use downstream-only without --project or --flow_plan')
         }
         if (params.flow_plan && params.mode != 'downstream-only') error('--flow_plan reuses completed downstream work and requires --mode downstream-only')
-        if (!(params.katana_stage_containers instanceof Map)) error('--katana_stage_containers must be a map of execution groups to images')
-        def groups = ['control', 'report', 'audit', 'quality', 'as', 'deg', 'dtu', 'landscape', 'evidence',
-                      'enrichment', 'motiftrace', 'overlap', 'reference', 'qc', 'coverage', 'network_fit',
-                      'network_followup', 'interaction', 'mapp_prepare', 'mapp']
-        if (params.katana_stage_containers.any { key, value -> !(key in groups) || !(value instanceof String) || !value.trim() }) {
-            error('Katana stage containers require known execution-group keys and nonempty image references')
+        if (!(params.katana_stage_containers instanceof Map)) error('--katana_stage_containers must map execution groups or exact task IDs to images')
+        // Exact IDs are checked against the real task plan before workers start.
+        if (params.katana_stage_containers.any { key, value -> !(key instanceof String) ||
+                !(key ==~ /[A-Za-z0-9][A-Za-z0-9_.-]*/) || !(value instanceof String) || !value.trim() }) {
+            error('Katana container overrides require safe execution-group/task keys and nonempty image references')
         }
         if ((params.mode != 'upstream-only' || params.managed_preflight) && (workflow.containerEngine in ['docker', 'singularity', 'apptainer']) && !params.katana_container) {
             error('No Katana container is configured; host fallback is disabled. Restore the release defaults or supply --katana_container.')

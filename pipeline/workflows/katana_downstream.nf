@@ -34,6 +34,10 @@ def tasksForGroup(planFile, group) {
     if (!(plan.tasks instanceof List) || plan.tasks.isEmpty()) error('The Katana task plan is empty')
     def ids = plan.tasks.collect { it.id }
     if (ids.unique(false).size() != ids.size()) error('The Katana task plan has duplicate IDs')
+    def unknownImages = params.katana_stage_containers.keySet().findAll { key ->
+        !(key in ['control', 'report']) && !parents.containsKey(key) && !(key in ids)
+    }
+    if (unknownImages) error("Container overrides do not match a group or planned task: ${unknownImages.join(', ')}")
     plan.tasks.each { task ->
         if (!(task.id ==~ /[A-Za-z0-9][A-Za-z0-9_.-]*/)) error("Unsafe task ID: ${task.id}")
         if (!parents.containsKey(task.execution_group)) error("Unsupported execution group: ${task.execution_group}")
