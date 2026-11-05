@@ -195,7 +195,7 @@ def required_report_gaps(collection, plan, report_manifest, report_dir, *, colle
                         if (row.get("sha256") != file_sha256(native_path) or row.get("scope") != task.get("scope") or
                             _inside(root, row["path"]) != native_path):
                             raise ValueError("Native-fit index changed the numerical family or window identity")
-            if report_manifest.get("specification_version") == "1.1":
+            if report_manifest.get("specification_version") in {"1.1", "1.2"}:
                 from katana_next.reports.mapp_catalogs import validate_portable_mapp_panel
                 validate_portable_mapp_panel(panel, report_root=report_dir)
         except (ValueError, OSError, KeyError) as exc:

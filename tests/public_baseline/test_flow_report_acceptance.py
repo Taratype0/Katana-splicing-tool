@@ -109,7 +109,7 @@ def test_verified_native_activity_render_does_not_require_absent_optional_parall
     assert (out / "REPORT.zip").stat().st_size > 0
 
 
-@pytest.mark.parametrize('tamper', [None, 'image', 'plot_data', 'axis', 'rendering'])
+@pytest.mark.parametrize('tamper', [None, 'image', 'plot_data', 'axis', 'rendering', 'portable_catalog'])
 def test_redrawn_native_activity_passes_real_report_gate_only_with_unchanged_evidence(tmp_path, tamper):
     root, plan, receipts, collection, report, out = _fixture(tmp_path)
     panel = next(p for p in report['panels'] if p.get('metadata', {}).get('component') == 'mapp_native')
@@ -126,6 +126,9 @@ def test_redrawn_native_activity_passes_real_report_gate_only_with_unchanged_evi
         metadata['activity_axis'][0]['condition'] = 'wrong-condition'
     elif tamper == 'rendering':
         metadata['activity_rendering'] = 'unknown'
+    elif tamper == 'portable_catalog':
+        link = next(x for x in panel['data_links'] if x.get('source_sha256') == metadata['portable_fit_index_sha256'])
+        (out / link['path']).write_bytes(b'changed')
     gaps = _mapp_gaps(required_report_gaps(root, plan, report, out, collection_receipt=collection))
     assert bool(gaps) == (tamper is not None), gaps
 
