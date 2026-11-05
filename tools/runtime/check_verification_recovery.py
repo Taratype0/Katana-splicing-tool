@@ -62,6 +62,18 @@ def verify(root):
     proof = dict(project_manifest='project.json', task_receipts=[dict(task_id='native',
         collection_path='evidence/native/task.receipt.json', sha256=file_sha256(receipt_path))])
     views = build_mapp_views(collection, plan, {'native':(receipt_path, receipt)}, transport)
+    # A completed collection from the previous runtime has bare sample labels.
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    for view in views['extra_views']:
+        for panel in view['panels']:
+            table = pd.read_csv(next(x['path'] for x in panel['data_links'] if x['role'] == 'plot_data'), sep='\t')
+            columns = [c for c in table if c.startswith('activities_')]
+            fig = Figure(); FigureCanvasAgg(fig); axes = fig.subplots()
+            axes.imshow(table[columns].to_numpy(), aspect='auto')
+            axes.set_xticks(range(len(columns)), [c.removeprefix('activities_') for c in columns])
+            fig.savefig(panel['path'])
+            panel['metadata']['native_activity_image_sha256'] = file_sha256(panel['path'])
     out = root / 'report'
     report = build_report(dict(project_manifest=str(collection / 'project.json'), artifacts=[],
         extra_views=views['extra_views'], report_require_plot_data=True), out)

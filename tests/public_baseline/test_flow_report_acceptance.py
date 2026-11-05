@@ -16,7 +16,7 @@ from katana_next.flow.model import file_sha256, read_json, seal_plan, write_json
 from katana_next.flow.runtime import canonical_hash, file_record
 
 
-def _fixture(tmp_path, *, parallel=False, not_applicable=False):
+def _fixture(tmp_path, *, parallel=False, not_applicable=False, legacy_image=False):
     from katana_next.full_fixture import create_full_fixture
     source = create_full_fixture(tmp_path / "study")
     root = tmp_path / "collection"
@@ -70,6 +70,21 @@ def _fixture(tmp_path, *, parallel=False, not_applicable=False):
                   "collection_path": "evidence/native/task.receipt.json", "sha256": file_sha256(receipt_path)}]}
     receipts = {"native": (receipt_path, receipt)}
     views = build_mapp_views(root, plan, receipts, transport)
+    if legacy_image:
+        # Model the completed pre-label-update collection used by real resumes.
+        # Preserve its activity values, but render the old bare sample axis.
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        for view in views['extra_views']:
+            for panel in view['panels']:
+                data = next(link['path'] for link in panel['data_links'] if link['role'] == 'plot_data')
+                frame = pd.read_csv(data, sep='\t')
+                columns = [c for c in frame if c.startswith('activities_')]
+                figure = Figure(); FigureCanvasAgg(figure); axes = figure.subplots()
+                axes.imshow(frame[columns].to_numpy(), aspect='auto')
+                axes.set_xticks(range(len(columns)), [c.removeprefix('activities_') for c in columns])
+                figure.savefig(panel['path'])
+                panel['metadata']['native_activity_image_sha256'] = file_sha256(panel['path'])
     from katana_next.reports import build_report
     report_dir = tmp_path / "report"
     actual = build_report({"project_manifest": str(root / "project.json"), "artifacts": [],
@@ -111,7 +126,7 @@ def test_verified_native_activity_render_does_not_require_absent_optional_parall
 
 @pytest.mark.parametrize('tamper', [None, 'image', 'plot_data', 'axis', 'rendering', 'portable_catalog'])
 def test_redrawn_native_activity_passes_real_report_gate_only_with_unchanged_evidence(tmp_path, tamper):
-    root, plan, receipts, collection, report, out = _fixture(tmp_path)
+    root, plan, receipts, collection, report, out = _fixture(tmp_path, legacy_image=True)
     panel = next(p for p in report['panels'] if p.get('metadata', {}).get('component') == 'mapp_native')
     metadata = panel['metadata']
     assert metadata['activity_rendering'] == 'condition_sample_labels/v1'
