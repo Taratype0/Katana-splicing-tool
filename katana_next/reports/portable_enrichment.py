@@ -2,7 +2,7 @@
 from copy import deepcopy
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .sources import digest, read_table, _artifact_comparisons
 
@@ -38,8 +38,10 @@ def portable_enrichment_artifacts(manifest, provenance, root):
         parameters = saved.get('parameters') or deepcopy(previous.get('parameters') or {})
         # Older manifests omitted run IDs on tables. Their identical recorded
         # parameters and lineage provide a display grouping key, not a new fit.
+        export_roots = sorted({str(PurePosixPath(str(p).replace('\\', '/')).parent)
+                               for p in (meta.get('exports') or {}).values() if p})
         run = saved.get('run_fingerprint') or hashlib.sha256(json.dumps(
-            [parameters, meta.get('native_background_provenance'), meta.get('exports')],
+            [parameters, meta.get('native_background_provenance'), export_roots],
             sort_keys=True).encode()).hexdigest()
         artifact = dict(analysis_id='prioritize.enrichment', kind='table', entity_type=entity,
                         artifact_id=table.get('artifact_id'), name=table['name'], path=str(path),
