@@ -60,8 +60,8 @@ def build_native_enrichment_facets(artifacts, destination):
         identity = 'ora-facets-' + hashlib.sha256((str(source.resolve()) + repr(key)).encode()).hexdigest()[:20]
         folder = Path(destination).resolve() / 'outputs/enrichment' / identity
         folder.mkdir(parents=True, exist_ok=True)
-        data = frame.copy(deep=True)
-        data['category'] = data.ontology_category.replace({'GO BP': 'BP', 'GO CC': 'CC', 'GO MF': 'MF'})
+        from .go_categories import annotate_completed_categories
+        data, category_audit = annotate_completed_categories(frame)
         classified = data.category.isin(FACETS)
         library_counts = []
         if 'library' in frame:
@@ -102,6 +102,11 @@ def build_native_enrichment_facets(artifacts, destination):
                               contrast_id=scope['contrast_id'], policy=scope['policy'], unit='gene_set' if role in {'plot_data','full_results'} else 'gene'))
         link('plot_data', plot_path, 'Plotted terms, counts, adjusted P and hit genes')
         link('full_results', source, 'All native tests and original correction families')
+        if category_audit:
+            import json
+            category_path = folder / 'go-category-annotation.json'
+            category_path.write_text(json.dumps(category_audit, indent=2) + '\n', encoding='utf-8')
+            link('methods', category_path, 'GO category annotation version and source')
         for sibling in artifacts:
             if native_enrichment_scope(sibling) != scope or sibling.get('kind') != 'table':
                 continue
@@ -116,11 +121,14 @@ def build_native_enrichment_facets(artifacts, destination):
                            data_links=links, source_run=run,
                            metadata={'renderer':'go-kegg-facets-v1','foreground_source':scope['foreground'],
                                      'library_counts': library_counts, 'unclassified_terms': int((~classified).sum()),
+                                     'go_category_annotation': category_audit,
                                      'facet_order':list(FACETS),'adjusted_p_recomputed':False},
                            caption='BP, CC, MF and KEGG; Gene Ratio = hits / input genes mapped to the library. Bubble area = Count; colour = original adjusted P. Up to five significant terms per facet; complete native tests, hit genes and correction families retained. No enrichment or statistical model was refitted. '
                            + ' '.join(f"{r['library']}: {r['significant']} significant / {r['tests']} recorded tests; {r['mapped_input_genes']} mapped input genes / {r['mapped_background_genes']} mapped background genes." for r in library_counts)
+                           + (f" Missing GO categories were annotated by GO ID using Gene Ontology {category_audit['ontology_version']}; original statistics and identifiers were preserved." if category_audit else '')
                            + (f" {int((~classified).sum())} tests lack recorded BP/CC/MF category metadata; their complete statistics remain linked. An empty category is not an unperformed GO analysis." if (~classified).any() else '')))
         replaced.append(key)
         audit.append(dict(source=str(source), status='rendered_completed_tests', eligible_tests=len(frame),
-                          displayed_terms=len(plotted), unclassified_terms=int((~classified).sum()), new_inference=False))
+                          displayed_terms=len(plotted), unclassified_terms=int((~classified).sum()),
+                          go_category_annotation=category_audit, new_inference=False))
     return dict(panels=panels, audit=audit, replaced=replaced)

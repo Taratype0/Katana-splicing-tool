@@ -4,6 +4,13 @@ import pandas as pd
 from pathlib import Path
 import argparse
 def verify(tmp_path):
+    from katana_next.reports.go_categories import annotate_completed_categories
+    categorized, provenance = annotate_completed_categories(pd.DataFrame({
+        'term':['GO:0008150 biological process','GO:0005575 cellular component','GO:0003674 molecular function'],
+        'ontology_category':['Unclassified']*3, 'fdr':[.01,.02,.03]}))
+    assert categorized.category.tolist()==['BP','CC','MF']
+    assert categorized.fdr.tolist()==[.01,.02,.03]
+    assert provenance['rows_resolved']==3
     import json
     import subprocess
     import sys

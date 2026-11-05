@@ -2,6 +2,15 @@
 
 Katana's own source is covered by the repository MIT license. Third-party source, browser code and fonts retain their original licenses; that MIT notice does not replace theirs.
 
+## Gene Ontology report categories
+
+The report includes a compact GO ID-to-namespace index derived from Gene
+Ontology release 2026-07-26, attributed to the Gene Ontology Consortium under
+[CC BY 4.0](https://geneontology.org/docs/go-citation-policy/).
+`katana_next/reports/assets/go-categories.json.gz` records the source URL,
+ontology version and source SHA256. It supplies BP/CC/MF display labels only;
+it does not update gene membership, backgrounds, enrichment tests or P/FDR.
+
 ## nf-core upstream modules
 
 The Nextflow workflow includes and adapts nf-core modules under their retained

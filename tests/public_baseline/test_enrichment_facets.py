@@ -114,3 +114,30 @@ def test_native_unclassified_and_missing_tests_are_not_negative_findings(tmp_pat
     assert 'No recorded eligible tests' in svg
     assert 'No significant terms' not in svg
     assert result['audit'][0]['unclassified_terms']==1
+
+
+def test_completed_go_ids_get_offline_namespaces_without_changing_native_statistics(tmp_path):
+    from katana_next.reports.native_enrichment import build_native_enrichment_facets
+    from katana_next.reports.go_categories import annotate_completed_categories
+    from pathlib import Path
+    frame=pd.DataFrame([dict(term='GO / '+gid+' saved term',ontology_category='Unclassified',
+        overlap_genes=3,selected_genes=20,background_genes=500,fdr=.01,pvalue=.001,
+        comparison_id='B_vs_A',library='GO',genes='G1;G2;G3')
+        for gid in ('GO:0008150','GO:0005575','GO:0003674')])
+    path=tmp_path/'native.parquet';frame.to_parquet(path,index=False);original=path.read_bytes()
+    artifact=dict(path=str(path),analysis_id='prioritize.enrichment',kind='table',entity_type='gene_set',
+        contrast_ids=['B_vs_A'],metadata=dict(foreground_source='deg',native_background_provenance={'source':'recorded'},
+        report_completion_evidence='completed_workflow_manifest'))
+    result=build_native_enrichment_facets([artifact],tmp_path/'out')
+    assert result['audit'][0]['unclassified_terms']==0
+    panel=result['panels'][0];data=pd.read_csv(next(x['path'] for x in panel['data_links'] if x['role']=='plot_data'),sep='\t')
+    assert data.category.tolist()==['BP','CC','MF']
+    assert data.ontology_category.tolist()==['Unclassified']*3
+    assert data.fdr.tolist()==[.01]*3 and data.pvalue.tolist()==[.001]*3
+    assert panel['metadata']['go_category_annotation']['rows_resolved']==3
+    assert panel['metadata']['go_category_annotation']['ontology_version']=='releases/2026-07-26'
+    assert path.read_bytes()==original
+    assert 'GO category metadata unavailable' not in Path(panel['path']).with_suffix('.svg').read_text('utf8')
+    frame.loc[0,'ontology_category']='GO MF'
+    annotated,_=annotate_completed_categories(frame)
+    assert annotated.loc[0,'category']=='MF'  # Do not overwrite a recorded category.
