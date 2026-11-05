@@ -244,6 +244,9 @@ class Builder:
         record.update({k: artifact[k] for k in ('chapter', 'contrast_id', 'policy', 'unit') if k in artifact})
         if not record.get('contrast_id') and len(artifact.get('contrast_ids') or []) == 1:
             record['contrast_id'] = artifact['contrast_ids'][0]
+        if artifact.get('analysis_id') == 'prioritize.enrichment':
+            record['completed_enrichment'] = {k: artifact[k] for k in
+                ('entity_type', 'contrast_ids', 'parameters', 'metadata', 'run_fingerprint') if k in artifact}
         # Small complete tables receive a self-contained browser. Large result
         # tables retain complete Parquet/TSV access, never a false complete Top N.
         if record['rows'] <= 50000:

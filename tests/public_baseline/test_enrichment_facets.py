@@ -47,13 +47,14 @@ def test_public_report_cli_uses_native_full_tables_and_preserves_statistics(tmp_
                 pvalue=.0001*(i+1),fdr=.001*(i+1) if i<6 else .9,
                 fdr_family='original-family-'+c,genes='G1;G2;G3')
                 for c in ('GO BP','GO CC','GO MF','KEGG') for i in range(7)])
-            for entity,name,frame in [('gene_set','tests',rows),
-                ('gene_input_audit','inputs',pd.DataFrame({'gene_id':['G1','G2'],'selected_input':[True,False]})),
-                ('background_audit','background',pd.DataFrame({'gene_id':['G1','G2','G3']}))]:
+            for entity,name,frame in [('gene_set','Gene-set enrichment',rows),
+                ('gene_input_audit','Enrichment gene inputs by comparison',pd.DataFrame({'gene_id':['G1','G2'],'selected_input':[True,False]})),
+                ('background_audit','Enrichment background eligibility',pd.DataFrame({'gene_id':['G1','G2','G3']}))]:
+                frame['comparison_id'] = cid
                 path=folder/(name+'.parquet'); frame.to_parquet(path,index=False)
                 originals[str(path)]=path.read_bytes()
                 artifacts.append(dict(artifact_id=foreground+cid+name,analysis_id='prioritize.enrichment',
-                    kind='table',entity_type=entity,name=name,path=str(path),contrast_ids=[cid],
+                    kind='table',entity_type=entity,name=name,path=str(path),
                     run_fingerprint=foreground+cid,metadata=dict(completion_verified=True,
                     foreground_source=foreground,background_source=foreground,native_background_provenance={'native_inputs':[]},
                     das_selection={'event_set':'stable_significant','read_support_policy':'bulk-all-samples-counts-v1'})))
@@ -79,6 +80,26 @@ def test_public_report_cli_uses_native_full_tables_and_preserves_statistics(tmp_
         assert set(selected.fdr_family)=={'original-family-'+c for c in ('GO BP','GO CC','GO MF','KEGG')}
     assert all(Path(path).read_bytes()==content for path,content in originals.items())
     assert (out/'REPORT.zip').stat().st_size>0
+    # Older portable reports omitted scope metadata on complete table entries.
+    # Recover it from exact artifact provenance and the saved comparison column.
+    for table in manifest['complete_results']:
+        table.pop('completed_enrichment', None)
+        table.pop('contrast_id', None)
+    for panel in manifest['panels']: panel['output_only'] = True
+    (out/'report-manifest.json').write_text(json.dumps(manifest))
+    report_before = (out/'REPORT.html').read_bytes()
+    refreshed = tmp_path/'refreshed'
+    result = subprocess.run([sys.executable,'-m','katana_next.reports.cli','--from-report',str(out),
+                             '--outdir',str(refreshed),'--no-archive'],capture_output=True,text=True)
+    assert result.returncode == 0, result.stderr+result.stdout
+    current = json.loads((refreshed/'report-manifest.json').read_text())
+    visible = [p for p in current['panels'] if p.get('metadata',{}).get('renderer')=='go-kegg-facets-v1' and not p.get('output_only')]
+    assert len(visible) == 8
+    assert {p['contrast_id'] for p in visible} == {'B_vs_A','D_vs_C'}
+    for panel in visible:
+        assert {r['role'] for r in panel['data_links']} == {'plot_data','full_results','foreground','background'}
+    assert (out/'REPORT.html').read_bytes() == report_before
+    assert all(Path(path).read_bytes()==content for path,content in originals.items())
 
 
 def test_native_unclassified_and_missing_tests_are_not_negative_findings(tmp_path):

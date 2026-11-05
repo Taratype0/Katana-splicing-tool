@@ -206,6 +206,19 @@ def _load_source(project, catalog=None, *, inline_base, mapper=None):
                 continue
             record.setdefault('metadata', {})['report_completion_evidence'] = evidence
         parameters = record.get('parameters') or {}
+        if record.get('analysis_id') == 'prioritize.enrichment' and path.is_file():
+            # Native workflow artifacts can omit contrast_ids. Use the saved
+            # table identity before deduplication; never guess from filenames.
+            if record.get('kind') == 'table':
+                frame = read_table(path)
+                if 'comparison_id' in frame:
+                    ids = sorted(set(frame.comparison_id.dropna().astype(str)))
+                    declared = record.get('contrast_ids') or record.get('comparison_ids')
+                    if declared and set(ids) - set(declared):
+                        raise ValueError('Enrichment table comparison differs from declared identity')
+                    if ids: record['contrast_ids'] = ids
+            if not record.get('contrast_ids'):
+                record['contrast_ids'] = list(_artifact_comparisons(record))
         key = (record.get('analysis_id'), record.get('name'), record.get('kind'), record.get('entity_type'),
                _artifact_comparisons(record), parameters.get('sequence_scope'), parameters.get('event_set'),
                parameters.get('foreground_source', (record.get('metadata') or {}).get('foreground_source')))

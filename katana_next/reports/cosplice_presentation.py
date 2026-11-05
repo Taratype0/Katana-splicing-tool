@@ -65,7 +65,93 @@ else{renderTable('pathwayTable',[],[],{empty:'No recorded module available.'})}}
     after = re.search(r'<script type="application/json" id="reportData">(.*?)</script>', text, re.S)
     if after[1] != payload[1]:
         raise ValueError('Presentation must preserve the complete native data payload byte-for-byte')
-    target.write_text(text, encoding='utf-8')
+    from .compact import _atomic_write
+    _atomic_write(target, text.encode('utf-8'))
     return {'version': 'katana-all-module-browser-v1', 'display_chapter': 7,
             'modules': len(data['modules']), 'native_data_unchanged': True,
             'association_filter_unchanged': True, 'new_scientific_computation': False}
+
+
+def refresh_cosplice_gene_labels(target):
+    """Use saved member annotations in display and copied module downloads.
+
+    Native JSON, object IDs, graph edges, ranking and tests remain untouched.
+    Atomic replacement also protects source reports copied using hard links.
+    """
+    from collections import defaultdict
+    import io
+    import zipfile
+    import pandas as pd
+    from .compact import _atomic_write
+    target = Path(target)
+    text = target.read_text('utf-8')
+    marker = 'katana-cosplice-gene-labels-v1'
+    if marker in text: return None
+    payload = re.search(r'<script type="application/json" id="reportData">(.*?)</script>', text, re.S)
+    if not payload: raise ValueError('CoSplice gene display requires its completed native payload')
+    data = json.loads(payload[1])
+    candidates = defaultdict(set)
+    for row in [*data.get('members', []), *data.get('genes', [])]:
+        gid, symbol = str(row.get('gene_id') or ''), str(row.get('gene_symbol') or '')
+        if gid and symbol and symbol.lower() not in {'nan', 'none', 'na', 'unannotated'} and symbol != gid and not symbol.startswith('ENS'):
+            candidates[gid].add(symbol)
+    names = {gid: next(iter(values)) for gid, values in candidates.items() if len(values) == 1}
+    # A display overlay is separate from reportData, which is kept byte exact.
+    anchor = "const moduleMap="
+    position = text.find(anchor, payload.end())
+    if position < 0: raise ValueError('Unknown CoSplice gene browser template')
+    overlay = ('const katanaGeneNames=' + json.dumps(names, ensure_ascii=True).replace('<', '\\u003c') + ';\n'
+               "const geneLabel=r=>katanaGeneNames[r?.gene_id]||r?.gene_id||'Unannotated';\n"
+               "D.genes=D.genes.map(r=>({...r,gene_symbol:geneLabel(r)}));\n"
+               "D.members=D.members.map(r=>({...r,gene_symbol:geneLabel(r)}));\n")
+    text = text[:position] + overlay + text[position:]
+    # Replace display expressions only. Clicks, joins, ordering and activeGene
+    # continue to use stable IDs; searching accepts either symbol or ID.
+    changes = {
+        "{key:'gene_id',label:'Gene'}": "{key:'gene_symbol',label:'Gene'},{key:'gene_id',label:'Gene ID'}",
+        "g.gene_id.toLowerCase().includes(q)": "(geneLabel(g)+' '+g.gene_id).toLowerCase().includes(q)",
+        "(e.gene_id+' '+e.event_key).toLowerCase()": "(geneLabel(e)+' '+e.gene_id+' '+e.event_key).toLowerCase()",
+        "b.textContent=g.gene_id+' · '": "b.textContent=geneLabel(g)+' · '",
+        "E(e?.gene_id||'Unannotated')": "E(geneLabel(e))",
+        "(e?.gene_id||'Unannotated')+' · kME '": "geneLabel(e)+' · '+(e?.gene_id||'Unannotated')+' · kME '",
+        "r=>r.gene_id+' · E'": "r=>geneLabel(r)+' · E'",
+        "o.textContent=e.gene_id+' · '": "o.textContent=geneLabel(e)+' · '+e.gene_id+' · '",
+        "e.gene_id+' observed PSI'": "geneLabel(e)+' observed PSI'",
+        "textContent=e.gene_id+' · '": "textContent=geneLabel(e)+' · '+e.gene_id+' · '",
+    }
+    # Apply only to executable script, never the stored scientific payload.
+    head, script = text[:payload.end()], text[payload.end():]
+    for old, new in changes.items(): script = script.replace(old, new)
+    script = script.replace("map(g=>g.gene_id).join(', ')", "map(g=>geneLabel(g)).join(', ')")
+    text = head + script + '\n<!-- ' + marker + ' -->'
+    updated = {}
+    for files in data.get('module_files', {}).values():
+        for role in ('genes', 'events'):
+            if not files.get(role): continue
+            path = (target.parent / 'report_tables' / files[role]).resolve()
+            if not path.is_relative_to(target.parent.resolve()):
+                raise ValueError('CoSplice member download escapes report directory')
+            if not path.is_file(): continue
+            frame = pd.read_csv(path, sep='\t', dtype=str, keep_default_na=False)
+            if 'gene_id' not in frame: continue
+            frame['gene_symbol'] = frame.gene_id.map(names).fillna(frame.gene_id)
+            content = frame.to_csv(sep='\t', index=False).encode('utf-8')
+            _atomic_write(path, content)
+            updated[path.name] = content
+    # Existing ZIPs are report downloads; augment only matching tables and
+    # preserve every other entry. The original source ZIP remains unchanged.
+    for path in (target.parent / 'report_tables').glob('*module_lists.zip'):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(path) as original, zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
+            for entry in original.infolist():
+                archive.writestr(entry, updated.get(Path(entry.filename).name, original.read(entry)))
+        _atomic_write(path, buffer.getvalue())
+    if re.search(r'id="reportData">(.*?)</script>', text, re.S)[1] != payload[1]:
+        raise ValueError('CoSplice native payload changed while labelling genes')
+    _atomic_write(target, text.encode('utf-8'))
+    return {'version': marker, 'mapped_gene_ids': len(names),
+            'module_gene_rows': len(data.get('genes', [])),
+            'mapped_module_gene_rows': sum(r.get('gene_id') in names for r in data.get('genes', [])),
+            'ambiguous_gene_ids': sum(len(v) > 1 for v in candidates.values()),
+            'download_tables': len(updated), 'native_data_unchanged': True,
+            'new_scientific_computation': False}

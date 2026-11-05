@@ -7,7 +7,8 @@ def native_enrichment_scope(artifact):
     if artifact.get('analysis_id') != 'prioritize.enrichment':
         return None
     meta = artifact.get('metadata', {})
-    comparisons = artifact.get('contrast_ids') or []
+    from .sources import _artifact_comparisons
+    comparisons = _artifact_comparisons(artifact)
     foreground = meta.get('foreground_source')
     if (len(comparisons) != 1 or foreground not in {'deg', 'das', 'dtu', 'dexseq'}
             or not meta.get('native_background_provenance')
@@ -62,6 +63,12 @@ def build_native_enrichment_facets(artifacts, destination):
         data = frame.copy(deep=True)
         data['category'] = data.ontology_category.replace({'GO BP': 'BP', 'GO CC': 'CC', 'GO MF': 'MF'})
         classified = data.category.isin(FACETS)
+        library_counts = []
+        if 'library' in frame:
+            for library, rows in frame.groupby('library', sort=True):
+                q = pd.to_numeric(rows.fdr, errors='coerce')
+                library_counts.append({'library': str(library), 'tests': len(rows),
+                                       'significant': int(q.le(.05).sum())})
         data = data.loc[classified].copy()
         data['Count'] = pd.to_numeric(data.overlap_genes)
         denominator = pd.to_numeric(data.selected_genes)
@@ -96,8 +103,11 @@ def build_native_enrichment_facets(artifacts, destination):
                            contrast_id=scope['contrast_id'], policy=scope['policy'], cell_type=cell_type,
                            data_links=links, source_run=run,
                            metadata={'renderer':'go-kegg-facets-v1','foreground_source':scope['foreground'],
+                                     'library_counts': library_counts, 'unclassified_terms': int((~classified).sum()),
                                      'facet_order':list(FACETS),'adjusted_p_recomputed':False},
-                           caption='BP, CC, MF and KEGG; Gene Ratio = hits / input genes mapped to the library. Bubble area = Count; colour = original adjusted P. Up to five significant terms per facet; complete native tests, hit genes and correction families retained. No enrichment or statistical model was refitted.'))
+                           caption='BP, CC, MF and KEGG; Gene Ratio = hits / input genes mapped to the library. Bubble area = Count; colour = original adjusted P. Up to five significant terms per facet; complete native tests, hit genes and correction families retained. No enrichment or statistical model was refitted. '
+                           + ' '.join(f"{r['library']}: {r['significant']} significant / {r['tests']} tested." for r in library_counts)
+                           + (f" {int((~classified).sum())} tests lack recorded BP/CC/MF category metadata; their complete statistics remain linked. An empty category is not an unperformed GO analysis." if (~classified).any() else '')))
         replaced.append(key)
         audit.append(dict(source=str(source), status='rendered_completed_tests', eligible_tests=len(frame),
                           displayed_terms=len(plotted), unclassified_terms=int((~classified).sum()), new_inference=False))

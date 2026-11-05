@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from katana_next.reports.native_enrichment import native_enrichment_scope
-from katana_next.reports.cosplice_presentation import refresh_cosplice_copy
+from katana_next.reports.cosplice_presentation import refresh_cosplice_copy, refresh_cosplice_gene_labels
 from katana_next.reports.gene_names import annotate_report_genes
 from katana_next.reports.mapp_activity import activity_axis, refresh_activity_panel
 
@@ -125,7 +125,7 @@ def test_browser_can_inspect_modules_when_no_association_is_significant(tmp_path
                          reason='Insufficient coverage' if i else '', statistic=1)
                     for i, m in enumerate(('M1', 'M2'))]
     samples = [dict(sample_id=s, biological_sample_id=s, condition=c) for s,c in [('S1','A'),('S2','B'),('S3','C')]]
-    members = [dict(module=m, event_key='E'+m, gene_id='G'+m, kME=.8, observed_samples=3,
+    members = [dict(module=m, event_key='E'+m, gene_id='G'+m, gene_symbol='Symbol'+m, kME=.8, observed_samples=3,
                     within_module_strength=.5, event_type='SE') for m in ('M1', 'M2')]
     data = dict(modules=modules, associations=associations, samples=samples, members=members,
                 scores=[dict(sample_id=s['sample_id'], M1=i, M2=-i) for i,s in enumerate(samples)],
@@ -142,6 +142,7 @@ def test_browser_can_inspect_modules_when_no_association_is_significant(tmp_path
     target = tmp_path/'report.html'
     target.write_text(template.replace('__REPORT_DATA__',json.dumps(data)).replace('__STUDY_TITLE__','Synthetic'),encoding='utf-8')
     refresh_cosplice_copy(target)
+    refresh_cosplice_gene_labels(target)
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
@@ -153,7 +154,44 @@ def test_browser_can_inspect_modules_when_no_association_is_significant(tmp_path
         assert 'M2' in page.locator('#moduleTitle').inner_text()
         assert page.locator('#networkPlot svg').count() == 1
         assert 'GM2' in page.locator('#independentModuleLists').inner_text()
+        assert 'SymbolM2' in page.locator('#independentModuleLists').inner_text()
+        assert 'SymbolM2' in page.locator('#networkPlot').inner_text()
+        page.locator('#geneSearch').fill('SymbolM2')
+        assert 'GM2' in page.locator('#geneTable').inner_text()
+        page.locator('#geneTable tbody tr').first.click()
+        assert 'SymbolM2' in page.locator('#eventPlot').inner_text()
         assert 'No significant terms' in page.locator('#pathwayTable').inner_text()
         assert 'No module passes' in page.locator('#topModules').inner_text()
         assert not errors, errors
         browser.close()
+
+
+def test_cosplice_labels_keep_native_data_and_hardlinked_downloads_unchanged(tmp_path):
+    import os
+    import zipfile
+    template = (Path(__file__).resolve().parents[2]/'katana_cosplice/_study_core/science/study_report39.html').read_text('utf-8')
+    data = dict(modules=[{'module':'M1'}], genes=[{'gene_id':'G1','module':'M1'}],
+        members=[{'gene_id':'G1','gene_symbol':'Alpha'}, {'gene_id':'G2','gene_symbol':'Beta'},
+                 {'gene_id':'G2','gene_symbol':'Other'}], module_files={'M1':{'genes':'module_M1_genes.tsv'}})
+    source = tmp_path/'original'; source.mkdir()
+    target = tmp_path/'copy'; (target/'report_tables').mkdir(parents=True)
+    native = json.dumps(data)
+    (source/'report.html').write_text(template.replace('__REPORT_DATA__',native),encoding='utf-8')
+    original_table = b'gene_id\tmodule\tmax_abs_kME\nG1\tM1\t0.987654321\nG2\tM1\t0.2\n'
+    (source/'module_M1_genes.tsv').write_bytes(original_table)
+    os.link(source/'report.html', target/'report.html')
+    os.link(source/'module_M1_genes.tsv', target/'report_tables/module_M1_genes.tsv')
+    with zipfile.ZipFile(target/'report_tables/all_module_lists.zip','w') as z:
+        z.writestr('module_M1_genes.tsv',original_table)
+    receipt = refresh_cosplice_gene_labels(target/'report.html')
+    assert receipt['mapped_gene_ids'] == 1 and receipt['ambiguous_gene_ids'] == 1
+    html = (target/'report.html').read_text('utf-8')
+    assert re.search(r'id="reportData">(.*?)</script>',html,re.S)[1] == native
+    updated = pd.read_csv(target/'report_tables/module_M1_genes.tsv',sep='\t',dtype=str)
+    assert updated.gene_symbol.tolist() == ['Alpha','G2']
+    assert updated.max_abs_kME.tolist() == ['0.987654321','0.2']
+    assert (source/'module_M1_genes.tsv').read_bytes() == original_table
+    assert 'katana-cosplice-gene-labels-v1' not in (source/'report.html').read_text('utf-8')
+    with zipfile.ZipFile(target/'report_tables/all_module_lists.zip') as z:
+        assert z.read('module_M1_genes.tsv') == (target/'report_tables/module_M1_genes.tsv').read_bytes()
+    assert refresh_cosplice_gene_labels(target/'report.html') is None

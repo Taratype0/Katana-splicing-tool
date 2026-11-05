@@ -589,9 +589,13 @@ def copy_rich_asset(asset: dict[str, Any], destination: Path) -> dict[str, Any]:
     if meta.get("network_view_role") == "module_browser":
         from .network_display_upgrade import upgrade_copied_network_browser
         presentation_refresh = upgrade_copied_network_browser(asset, bounded[source])
-    if meta.get("report_role") == "whole_study_chapter":
-        from .cosplice_presentation import refresh_cosplice_copy
-        presentation_refresh = refresh_cosplice_copy(bounded[source])
+    if meta.get('analysis_id') == 'programs.cosplice' or meta.get("report_role") == "whole_study_chapter":
+        from .cosplice_presentation import refresh_cosplice_copy, refresh_cosplice_gene_labels
+        presentation_refresh = []
+        for target in bounded.values():
+            if target.suffix == '.html' and 'id="reportData"' in target.read_text('utf-8'):
+                presentation_refresh.append({'path': target.relative_to(destination).as_posix(),
+                    'modules': refresh_cosplice_copy(target), 'gene_labels': refresh_cosplice_gene_labels(target)})
     rows = []
     for path, target in bounded.items():
         size, stamp, digest = before[path]

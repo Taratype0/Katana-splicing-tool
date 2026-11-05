@@ -112,6 +112,16 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
     from .network_display_upgrade import bind_legacy_network_table_scopes, upgrade_copied_network_browser
     scope_binding = bind_legacy_network_table_scopes(manifest)
     network_receipts = []
+    from .cosplice_presentation import refresh_cosplice_copy, refresh_cosplice_gene_labels
+    cosplice_receipts = []
+    for target in (output / 'outputs/rich').rglob('*.html'):
+        text = target.read_text('utf-8')
+        if 'id="reportData"' in text and 'const moduleMap=' in text:
+            cosplice_receipts.append({'path': target.relative_to(output).as_posix(),
+                'modules': refresh_cosplice_copy(target), 'gene_labels': refresh_cosplice_gene_labels(target)})
+    for table in manifest.get('complete_results', []):
+        if table.get('analysis_id') == 'rich_browser' and table.get('metadata', {}).get('analysis_id') == 'programs.cosplice':
+            table.setdefault('metadata', {})['portable_sha256'] = digest(output / table['source'])
     for table in manifest.get('complete_results', []):
         if (table.get('chapter') != 6 or table.get('analysis_id') != 'rich_browser'
                 or (table.get('metadata', {}).get('network_view_role') != 'module_browser'
@@ -151,9 +161,25 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
     builder.data_link_audit = deepcopy(manifest.get('figure_data_links', {}).get('bindings', []))
     builder.derived_audits = deepcopy(provenance.get('derived_views', []))
     builder.preserved_source_projects = deepcopy(provenance.get('source_projects', []))
+    from .portable_enrichment import portable_enrichment_artifacts
+    from .native_enrichment import build_native_enrichment_facets
+    artifacts = portable_enrichment_artifacts(manifest, provenance, output)
+    facets = build_native_enrichment_facets(artifacts, output)
+    scopes = {(p['contrast_id'], p['metadata']['foreground_source'], p.get('policy')) for p in facets['panels']}
+    # Replace display-only panels, retaining all original plots and full tables.
+    for panel in builder.panels:
+        meta = panel.get('metadata', {})
+        if panel.get('chapter') == 5 and (meta.get('analysis_id') == 'prioritize.enrichment'
+                or meta.get('foreground_source') in {'deg', 'das', 'dtu', 'dexseq'}):
+            if (panel.get('contrast_id'), meta.get('foreground_source'), panel.get('policy')) in scopes or panel.get('contrast_id') == 'all':
+                panel['output_only'] = True
+    builder.add_views(facets)
+    builder.derived_audits.extend(facets['audit'])
     builder.derived_audits.append({'schema': 'katana.report_presentation_refresh/v1',
         'source_manifest_sha256': before[str(manifest_path)], 'network_browsers': network_receipts,
-        'motif_significance': motif_audit, 'network_table_scope_binding': scope_binding, 'completed_analyses_rerun': 0})
+        'motif_significance': motif_audit, 'network_table_scope_binding': scope_binding,
+        'cosplice_gene_labels': cosplice_receipts, 'native_enrichment_facets': facets['audit'],
+        'completed_analyses_rerun': 0})
     if manifest.get('release_status'): builder.release_status = deepcopy(manifest['release_status'])
     builder.create_archive = False
     result = builder.write()
@@ -164,6 +190,7 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
     receipt = {'schema': 'katana.completed_report_refresh/v1', 'status': 'completed',
         'utc': datetime.now(timezone.utc).isoformat(), 'source_manifest_sha256': before[str(manifest_path)],
         'network_browsers': network_receipts, 'motif_significance': motif_audit,
+        'cosplice_gene_labels': cosplice_receipts, 'native_enrichment_facets': facets['audit'],
         'completed_analyses_rerun': 0, 'original_report_unchanged': original_unchanged(),
         'compact': compact}
     if not receipt['original_report_unchanged']:
