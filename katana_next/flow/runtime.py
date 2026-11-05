@@ -79,7 +79,16 @@ def file_record(path: str | Path) -> dict:
     digest = file_hash(path)
     after = identity(path)
     if before != after:
-        raise ValueError(f"File changed while its content was verified: {path}")
+        # digest() already handles a metadata-only transition by checking the
+        # bytes again. The outer record must use that stable final identity,
+        # rather than reject its successfully verified result. Also cover a
+        # transition between digest() returning and the outer stat: bounded
+        # re-verification, never a retry of a changing scientific output.
+        if before[:3] != after[:3]:
+            raise ValueError(f"File changed while its content was verified: {path}")
+        confirmed = file_hash(path)
+        if identity(path) != after or confirmed != digest:
+            raise ValueError(f"File changed while its content was verified: {path}")
     return {"path": str(path), "size_bytes": after[2], "sha256": digest, "file_identity": after,
             "metadata_cache_ready": metadata_cache_ready(after)}
 

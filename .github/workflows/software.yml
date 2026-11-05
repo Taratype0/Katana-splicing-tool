@@ -105,8 +105,10 @@ jobs:
           cp tests/public_baseline/test_target_distribution.py "$RUNNER_TEMP/test_target_distribution.py"
           cp tests/public_baseline/test_flow_distribution.py "$RUNNER_TEMP/test_flow_distribution.py"
           cp tests/public_baseline/test_enrichment_facets.py "$RUNNER_TEMP/test_enrichment_facets.py"
+          cp tests/public_baseline/test_verification_recovery.py "$RUNNER_TEMP/test_verification_recovery.py"
+          cp tests/public_baseline/test_flow_report_acceptance.py "$RUNNER_TEMP/test_flow_report_acceptance.py"
           cd "$RUNNER_TEMP"
-          python -I -m pytest -q test_motiftrace_distribution.py test_report_distribution.py test_target_distribution.py test_flow_distribution.py test_enrichment_facets.py
+          python -I -m pytest -q test_motiftrace_distribution.py test_report_distribution.py test_target_distribution.py test_flow_distribution.py test_enrichment_facets.py test_verification_recovery.py test_flow_report_acceptance.py
       - uses: actions/upload-artifact@v4
         with:
           name: public-wheel-linux

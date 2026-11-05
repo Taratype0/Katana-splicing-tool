@@ -13,7 +13,7 @@ delivery are part of this one Nextflow session. See [outputs](NATIVE_OUTPUTS.md)
 | `--digest_cache` | launch/.katana-cache/checksums | One checksum database for unchanged-file reuse across tasks. |
 | `--verify_content` | false | Force full file rereads instead of metadata-validated digest reuse. |
 | `--katana_container` | release image | Optional override; default Docker image or SIF is downloaded by Nextflow. |
-| `--katana_stage_containers` | versioned report image | Optional per-stage image map. The report stage uses the approved 4 November renderer; analysis stages keep their existing image so report updates do not invalidate completed scientific tasks. |
+| `--katana_stage_containers` | versioned DTU and report images | Optional image map. An exact planned task ID takes precedence over its execution group. This supports repairing a failed task while retaining the image and Nextflow cache identity of completed tasks. The approved report format is unchanged. |
 | `--retention_container` | analysis image | Optional compatible image override for final project retention and delivery only. Supports a delivery repair while keeping the original analysis image and `-resume` cache identities. |
 | `--dexseq_tools_container` | pinned DEXSeq image | Optional override; default is downloaded by Nextflow. |
 | `--bundle` | unset | Existing upstream bundle; select downstream-only instead of raw inputs. |
@@ -406,7 +406,7 @@ significance. See [MOTIFTRACE.md](MOTIFTRACE.md).
 | --- | --- | --- |
 | `--katana_container` | published Katana runtime | Optional compatible image override; downloaded automatically. |
 | `--dexseq_tools_container` | published Katana DEXSeq tools image | Optional compatible image override. Nextflow downloads the pinned Docker image or SIF automatically; no manual download or build is required. |
-| `--katana_stage_containers` | `{}` | Advanced map of execution groups to compatible images. Main control still requires the full image. Use a structured params file, not an unvalidated shell string. |
+| `--katana_stage_containers` | versioned DTU and report images | Advanced map of execution groups or exact task IDs to compatible images, supplied in a Nextflow configuration. Main control still requires the full image. Preserve the original control image and parameters when resuming; changing all images can invalidate successful task caches. |
 | `--flow_executable` | `katana-flow` | Container profiles permit only `katana-flow` or `/opt/conda/bin/katana-flow`; mounted host launchers are rejected. |
 | `--slurm_account` | unset | Account passed to Slurm when configured. |
 | `--slurm_partition` | unset | Explicit Slurm queue/partition; overrides automatic Dardel routing. |

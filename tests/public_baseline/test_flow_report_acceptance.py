@@ -109,6 +109,27 @@ def test_verified_native_activity_render_does_not_require_absent_optional_parall
     assert (out / "REPORT.zip").stat().st_size > 0
 
 
+@pytest.mark.parametrize('tamper', [None, 'image', 'plot_data', 'axis', 'rendering'])
+def test_redrawn_native_activity_passes_real_report_gate_only_with_unchanged_evidence(tmp_path, tamper):
+    root, plan, receipts, collection, report, out = _fixture(tmp_path)
+    panel = next(p for p in report['panels'] if p.get('metadata', {}).get('component') == 'mapp_native')
+    metadata = panel['metadata']
+    assert metadata['activity_rendering'] == 'condition_sample_labels/v1'
+    assert metadata['rendered_activity_image_sha256'] == file_sha256(out / panel['image'])
+    assert metadata['native_activity_image_sha256'] != metadata['rendered_activity_image_sha256']
+    if tamper == 'image':
+        (out / panel['image']).write_bytes(b'changed')
+    elif tamper == 'plot_data':
+        link = next(x for x in panel['data_links'] if x['role'] == 'plot_data')
+        (out / link['path']).write_bytes(b'changed')
+    elif tamper == 'axis':
+        metadata['activity_axis'][0]['condition'] = 'wrong-condition'
+    elif tamper == 'rendering':
+        metadata['activity_rendering'] = 'unknown'
+    gaps = _mapp_gaps(required_report_gaps(root, plan, report, out, collection_receipt=collection))
+    assert bool(gaps) == (tamper is not None), gaps
+
+
 def test_native_receipt_verification_accepts_unicode_resource_paths(tmp_path):
     root, plan, receipts, collection, report, out = _fixture(tmp_path / "项目")
     assert not _mapp_gaps(required_report_gaps(root, plan, report, out, collection_receipt=collection))

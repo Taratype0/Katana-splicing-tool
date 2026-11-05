@@ -176,9 +176,8 @@ def required_report_gaps(collection, plan, report_manifest, report_dir, *, colle
                 metadata.get("fit_receipt_sha256") != {key: value[1]["receipt_sha256"] for key, value in entries.items()} or
                 metadata.get("calibrated_motiftrace_parallel") is not False):
                 raise ValueError("Native activity panel does not bind every completed window fit")
-            image = _inside(report_dir, panel.get("image", ""))
-            if not image.is_file() or file_sha256(image) != metadata.get("native_activity_image_sha256"):
-                raise ValueError("Native MAEI activity panel is absent or changed")
+            from katana_next.reports.mapp_activity import validate_activity_image
+            validate_activity_image(panel, project, report_dir)
             links = panel.get("data_links", [])
             for role, key in (("plot_data", "native_plot_data_sha256"), ("full_results", "native_fit_index_sha256")):
                 matches = [link for link in links if link.get("role") == role and

@@ -45,7 +45,7 @@ Path("config/flow.json").write_text(json.dumps(cfg))
     # the published report entry, so override that key with the local image.
     (root / 'acceptance.config').write_text(
         'executor.cpus = 4\nexecutor.memory = "6 GB"\n'
-        f'params.katana_stage_containers = [report: {json.dumps(args.image)}]\n')
+        f'params.katana_stage_containers = [dtu: {json.dumps(args.image)}, report: {json.dumps(args.image)}]\n')
     base = [args.nextflow, 'run', str(root / 'pipeline/main.nf'), '-profile', 'docker',
         '--mode', 'downstream-only', '--project', str(root / 'source/katana.project.json'),
         '--flow_config', str(root / 'config/flow.json'), '--outdir', str(root / 'results'),
@@ -81,6 +81,33 @@ Path("config/flow.json").write_text(json.dumps(cfg))
     assert {r['name'].split(':')[-1] for r in delivery_rows if r['status'] == 'COMPLETED'} == changed
     assert all(r['status'] == ('COMPLETED' if r['name'].split(':')[-1] in changed else 'CACHED') for r in delivery_rows)
     records['retention_resume'] = {'completed': 2, 'cached': len(delivery_rows)-2, 'scientific_tasks_rerun': 0}
+    # A task-specific repair must keep OTHER completed DTU tasks, all upstream
+    # analyses and native fits cached. Only that task and its descendants can
+    # change. This is generated-data cache acceptance, not a production resume.
+    dtu_rows = [r for r in rows if ':DTU (' in r['name']]
+    assert len(dtu_rows) == 2, dtu_rows
+    repaired_id = dtu_rows[0]['name'].split(' (', 1)[1].removesuffix(')')
+    repair_image = args.image + '-one-task-repair'
+    subprocess.run(['docker', 'tag', args.image, repair_image], check=True)
+    (root / 'one-task.config').write_text(
+        f'params.katana_stage_containers = [{json.dumps(repaired_id)}: {json.dumps(repair_image)}]\n')
+    trace = root / 'one-task-resume.tsv'
+    with (root / 'one-task-resume.log').open('w') as stream:
+        run = subprocess.run([*base, '-c', str(root / 'one-task.config'),
+            '-with-trace', str(trace), '-resume'], cwd=root, stdout=stream,
+            stderr=subprocess.STDOUT, timeout=3600)
+    assert run.returncode == 0, (root / 'one-task-resume.log').read_text()[-24000:]
+    with trace.open() as stream:
+        repair_rows = list(csv.DictReader(stream, delimiter='\t'))
+    by_name = {r['name']: r for r in repair_rows}
+    assert by_name[dtu_rows[0]['name']]['status'] == 'COMPLETED'
+    assert by_name[dtu_rows[1]['name']]['status'] == 'CACHED'
+    unaffected = ['KATANA_FLOW_PLAN', 'AUDIT', 'QC', 'DAS', 'DEG', 'NETWORK', 'MOTIFTRACE', 'MAPP']
+    protected = [r for r in repair_rows if r['name'].split(':')[-1].split(' (')[0] in unaffected]
+    assert protected and all(r['status'] == 'CACHED' for r in protected), protected
+    records['one_task_resume'] = {'repaired_task': repaired_id,
+        'other_dtu_cached': True, 'protected_cached': len(protected),
+        'trace': trace.name}
     results = root / 'results'
     receipt = json.loads((results / 'pipeline_info/delivery.receipt.json').read_text())
     assert receipt['status'] == 'completed', receipt

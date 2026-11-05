@@ -65,8 +65,47 @@ def refresh_activity_panel(panel, project, report_root):
     cid = panel['contrast_id']
     destination = Path(report_root)/'figures/mapp'/(sha256(cid.encode()).hexdigest()[:16]+'-activities.png')
     axis = render_activity(pd.read_csv(path, sep='\t'), project, cid, destination)
-    result = {**panel, 'path': str(destination), 'metadata': {**metadata, 'activity_axis': axis}}
+    rendered_sha = sha256(destination.read_bytes()).hexdigest()
+    result = {**panel, 'path': str(destination), 'metadata': {
+        **metadata, 'activity_axis': axis,
+        'activity_rendering': 'condition_sample_labels/v1',
+        'rendered_activity_image_sha256': rendered_sha}}
     result['caption'] = panel.get('caption', '') + ' Columns identify experimental condition and individual sample; biological replicates are not averaged.'
     return result, {'component': 'mapp_condition_labels', 'comparison_id': cid,
                     'source_plot_data_sha256': expected, 'activity_axis': axis,
+                    'rendered_activity_image_sha256': rendered_sha,
                     'native_values_unchanged': True, 'new_fits': 0}
+
+
+def validate_activity_image(panel, project, report_root):
+    """Authenticate the displayed image without replacing native provenance."""
+    from hashlib import sha256
+    import pandas as pd
+    root = Path(report_root).resolve()
+    metadata = panel['metadata']
+
+    def member(relative):
+        path = (root / relative).resolve()
+        if Path(relative).is_absolute() or not path.is_relative_to(root):
+            raise ValueError('Native MAEI image/data escapes its report')
+        return path
+
+    expected = metadata.get('native_activity_image_sha256')
+    if metadata.get('activity_rendering') is not None:
+        if metadata['activity_rendering'] != 'condition_sample_labels/v1':
+            raise ValueError('Unknown native MAEI activity rendering')
+        links = [row for row in panel.get('data_links', []) if row.get('role') == 'plot_data']
+        if len(links) != 1:
+            raise ValueError('Rendered native MAEI activity lacks its exact source rows')
+        data = member(links[0]['path'])
+        if sha256(data.read_bytes()).hexdigest() != metadata.get('native_plot_data_sha256'):
+            raise ValueError('Rendered native MAEI activity source rows changed')
+        columns = [c for c in pd.read_csv(data, sep='\t', nrows=0) if str(c).startswith('activities_')]
+        if not columns or metadata.get('activity_axis') != activity_axis(columns, project):
+            raise ValueError('Rendered native MAEI activity axis differs from the project samples')
+        expected = metadata.get('rendered_activity_image_sha256')
+    elif metadata.get('rendered_activity_image_sha256') is not None:
+        raise ValueError('Rendered native MAEI image has no declared rendering')
+    image = member(panel.get('image', ''))
+    if not image.is_file() or sha256(image.read_bytes()).hexdigest() != expected:
+        raise ValueError('Native MAEI activity panel is absent or changed')
