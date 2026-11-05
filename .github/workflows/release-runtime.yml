@@ -47,10 +47,10 @@ jobs:
         run: bash tools/runtime/release_runtime.sh models
       - name: Verify approved enrichment figures from the installed image
         run: |
-          docker run --rm --network=none -e MPLCONFIGDIR=/tmp/matplotlib -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python -I /checks/check_report_format.py --outdir /acceptance/approved-report
+          docker run --rm --network=none --user "$(id -u):$(id -g)" -e MPLCONFIGDIR=/tmp/matplotlib -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python -I /checks/check_report_format.py --outdir /acceptance/approved-report
       - name: Verify DTU file identity and native MAPP final report acceptance
         run: |
-          docker run --rm --network=none -e MPLCONFIGDIR=/tmp/matplotlib -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python -I /checks/check_verification_recovery.py --outdir /acceptance/verification-recovery
+          docker run --rm --network=none --user "$(id -u):$(id -g)" -e MPLCONFIGDIR=/tmp/matplotlib -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python -I /checks/check_verification_recovery.py --outdir /acceptance/verification-recovery
       - name: Verify installed native DAG, models, report, delivery and resume
         run: |
           "$CONTROLLER/python/bin/python3" -I tools/runtime/check_native_models.py --image "katana-downstream:$RUNTIME_VERSION" --nextflow "$CONTROLLER/bin/nextflow" --outdir "$RUNNER_TEMP/katana-release/output/native-models"
