@@ -158,7 +158,7 @@ def test_browser_can_inspect_modules_when_no_association_is_significant(tmp_path
         assert 'SymbolM2' in page.locator('#networkPlot').inner_text()
         page.locator('#geneSearch').fill('SymbolM2')
         assert 'GM2' in page.locator('#geneTable').inner_text()
-        page.locator('#geneTable tbody tr').first.click()
+        page.locator('#independentModuleLists tbody tr').first.click()
         assert 'SymbolM2' in page.locator('#eventPlot').inner_text()
         assert 'No significant terms' in page.locator('#pathwayTable').inner_text()
         assert 'No module passes' in page.locator('#topModules').inner_text()

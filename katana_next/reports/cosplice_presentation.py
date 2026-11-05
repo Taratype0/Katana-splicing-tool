@@ -125,7 +125,9 @@ def refresh_cosplice_gene_labels(target):
     script = script.replace("map(g=>g.gene_id).join(', ')", "map(g=>geneLabel(g)).join(', ')")
     text = head + script + '\n<!-- ' + marker + ' -->'
     updated = {}
-    for files in data.get('module_files', {}).values():
+    download_sets = [*data.get('module_files', {}).values(),
+                     {'genes': 'module_gene_summary.tsv', 'events': 'gene_event_membership.tsv'}]
+    for files in download_sets:
         for role in ('genes', 'events'):
             if not files.get(role): continue
             path = (target.parent / 'report_tables' / files[role]).resolve()

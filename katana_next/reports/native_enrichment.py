@@ -68,7 +68,19 @@ def build_native_enrichment_facets(artifacts, destination):
             for library, rows in frame.groupby('library', sort=True):
                 q = pd.to_numeric(rows.fdr, errors='coerce')
                 library_counts.append({'library': str(library), 'tests': len(rows),
-                                       'significant': int(q.le(.05).sum())})
+                                       'significant': int(q.le(.05).sum()),
+                                       'mapped_input_genes': int(pd.to_numeric(rows.selected_genes).max()),
+                                       'mapped_background_genes': int(pd.to_numeric(rows.background_genes).max()) if 'background_genes' in rows else None})
+        empty_messages = {}
+        unknown_go = ~classified & data.get('library', pd.Series('', index=data.index)).astype(str).str.contains('GO', case=False)
+        if unknown_go.any():
+            for category in ('BP', 'CC', 'MF'):
+                if not (data.category == category).any():
+                    empty_messages[category] = 'GO category metadata unavailable\nSee complete GO tests'
+        for category in FACETS:
+            rows = data.loc[data.category.eq(category)]
+            if len(rows) and pd.to_numeric(rows.selected_genes).eq(0).all():
+                empty_messages[category] = 'No input genes mapped to this library'
         data = data.loc[classified].copy()
         data['Count'] = pd.to_numeric(data.overlap_genes)
         denominator = pd.to_numeric(data.selected_genes)
@@ -81,7 +93,7 @@ def build_native_enrichment_facets(artifacts, destination):
         title = f"GO / KEGG enrichment | {label} | {scope['contrast_id']}"
         image = folder / 'facets.png'
         plotted = render_enrichment_facets(data, image, title=title,
-                                          available_categories=set(data.category))
+                                          available_categories=set(data.category), empty_messages=empty_messages)
         plot_path = folder / 'plotted.tsv'
         plotted.to_csv(plot_path, sep='\t', index=False)
         links = []
@@ -106,7 +118,7 @@ def build_native_enrichment_facets(artifacts, destination):
                                      'library_counts': library_counts, 'unclassified_terms': int((~classified).sum()),
                                      'facet_order':list(FACETS),'adjusted_p_recomputed':False},
                            caption='BP, CC, MF and KEGG; Gene Ratio = hits / input genes mapped to the library. Bubble area = Count; colour = original adjusted P. Up to five significant terms per facet; complete native tests, hit genes and correction families retained. No enrichment or statistical model was refitted. '
-                           + ' '.join(f"{r['library']}: {r['significant']} significant / {r['tests']} tested." for r in library_counts)
+                           + ' '.join(f"{r['library']}: {r['significant']} significant / {r['tests']} recorded tests; {r['mapped_input_genes']} mapped input genes / {r['mapped_background_genes']} mapped background genes." for r in library_counts)
                            + (f" {int((~classified).sum())} tests lack recorded BP/CC/MF category metadata; their complete statistics remain linked. An empty category is not an unperformed GO analysis." if (~classified).any() else '')))
         replaced.append(key)
         audit.append(dict(source=str(source), status='rendered_completed_tests', eligible_tests=len(frame),

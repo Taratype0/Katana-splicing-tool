@@ -7,7 +7,7 @@ import pandas as pd
 FACETS = ('BP', 'CC', 'MF', 'KEGG')
 
 
-def render_enrichment_facets(frame, destination, *, title='', top_n=5, available_categories=None):
+def render_enrichment_facets(frame, destination, *, title='', top_n=5, available_categories=None, empty_messages=None):
     """Plot recorded ratios, counts and adjusted P; preserve the complete source.
 
     Required columns: category, term, Count, GeneRatio, p.adjust. Categories must
@@ -64,6 +64,7 @@ def render_enrichment_facets(frame, destination, *, title='', top_n=5, available
         else:
             ax.set_yticks([]);ax.set_ylim(.5,-.5)
             message = 'No significant terms' if available_categories is None or category in available_categories else 'No recorded eligible tests'
+            message = (empty_messages or {}).get(category, message)
             ax.text(.5,.5,message,transform=ax.transAxes,ha='center',va='center',fontsize=9,color='#666')
         ax.add_patch(Rectangle((1,0),.065,1,transform=ax.transAxes,clip_on=False,facecolor='#d6d6d6',edgecolor='#777',linewidth=.7))
         ax.text(1.033,.5,category,rotation=270,ha='center',va='center',transform=ax.transAxes,fontsize=10,fontfamily='DejaVu Serif')
