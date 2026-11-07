@@ -16,9 +16,15 @@ on:
       - 'setup.py'
       - '.github/workflows/pipeline.yml'
   workflow_dispatch:
+    inputs:
+      target_only:
+        description: Run only the small generated-BAM target follow-up acceptance
+        type: boolean
+        default: false
 
 jobs:
   native-transport:
+    if: ${{ !inputs.target_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -100,6 +106,7 @@ jobs:
             --outdir "$RUNNER_TEMP/katana-single-session"
 
   paired-native-models:
+    if: ${{ !inputs.target_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -117,4 +124,40 @@ jobs:
         with:
           name: paired-native-models
           path: ${{ runner.temp }}/paired-models
+          retention-days: 7
+
+  target-followup:
+    if: ${{ inputs.target_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MPLBACKEND: Agg
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install target runtime
+        run: python -m pip install -e ".[targets,next,next-dev]"
+      - name: Download verified Nextflow
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error https://github.com/nextflow-io/nextflow/releases/download/v25.10.4/nextflow-25.10.4-dist --output "$RUNNER_TEMP/nextflow-25.10.4-dist"
+          echo "60db869a7618783e3ee60183a2b0c6c50ffc67221eabec60800b904991786aaa  $RUNNER_TEMP/nextflow-25.10.4-dist" | sha256sum --check --strict
+      - name: Execute targets, resume, restore and missing-index recovery
+        shell: bash
+        run: |
+          runtime_command=$(python -c 'import json,os; print(json.dumps(["java", "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "-cp", os.environ["RUNNER_TEMP"] + "/nextflow-25.10.4-dist", "nextflow.cli.Launcher"]))')
+          python pipeline/tools/check_target_followup.py --nextflow-command-json "$runtime_command" --outdir "$RUNNER_TEMP/target-followup"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: target-followup-acceptance
+          path: ${{ runner.temp }}/target-followup
+          include-hidden-files: true
           retention-days: 7
