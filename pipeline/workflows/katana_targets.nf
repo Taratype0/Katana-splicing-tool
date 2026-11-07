@@ -14,7 +14,7 @@ process TARGET_REQUEST_INSPECT {
 }
 
 process TARGET_DETAIL {
-    tag target_id
+    tag { target_id }
     cpus 1
     container { params.katana_container ?: null }
     publishDir "${params.outdir}/targets", mode: 'copy'

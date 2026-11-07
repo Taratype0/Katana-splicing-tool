@@ -55,7 +55,7 @@ def main():
         trace = root / f'{label}.trace.tsv'
         command = [*nf, 'run', str(main_nf), '-entry', 'TARGETS', '--target_request', exported['archive_path'],
                    '--target_bindings', str(binding_file), '--outdir', str(out), '-work-dir', str(work),
-                   '-c', str(config), '-with-trace', str(trace), '-ansi-log', 'false']
+                   '-c', str(main_nf.parent / 'nextflow.config'), '-c', str(config), '-with-trace', str(trace), '-ansi-log', 'false']
         if resume:
             command.append('-resume')
         result = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, timeout=300)
