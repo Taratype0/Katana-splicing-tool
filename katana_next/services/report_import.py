@@ -109,7 +109,10 @@ def import_report(report_path, output_root, projects=None):
         frame['row_id'] = [f'{digest[:16]}:{i}' for i in range(len(frame))]
         target = destination / 'results' / 'imported' / f'{digest}.parquet'
         context.results.write_dataframe(frame, target)
-        metadata = {**entry.get('metadata', {}), 'project_snapshot_fingerprint': context.snapshot.manifest_fingerprint,
+        source_metadata = entry.get('metadata', {})
+        metadata = {'source_metadata': source_metadata,
+            **{k:v for k,v in source_metadata.items() if k in {'count_mode','rmats_mode','selected_rmats_mode','das_selection'}},
+            'project_snapshot_fingerprint': context.snapshot.manifest_fingerprint,
             'source_analysis_id': entry.get('analysis_id'), 'source_report_sha256': origin,
             'source_relative_path': path.relative_to(source).as_posix(), 'source_table_sha256': digest,
             'imported_table_sha256': sha(target), 'report_hash_verified': verified,

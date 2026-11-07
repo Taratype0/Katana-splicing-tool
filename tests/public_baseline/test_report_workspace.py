@@ -29,7 +29,8 @@ def report_fixture(tmp_path):
         target = root / f'table-{i}.parquet'
         target.write_bytes(artifact.path.read_bytes())
         entries.append({'name':artifact.name,'analysis_id':artifact.analysis_id,'source':target.name,
-                        'contrast_id':'B_vs_A','parameters':artifact.parameters})
+                        'contrast_id':'B_vs_A','parameters':artifact.parameters,
+                        'metadata': {'artifact_contract_version':'3.0-correctness','workflow_version':'original-version'}})
         hashes.append({'report_path':target.name,'source_sha256':sha(target)})
     manifest = {'schema':'katana.approved_report/v1','project_id':project['project_id'],
                 'display_project':project,'complete_results':entries,'source_files':hashes}
@@ -92,4 +93,3 @@ def test_source_report_cannot_be_destination(tmp_path):
     root, _ = report_fixture(tmp_path)
     with pytest.raises(ValueError,match='separate'):
         import_report(root,root/'workspace')
-

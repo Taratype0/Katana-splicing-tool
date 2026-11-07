@@ -21,9 +21,9 @@ export function ReportExplorer({projectId, artifacts, onAdd}: {projectId:string;
   const settings={search,identifiers:identifiers.split(/[\s,;]+/).filter(Boolean),comparison,
     fdr_column:fdr,fdr_max:fdrMax===''?null:Number(fdrMax),effect_column:effect,effect_min:effectMin===''?null:Number(effectMin)};
   const data=useQuery({queryKey:['report-table',projectId,artifact?.artifact_id,settings,offset],
-    queryFn:()=>api.browseReport(projectId,artifact!.artifact_id,{...settings,offset,limit:100}),enabled:!!artifact});
+    queryFn:()=>api.browseReport(projectId,artifact!.artifact_id,{...settings,offset,limit:100}),enabled:!!artifact,placeholderData:previous=>previous});
   const columns=data.data?.columns || [];
-  const rows=data.data?.rows || [];
+  const rows=data.isFetching ? [] : (data.data?.rows || []);
   const reset=()=>{setOffset(0);setSelected({});};
   const add=(kind:'gene'|'event')=>{try {onAdd(makeTargetEntry(artifact!,Object.values(selected),kind,settings));setError('');}catch(e){setError(String(e));}};
   return <section className="target-workbench report-explorer" aria-label="Report explorer">
@@ -38,12 +38,12 @@ export function ReportExplorer({projectId, artifacts, onAdd}: {projectId:string;
       <label>Effect column <select value={effect} onChange={e=>{setEffect(e.target.value);setEffectMin('');reset();}}><option value="">No effect filter</option>{columns.map(c=><option key={c}>{c}</option>)}</select><input aria-label="Minimum absolute effect" type="number" min="0" step="0.01" disabled={!effect} value={effectMin} onChange={e=>{setEffectMin(e.target.value);reset();}}/></label>
     </div>
     {(error || data.error) && <p role="alert">{error || data.error?.message}</p>}
-    {fdr && effect && <><p>Effect versus −log10({fdr}), current page only. Click a point to select its exact row.</p><svg viewBox="0 0 640 250" role="img" aria-label="Interactive effect and FDR plot" style={{maxWidth:800,background:'#f5f7fa'}}>
+    {fdr && effect && <><p>Effect versus −log10({fdr}), current page only; y is capped at 20. Click a point to select its exact row.</p><svg viewBox="0 0 640 250" role="img" aria-label="Interactive effect and FDR plot" style={{maxWidth:800,background:'#f5f7fa'}}>
       <line x1="320" y1="10" x2="320" y2="225" stroke="#aaa"/>
       {rows.filter(r=>r[fdr]!==null && r[fdr]!=='' && r[effect]!==null && r[effect]!=='' && Number.isFinite(Number(r[fdr])) && Number(r[fdr])>=0 && Number(r[fdr])<=1 && Number.isFinite(Number(r[effect]))).map(r=>{
         const max=Math.max(1,...rows.map(v=>Math.abs(Number(v[effect]))||0));const x=320+Number(r[effect])/max*290;
         const y=225-Math.min(20,-Math.log10(Math.max(1e-20,Number(r[fdr]))))*10;
-        return <circle key={String(r.row_id)} cx={x} cy={y} r={selected[String(r.row_id)]?6:4} fill={Number(r[effect])>=0?'#C63F4A':'#2863A5'} onClick={()=>setSelected(s=>({...s,[String(r.row_id)]:r}))}><title>{String(r.gene_symbol||r.gene_id||r.event_id||r.row_id)}</title></circle>;
+        return <circle key={String(r.row_id)} cx={x} cy={y} r={selected[String(r.row_id)]?6:4} fill={Number(r[effect])>=0?'#C63F4A':'#2863A5'} onClick={()=>setSelected(s=>({...s,[String(r.row_id)]:r}))}><title>{String(r.gene_symbol||r.gene_id||r.event_id||r.row_id)} · {effect}: {String(r[effect])} · {fdr}: {String(r[fdr])}</title></circle>;
       })}<text x="280" y="245">{effect}</text></svg></>}
     <div className="target-actions"><button disabled={data.isFetching || !rows.length} onClick={()=>setSelected(s=>({...s,...Object.fromEntries(rows.map(r=>[String(r.row_id),r]))}))}>Select this page</button><button onClick={()=>setSelected({})}>Clear selection</button><button disabled={!Object.keys(selected).length} onClick={()=>add('gene')}>Add genes to targets</button><button disabled={!Object.keys(selected).length} onClick={()=>add('event')}>Add events to targets</button></div>
     <p>{data.isFetching?'Loading…':`${data.data?.total ?? 0} matching rows`} · {Object.keys(selected).length} selected across pages</p>
