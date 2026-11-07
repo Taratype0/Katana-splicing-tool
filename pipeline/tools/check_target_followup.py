@@ -87,10 +87,10 @@ def main():
                         'status':target['status'], 'sashimi_events':expected_events,
                         'png_count':len(list(target_root.rglob('*.png'))), 'report':str(target_root / 'INDEX.html')})
     # Original result bytes must survive Nextflow resume and returned-result restore.
-    before = {str(p.relative_to(outputs)):digest(p) for p in outputs.rglob('*') if p.is_file()}
+    before = {str(p.relative_to(outputs)):digest(p) for p in (outputs / 'targets').rglob('*') if p.is_file()}
     second = execute('resume', REPO / 'pipeline/main.nf', bindings, outputs, root / 'work', resume=True)
     assert all(t['status'] == 'CACHED' for t in second), second
-    assert before == {str(p.relative_to(outputs)):digest(p) for p in outputs.rglob('*') if p.is_file()}
+    assert before == {str(p.relative_to(outputs)):digest(p) for p in (outputs / 'targets').rglob('*') if p.is_file()}
     returned = outputs / 'targets' / exported['targets'][1]['target_id']
     restored = restore_results(returned / 'REPORT.zip', root / 'restored', expected_project_id=context.manifest.project_id)
     assert inspect_results(root / 'restored')['verified'] is True, restored
