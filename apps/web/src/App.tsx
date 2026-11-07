@@ -25,6 +25,7 @@ import { WorkspaceNav } from "./components/WorkspaceNav";
 import { RunPlanPanel } from "./components/RunPlanPanel";
 import { RbpEvidenceGuide } from "./components/RbpEvidenceGuide";
 import { MotifTraceWorkbench, motifTraceModeParameters } from "./components/MotifTraceWorkbench";
+import { ReportExplorer } from "./components/ReportExplorer";
 import { TargetWorkbench } from "./components/TargetWorkbench";
 import { browsingSnapshot, makeTargetEntry, useTargetBasket } from "./targetBasket";
 import type { Artifact, ProjectPayload, WorkflowDefinition } from "./types";
@@ -85,10 +86,11 @@ export default function App() {
       setSelectedContrasts(new Set(payload.manifest.contrasts.map((contrast) => contrast.contrast_id)));
       setSelectedIds(new Set());
       setFocusedRow(undefined);
-      setActiveWorkspace("project");
+      setActiveWorkspace(payload.manifest.metadata?.report_workspace ? "report-explorer" : "project");
     });
   }
 
+  const importReport = useMutation({mutationFn:api.importReport,onSuccess:acceptProject});
   const openProject = useMutation({ mutationFn: api.openProject, onSuccess: acceptProject });
   const migrateProject = useMutation({ mutationFn: api.migrateProject, onSuccess: acceptProject });
   const configureResources = useMutation({ mutationFn: api.configureResources, onSuccess: acceptProject });
@@ -308,8 +310,9 @@ export default function App() {
     return (
       <ProjectGate
         defaultPath={recentManifest}
-        loading={openProject.isPending || migrateProject.isPending || configureResources.isPending}
-        error={openProject.error?.message ?? migrateProject.error?.message ?? configureResources.error?.message}
+        onImportReport={request=>importReport.mutate(request)}
+        loading={importReport.isPending || openProject.isPending || migrateProject.isPending || configureResources.isPending}
+        error={importReport.error?.message ?? openProject.error?.message ?? migrateProject.error?.message ?? configureResources.error?.message}
         onOpen={(path) => openProject.mutate(path)}
         onMigrate={(request) => migrateProject.mutate(request)}
         onConfigureResources={(request) => configureResources.mutate(request)}
@@ -320,10 +323,10 @@ export default function App() {
   const conditions = activeWorkspace === "single-cell" ? (scConditions.data ?? []) : [...new Set(project.manifest.samples.map((sample) => sample.condition))];
   return (
     <div className="app-frame">
-      <WorkspaceNav workspaces={[...(workspaces.data ?? []), {workspace_id: "targets", label: "Gene / Event workspace", purpose: "Export exact targets, run selected cards and read evidence, and reopen returned results.", icon: "target", enabled: true, phase: 1}]} activeId={activeWorkspace} onChange={setActiveWorkspace} />
+      <WorkspaceNav workspaces={[...(workspaces.data ?? []), {workspace_id:"report-explorer",label:"Report explorer",purpose:"Explore complete imported results",icon:"table",enabled:true,phase:1}, {workspace_id: "targets", label: "Gene / Event workspace", purpose: "Export exact targets, run selected cards and read evidence, and reopen returned results.", icon: "target", enabled: true, phase: 1}]} activeId={activeWorkspace} onChange={setActiveWorkspace} />
       <section ref={workspaceScroll} className="app-main" tabIndex={0} aria-label="Analysis workspace">
         <header className="topbar">
-          <div><span className="eyebrow">RNA splicing analysis</span><h1>{activeWorkspace === "targets" ? "Gene / Event workspace" : workspaces.data?.find((item) => item.workspace_id === activeWorkspace)?.label ?? "Katana"}</h1></div>
+          <div><span className="eyebrow">RNA splicing analysis</span><h1>{activeWorkspace === "report-explorer" ? "Report explorer" : activeWorkspace === "targets" ? "Gene / Event workspace" : workspaces.data?.find((item) => item.workspace_id === activeWorkspace)?.label ?? "Katana"}</h1></div>
           <div className="topbar-actions">
             <button type="button" className="ghost-action" onClick={() => setActiveWorkspace("targets")}>Targets ({targets.entries.reduce((sum, entry) => sum + entry.row_ids.length, 0)})</button>
             <button type="button" className="ghost-action" aria-expanded={detailOpen} aria-controls="scientific-detail" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? "Hide methods" : "Methods & details"}</button>
@@ -347,7 +350,7 @@ export default function App() {
         )}
 
         {targetError && <p role="alert" className="warning-strip error-strip">{targetError}</p>}
-        {activeWorkspace === "targets" ? <TargetWorkbench key={`${projectId}:${project.snapshot.manifest_fingerprint}`} projectId={projectId}
+        {activeWorkspace === "report-explorer" ? <ReportExplorer projectId={projectId} artifacts={sourceArtifacts.data ?? []} onAdd={targets.add}/> : activeWorkspace === "targets" ? <TargetWorkbench key={`${projectId}:${project.snapshot.manifest_fingerprint}`} projectId={projectId}
           projectFingerprint={project.snapshot.manifest_fingerprint} entries={targets.entries} contrasts={project.manifest.contrasts} storageError={targets.storageError}
           onRemove={targets.remove} onClear={targets.clear}/> : <div className={`workspace-grid${detailOpen ? "" : " detail-closed"}`}>
           <main className="workbench">

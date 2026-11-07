@@ -70,4 +70,4 @@ def portable_display_project(project):
             'annotation': {k: project.get('annotation', {})[k]
                            for k in ('genome_build', 'annotation_release', 'species') if k in project.get('annotation', {})},
             'metadata': {k: project.get('metadata', {})[k]
-                         for k in ('annotation_release', 'gene_filter_policy') if k in project.get('metadata', {})}}
+                         for k in ('annotation_release', 'gene_filter_policy', 'coordinate_system') if k in project.get('metadata', {})}}

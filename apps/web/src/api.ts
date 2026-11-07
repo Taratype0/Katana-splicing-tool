@@ -25,6 +25,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  prepareTargetPipeline: (project:string,payload:unknown) => request<{task_id:string;status:string;command:string;download_url:string}>(`/projects/${encodeURIComponent(project)}/targets/nextflow`, {method:"POST",body:JSON.stringify(payload)}),
+  importReport: (payload: {report_path:string;output_root:string}) => request<ProjectPayload>("/projects/import-report", {method:"POST",body:JSON.stringify(payload)}),
+  browseReport: (project:string, artifact:string, payload:unknown) => request<TablePage>(`/projects/${encodeURIComponent(project)}/report-tables/${encodeURIComponent(artifact)}`, {method:"POST",body:JSON.stringify(payload)}),
   motifTraceModes: () => request<MotifTraceCatalog>("/motiftrace/modes"),
   configureGeneFilter: (projectId: string, settings: import("./components/GeneFilterPanel").GeneFilterSettings) =>
     request<ProjectPayload>(`/projects/${encodeURIComponent(projectId)}/gene-filter`, {method:"POST",body:JSON.stringify(settings)}),

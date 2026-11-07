@@ -195,6 +195,8 @@ def _verified_source(context, artifact):
     if (artifact.project_id != context.manifest.project_id or not artifact.path.is_file() or
             artifact.metadata.get("project_snapshot_fingerprint") != context.snapshot.manifest_fingerprint):
         raise ValueError("Selected source is unavailable, foreign or stale for the current project")
+    if artifact.metadata.get("imported_table_sha256") and _digest(artifact.path) != artifact.metadata["imported_table_sha256"]:
+        raise ValueError("Imported report table changed after verification")
     before = artifact.path.stat()
     digest = _digest(artifact.path)
     if artifact.metadata.get("artifact_contract_version") == "3.0-correctness":
@@ -262,6 +264,17 @@ def _resources(context, samples):
         path = getattr(context.manifest.annotation, kind)
         if path:
             references[kind + "_resource_id"] = add(kind, path)
+    if context.manifest.metadata.get("report_workspace"):
+        for row in sample_entries:
+            for kind in ("bam", "bai"):
+                rid = "resource-" + hashlib.sha256(_canonical([kind, row["sample_id"]])).hexdigest()[:24]
+                row[kind + "_resource_id"] = rid
+                resources.append({"resource_id": rid, "kind": kind, "sample_id": row["sample_id"],
+                    "sha256": None, "bytes": None, "verification": {"state": "not_verified", "hash_method": "unavailable"}})
+        rid = "resource-" + hashlib.sha256(_canonical(["gtf", "reference"])).hexdigest()[:24]
+        references["gtf_resource_id"] = rid
+        resources.append({"resource_id": rid, "kind": "gtf", "sha256": None, "bytes": None,
+            "verification": {"state": "not_verified", "hash_method": "unavailable"}})
     return resources, sample_entries, references, bindings, path_ids
 
 

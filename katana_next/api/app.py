@@ -472,6 +472,9 @@ def create_app(runtime: PlatformRuntime | None = None) -> FastAPI:
 
         return StreamingResponse(stream(), media_type="text/event-stream")
 
+    from katana_next.api.report_workspace import create_report_router
+    app.include_router(create_report_router(active))
+
     from katana_next.api.targets import create_targets_router
     app.include_router(create_targets_router(active))
 

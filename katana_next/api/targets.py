@@ -196,6 +196,24 @@ def create_targets_router(runtime) -> APIRouter:
             record.update(status="failed", error=str(exc))
         _write(path, record)
 
+    @router.post("/nextflow")
+    def prepare_nextflow(project_id: str, payload: TargetBatchRequest):
+        from katana_next.targets.nextflow import prepare_task
+        try:
+            exported = request_record(project_id, payload)
+            task_id = "nf-" + uuid4().hex
+            result = prepare_task(exported["archive_path"], workspace(project_id) / "nextflow" / task_id,
+                                  resources=payload.resources)
+            return {**result, "task_id": task_id,
+                "download_url": f"/api/projects/{quote(project_id, safe='')}/targets/nextflow/{task_id}/download"}
+        except (ValueError, OSError, KeyError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/nextflow/{task_id}/download")
+    def download_nextflow(project_id: str, task_id: str):
+        path = _bounded(workspace(project_id), workspace(project_id) / "nextflow" / _identity(task_id) / "NEXTFLOW_TASK.zip", file=True)
+        return FileResponse(path, filename="NEXTFLOW_TASK.zip")
+
     @router.post("/export")
     def export_route(project_id: str, payload: TargetBatchRequest):
         try:

@@ -194,3 +194,20 @@ Required calculations are verified before the fixed seven-section report is acce
         }
     }
 }
+
+
+// A new follow-up run from a portable request exported by the browser.
+include { KATANA_TARGETS } from './workflows/katana_targets'
+workflow TARGETS {
+    if (!params.target_request) error('TARGETS requires --target_request')
+    def bindings = params.target_bindings ? new groovy.json.JsonSlurper().parse(file(params.target_bindings).toFile()) : [resources:[:]]
+    if (bindings.schema && bindings.schema != 'katana.target_bindings/v1') error('Unsupported target bindings schema')
+    def base = params.target_bindings ? file(params.target_bindings).toAbsolutePath().parent : launchDir
+    def resourceMap = bindings.resources ?: [:]
+    def resourceIds = resourceMap.keySet().toList().sort()
+    def resourcePaths = resourceIds.collect { key ->
+        def location = java.nio.file.Paths.get(resourceMap[key].toString())
+        file(location.isAbsolute() ? location.toString() : base.resolve(location).toString(), checkIfExists:true)
+    }
+    KATANA_TARGETS(Channel.value(file(params.target_request, checkIfExists:true)), Channel.value(resourceIds), Channel.value(resourcePaths))
+}

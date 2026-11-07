@@ -46,6 +46,7 @@ export function TargetWorkbench({projectId, projectFingerprint, entries, contras
       resources: Object.fromEntries(Object.entries(bindings).filter(([, value]) => value.trim()).map(([key, value]) => [key, value.trim()])),
       ...(workers ? {workers: Number(workers)} : {})};
   }
+  const pipeline = useMutation({mutationFn:()=>api.prepareTargetPipeline(projectId, executionRequest())});
   const plan = useMutation({mutationFn: () => api.planTargets(projectId, executionRequest())});
   const run = useMutation({mutationFn: () => api.runTargets(projectId, executionRequest()), onSuccess: acceptRun});
   const imported = useMutation({mutationFn: () => api.importTargetResults(projectId, manifestPath.trim()), onSuccess: acceptRun});
@@ -53,7 +54,7 @@ export function TargetWorkbench({projectId, projectFingerprint, entries, contras
     enabled: Boolean(runId), refetchInterval: query => ["queued", "running"].includes(query.state.data?.status || "queued") ? 1000 : false});
   const current = status.data || returned;
   const active = current && ["queued", "running"].includes(current.status);
-  const errors = [storageError, exportRequest.error?.message, plan.error?.message, run.error?.message,
+  const errors = [pipeline.error?.message, storageError, exportRequest.error?.message, plan.error?.message, run.error?.message,
     imported.error?.message, status.error?.message, current?.error].filter(Boolean);
 
   return <section className="target-workbench" aria-label="Gene and event target workspace">
@@ -92,6 +93,7 @@ export function TargetWorkbench({projectId, projectFingerprint, entries, contras
         <pre>katana-targets plan --request /path/to/request.zip --bindings /path/to/bindings.json{"\n"}katana-targets run --request /path/to/request.zip --outdir /path/to/target-results --bindings /path/to/bindings.json</pre>
       </div>}
     </section>
+    <section aria-label="Nextflow target task"><h3>New Katana pipeline task</h3><p>Create a native Nextflow follow-up task for the execution machine. Only selected targets run; BAM/index/reference resources are staged by Nextflow.</p><button disabled={!exported || pipeline.isPending} onClick={()=>pipeline.mutate()}>Create Nextflow target task</button>{pipeline.data && <div role="status"><p>Task {pipeline.data.task_id}: prepared, not submitted</p><a href={pipeline.data.download_url}>Download Nextflow task</a><pre>{pipeline.data.command}</pre><p>Fill bindings.json on the execution machine and use your executor config. Return results/targets/&lt;target_id&gt; after completion.</p></div>}</section>
     <section aria-label="Target execution"><h3>Run on this service host</h3>
       <p>Paths below belong to the machine running the Katana Python service. This starts ordinary Python work on that host; it does not submit a Slurm job. Use the CLI within your scheduler allocation for cluster execution.</p>
       {exported?.resources.map(resource => <label className="target-resource" key={resource.resource_id}>

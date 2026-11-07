@@ -1,0 +1,20 @@
+import {render,screen,fireEvent,waitFor} from '@testing-library/react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {vi,test,expect} from 'vitest';
+import {ReportExplorer} from './ReportExplorer';
+import {api} from '../api';
+import type {Artifact} from '../types';
+test('complete table selection retains exact non-significant rows and browsing context', async()=>{
+ const browse=vi.spyOn(api,'browseReport').mockResolvedValue({columns:['row_id','gene_id','event_id','fdr'],rows:[{row_id:'r1',gene_id:'G1',event_id:'SE:1',fdr:.9}],total:1,offset:0,limit:100});
+ const add=vi.fn();
+ const artifact={artifact_id:'a',analysis_id:'imported.report',name:'Complete events',row_count:1,metadata:{report_hash_verified:true},parameters:{},contrast_ids:['B_vs_A']} as unknown as Artifact;
+ render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><ReportExplorer projectId="study" artifacts={[artifact]} onAdd={add}/></QueryClientProvider>);
+ await screen.findByText('0.9');
+ fireEvent.click(screen.getByRole('button',{name:'Select this page'}));
+ fireEvent.click(screen.getByRole('button',{name:'Add events to targets'}));
+ expect(add.mock.calls[0][0]).toMatchObject({source_artifact_id:'a',target_kind:'event',row_ids:['r1']});
+ fireEvent.change(screen.getByLabelText('Gene IDs, symbols or event IDs'),{target:{value:'G1 G2'}});
+ await waitFor(()=>expect(browse.mock.calls.at(-1)?.[2]).toMatchObject({identifiers:['G1','G2']}));
+ expect(screen.getByRole('button',{name:'Add events to targets'})).toBeDisabled();
+ browse.mockRestore();
+});

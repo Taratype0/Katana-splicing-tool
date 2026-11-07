@@ -6,13 +6,14 @@ type Props = {
   defaultPath: string;
   loading: boolean;
   error?: string;
+  onImportReport?: (request: {report_path:string;output_root:string}) => void;
   onOpen: (path: string) => void;
   onMigrate?: (request: MigrationRequest) => void;
   onConfigureResources?: (request: { manifest_path: string; resource_bundle_path: string; output_root: string }) => void;
 };
 
-export function ProjectGate({ defaultPath, loading, error, onOpen, onMigrate, onConfigureResources }: Props) {
-  const [mode, setMode] = useState<"open" | "migrate" | "resources">("open");
+export function ProjectGate({ defaultPath, loading, error, onOpen, onImportReport, onMigrate, onConfigureResources }: Props) {
+  const [mode, setMode] = useState<"open" | "migrate" | "resources" | "report">("open");
   const [path, setPath] = useState(defaultPath);
   const [legacyPath, setLegacyPath] = useState("");
   const [outputRoot, setOutputRoot] = useState("");
@@ -20,6 +21,7 @@ export function ProjectGate({ defaultPath, loading, error, onOpen, onMigrate, on
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (mode === "report" && path.trim() && outputRoot.trim()) onImportReport?.({report_path:path.trim(),output_root:outputRoot.trim()});
     if (mode === "open" && path.trim()) onOpen(path.trim());
     if (mode === "migrate" && legacyPath.trim() && outputRoot.trim()) {
       onMigrate?.({ legacy_config_path: legacyPath.trim(), output_root: outputRoot.trim() });
@@ -43,17 +45,18 @@ export function ProjectGate({ defaultPath, loading, error, onOpen, onMigrate, on
       </section>
 
       <section className="open-card">
-        <div className="gate-mode-tabs">
+        <div className="gate-mode-tabs"><button type="button" onClick={()=>setMode("report")}>Open extracted report</button>
           <button type="button" className={mode === "open" ? "active" : ""} onClick={() => setMode("open")}><FolderOpen size={15} />Existing project</button>
           <button type="button" className={mode === "migrate" ? "active" : ""} onClick={() => setMode("migrate")}><FolderInput size={15} />Import older project</button>
           <button type="button" className={mode === "resources" ? "active" : ""} onClick={() => setMode("resources")}>GO / MotifTrace resources</button>
         </div>
-        <h2>{mode === "resources" ? "Attach annotation resources" : mode === "open" ? "Open your analysis project" : "Import an older project"}</h2>
-        <p>{mode === "resources" ? "Attach GO/KEGG and RBP databases for the correct species to a new project copy. Your original project stays unchanged." : mode === "open" ? "Select the katana.project.json file containing your inputs, sample groups and comparisons." : "Import an older Katana configuration into a new project directory. Existing inputs and results stay untouched."}</p>
+        <h2>{mode === "report" ? "Open an extracted report" : mode === "resources" ? "Attach annotation resources" : mode === "open" ? "Open your analysis project" : "Import an older project"}</h2>
+        <p>{mode === "report" ? "Browse completed results and select genes or events for a follow-up pipeline task." : mode === "resources" ? "Attach GO/KEGG and RBP databases for the correct species to a new project copy. Your original project stays unchanged." : mode === "open" ? "Select the katana.project.json file containing your inputs, sample groups and comparisons." : "Import an older Katana configuration into a new project directory. Existing inputs and results stay untouched."}</p>
         <form onSubmit={submit}>
+          {mode === "report" && <><p>Enter the extracted report directory. Complete tables are copied into a new browsing workspace; no upstream analyses run.</p><label>New report workspace directory<input value={outputRoot} onChange={e=>setOutputRoot(e.target.value)}/></label></>}
           {mode !== "migrate" ? (
             <>
-              <label htmlFor="manifest-path">Project manifest path</label>
+              <label htmlFor="manifest-path">{mode === "report" ? "Report directory or report-manifest.json" : "Project manifest path"}</label>
               <input id="manifest-path" value={path} onChange={(event) => setPath(event.target.value)} placeholder="Full path to katana.project.json" autoComplete="off" />
             </>
           ) : (
@@ -71,8 +74,8 @@ export function ProjectGate({ defaultPath, loading, error, onOpen, onMigrate, on
             <input id="resource-output" value={outputRoot} onChange={(event) => setOutputRoot(event.target.value)} placeholder="New project output directory" autoComplete="off" />
           </>}
           {error && <div className="form-error" role="alert">{error}</div>}
-          <button className="primary-action" type="submit" disabled={loading || (mode === "resources" ? !path.trim() || !bundlePath.trim() || !outputRoot.trim() : mode === "open" ? !path.trim() : !legacyPath.trim() || !outputRoot.trim())}>
-            {loading ? "Validating project..." : mode === "resources" ? "Attach resources and open" : mode === "open" ? "Open project" : "Migrate and open"}<ArrowRight size={17} />
+          <button className="primary-action" type="submit" disabled={loading || (mode === "resources" ? !path.trim() || !bundlePath.trim() || !outputRoot.trim() : (mode === "open" || mode === "report") ? !path.trim() || (mode === "report" && !outputRoot.trim()) : !legacyPath.trim() || !outputRoot.trim())}>
+            {loading ? "Validating project..." : mode === "resources" ? "Attach resources and open" : mode === "report" ? "Import report and explore" : mode === "open" ? "Open project" : "Migrate and open"}<ArrowRight size={17} />
           </button>
         </form>
         <div className="privacy-note"><ShieldCheck size={16} />Inputs stay local and analysis outputs never default to the source tree.</div>
