@@ -30,3 +30,30 @@
 .report-explorer tbody tr:nth-child(even) {background:#f6f8fa}
 .report-explorer tbody tr:hover {background:#edf3f9}
 .report-explorer .target-actions {margin:16px 0}
+
+/* The report workflow keeps navigation, filters and actions in separate rows. */
+.report-explorer .report-toolbar {display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:20px}
+.report-explorer .report-toolbar select {font-size:18px;font-weight:600;max-width:75%;min-width:280px;border:0;border-bottom:1px solid #d8dfe6;padding-left:0}
+.report-explorer .report-toolbar a {white-space:nowrap;font-size:13px;margin:0}
+.report-explorer .report-filters {grid-template-columns:1.3fr 1fr 1fr 1.2fr 1.2fr;gap:10px;margin:16px 0 22px;align-items:start}
+.report-explorer .report-filters .paired-filter {display:grid;grid-template-columns:1fr 80px;gap:0}
+.report-explorer .paired-filter select {border-radius:3px 0 0 3px;min-width:0}
+.report-explorer .paired-filter input {border-left:0;border-radius:0 3px 3px 0;min-width:0}
+.report-explorer .identifier-filter {border:1px solid #bdcad6;border-radius:3px;padding:8px 10px;font-size:13px;position:relative}
+.report-explorer .identifier-filter summary {cursor:pointer;white-space:nowrap}
+.report-explorer .identifier-filter textarea {margin-top:10px;min-height:100px}
+.report-explorer .report-table-status {display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;color:#596d7e;margin:18px 0 8px}
+.report-explorer .report-table-status details {position:relative}
+.report-explorer .report-table-status details[open] {max-width:350px}
+.report-explorer .report-plot {margin:20px 0}
+.report-explorer .report-plot figcaption {font-size:12px;color:#596d7e;margin-bottom:8px}
+.target-workbench:not(.report-explorer) {display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);column-gap:36px;align-items:start}
+.target-workbench:not(.report-explorer)>section:first-of-type {grid-column:1;grid-row:1 / span 4;border:0;padding-top:0;margin-top:0}
+.target-workbench:not(.report-explorer)>section:not(:first-of-type),.target-workbench>.local-execution {grid-column:2;margin-top:0;padding:0 0 24px;border-top:0;border-bottom:1px solid #d8dfe6;margin-bottom:24px}
+.target-workbench>.local-execution>summary {cursor:pointer;font-weight:600;font-size:14px}
+.target-workbench>.target-error,.target-workbench>.target-run {grid-column:1 / -1}
+.target-workbench .target-selection {border-left:0;border:1px solid #d8dfe6;background:#fafbfc;border-radius:4px}
+.target-workbench .target-selection details {font-size:12px;color:#596d7e;margin-top:8px}
+.target-workbench .target-export {border:0;padding:12px 0;margin:0}
+@media(max-width:1100px){.report-explorer .report-filters {grid-template-columns:repeat(3,minmax(0,1fr))}.target-workbench:not(.report-explorer){display:block}}
+@media(max-width:700px){.report-explorer .report-filters{grid-template-columns:1fr}.report-explorer .report-toolbar{display:block}.report-explorer .report-toolbar select{max-width:100%;width:100%;min-width:0}.report-explorer .report-toolbar a{display:inline-block;margin-top:12px}}

@@ -52,8 +52,8 @@ export function WorkspaceNav({ workspaces, activeId, onChange }: Props) {
       </div>
 
       <nav>
-        {workflowStages.map((stage) => <Fragment key={stage.title}>
-          <h2 style={{ fontSize: 11, letterSpacing: ".04em", margin: "20px 10px 8px", opacity: .7 }}>{stage.title}</h2>
+        {workflowStages.filter(stage=>stage.ids.some(id=>workspaces.some(w=>w.workspace_id===id))).map((stage) => <Fragment key={stage.title}>
+          {workspaces.length > 2 && <h2 style={{ fontSize: 11, letterSpacing: ".04em", margin: "20px 10px 8px", opacity: .7 }}>{stage.title}</h2>}
           {stage.ids.flatMap((id) => workspaces.filter((w) => w.workspace_id === id)).map((workspace) => {
           const Icon = icons[workspace.icon as keyof typeof icons] ?? SlidersHorizontal;
           return (
@@ -74,13 +74,13 @@ export function WorkspaceNav({ workspaces, activeId, onChange }: Props) {
         })}</Fragment>)}
       </nav>
 
-      <div className="local-note">
+      {workspaces.length > 2 && <div className="local-note">
         <ShieldCheck size={17} />
         <div>
           <strong>Local by design</strong>
           <span>Inputs remain on this workstation.</span>
         </div>
-      </div>
+      </div>}
     </aside>
   );
 }

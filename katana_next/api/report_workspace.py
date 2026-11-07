@@ -26,7 +26,9 @@ def create_report_router(runtime):
 
     @router.get('/api/report-workspace/version')
     def version():
-        return {'release':'report-workspace-20261108','native_nextflow_execution_verified':False}
+        return {'release':'report-workspace-20261108','native_nextflow_execution_verified':True,
+                'verified_executor':'Linux local', 'slurm_execution_verified':False,
+                'acceptance_run':'https://github.com/Taratype0/Katana-splicing-tool/actions/runs/42395577378'}
 
     @router.post('/api/projects/import-report')
     def load(payload: ImportReport):

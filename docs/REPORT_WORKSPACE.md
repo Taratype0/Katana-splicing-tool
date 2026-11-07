@@ -61,8 +61,25 @@ Nextflow task download. Actual PTBP1 report acceptance imported 44 complete
 tables containing 1,690,979 rows. Those rows include different evidence types;
 this count is not a count of unique genes/events.
 
-Native Nextflow execution on Linux/Slurm remains to be verified. The local
-machine has no usable Linux executor, and the configured SSH host was
-unreachable during this acceptance. No formal dataset or cluster job was
-launched. This is a separately launched development candidate; it does not
-replace the sealed port-18773 default or claim nf-core acceptance/certification.
+Native Nextflow 25.10.4 execution on the Linux local executor passed on
+8 November 2026 ([acceptance run](https://github.com/Taratype0/Katana-splicing-tool/actions/runs/42395577378)).
+A selected gene expands into four measured events; a second exact event retains
+its nonsignificant FDR. Three native processes complete and all three are cached
+on resume, with identical target product bytes. Removing a BAM index produces
+explicit partial/unavailable records. Rebinding it reruns the two detail tasks
+and recovers complete products. Returned result ZIP restoration verifies the
+original request and product ledger. The original report remains unchanged.
+
+This verifies software behavior on generated indexed BAMs, not biological
+validity of a study or Slurm scheduling. The generated BAM counts and saved
+statistical fixture values are independent test inputs. No formal dataset or
+cluster job was launched. The sealed port-18773 default remains preserved.
+
+## Interface
+
+Imported-report navigation shows only Results and the Gene / Event workspace.
+Result selection, compact filters and table actions occupy separate rows; gene,
+event and statistical columns precede technical coordinates. Original statistics
+and checksum details remain under Source. Target choices and outputs sit beside
+the pipeline task and returned-result import. Local execution and command details
+are expandable. Missing-data, verification and submission states remain explicit.

@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { ArrowRight, FolderInput, FolderOpen, ShieldCheck } from "lucide-react";
+import { ArrowRight, FolderInput, FolderOpen } from "lucide-react";
 
 type MigrationRequest = { legacy_config_path: string; output_root: string };
 type Props = {
@@ -33,31 +33,21 @@ export function ProjectGate({ defaultPath, loading, error, onOpen, onImportRepor
 
   return (
     <main className="project-gate">
-      <section className="gate-copy">
-        <span className="eyebrow">Katana</span>
-        <h1>Analyze RNA splicing.<br />Explain the results.</h1>
-        <p>Explore differential splicing, gene expression, exon and transcript usage, GO/KEGG, RBP binding and co-splicing networks. Use bulk or completed single-cell results with sample metadata.</p>
-        <div className="principle-row">
-          <div><span>01</span><strong>Select an analysis</strong><small>Choose comparisons and set thresholds.</small></div>
-          <div><span>02</span><strong>Inspect the results</strong><small>View plots, gene lists and source tables.</small></div>
-          <div><span>03</span><strong>Export a report</strong><small>Share figures and Chinese/English explanations.</small></div>
-        </div>
-      </section>
+      <section className="gate-copy"><h1>Katana</h1></section>
 
       <section className="open-card">
-        <div className="gate-mode-tabs"><button type="button" onClick={()=>setMode("report")}>Open extracted report</button>
+        <div className="gate-mode-tabs"><button type="button" className={mode === "report" ? "active" : ""} onClick={()=>setMode("report")}>Open extracted report</button>
           <button type="button" className={mode === "open" ? "active" : ""} onClick={() => setMode("open")}><FolderOpen size={15} />Existing project</button>
           <button type="button" className={mode === "migrate" ? "active" : ""} onClick={() => setMode("migrate")}><FolderInput size={15} />Import older project</button>
           <button type="button" className={mode === "resources" ? "active" : ""} onClick={() => setMode("resources")}>GO / MotifTrace resources</button>
         </div>
         <h2>{mode === "report" ? "Open an extracted report" : mode === "resources" ? "Attach annotation resources" : mode === "open" ? "Open your analysis project" : "Import an older project"}</h2>
-        <p>{mode === "report" ? "Browse completed results and select genes or events for a follow-up pipeline task." : mode === "resources" ? "Attach GO/KEGG and RBP databases for the correct species to a new project copy. Your original project stays unchanged." : mode === "open" ? "Select the katana.project.json file containing your inputs, sample groups and comparisons." : "Import an older Katana configuration into a new project directory. Existing inputs and results stay untouched."}</p>
         <form onSubmit={submit}>
-          {mode === "report" && <><p>Enter the extracted report directory. Complete tables are copied into a new browsing workspace; no upstream analyses run.</p><label>New report workspace directory<input value={outputRoot} onChange={e=>setOutputRoot(e.target.value)}/></label></>}
+          {mode === "report" && <><label>New report workspace directory<input value={outputRoot} onChange={e=>setOutputRoot(e.target.value)}/></label></>}
           {mode !== "migrate" ? (
             <>
               <label htmlFor="manifest-path">{mode === "report" ? "Report directory or report-manifest.json" : "Project manifest path"}</label>
-              <input id="manifest-path" value={path} onChange={(event) => setPath(event.target.value)} placeholder="Full path to katana.project.json" autoComplete="off" />
+              <input id="manifest-path" value={path} onChange={(event) => setPath(event.target.value)} placeholder={mode === "report" ? "Path to extracted report" : "Path to katana.project.json"} autoComplete="off" />
             </>
           ) : (
             <>
@@ -78,7 +68,7 @@ export function ProjectGate({ defaultPath, loading, error, onOpen, onImportRepor
             {loading ? "Validating project..." : mode === "resources" ? "Attach resources and open" : mode === "report" ? "Import report and explore" : mode === "open" ? "Open project" : "Migrate and open"}<ArrowRight size={17} />
           </button>
         </form>
-        <div className="privacy-note"><ShieldCheck size={16} />Inputs stay local and analysis outputs never default to the source tree.</div>
+
       </section>
     </main>
   );

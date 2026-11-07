@@ -46,7 +46,11 @@ export function TargetWorkbench({projectId, projectFingerprint, entries, contras
       resources: Object.fromEntries(Object.entries(bindings).filter(([, value]) => value.trim()).map(([key, value]) => [key, value.trim()])),
       ...(workers ? {workers: Number(workers)} : {})};
   }
-  const pipeline = useMutation({mutationFn:()=>api.prepareTargetPipeline(projectId, executionRequest())});
+  const pipeline = useMutation({mutationFn:async()=>{
+    const request = exported ?? await exportRequest.mutateAsync();
+    return api.prepareTargetPipeline(projectId, {request_id:request.request_id});
+  }});
+  useEffect(()=>{pipeline.reset();}, [signature]);
   const plan = useMutation({mutationFn: () => api.planTargets(projectId, executionRequest())});
   const run = useMutation({mutationFn: () => api.runTargets(projectId, executionRequest()), onSuccess: acceptRun});
   const imported = useMutation({mutationFn: () => api.importTargetResults(projectId, manifestPath.trim()), onSuccess: acceptRun});
@@ -58,46 +62,40 @@ export function TargetWorkbench({projectId, projectFingerprint, entries, contras
     imported.error?.message, status.error?.message, current?.error].filter(Boolean);
 
   return <section className="target-workbench" aria-label="Gene and event target workspace">
-    <header><span className="target-eyebrow">Selected-target analysis</span><h2>Gene / Event workspace</h2>
-      <p>Choose exact genes or events in result tables, then add them to this basket. Cards reuse completed evidence. Optional Sashimi reads only the requested events from BAMs on the execution machine.</p>
-      <p className="target-note">This workspace produces separate target reports and interactive data. The approved seven-section study report is unchanged.</p></header>
     {errors.map((message, i) => <p className="target-error" role="alert" key={i}>{message}</p>)}
     <section aria-label="Persistent target basket">
-      <div className="target-heading"><h3>Target basket · {entries.reduce((sum, item) => sum + item.row_ids.length, 0)} source rows</h3>
+      <div className="target-heading"><h3>Selected · {entries.reduce((sum, item) => sum + item.row_ids.length, 0)} rows</h3>
         <button type="button" disabled={!entries.length} onClick={onClear}>Clear basket</button></div>
-      {!entries.length ? <p>No targets selected. Open a result table, select rows and choose “Add genes to targets” or “Add events to targets”.</p> :
+      {!entries.length ? <p>Select genes or events from Results.</p> :
         entries.map(entry => <article className="target-selection" key={entry.basket_id}>
           <div><strong>{entry.target_kind === "gene" ? "Gene targets" : "Exact event targets"}</strong> · {entry.row_ids.length} source rows · {entry.source_name}
             <button type="button" aria-label={`Remove ${entry.source_name} ${entry.target_kind} targets`} onClick={() => onRemove(entry.basket_id)}>Remove</button></div>
-          <details><summary>Selected identities and browsing context</summary><ul>{entry.labels.map((label, i) => <li key={`${label}:${i}`}>{label} <code>{entry.row_ids[i] || ""}</code></li>)}</ul>
+          <details><summary>Selection details</summary><ul>{entry.labels.map((label, i) => <li key={`${label}:${i}`}>{label} <code>{entry.row_ids[i] || ""}</code></li>)}</ul>
             <pre>{JSON.stringify(entry.filters, null, 2)}</pre></details>
         </article>)}
-      <fieldset><legend>Requested products</legend>{[["gene_card", "Gene cards"], ["event_card", "Event cards"], ["sashimi", "Sashimi read evidence"]].map(([id, label]) =>
+      <fieldset><legend>Outputs</legend>{[["gene_card", "Gene cards"], ["event_card", "Event cards"], ["sashimi", "Sashimi"]].map(([id, label]) =>
         <label key={id}><input type="checkbox" checked={modules.includes(id)} onChange={event => setModules(current => event.target.checked ? [...current, id] : current.filter(value => value !== id))}/>{label}</label>)}</fieldset>
-      <label className="target-resource">Target comparison scope<select value={comparisonScope} onChange={event => setComparisonScope(event.target.value as "source" | "all" | "custom")}>
+      <label className="target-resource">Comparisons<select aria-label="Target comparison scope" value={comparisonScope} onChange={event => setComparisonScope(event.target.value as "source" | "all" | "custom")}>
         <option value="source">Selected source comparisons</option><option value="all" disabled={!contrasts.length}>All project comparisons</option>
         <option value="custom" disabled={!contrasts.length}>Custom comparisons</option></select></label>
-      {comparisonScope === "source" && <p>By default, the batch uses the union of comparison IDs recorded in the exact selected source rows; if those rows have no comparison column, it uses the declared project comparisons. Browsing thresholds and comparison controls are saved separately and do not silently expand this scope.</p>}
+
       {comparisonScope === "custom" && <fieldset><legend>Include target comparisons</legend>{contrasts.map(contrast =>
         <label key={contrast.contrast_id}><input type="checkbox" checked={customComparisons.includes(contrast.contrast_id)} onChange={event => setCustomComparisons(current => event.target.checked ? [...current, contrast.contrast_id] : current.filter(id => id !== contrast.contrast_id))}/>{contrast.label}</label>)}</fieldset>}
-      {comparisonScope === "custom" && !customComparisons.length && <p role="status">Choose at least one target comparison. An empty selection never means all.</p>}
-      {comparisonScope !== "source" && <p>The requested comparisons must include those represented by the selected source rows. Exact source identities are checked during export; mismatches are rejected.</p>}
-      <button className="target-primary" type="button" disabled={!entries.length || !modules.length || exportRequest.isPending || (comparisonScope === "custom" && !customComparisons.length)} onClick={() => exportRequest.mutate()}>
-        {exportRequest.isPending ? "Verifying and exporting…" : "Export portable target request"}</button>
-      {exported && <div className="target-export" role="status"><strong>{exported.target_count} verified targets</strong> · request <code>{exported.request_id}</code>
+      {comparisonScope === "custom" && !customComparisons.length && <p role="status">Choose at least one comparison.</p>}
+
+      <button aria-label="Export portable target request" type="button" disabled={!entries.length || !modules.length || exportRequest.isPending || (comparisonScope === "custom" && !customComparisons.length)} onClick={() => exportRequest.mutate()}>
+        {exportRequest.isPending ? "Preparing…" : "Export request"}</button>
+      {exported && <div className="target-export" role="status"><strong>{exported.target_count} verified targets</strong>
         <a href={exported.download_url}>Download request ZIP</a>
         <ul>{exported.targets.map((target, index) => <li key={String(target.target_id || index)}>
           {String(target.target_kind === "gene" ? target.gene_symbol || target.gene_id || target.target_id : target.event_id || target.target_id)}:
           {" "}{Array.isArray(target.comparison_ids) ? target.comparison_ids.map(String).join(", ") : "Comparison scope not recorded"}</li>)}</ul>
-        <p>Run this request locally or on a server with the same Katana package. BAMs and large references are excluded.</p>
-        <pre>katana-targets plan --request /path/to/request.zip --bindings /path/to/bindings.json{"\n"}katana-targets run --request /path/to/request.zip --outdir /path/to/target-results --bindings /path/to/bindings.json</pre>
       </div>}
     </section>
-    <section aria-label="Nextflow target task"><h3>New Katana pipeline task</h3><p>Create a native Nextflow follow-up task for the execution machine. Only selected targets run; BAM/index/reference resources are staged by Nextflow.</p><button disabled={!exported || pipeline.isPending} onClick={()=>pipeline.mutate()}>Create Nextflow target task</button>{pipeline.data && <div role="status"><p>Task {pipeline.data.task_id}: prepared, not submitted</p><a href={pipeline.data.download_url}>Download Nextflow task</a><pre>{pipeline.data.command}</pre><p>Fill bindings.json on the execution machine and use your executor config. Return results/targets/&lt;target_id&gt; after completion.</p></div>}</section>
-    <section aria-label="Target execution"><h3>Run on this service host</h3>
-      <p>Paths below belong to the machine running the Katana Python service. This starts ordinary Python work on that host; it does not submit a Slurm job. Use the CLI within your scheduler allocation for cluster execution.</p>
+    <section aria-label="Nextflow target task"><h3>Pipeline task</h3><button className="target-primary" aria-label="Create Nextflow target task" disabled={!entries.length || !modules.length || pipeline.isPending || exportRequest.isPending || (comparisonScope === "custom" && !customComparisons.length)} onClick={()=>pipeline.mutate()}>{pipeline.isPending ? "Preparing…" : "Create pipeline task"}</button>{pipeline.data && <div role="status"><p>Prepared · not submitted</p><a href={pipeline.data.download_url}>Download Nextflow task</a><details><summary>Run command</summary><pre>{pipeline.data.command}</pre><p>Bind BAM, index and reference paths in bindings.json on the execution machine.</p></details></div>}</section>
+    <details className="local-execution" aria-label="Target execution"><summary>Run locally</summary><p>Paths refer to this service host. No scheduler submission.</p>
       {exported?.resources.map(resource => <label className="target-resource" key={resource.resource_id}>
-        <span>{resource.kind} · {resource.sample_id || resource.resource_id}</span><code>{resource.resource_id}</code>
+        <span>{resource.kind} · {resource.sample_id || "Reference"}</span>
         <input aria-label={`Resource path ${resource.resource_id}`} value={bindings[resource.resource_id] || ""} placeholder="Path on this service host" onChange={event => setBindings(current => ({...current, [resource.resource_id]: event.target.value}))}/></label>)}
       <label className="target-resource">Workers <input type="number" min={1} step={1} value={workers} placeholder="Available allocation" onChange={event => setWorkers(event.target.value)}/></label>
       <div className="target-actions"><button type="button" disabled={!exported || plan.isPending} onClick={() => plan.mutate()}>Check target readiness</button>
@@ -105,6 +103,7 @@ export function TargetWorkbench({projectId, projectFingerprint, entries, contras
       {plan.data && <div role="status"><strong>{plan.data.ready ? "Ready" : "Resource or input attention required"}</strong>
         {[...plan.data.errors, ...plan.data.warnings].map((message, i) => <p key={i}>{planMessage(message)}</p>)}
         <details><summary>Tasks and reuse plan</summary><pre>{JSON.stringify(plan.data, null, 2)}</pre></details></div>}
+    </details>
       {current && <div className="target-run" role="status"><h4>Target run: {current.status}</h4><p>{current.execution}</p>
         {current.progress && <pre>{JSON.stringify(current.progress, null, 2)}</pre>}
         {!current.result && current.target_statuses && <ul>{Object.entries(current.target_statuses).map(([id, item]) =>
@@ -118,11 +117,9 @@ export function TargetWorkbench({projectId, projectFingerprint, entries, contras
           {target.sashimi?.filter(item => !["complete", "not_requested"].includes(item.status)).map((item, i) => <p key={i}>Sashimi {item.status}: {item.reason || "See target diagnostics"}</p>)}
           {target.report && <a href={api.targetFileUrl(projectId, current.run_id, target.report)} target="_blank" rel="noreferrer">Open report and data</a>}</article>)}
       </div>}
-    </section>
-    <section aria-label="Import completed target results"><h3>Reopen returned results</h3>
-      <p>Extract a completed target result ZIP on this service host, then enter its result manifest or directory. Import verifies project identity and member hashes before exposing reports or data.</p>
-      <label className="target-resource">Result manifest or directory <input value={manifestPath} onChange={event => setManifestPath(event.target.value)} placeholder="Path on this service host"/></label>
-      <button type="button" disabled={!manifestPath.trim() || imported.isPending} onClick={() => imported.mutate()}>{imported.isPending ? "Verifying results…" : "Verify and import target results"}</button>
+    <section aria-label="Import completed target results"><h3>Returned results</h3>
+      <label className="target-resource"><input aria-label="Result manifest or directory" value={manifestPath} onChange={event => setManifestPath(event.target.value)} placeholder="Result folder or manifest path"/></label>
+      <button aria-label="Verify and import target results" type="button" disabled={!manifestPath.trim() || imported.isPending} onClick={() => imported.mutate()}>{imported.isPending ? "Verifying results…" : "Open results"}</button>
     </section>
   </section>;
 }

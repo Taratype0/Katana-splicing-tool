@@ -323,21 +323,21 @@ export default function App() {
   const conditions = activeWorkspace === "single-cell" ? (scConditions.data ?? []) : [...new Set(project.manifest.samples.map((sample) => sample.condition))];
   return (
     <div className="app-frame">
-      <WorkspaceNav workspaces={[...(workspaces.data ?? []), {workspace_id:"report-explorer",label:"Report explorer",purpose:"Explore complete imported results",icon:"table",enabled:true,phase:1}, {workspace_id: "targets", label: "Gene / Event workspace", purpose: "Export exact targets, run selected cards and read evidence, and reopen returned results.", icon: "target", enabled: true, phase: 1}]} activeId={activeWorkspace} onChange={setActiveWorkspace} />
+      <WorkspaceNav workspaces={[...(project.manifest.metadata?.report_workspace ? [] : (workspaces.data ?? [])), {workspace_id:"report-explorer",label:"Report explorer",purpose:"Explore complete imported results",icon:"table",enabled:true,phase:1}, {workspace_id: "targets", label: "Gene / Event workspace", purpose: "Export exact targets, run selected cards and read evidence, and reopen returned results.", icon: "target", enabled: true, phase: 1}]} activeId={activeWorkspace} onChange={setActiveWorkspace} />
       <section ref={workspaceScroll} className="app-main" tabIndex={0} aria-label="Analysis workspace">
         <header className="topbar">
-          <div><span className="eyebrow">RNA splicing analysis</span><h1>{activeWorkspace === "report-explorer" ? "Report explorer" : activeWorkspace === "targets" ? "Gene / Event workspace" : workspaces.data?.find((item) => item.workspace_id === activeWorkspace)?.label ?? "Katana"}</h1></div>
+          <div><span className="eyebrow">{project.manifest.metadata?.report_workspace ? project.manifest.name : "RNA splicing analysis"}</span><h1>{activeWorkspace === "report-explorer" ? "Report explorer" : activeWorkspace === "targets" ? "Gene / Event workspace" : workspaces.data?.find((item) => item.workspace_id === activeWorkspace)?.label ?? "Katana"}</h1></div>
           <div className="topbar-actions">
             <button type="button" className="ghost-action" onClick={() => setActiveWorkspace("targets")}>Targets ({targets.entries.reduce((sum, entry) => sum + entry.row_ids.length, 0)})</button>
-            <button type="button" className="ghost-action" aria-expanded={detailOpen} aria-controls="scientific-detail" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? "Hide methods" : "Methods & details"}</button>
-            <button type="button" className="ghost-action" aria-expanded={aboutOpen} onClick={() => setAboutOpen(!aboutOpen)}><Info size={16} />About</button>
+            {!project.manifest.metadata?.report_workspace && <button type="button" className="ghost-action" aria-expanded={detailOpen} aria-controls="scientific-detail" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? "Hide methods" : "Methods & details"}</button>}
+            {!project.manifest.metadata?.report_workspace && <button type="button" className="ghost-action" aria-expanded={aboutOpen} onClick={() => setAboutOpen(!aboutOpen)}><Info size={16} />About</button>}
             <button type="button" className="ghost-action" onClick={() => openOutput.mutate()}><FolderOpen size={16} />Output folder</button>
             <button type="button" className="ghost-action" onClick={closeProject}><FolderX size={16} />Close</button>
           </div>
         </header>
         {aboutOpen && <section className="software-info" aria-label="About Katana"><strong>Katana</strong><p>Bulk and single-cell RNA splicing analysis, visualization and reporting.</p><small>Software version: 2.0.0-beta.2. Browser and desktop use the same local analysis engine. Input files remain on this computer.</small></section>}
 
-        <ContextBar project={project} selectedContrastCount={selectedContrasts.size} workflowLabel={activeWorkflow?.label ?? "Choose workflow"} />
+        {!project.manifest.metadata?.report_workspace && <ContextBar project={project} selectedContrastCount={selectedContrasts.size} workflowLabel={activeWorkflow?.label ?? "Choose workflow"} />}
         {activeWorkspace === "project" && <GeneFilterPanel key={project.snapshot.manifest_fingerprint} project={project}
           busy={configureGeneFilter.isPending} error={configureGeneFilter.error?.message}
           onApply={settings=>configureGeneFilter.mutate(settings)}/>}
@@ -463,7 +463,7 @@ export default function App() {
         {activeWorkspace !== "targets" && <SelectionBasket count={selectedIds.size} saving={saveSelection.isPending} onSave={() => saveSelection.mutate()} onClear={() => setSelectedIds(new Set())}
           onAddGenes={targetRows.length === selectedIds.size && targetRows.every(row => row.gene_id) ? () => addTargets("gene") : undefined}
           onAddEvents={targetRows.length === selectedIds.size && targetRows.every(row => row.event_id) ? () => addTargets("event") : undefined}/>}
-        <JobDrawer jobs={jobsQuery.data ?? []} />
+        {!project.manifest.metadata?.report_workspace && <JobDrawer jobs={jobsQuery.data ?? []} />}
       </section>
     </div>
   );
