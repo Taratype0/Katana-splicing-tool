@@ -45,8 +45,11 @@ Declare the MultiQC HTML and `multiqc_data.json` as `sequencing_qc` assets with
 
 ## Coverage policy
 
-For each sample, Katana prefers a valid completed Qualimap coverage profile, then
-an existing RSeQC/declared coverage profile. It never schedules another RSeQC
+For each sample, Katana prefers a valid completed Qualimap coverage profile,
+then Qualimap's saved raw curve in `multiqc_data.json`, then an existing
+RSeQC/declared coverage profile. HTML alone can display the plots but cannot
+provide a machine-readable profile; supply its matching JSON as shown above.
+It never schedules another RSeQC
 scan for a sample with a valid completed profile. Existing curves are included
 even when `--with_genebody_coverage false` (the default) disables new scans.
 

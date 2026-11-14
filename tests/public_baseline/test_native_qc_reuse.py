@@ -122,6 +122,38 @@ def test_installed_coverage_workflow_reuses_native_curves(study, tmp_path):
     assert any(a['name'] == 'Gene-body coverage curves' for a in receipt['generated_artifacts'])
 
 
+def test_multiqc_only_curves_prevent_scans_and_execute_coverage(study, tmp_path):
+    payload = json.loads(study.read_text())
+    curves = {s['sample_id']: {str(i): 100+i for i in range(1,101)} for s in payload['samples']}
+    path = write_json(study.parent/'multiqc_data.json', {'report_saved_raw_data': {'qualimap_rnaseq_cov_hist': curves}})
+    payload['assets'].append({'asset_id':'multiqc-data','kind':'sequencing_qc','path':str(path),
+                              'metadata':{'qc_type':'multiqc'}})
+    write_json(study, payload)
+    plan = create_plan(study, {'analyses':{'coverage':True}})
+    assert not any(t.get('adapter') == 'qc.genebody' for t in plan['tasks'])
+    assert set(plan['configuration']['qc']['coverage_reuse']['selected_asset_by_sample'].values()) == {'multiqc-data'}
+    from katana_next.flow.task import execute_task
+    saved = write_json(tmp_path/'plan.json', plan)
+    execute_task(saved, 'audit', tmp_path/'audit')
+    execute_task(saved, 'coverage-summary', tmp_path/'coverage', dependency_receipts=[tmp_path/'audit/task.receipt.json'])
+    receipt = json.loads((tmp_path/'coverage/task.receipt.json').read_text())
+    assert receipt['status'] == 'completed'
+    assert any(a['name'] == 'Gene-body coverage curves' for a in receipt['generated_artifacts'])
+    add_profiles(study, 1)
+    preferred = create_plan(study, {})['configuration']['qc']['coverage_reuse']['selected_asset_by_sample']
+    assert sum(v.startswith('qualimap-') for v in preferred.values()) == 1
+
+
+def test_multiqc_curve_does_not_accept_renamed_samples(study):
+    payload = json.loads(study.read_text())
+    path = write_json(study.parent/'multiqc_data.json', {'report_saved_raw_data':{
+        'qualimap_rnaseq_cov_hist':{'unrelated':{str(i):1 for i in range(1,101)}}}})
+    payload['assets'].append({'asset_id':'multiqc-data','kind':'sequencing_qc','path':str(path)})
+    write_json(study, payload)
+    with pytest.raises(ValueError, match='exact sample identity'):
+        create_plan(study, {})
+
+
 def test_multiqc_frame_uses_fixed_chapter_one(tmp_path):
     from katana_next.reports.engine import Builder
     from katana_next.reports.layout import render

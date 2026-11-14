@@ -9,6 +9,9 @@ on:
       - '.github/workflows/report-content.yml'
       - 'scripts/*report*dummy*'
       - 'scripts/report_content_fixture.py'
+      - 'katana_next/flow/native_coverage.py'
+      - 'katana_next/flow/multiqc.py'
+      - 'tools/runtime/check_qc_reuse.py'
 permissions:
   contents: read
 jobs:
@@ -26,6 +29,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install pinned Nextflow for native QC aggregation
+        run: |
+          curl -fsSL https://github.com/nextflow-io/nextflow/releases/download/v25.10.4/nextflow-25.10.4-dist -o "$RUNNER_TEMP/nextflow"
+          chmod +x "$RUNNER_TEMP/nextflow"
       - run: python -m pip install -e '.[next,next-dev]' playwright
       - run: python -m playwright install --with-deps chromium
       - name: Install isolated native MultiQC for generated-log acceptance
@@ -33,7 +44,7 @@ jobs:
           python -m venv "$RUNNER_TEMP/multiqc"
           "$RUNNER_TEMP/multiqc/bin/pip" install multiqc==1.35
       - name: Verify native MultiQC reuse and the fixed chapter-one report
-        run: python tools/runtime/check_qc_reuse.py --multiqc "$RUNNER_TEMP/multiqc/bin/multiqc" --outdir qc-reuse-review
+        run: python tools/runtime/check_qc_reuse.py --multiqc "$RUNNER_TEMP/multiqc/bin/multiqc" --nextflow "$RUNNER_TEMP/nextflow" --outdir qc-reuse-review
       - name: Verify the embedded native MultiQC browser
         run: |
           python - <<'PY'

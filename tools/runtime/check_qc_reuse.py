@@ -14,6 +14,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--multiqc', default='multiqc')
     parser.add_argument('--outdir', type=Path, required=True)
+    parser.add_argument('--existing-multiqc', type=Path)
+    parser.add_argument('--prepare-only', action='store_true')
+    parser.add_argument('--nextflow', type=Path)
     args = parser.parse_args()
     out = args.outdir.resolve()
     out.mkdir(parents=True)
@@ -37,12 +40,45 @@ Sequence length\t150
 >>END_MODULE
 '''
         with zipfile.ZipFile(raw/(sample+'_R1_fastqc.zip'), 'w') as archive:
+            archive.writestr(sample+'_R1_fastqc/', '')
             archive.writestr(sample+'_R1_fastqc/fastqc_data.txt', text)
-    subprocess.run([args.multiqc, str(raw), '--outdir', str(out/'multiqc'),
-                    '--filename', 'multiqc_report.html', '--data-format', 'json'], check=True)
+        directory = raw/sample/'raw_data_qualimapReport'
+        directory.mkdir(parents=True)
+        (directory/'coverage_profile_along_genes_(total).txt').write_text(
+            '#Transcript position\tTranscript coverage profile\n' +
+            ''.join(f'{i}\t{100+i}\n' for i in range(1,101)))
+        (directory.parent/'rnaseq_qc_results.txt').write_text(
+            f'bam file = {sample}.bam\ngff file = generated.gtf\nprotocol = non-strand-specific\n'
+            "reads aligned = 1000\nexonic = 800\nintronic = 150\nintergenic = 50\n"
+            "5' bias = 1.0\n3' bias = 1.2\n5'-3' bias = 0.83\n"
+            "5'-3' bias region size = 100\n5'-3' bias number of top transcripts = 1000\n")
+    if args.existing_multiqc:
+        shutil.copytree(args.existing_multiqc, out/'multiqc')
+    elif args.nextflow:
+        import os
+        module = Path(__file__).resolve().parents[2]/'pipeline/modules/local/multiqc.nf'
+        nf = out/'check.nf'
+        nf.write_text("include { KATANA_MULTIQC } from '"+module.as_posix()+"'\n"
+                      "workflow { KATANA_MULTIQC(Channel.value(file(params.logs))) }\n")
+        config = out/'nextflow.config'
+        config.write_text("process { withName: KATANA_MULTIQC { publishDir = [path: '"+
+                          (out/'multiqc').as_posix()+"', mode: 'copy'] } }\n")
+        env = dict(os.environ, PATH=str(Path(args.multiqc).resolve().parent)+os.pathsep+os.environ['PATH'])
+        command = [str(args.nextflow.resolve()), 'run', str(nf), '-c', str(config),
+                   '--logs', str(raw), '-work-dir', str(out/'work')]
+        subprocess.run(command+['-with-trace', str(out/'trace-first.tsv')], cwd=out, env=env, check=True)
+        subprocess.run(command+['-resume', '-with-trace', str(out/'trace-resume.tsv')], cwd=out, env=env, check=True)
+        assert '\tCACHED\t' in (out/'trace-resume.tsv').read_text()
+    else:
+        subprocess.run([args.multiqc, str(raw), '--outdir', str(out/'multiqc'),
+                        '--filename', 'multiqc_report.html', '--data-format', 'json'], check=True)
     html = out/'multiqc/multiqc_report.html'
     data = out/'multiqc/multiqc_data/multiqc_data.json'
     assert html.is_file() and data.is_file()
+    saved = json.loads(data.read_text())['report_saved_raw_data']['qualimap_rnaseq_cov_hist']
+    assert set(saved) == {'S1', 'S2'}, list(saved)
+    if args.prepare_only:
+        return
     from katana_next.flow.model import write_json
     from katana_next.flow.sequencing import execute_stage, readiness
     project = write_json(out/'project.json', {
@@ -54,6 +90,13 @@ Sequence length\t150
     spec = {'adapter':'qc.sequencing', 'inputs':{'project':str(project)}}
     assert readiness(spec) == []
     result = execute_stage(spec, out/'qc')
+    from katana_next.infrastructure.manifest_store import ManifestStore
+    from katana_next.flow.native_coverage import profile_selection
+    _, loaded = ManifestStore().load(project)
+    selected, frames = profile_selection(loaded)
+    assert set(selected) == {'S1', 'S2'}
+    assert len(frames['1']) == 200
+    assert frames['1'].coverage.min() == 101
     from katana_next.reports.engine import Builder
     from katana_next.reports.layout import render
     from katana_next.reports.engine import ASSET_ROOT

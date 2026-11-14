@@ -1,7 +1,30 @@
 """Select completed coverage profiles without opening a BAM or running QC."""
 from pathlib import Path
+import json
 
-from katana_next.science.coverage_bias import read_gene_body_coverage
+from katana_next.science.coverage_bias import read_gene_body_coverage, validate_coverage_frame
+
+
+def multiqc_qualimap_profiles(asset, declared):
+    """Read Qualimap's saved raw curve, not its rescaled plot or general statistics."""
+    import pandas as pd
+    document = json.loads(asset.path.read_text(encoding="utf-8-sig"))
+    raw = document.get("report_saved_raw_data", {}).get("qualimap_rnaseq_cov_hist", {})
+    if not raw:
+        return None
+    rows = []
+    sample_map = asset.metadata.get("sample_map", {})
+    for original, values in raw.items():
+        sid = sample_map.get(original, original)
+        # Coverage is one profile per biological sample, not per read mate.
+        if sid not in declared:
+            raise ValueError("MultiQC Qualimap curve needs exact sample identity or sample_map: " + original)
+        if not isinstance(values, dict):
+            raise ValueError("Unsupported MultiQC Qualimap raw curve: " + original)
+        rows.extend({"sample_id": sid, "percentile": position, "coverage": value,
+                     "axis_orientation": "source transcript position; use native Qualimap bias for strand-oriented end metrics"}
+                    for position, value in values.items())
+    return validate_coverage_frame(pd.DataFrame(rows))
 
 
 def profile_selection(manifest):
@@ -10,17 +33,24 @@ def profile_selection(manifest):
     candidates = {}
     frames = {}
     for asset in manifest.assets:
-        if asset.kind != "gene_body_coverage":
+        if asset.kind == "sequencing_qc" and asset.path.name == "multiqc_data.json":
+            frame = multiqc_qualimap_profiles(asset, declared)
+            if frame is None:
+                continue
+            priority = 1
+        elif asset.kind == "gene_body_coverage":
+            frame = read_gene_body_coverage(asset.path, asset.metadata.get("sample_map"),
+                                            sample_id=asset.metadata.get("sample_id"))
+            qualimap = frame.axis_orientation.str.startswith("source transcript position").all()
+            priority = 0 if qualimap else 2
+        else:
             continue
-        frame = read_gene_body_coverage(asset.path, asset.metadata.get("sample_map"),
-                                        sample_id=asset.metadata.get("sample_id"))
         unknown = set(frame.sample_id) - declared
         if unknown:
             raise ValueError("Coverage profile contains undeclared samples: " + ", ".join(sorted(unknown)))
-        qualimap = frame.axis_orientation.str.startswith("source transcript position").all()
         frames[asset.asset_id] = frame
         for sid in frame.sample_id.unique():
-            candidates.setdefault(sid, []).append((0 if qualimap else 1, asset.asset_id))
+            candidates.setdefault(sid, []).append((priority, asset.asset_id))
     selected = {}
     for sid, choices in candidates.items():
         priority = min(x[0] for x in choices)

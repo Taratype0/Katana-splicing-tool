@@ -45,6 +45,14 @@ jobs:
           docker run --rm --network=none --user "$(id -u):$(id -g)" -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python /checks/check_import_content.py --outdir /acceptance/import-content
       - name: Verify installed standalone models and approved report
         run: bash tools/runtime/release_runtime.sh models
+      - name: Prepare generated native MultiQC with completed Qualimap profiles
+        run: |
+          python -m venv "$RUNNER_TEMP/multiqc"
+          "$RUNNER_TEMP/multiqc/bin/pip" install multiqc==1.35
+          python tools/runtime/check_qc_reuse.py --prepare-only --multiqc "$RUNNER_TEMP/multiqc/bin/multiqc" --outdir "$RUNNER_TEMP/katana-release/output/native-qc"
+      - name: Verify installed MultiQC import, coverage reuse and fixed report
+        run: |
+          docker run --rm --network=none --user "$(id -u):$(id -g)" -e MPLCONFIGDIR=/tmp/matplotlib -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python -I /checks/check_qc_reuse.py --existing-multiqc /acceptance/native-qc/multiqc --outdir /acceptance/installed-qc
       - name: Verify approved enrichment figures from the installed image
         run: |
           docker run --rm --network=none --user "$(id -u):$(id -g)" -e MPLCONFIGDIR=/tmp/matplotlib -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python -I /checks/check_report_format.py --outdir /acceptance/approved-report

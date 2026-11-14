@@ -22,7 +22,7 @@ def completed_multiqc(manifest):
     sample_names = set()
     modules = []
     for name, values in document.get("report_saved_raw_data", {}).items():
-        if isinstance(values, dict) and values and name.lower() not in {"software_versions", "custom_content"}:
+        if isinstance(values, dict) and values and not any(x in name.lower() for x in ("software_versions", "custom_content")):
             sample_names.update(str(k) for k in values)
             modules.append(name)
     for values in document.get("report_general_stats_data", []):
@@ -44,7 +44,7 @@ def completed_multiqc(manifest):
         raise ValueError("MultiQC is missing declared samples: " + ", ".join(missing))
     return html[0], data[0], {"sample_mapping": mapping, "modules": sorted(modules),
         "multiqc_version": document.get("config_version", document.get("multiqc_version", "recorded in native report")),
-        "coverage_available": any("qualimap" in x.lower() or "gene_body" in x.lower() for x in modules),
+        "coverage_available": bool(document.get("report_saved_raw_data", {}).get("qualimap_rnaseq_cov_hist")),
         "raw_reads_or_bams_read": False, "upstream_jobs": 0}
 
 

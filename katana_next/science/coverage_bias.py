@@ -49,6 +49,12 @@ def read_gene_body_coverage(path: Path, sample_map: dict | None = None, *, sampl
         )
     if "axis_orientation" not in frame:
         frame["axis_orientation"] = "5-prime to 3-prime"
+    return validate_coverage_frame(frame, sample_map)
+
+
+def validate_coverage_frame(frame: pd.DataFrame, sample_map=None) -> pd.DataFrame:
+    """Validate imported numerical profiles independently of their file container."""
+    frame = frame.copy()
     if frame.empty or frame.sample_id.isna().any() or frame.sample_id.astype(str).str.strip().eq("").any():
         raise ValueError("Coverage rows need explicit sample IDs")
     frame["sample_id"] = frame.sample_id.astype(str)

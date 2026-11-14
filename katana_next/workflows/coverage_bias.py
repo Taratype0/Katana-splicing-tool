@@ -12,10 +12,16 @@ class CoverageBiasWorkflow(WorkflowBase):
         "Are reads distributed across gene bodies, or concentrated at one end?",
         "Import RSeQC, long-form or explicitly sample-mapped Qualimap gene-body profiles; normalize each profile by its mean. Qualimap's native 100-bp bias statistic is not the 20-percent window ratio computed here.",
         "Sample-level coverage curves, 3-prime/5-prime ratios and metadata; no automatic sample exclusion.",
-        "sequencing sample", required_asset_kinds=("gene_body_coverage",),
-        optional_asset_kinds=("qualimap_rnaseq_metrics",),
+        "sequencing sample", required_asset_kinds=(),
+        optional_asset_kinds=("gene_body_coverage", "sequencing_qc", "qualimap_rnaseq_metrics"),
         limitations="FastQC is not gene-body coverage. End-tagged assays have expected bias. Global coverage does not rule out local artifacts or biological alternative end usage.",
     )
+
+    def validate_assets(self, context):
+        from katana_next.flow.native_coverage import profile_selection
+        selected, _ = profile_selection(context.manifest)
+        if not selected:
+            raise ValueError("Coverage requires completed native profiles or Qualimap curves in MultiQC data")
 
     def run(self, context, job, run_fingerprint, parameters):
         from katana_next.flow.native_coverage import profile_selection
