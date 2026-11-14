@@ -73,7 +73,9 @@ Sequence length\t150
         subprocess.run([args.multiqc, str(raw), '--outdir', str(out/'multiqc'),
                         '--filename', 'multiqc_report.html', '--data-format', 'json'], check=True)
     html = out/'multiqc/multiqc_report.html'
-    data = out/'multiqc/multiqc_data/multiqc_data.json'
+    data = out/'multiqc/multiqc_report_data/multiqc_data.json'
+    if not data.exists() and (out/'multiqc/multiqc_data.json').is_file():
+        data = out/'multiqc/multiqc_data.json'
     assert html.is_file() and data.is_file()
     saved = json.loads(data.read_text())['report_saved_raw_data']['qualimap_rnaseq_cov_hist']
     assert set(saved) == {'S1', 'S2'}, list(saved)

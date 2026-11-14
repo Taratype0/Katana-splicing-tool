@@ -12,11 +12,11 @@ process KATANA_MULTIQC {
     path qc_files, stageAs: 'inputs/??????/*'
     output:
     path 'multiqc_report.html', emit: report
-    path 'multiqc_data/multiqc_data.json', emit: data
+    path 'multiqc_report_data/multiqc_data.json', emit: data
     script:
     """
     multiqc inputs --filename multiqc_report.html --outdir . --data-format json --force
     test -s multiqc_report.html
-    test -s multiqc_data/multiqc_data.json
+    test -s multiqc_report_data/multiqc_data.json
     """
 }
