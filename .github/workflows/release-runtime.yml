@@ -50,9 +50,11 @@ jobs:
           python -m venv "$RUNNER_TEMP/multiqc"
           "$RUNNER_TEMP/multiqc/bin/pip" install multiqc==1.35
           python tools/runtime/check_qc_reuse.py --prepare-only --multiqc "$RUNNER_TEMP/multiqc/bin/multiqc" --outdir "$RUNNER_TEMP/katana-release/output/native-qc"
+          mkdir -p "$RUNNER_TEMP/katana-release/output/container-multiqc"
+          docker run --rm --user "$(id -u):$(id -g)" -v "$RUNNER_TEMP/katana-release/output:/acceptance" community.wave.seqera.io/library/multiqc:1.35--c17fb751507e9dfc multiqc /acceptance/native-qc/native --outdir /acceptance/container-multiqc --filename multiqc_report.html --data-format json
       - name: Verify installed MultiQC import, coverage reuse and fixed report
         run: |
-          docker run --rm --network=none --user "$(id -u):$(id -g)" -e MPLCONFIGDIR=/tmp/matplotlib -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python -I /checks/check_qc_reuse.py --existing-multiqc /acceptance/native-qc/multiqc --outdir /acceptance/installed-qc
+          docker run --rm --network=none --user "$(id -u):$(id -g)" -e MPLCONFIGDIR=/tmp/matplotlib -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python -I /checks/check_qc_reuse.py --existing-multiqc /acceptance/container-multiqc --outdir /acceptance/installed-qc
       - name: Verify approved enrichment figures from the installed image
         run: |
           docker run --rm --network=none --user "$(id -u):$(id -g)" -e MPLCONFIGDIR=/tmp/matplotlib -v "$RUNNER_TEMP/katana-release/output:/acceptance" -v "$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "katana-downstream:$RUNTIME_VERSION" python -I /checks/check_report_format.py --outdir /acceptance/approved-report

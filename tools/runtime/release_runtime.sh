@@ -101,6 +101,8 @@ with tarfile.open('docker-validation.tar.gz','w:gz') as archive:
       archive.add(path,arcname=str(path))
 PYDOCKER
   test "$(gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+  tar -czf generated-qc-inputs.tar.gz container-multiqc
+  gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" generated-qc-inputs.tar.gz
   gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" *.docker.tar.gz docker-SHA256SUMS docker-validation.tar.gz docker.acceptance.json
   gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" "$(find "$ROOT/accepted-controller" -name 'katana-controller-*.tar.gz')" CONTROLLER_VALIDATION.json
   ;;
@@ -108,6 +110,8 @@ apptainer)
   mkdir -p "$ROOT/output"
   cd "$ROOT/output"
   gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" -p "katana-downstream-$RUNTIME_VERSION-linux-amd64.docker.tar.gz" -p docker-SHA256SUMS -p docker.acceptance.json
+  gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" -p generated-qc-inputs.tar.gz
+  tar -xzf generated-qc-inputs.tar.gz
   sha256sum --check --strict docker-SHA256SUMS
   python - <<'PYACCEPT'
 import json,os
@@ -127,6 +131,7 @@ PYACCEPT
   apptainer exec --cleanenv --bind "$ROOT/output:/acceptance,$GITHUB_WORKSPACE/scripts:/checks:ro" "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" python /checks/check_downstream_environment.py --out /acceptance/apptainer-environment
   apptainer exec --cleanenv --bind "$ROOT/output:/acceptance,$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" python /checks/check_import_content.py --outdir /acceptance/apptainer-import-content
   apptainer exec --cleanenv --bind "$ROOT/output:/acceptance,$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" python /checks/check_verification_recovery.py --outdir /acceptance/apptainer-verification-recovery
+  apptainer exec --cleanenv --bind "$ROOT/output:/acceptance,$GITHUB_WORKSPACE/tools/runtime:/checks:ro" "output/katana-downstream-$RUNTIME_VERSION-linux-amd64.sif" python -I /checks/check_qc_reuse.py --existing-multiqc /acceptance/container-multiqc --outdir /acceptance/apptainer-qc
   ;;
 collect)
   cd "$ROOT/output"
@@ -142,11 +147,14 @@ import_check=json.loads(Path('apptainer-import-content/acceptance.json').read_te
 receipt['apptainer_import_content']=import_check
 verification=json.loads(Path('apptainer-verification-recovery/acceptance.json').read_text()); assert verification['status']=='passed'
 receipt['apptainer_verification_recovery']=verification
+qc=json.loads(Path('apptainer-qc/acceptance.json').read_text()); assert qc['status']=='passed'
+receipt['apptainer_qc_reuse']=qc
 Path('runtime.acceptance.json').write_text(json.dumps(receipt,indent=2))
 with tarfile.open('apptainer-validation.tar.gz','w:gz') as archive:
   archive.add('apptainer-environment')
   archive.add('apptainer-import-content')
   archive.add('apptainer-verification-recovery')
+  archive.add('apptainer-qc')
 PYACCEPT
   test "$(gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
   gh release upload "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" *.sif runtime-SHA256SUMS apptainer-validation.tar.gz runtime.acceptance.json
