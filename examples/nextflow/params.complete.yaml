@@ -56,6 +56,7 @@ skip_network: false
 skip_interaction: false
 skip_sequencing_qc: false
 with_genebody_coverage: false
+qc_results: null
 with_network_bootstrap: false
 
 # Upstream reference, alignment, expression and splicing parameters

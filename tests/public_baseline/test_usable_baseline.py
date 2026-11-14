@@ -34,7 +34,11 @@ NEW_REPORT_WORKFLOW = {"workflow_id": "reports.study", "version": "1.0.0",
 # approved downstream DAS selection. The two earlier JSON inventories stay
 # byte-for-byte unchanged rather than becoming snapshots of whatever runs now.
 for entry in INVENTORY["workflows"]:
-    if entry["workflow_id"] in {"programs.cosplice", "programs.psi_network"}:
+    if entry["workflow_id"] == "quality.read_coverage_bias":
+        # Approved native Qualimap/MultiQC reuse changes input selection only.
+        # Earlier inventory files and the coverage metric definitions stay intact.
+        entry["version"] = "1.2.0"
+    elif entry["workflow_id"] in {"programs.cosplice", "programs.psi_network"}:
         # Approved study-wide engine and optional paired design replace the
         # default fit entry. The preserved legacy calculations retain tests.
         entry["version"] = "4.3.4"
@@ -99,6 +103,7 @@ def test_only_approved_input_module_and_label_workflows_changed_from_preserved_b
         "programs.psi_network", "programs.hub_events",
         "prioritize.evidence", "prioritize.enrichment", "prioritize.rbp_support",
         "prioritize.motiftrace_consequences", "prioritize.rbp_mechanism",
+        "quality.read_coverage_bias",
     }
     assert current["quality.stable_as"]["parameter_defaults"] == {"fdr": 0.05, "min_abs_dpsi": 0.1}
     assert current["differential.cross_comparison"]["parameter_defaults"] == {
