@@ -70,7 +70,7 @@ is generated automatically. The selected modules use the versioned
 Optional analyses can be disabled with the documented `--skip_*` switches.
 
 ```sh
-nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103 \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026111401 \
   --input inputs/samples.csv --contrasts inputs/contrasts.csv \
   --fasta references/genome.fa --gtf references/annotation.gtf \
   --species Mus_musculus --reference_build GRCm39 \
@@ -107,7 +107,7 @@ node. Slurm manages actual admission and concurrency.
 For a Katana upstream results bundle:
 
 ```sh
-nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103 \
+nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026111401 \
   --mode downstream-only --bundle upstream-results/katana_bundle \
   --species Mus_musculus --reference_build GRCm39 \
   -profile docker --outdir results -work-dir work

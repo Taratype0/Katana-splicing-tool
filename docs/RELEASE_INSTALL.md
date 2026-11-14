@@ -4,7 +4,7 @@ Use the [independent runtime guide](INDEPENDENT_RUNTIME.md) for the current
 release, downloadable Python wheel, Linux runtime, matching task images and
 checksums. Older releases remain available under their versioned GitHub tags.
 
-- **FASTQ or BAM:** `nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026110404`
+- **FASTQ or BAM:** `nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026111401`
   with sample/contrast sheets, references, profile and output paths. Containers
   and supported databases download automatically; no manual JSON is required.
 - **Existing upstream bundle:** the same command with `--mode downstream-only
