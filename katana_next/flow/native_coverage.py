@@ -5,11 +5,14 @@ import json
 from katana_next.science.coverage_bias import read_gene_body_coverage, validate_coverage_frame
 
 
-def multiqc_qualimap_profiles(asset, declared):
-    """Read Qualimap's saved raw curve, not its rescaled plot or general statistics."""
+def multiqc_coverage_profiles(asset, declared):
+    """Read saved raw curves, not rescaled plots or general statistics."""
     import pandas as pd
     document = json.loads(asset.path.read_text(encoding="utf-8-sig"))
-    raw = document.get("report_saved_raw_data", {}).get("qualimap_rnaseq_cov_hist", {})
+    saved = document.get("report_saved_raw_data", {})
+    qualimap = saved.get("qualimap_rnaseq_cov_hist", {})
+    rseqc = saved.get("rseqc_gene_body_cov", {})
+    raw = {**rseqc, **qualimap}
     if not raw:
         return None
     rows = []
@@ -18,11 +21,12 @@ def multiqc_qualimap_profiles(asset, declared):
         sid = sample_map.get(original, original)
         # Coverage is one profile per biological sample, not per read mate.
         if sid not in declared:
-            raise ValueError("MultiQC Qualimap curve needs exact sample identity or sample_map: " + original)
+            raise ValueError("MultiQC coverage curve needs exact sample identity or sample_map: " + original)
         if not isinstance(values, dict):
-            raise ValueError("Unsupported MultiQC Qualimap raw curve: " + original)
+            raise ValueError("Unsupported MultiQC raw coverage curve: " + original)
         rows.extend({"sample_id": sid, "percentile": position, "coverage": value,
-                     "axis_orientation": "source transcript position; use native Qualimap bias for strand-oriented end metrics"}
+                     "axis_orientation": ("source transcript position; use native Qualimap bias for strand-oriented end metrics"
+                                          if original in qualimap else "5-prime to 3-prime")}
                     for position, value in values.items())
     return validate_coverage_frame(pd.DataFrame(rows))
 
@@ -34,10 +38,10 @@ def profile_selection(manifest):
     frames = {}
     for asset in manifest.assets:
         if asset.kind == "sequencing_qc" and asset.path.name == "multiqc_data.json":
-            frame = multiqc_qualimap_profiles(asset, declared)
+            frame = multiqc_coverage_profiles(asset, declared)
             if frame is None:
                 continue
-            priority = 1
+            priority = None
         elif asset.kind == "gene_body_coverage":
             frame = read_gene_body_coverage(asset.path, asset.metadata.get("sample_map"),
                                             sample_id=asset.metadata.get("sample_id"))
@@ -50,7 +54,10 @@ def profile_selection(manifest):
             raise ValueError("Coverage profile contains undeclared samples: " + ", ".join(sorted(unknown)))
         frames[asset.asset_id] = frame
         for sid in frame.sample_id.unique():
-            candidates.setdefault(sid, []).append((priority, asset.asset_id))
+            rank = priority
+            if rank is None:
+                rank = 1 if frame.loc[frame.sample_id.eq(sid)].axis_orientation.str.startswith("source transcript position").all() else 3
+            candidates.setdefault(sid, []).append((rank, asset.asset_id))
     selected = {}
     for sid, choices in candidates.items():
         priority = min(x[0] for x in choices)

@@ -44,7 +44,8 @@ def completed_multiqc(manifest):
         raise ValueError("MultiQC is missing declared samples: " + ", ".join(missing))
     return html[0], data[0], {"sample_mapping": mapping, "modules": sorted(modules),
         "multiqc_version": document.get("config_version", document.get("multiqc_version", "recorded in native report")),
-        "coverage_available": bool(document.get("report_saved_raw_data", {}).get("qualimap_rnaseq_cov_hist")),
+        "coverage_available": any(document.get("report_saved_raw_data", {}).get(k)
+                                  for k in ("qualimap_rnaseq_cov_hist", "rseqc_gene_body_cov")),
         "raw_reads_or_bams_read": False, "upstream_jobs": 0}
 
 
@@ -78,7 +79,9 @@ def reuse_multiqc(manifest, output_dir):
         "sources": sources, "upstream_jobs": 0,
         "artifacts": [{"name": "MultiQC sequencing quality", "path": str(out / "multiqc_report.html"),
                        "metadata": {"native_multiqc": True, "qc_phase": "multiqc", "data_links": links,
-                                    "caption": "Original MultiQC results. Only measured modules are shown; no FASTQ or BAM scan was repeated."}}]})
+                                    "caption": "Original MultiQC results. Only measured modules are shown; no FASTQ or BAM scan was repeated. "
+                                        + ("Gene-body coverage is included in the supplied data." if audit['coverage_available']
+                                           else "No Qualimap or RSeQC gene-body curve was recorded in the supplied MultiQC data.")}}]})
     outputs = [{"path": str(p), "size_bytes": p.stat().st_size, "sha256": file_sha256(p),
                 "kind": "file", "name": p.name, "analysis_id": "flow.qc.sequencing"}
                for p in out.iterdir() if p.is_file()]

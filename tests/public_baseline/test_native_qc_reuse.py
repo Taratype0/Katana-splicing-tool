@@ -154,6 +154,21 @@ def test_multiqc_curve_does_not_accept_renamed_samples(study):
         create_plan(study, {})
 
 
+def test_multiqc_rseqc_raw_counts_are_reused_without_scan(study):
+    payload = json.loads(study.read_text())
+    curves = {s['sample_id']: {str(i): i+500 for i in range(1,101)} for s in payload['samples']}
+    path = write_json(study.parent/'multiqc_data.json', {'report_saved_raw_data': {'rseqc_gene_body_cov': curves}})
+    payload['assets'].append({'asset_id':'mq-rseqc','kind':'sequencing_qc','path':str(path)})
+    write_json(study, payload)
+    plan = create_plan(study, {'analyses': {'coverage':True}})
+    assert not any(t.get('adapter') == 'qc.genebody' for t in plan['tasks'])
+    from katana_next.infrastructure.manifest_store import ManifestStore
+    _, manifest = ManifestStore().load(study)
+    _, frames = profile_selection(manifest)
+    assert frames['mq-rseqc'].coverage.min() == 501
+    assert frames['mq-rseqc'].axis_orientation.eq('5-prime to 3-prime').all()
+
+
 def test_multiqc_frame_uses_fixed_chapter_one(tmp_path):
     from katana_next.reports.engine import Builder
     from katana_next.reports.layout import render
