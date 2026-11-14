@@ -28,6 +28,29 @@ jobs:
           node-version: '24'
       - run: python -m pip install -e '.[next,next-dev]' playwright
       - run: python -m playwright install --with-deps chromium
+      - name: Install isolated native MultiQC for generated-log acceptance
+        run: |
+          python -m venv "$RUNNER_TEMP/multiqc"
+          "$RUNNER_TEMP/multiqc/bin/pip" install multiqc==1.35
+      - name: Verify native MultiQC reuse and the fixed chapter-one report
+        run: python tools/runtime/check_qc_reuse.py --multiqc "$RUNNER_TEMP/multiqc/bin/multiqc" --outdir qc-reuse-review
+      - name: Verify the embedded native MultiQC browser
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page()
+              page.goto(Path('qc-reuse-review/report/REPORT.html').resolve().as_uri())
+              frame = page.locator('iframe[title="MultiQC sequencing quality"]')
+              frame.scroll_into_view_if_needed()
+              frame.content_frame.locator('body').wait_for()
+              assert 'MultiQC' in frame.content_frame.locator('body').inner_text()
+              assert 'S1' in frame.content_frame.locator('body').inner_text()
+              page.screenshot(path='qc-reuse-review/report-browser.png', full_page=False)
+              browser.close()
+          PY
       - run: python -m pytest -q tests/public_baseline/test_report_content_visibility.py tests/public_baseline/test_enrichment_facets.py
       - run: python scripts/build_integration_review_dummy.py --content-review --outdir dummy-review
       - run: python scripts/check_integration_review_dummy.py --content-review --directory dummy-review/report --receipt dummy-review/acceptance.json
@@ -36,5 +59,7 @@ jobs:
         if: always()
         with:
           name: seven-chapter-content-review
-          path: dummy-review/
+          path: |
+            dummy-review/
+            qc-reuse-review/
           retention-days: 7

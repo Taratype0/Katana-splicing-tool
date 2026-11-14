@@ -367,7 +367,8 @@ workflow KATANA_PIPELINE {
         [result.files].flatten().collect { p -> artifact('auxiliary', p, "suppa/${cmp.contrast}/diffsplice/per_isoform/${p.name}", [comparison_id: cmp.contrast,
             direction: 'treatment_minus_control', source_input1: cmp.control, source_input2: cmp.treatment]) }
     }
-    if (!params.skip_sequencing_qc && !params.qc_results) {
+    def existing_multiqc = params.qc_results ? file("${params.qc_results}/**/multiqc_report.html") : []
+    if (!params.skip_sequencing_qc && !existing_multiqc) {
         KATANA_MULTIQC(ch_qc_files.flatten().collect().filter { it.size() > 0 })
         ch_artifacts = ch_artifacts.mix(
             KATANA_MULTIQC.out.report.map { artifact('qc', it, 'qc/multiqc/multiqc_report.html', [qc_type: 'multiqc', qc_phase: 'multiqc']) },
