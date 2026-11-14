@@ -83,10 +83,9 @@ def template_preflight(template_path, config_path):
         bed = bed if bed.is_absolute() else config_base / bed
         if qc.get("reference_bed") and not bed.is_file():
             errors.append("Gene-body QC requires a reference BED matching the declared annotation")
-        import shutil
-        executable = qc.get("rseqc_executable", "geneBody_coverage.py")
-        if not shutil.which(executable) and not Path(executable).is_file():
-            errors.append("Missing RSeQC executable: " + executable)
+        # Do not require RSeQC before completed native profiles are imported.
+        # The project plan checks the executable only for genuinely missing
+        # samples for which the user requested a new BAM scan.
     return {"schema": "katana.flow.template_preflight/v1", "ready": not errors, "errors": errors,
             "scope": "Resource/runtime readiness before upstream. Native project and calculation acceptance follow upstream export."}
 

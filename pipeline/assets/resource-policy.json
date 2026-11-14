@@ -45,6 +45,22 @@
   ],
   "processes": [
     {
+      "process": "KATANA_MULTIQC",
+      "source": "pipeline/modules/local/multiqc.nf",
+      "labels": [
+        "process_single"
+      ],
+      "initial": {
+        "cpus": 1,
+        "memory_gib": 4,
+        "time_hours": 1
+      },
+      "disposition": "log aggregation only",
+      "rationale": "Parses completed QC logs; never scans reads or BAMs. Initial allowance, not a measured production peak.",
+      "cpu_retry_policy": "fixed worker count; memory/time may grow",
+      "threading_review": "serial report aggregation"
+    },
+    {
       "process": "ADAPT_SUPPA_CONTRASTS",
       "source": "pipeline/modules/local/adapt_suppa_contrasts.nf",
       "labels": [

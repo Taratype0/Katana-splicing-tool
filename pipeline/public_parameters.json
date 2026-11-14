@@ -140,6 +140,9 @@
   "with_genebody_coverage": {
     "type": "bool"
   },
+  "qc_results": {
+    "type": "string"
+  },
   "with_network_bootstrap": {
     "type": "bool"
   },

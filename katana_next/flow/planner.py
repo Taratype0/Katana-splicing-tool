@@ -123,15 +123,25 @@ def create_plan(project, config):
                 {"contrast_ids": [cid]}, scope)
 
     qc = settings.get("qc", {})
+    from .native_coverage import profile_selection
+    coverage_sources, _ = profile_selection(manifest)
+    # The coverage switch authorizes missing BAM scans; it must not hide
+    # already measured profiles when scanning is disabled.
+    scan_missing = enabled["coverage"] and qc.get("coverage_source", "prefer_existing") != "existing_native"
+    if qc.get("coverage_source", "prefer_existing") not in {"prefer_existing", "existing_native", "all", "new_rseqc"}:
+        raise ValueError("Unknown qc.coverage_source")
+    if coverage_sources:
+        enabled["coverage"] = True
+    missing_coverage = [s for s in manifest.samples if s.sample_id not in coverage_sources]
     if enabled["sequencing_qc"]:
         add("sequencing-qc", "flow.qc.sequencing", ["audit"], {}, {"unit": "available_native_sequencing_QC"},
             adapter="qc.sequencing", inputs={"project": str(project_path)})
     if enabled["coverage"]:
-        if not qc.get("reference_bed"):
+        if scan_missing and missing_coverage and not qc.get("reference_bed"):
             add("reference-bed", "flow.reference.bed12", ["audit"], {}, {"unit": "reference"},
                 adapter="reference.bed12", inputs={"gtf": str(manifest.annotation.gtf or "")})
         coverage_tasks = []
-        for sample in manifest.samples:
+        for sample in (missing_coverage if scan_missing else []):
             inputs = {"bam": str(sample.assets.get("bam", sample.assets.get("genome_bam", ""))),
                       "reference_bed": local(qc["reference_bed"]) if qc.get("reference_bed") else ""}
             dependency_inputs = {} if qc.get("reference_bed") else {
@@ -139,8 +149,13 @@ def create_plan(project, config):
             coverage_tasks.append(add("genebody-" + _token(sample.sample_id), "flow.qc.genebody", ["audit"] if qc.get("reference_bed") else ["reference-bed"],
                 {k: v for k, v in qc.items() if k != "reference_bed"}, {"sample_id": sample.sample_id},
                 adapter="qc.genebody", inputs=inputs, dependency_inputs=dependency_inputs))
-        if coverage_tasks:
-            add("coverage-summary", "quality.read_coverage_bias", coverage_tasks)
+        if coverage_tasks or coverage_sources:
+            add("coverage-summary", "quality.read_coverage_bias", coverage_tasks or ["audit"])
+        settings["qc"] = {**qc, "coverage_reuse": {
+            "selected_asset_by_sample": coverage_sources,
+            "new_scan_samples": [s.sample_id for s in missing_coverage] if scan_missing else [],
+            "unavailable_samples": [] if scan_missing else [s.sample_id for s in missing_coverage],
+            "policy": "prefer valid Qualimap, then existing coverage; scan missing only when requested"}}
 
     if not isinstance(settings.get('network', {}), dict):
         raise ValueError('network must be a configuration object')

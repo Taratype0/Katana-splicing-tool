@@ -16,7 +16,7 @@ def automaticConfiguration() {
     keys += ['landscape', 'cross_comparison', 'enrichment', 'rbp_identity', 'motiftrace',
              'motif_binding', 'mapp', 'network', 'interaction', 'sequencing_qc'].collect { "skip_${it}".toString() }
     def request = keys.collectEntries { key -> [(key): params[key]] }
-    def kinds = ['gene_sets', 'rbp_gene_sets', 'motif_database', 'clip_peaks', 'fimo_runtime']
+    def kinds = ['gene_sets', 'rbp_gene_sets', 'motif_database', 'clip_peaks', 'fimo_runtime', 'qc_results']
     def resources = []
     def names = []
     def entries = []
@@ -113,7 +113,8 @@ Use -c examples/nextflow/kth.config for the supplied Dardel shared-queue example
 Optional analyses: --skip_network --skip_motiftrace --skip_motif_binding --skip_mapp
   --skip_enrichment --skip_rbp_identity --skip_landscape --skip_cross_comparison
   --skip_interaction --skip_sequencing_qc
-Extra gene-body BAM scanning: --with_genebody_coverage (off by default).
+Reuse completed MultiQC/Qualimap: --qc_results /path/to/completed/qc.
+Extra gene-body BAM scanning: --with_genebody_coverage (off by default; missing profiles only).
 Internal JSON is generated automatically. Advanced --project_template/--flow_config still work.
 Use nextflow -bg run to launch in the background. See docs/NEXTFLOW_SIMPLE.md for direct CLI examples.
 Containers download automatically for Docker, Singularity and Apptainer. No hand-written JSON is required.

@@ -103,7 +103,7 @@ def fetch_resource(item, cache):
 
 def resource_entries(request, resources):
     names = request.get('resource_names', [])
-    if len(names) != len(resources) or set(names) - set(RESOURCE_KINDS):
+    if len(names) != len(resources) or set(names) - (set(RESOURCE_KINDS) | {"qc_results"}):
         raise ValueError('Resource names and staged inputs do not match')
     declarations = request.get('resource_entries')
     if declarations is not None and len(declarations) != len(names):
@@ -203,6 +203,10 @@ def generate(request, resources, outdir):
     for entry in entries:
         name, filename = entry['parameter'], entry['path']
         path = Path(filename).resolve(strict=True)
+        if name == "qc_results":
+            if not path.is_dir():
+                raise ValueError("--qc_results must be a directory of completed QC results")
+            continue
         if not path.is_file():
             raise ValueError(f"--{name} must be a file")
         try:
@@ -241,6 +245,10 @@ def generate(request, resources, outdir):
     if outdir.exists():
         raise FileExistsError(f"Configuration destination already exists: {outdir}")
     outdir.mkdir(parents=True)
+    for entry in entries:
+        if entry['parameter'] == 'qc_results':
+            from katana_next.flow.native_coverage import stage_native_qc
+            template['assets'].extend(stage_native_qc(entry['path'], outdir / 'native-qc'))
     def write(name, document):
         (outdir / name).write_text(json.dumps(document, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
     if raw and (analyses["motiftrace"] or analyses["motif_binding"]) and "fimo_runtime" not in names:

@@ -158,6 +158,12 @@ def render(builder):
         chapter_items = _ordered_panels(builder, number)
         inserted = set()
         for index, item in enumerate(chapter_items, 1):
+            if item.get('metadata', {}).get('native_multiqc'):
+                blocks.append('<article class="exhibit wide native-multiqc" id="'+esc(item['id'])+'">'
+                    '<div class="exhibit-head"><h3>MultiQC sequencing quality</h3></div><p class="fig-notes">'+esc(item.get('caption', ''))+'</p>'
+                    +_link(item['image'], 'Open full MultiQC report')+_data_links(item)
+                    +'<iframe loading="lazy" data-src="'+esc(item['image'])+'" title="MultiQC sequencing quality" class="network-frame"></iframe></article>')
+                continue
             links = _link(item['image'], 'Figure')
             if item.get('svg'): links += _link(item['svg'], 'SVG')
             links += _data_links(item)

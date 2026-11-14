@@ -39,7 +39,7 @@ def build_qc_views(root, plan, receipts, transport):
             phase = artifact.get("metadata", {}).get("qc_phase", "native")
             phase_title = "Supplied BAM records" if phase == "bam_records" else phase.replace("_", " ").capitalize()
             title = phase_title + " | " + artifact["name"]
-            if path.suffix == ".png":
+            if path.suffix == ".png" or artifact.get("metadata", {}).get("native_multiqc"):
                 metadata = copy.deepcopy(artifact.get("metadata", {}))
                 links = []
                 for link in metadata.get("data_links", []):
@@ -51,7 +51,8 @@ def build_qc_views(root, plan, receipts, transport):
                 panels.append({"id": "sequencing-" + phase + "-" + path.stem,
                     "chapter": 1, "title": title, "path": str(path), "contrast_id": "all",
                     "caption": metadata.get("caption", "Original native sequencing QC; no upstream rerun."),
-                    "data_links": links, "metadata": {"qc_phase": phase, "native_QC_values_preserved": True}})
+                    "data_links": links, "metadata": {"qc_phase": phase, "native_QC_values_preserved": True,
+                                                        "native_multiqc": metadata.get("native_multiqc", False)}})
             elif path.suffix in {".tsv", ".csv", ".html"}:
                 tables.append({"chapter": 1, "name": title, "path": str(path),
                                "analysis_id": "quality.reads"})

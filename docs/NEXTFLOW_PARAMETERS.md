@@ -521,3 +521,7 @@ in the default resource bundle; other required kinds still download automaticall
 The bundled CLIP sources retain separate target, assay, biosample and genome-build
 metadata. For custom per-file metadata use an advanced project template.
 See [database versions and provenance](RESOURCE_DATABASES.md).
+
+## Reusing sequencing QC
+
+Use `--qc_results /path/to/completed/qc` to reuse MultiQC and Qualimap outputs. Existing coverage is preferred; `--with_genebody_coverage` scans missing samples only. See [QC reuse](QC_REUSE.md).

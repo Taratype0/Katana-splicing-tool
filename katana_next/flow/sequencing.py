@@ -109,6 +109,9 @@ def readiness(spec):
         return []
     try:
         manifest, sources = _project_sources(spec)
+        from .multiqc import completed_multiqc
+        if completed_multiqc(manifest) is not None:
+            return []
         sample_ids = {sample.sample_id for sample in manifest.samples}
         # Genome-BAM input does not create fictional raw FASTQ or STAR QC.
         # Legacy projects with no source declaration use the complete cohort.
@@ -141,6 +144,11 @@ def execute_stage(spec, output_dir):
     issues = readiness(spec)
     if issues:
         raise ValueError("; ".join(issues))
+    from .multiqc import reuse_multiqc
+    manifest, _ = _project_sources(spec)
+    reused = reuse_multiqc(manifest, output_dir)
+    if reused is not None:
+        return reused
     out = Path(output_dir).resolve()
     if out.exists() and any(out.iterdir()):
         raise FileExistsError("Existing sequencing QC outputs are preserved")

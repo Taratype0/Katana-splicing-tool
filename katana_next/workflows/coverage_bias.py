@@ -6,7 +6,7 @@ from katana_next.workflows.figure_style import readable_plot as _plot
 
 
 class CoverageBiasWorkflow(WorkflowBase):
-    version = "1.1.1"
+    version = "1.2.0"
     definition = WorkflowDefinition(
         "quality.read_coverage_bias", "quality", "5-prime / 3-prime read coverage",
         "Are reads distributed across gene bodies, or concentrated at one end?",
@@ -18,8 +18,10 @@ class CoverageBiasWorkflow(WorkflowBase):
     )
 
     def run(self, context, job, run_fingerprint, parameters):
-        assets = [a for a in context.manifest.assets if a.kind == "gene_body_coverage"]
-        profiles = pd.concat([read_gene_body_coverage(a.path, a.metadata.get("sample_map"), sample_id=a.metadata.get("sample_id")) for a in assets], ignore_index=True)
+        from katana_next.flow.native_coverage import profile_selection
+        selected, frames = profile_selection(context.manifest)
+        profiles = pd.concat([frames[aid].loc[frames[aid].sample_id.eq(sid)].assign(source_asset_id=aid)
+                              for sid, aid in selected.items()], ignore_index=True)
         if profiles.duplicated(["sample_id", "percentile"]).any():
             raise ValueError("Coverage assets overlap; choose one profile per sample")
         metadata = pd.DataFrame([
@@ -33,7 +35,9 @@ class CoverageBiasWorkflow(WorkflowBase):
         oriented = curves.axis_orientation.eq("5-prime to 3-prime").all()
         writer = ArtifactWriter(context, self.definition.workflow_id, run_fingerprint, parameters, self.version,
             common_metadata={"method": self.definition.method, "limitations": self.definition.limitations,
-                             "sample_exclusion": "none; diagnostic only"})
+                             "sample_exclusion": "none; diagnostic only",
+                             "selected_asset_by_sample": selected,
+                             "unavailable_samples": sorted(set(metadata.sample_id) - set(selected))})
         table = writer.table("Gene-body coverage curves", "gene_body_coverage.parquet", curves, entity_type="coverage_profile")
         writer.table("Read coverage bias metrics", "coverage_bias_metrics.parquet", metrics, entity_type="sample_qc", parents=(table.artifact_id,))
         native_assets = [a for a in context.manifest.assets if a.kind == "qualimap_rnaseq_metrics"]

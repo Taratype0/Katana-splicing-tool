@@ -796,3 +796,7 @@ current options. See [NEXTFLOW_PARAMETERS.md](NEXTFLOW_PARAMETERS.md).
 ## Selecting analyses and recovering a run
 
 The default runs the complete report. See [analysis and execution options](ANALYSIS_AND_EXECUTION_OPTIONS.md) for per-module opt-outs, resource-only resume, shared MAPP preparation and storage behaviour.
+
+## Reusing sequencing QC
+
+Use `--qc_results /path/to/completed/qc` to reuse MultiQC and Qualimap outputs. Existing coverage is preferred; `--with_genebody_coverage` scans missing samples only. See [QC reuse](QC_REUSE.md).

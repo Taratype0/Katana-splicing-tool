@@ -126,7 +126,7 @@ workflow KATANA_DOWNSTREAM {
     OVERLAP(readyTasks(plan, 'overlap', molecular), project_root, project_filename)
     REFERENCE(readyTasks(plan, 'reference', AUDIT.out.result), project_root, project_filename)
     QC(readyTasks(plan, 'qc', AUDIT.out.result.mix(REFERENCE.out.result)), project_root, project_filename)
-    COVERAGE(readyTasks(plan, 'coverage', QC.out.result), project_root, project_filename)
+    COVERAGE(readyTasks(plan, 'coverage', AUDIT.out.result.mix(QC.out.result)), project_root, project_filename)
     NETWORK_FIT(readyTasks(plan, 'network_fit', AUDIT.out.result), project_root, project_filename)
     NETWORK_FOLLOWUP(readyTasks(plan, 'network_followup', NETWORK_FIT.out.result), project_root, project_filename)
     INTERACTION(readyTasks(plan, 'interaction', AUDIT.out.result), project_root, project_filename)

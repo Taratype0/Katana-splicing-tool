@@ -206,6 +206,8 @@ def import_bundle(bundle, project_template, outdir, *, owned_link_root=None, ana
             skipped_resources.append(asset["asset_id"])
             continue
         asset = copy.deepcopy(asset)
+        from .native_coverage import bind_native_sample_metadata
+        bind_native_sample_metadata(asset, set(by_sample))
         path = Path(asset["path"])
         path = path if path.is_absolute() else template_path.parent / path
         if not path.is_file():

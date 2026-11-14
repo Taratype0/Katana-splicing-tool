@@ -13,6 +13,7 @@ include { KATANA_EXPORT } from '../modules/local/katana_export'
 include { KATANA_DIFFERENTIAL } from '../modules/local/katana_differential'
 
 include { FASTQC } from '../modules/nf-core/fastqc/main'
+include { KATANA_MULTIQC } from '../modules/local/multiqc'
 include { FASTQC as BAM_FASTQC } from '../modules/nf-core/fastqc/main'
 include { TRIMGALORE } from '../modules/nf-core/trimgalore/main'
 include { STAR_GENOMEGENERATE } from '../modules/nf-core/star/genomegenerate/main'
@@ -365,6 +366,12 @@ workflow KATANA_PIPELINE {
         if (!cmp) error('SUPPA isoform output has no declared contrast')
         [result.files].flatten().collect { p -> artifact('auxiliary', p, "suppa/${cmp.contrast}/diffsplice/per_isoform/${p.name}", [comparison_id: cmp.contrast,
             direction: 'treatment_minus_control', source_input1: cmp.control, source_input2: cmp.treatment]) }
+    }
+    if (!params.skip_sequencing_qc && !params.qc_results) {
+        KATANA_MULTIQC(ch_qc_files.flatten().collect().filter { it.size() > 0 })
+        ch_artifacts = ch_artifacts.mix(
+            KATANA_MULTIQC.out.report.map { artifact('qc', it, 'qc/multiqc/multiqc_report.html', [qc_type: 'multiqc', qc_phase: 'multiqc']) },
+            KATANA_MULTIQC.out.data.map { artifact('qc', it, 'qc/multiqc/multiqc_data.json', [qc_type: 'multiqc', qc_phase: 'multiqc']) })
     }
     ch_export_inputs = ch_artifacts.mix(ch_dtu_artifacts, ch_rmats_artifacts, ch_suppa_artifacts, ch_suppa_isoform_artifacts).collect(flat: false)
         .map { artifacts -> exportArtifactInputs(artifacts) }
