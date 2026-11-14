@@ -2,7 +2,7 @@
 
 ## Current native entry
 
-New studies run `nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev20261103`. `--outdir` is the published
+New studies run `nextflow -bg run Taratype0/Katana-splicing-tool -r v2.0.0-beta.5.dev2026111401`. `--outdir` is the published
 result root and `-work-dir` is native cache. Stage dependencies and final
 delivery are part of this one Nextflow session. See [outputs](NATIVE_OUTPUTS.md).
 

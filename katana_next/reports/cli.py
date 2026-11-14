@@ -21,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Optional JSON analysis-artifact export. --asset-catalog is an alias for --catalog.")
     parser.add_argument("--from-report", type=Path,
                         help="Refresh presentation of an existing portable report; completed analyses are never rerun.")
+    parser.add_argument("--qc-results", type=Path,
+                        help="Add a completed MultiQC HTML/JSON pair when refreshing an existing report; no QC tool is rerun.")
     parser.add_argument("--compact", action="store_true", help="Losslessly consolidate portable report storage.")
     archive_options=parser.add_mutually_exclusive_group()
     archive_options.add_argument("--no-archive", action="store_true", help="Generate the complete report directory without a duplicate ZIP.")
@@ -36,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error('--path-map applies to completed-result inputs; portable reports already use relative payload paths')
     if args.network_display_parameters and not args.from_report:
         parser.error('--network-display-parameters requires --from-report')
+    if args.qc_results and not args.from_report:
+        parser.error('--qc-results requires --from-report; fresh projects declare QC as input assets')
     try:
         from katana_next.reports import build_report
         mappings=None
@@ -55,7 +59,8 @@ def main(argv: list[str] | None = None) -> int:
                     parameters = {cid: str((args.network_display_parameters.resolve().parent / path).resolve())
                                   if not Path(path).is_absolute() else path for cid, path in parameters.items()}
                 manifest = refresh_report(args.from_report, args.outdir, project=args.project,
-                                          compact=args.compact, network_parameters=parameters,create_archive=False)
+                                          compact=args.compact, network_parameters=parameters,create_archive=False,
+                                          qc_results=args.qc_results)
                 if not args.no_archive:
                     from .refresh import write_archive
                     write_archive(args.outdir,archive_path=args.archive)

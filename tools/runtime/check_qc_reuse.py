@@ -120,6 +120,14 @@ Sequence length\t150
              'native_multiqc':result['evidence'], 'report':str(report/'REPORT.html'),
              'original_html_bytes_preserved':(report/manifest['panels'][0]['image']).read_bytes()==html.read_bytes()}
     assert proof['original_html_bytes_preserved']
+    import sys
+    before = (report/'REPORT.html').read_bytes()
+    subprocess.run([sys.executable, '-m', 'katana_next.reports.cli', '--from-report', str(report),
+                    '--qc-results', str(out/'multiqc'), '--outdir', str(out/'refreshed')], check=True)
+    assert (report/'REPORT.html').read_bytes() == before
+    refreshed = json.loads((out/'refreshed/report-manifest.json').read_text())
+    assert len([p for p in refreshed['panels'] if p.get('metadata',{}).get('native_multiqc') and not p.get('output_only')]) == 1
+    proof['public_report_refresh_preserved_original'] = True
     write_json(out/'acceptance.json',proof)
     print(json.dumps(proof))
 

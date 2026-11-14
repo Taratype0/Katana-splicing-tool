@@ -64,7 +64,7 @@ def _project(manifest, project):
 
 
 def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
-                   compact=False, network_parameters=None):
+                   compact=False, network_parameters=None, qc_results=None):
     """Refresh existing figures/data in a new directory; never refit a result.
 
     ``network_parameters`` may declare verified original network parameters for
@@ -174,6 +174,25 @@ def refresh_report(report_dir, output_dir, *, project=None, create_archive=True,
             if (panel.get('contrast_id'), meta.get('foreground_source'), panel.get('policy')) in scopes or panel.get('contrast_id') == 'all':
                 panel['output_only'] = True
     builder.add_views(facets)
+    if qc_results:
+        from types import SimpleNamespace
+        from katana_next.flow.multiqc import reuse_multiqc
+        assets = [SimpleNamespace(path=p.resolve(), kind='sequencing_qc', metadata={'qc_type':'multiqc'})
+                  for p in Path(qc_results).rglob('*') if p.is_file() and
+                  p.name in {'multiqc_report.html','multiqc_data.json'}]
+        qc_manifest = SimpleNamespace(assets=assets, samples=[SimpleNamespace(sample_id=s['sample_id'])
+                                      for s in project_value['samples']])
+        qc = reuse_multiqc(qc_manifest, output/'native-qc')
+        if qc is None:
+            raise ValueError('--qc-results needs a completed MultiQC HTML and JSON pair')
+        view = json.loads((output/'native-qc/sequencing-qc-views.json').read_text())['artifacts'][0]
+        # Original figures remain downloadable; only the sequencing QC display changes.
+        for panel in builder.panels:
+            if panel.get('chapter') == 1:
+                panel['output_only'] = True
+        builder.add_views({'panels':[{'id':'native-multiqc','chapter':1,'title':view['name'],
+            'path':view['path'],'metadata':view['metadata'],'data_links':view['metadata']['data_links']}]})
+        builder.derived_audits.append({'schema':'katana.multiqc_presentation_reuse/v1', **qc['evidence']})
     builder.derived_audits.extend(facets['audit'])
     builder.derived_audits.append({'schema': 'katana.report_presentation_refresh/v1',
         'source_manifest_sha256': before[str(manifest_path)], 'network_browsers': network_receipts,

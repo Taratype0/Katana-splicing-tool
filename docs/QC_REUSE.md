@@ -67,3 +67,18 @@ preserved; they are not relabelled as interchangeable values.
 The seven chapters, colours, molecular statistics and completed analysis results
 are unchanged. Existing releases and reports remain intact; installing a new
 release does not rewrite an earlier report or submit a scientific run.
+
+## Add MultiQC to a finished report
+
+With the matching Katana package installed, refresh the presentation into a new
+directory. This command reads completed results only; it does not run Nextflow,
+RSeQC or any differential, network or motif analysis:
+
+```sh
+katana-report --from-report /data/study/results/report \
+  --qc-results /data/study/original_multiqc \
+  --outdir /data/study/report-with-multiqc
+```
+
+The original report is preserved. The new directory includes `REPORT.html` and
+`REPORT.zip`, with native MultiQC in chapter one and the other chapters retained.

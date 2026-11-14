@@ -58,6 +58,9 @@ The study report has seven sections:
 6. RBP and MotifTrace.
 7. Co-splicing networks across the study.
 
+Sequencing QC uses the original interactive MultiQC report. [Import completed QC](docs/QC_REUSE.md)
+to reuse Qualimap coverage and other measured metrics without another BAM scan.
+
 A comparison selector keeps the report focused. Tables link to complete results, and the splicing display can switch between ordinary significant events and read-supported significant events (RS-DAS, the default).
 
 A whole-study CoSplice result stays the same when the comparison selector changes. Its module composition, activities, associations and complete gene/event lists close the report. Imported older networks keep their recorded scope. [CoSplice](docs/COSPLICE.md) and [MotifTrace](docs/MOTIFTRACE.md) also have standalone commands and Python APIs.
