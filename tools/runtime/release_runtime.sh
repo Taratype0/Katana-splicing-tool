@@ -91,7 +91,8 @@ summaries={name:json.loads(Path(path).read_text()) for name,path in {
   'native_models':'native-models/acceptance.json',
   'environment':'environment/acceptance.json',
   'import_content':'import-content/acceptance.json',
-  'verification_recovery':'verification-recovery/acceptance.json'}.items()}
+  'verification_recovery':'verification-recovery/acceptance.json',
+  'native_qc_reuse':'installed-qc/acceptance.json'}.items()}
 assert all(s['status']=='passed' for s in summaries.values())
 Path('docker.acceptance.json').write_text(json.dumps(dict(status='passed',candidate=os.environ['GITHUB_SHA'],wheel_sha256=os.environ['WHEEL_SHA'],software_run=os.environ['SOFTWARE_RUN'],checks=summaries),indent=2))
 with tarfile.open('docker-validation.tar.gz','w:gz') as archive:
