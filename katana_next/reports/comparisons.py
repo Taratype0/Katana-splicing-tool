@@ -23,7 +23,7 @@ BLUE, RED, GRAY = "#2863A5", "#C63F4A", "#CDD1D6"
 EVENT_COLORS = [BLUE, RED, "#218D87", "#9A64B0", "#D49A25"]
 EVENTS = ("SE", "A3SS", "A5SS", "MXE", "RI")
 POLICIES = ("stable_significant", "significant")
-LABELS = {"stable_significant": "RS-DAS", "significant": "DAS"}
+LABELS = {"stable_significant": "PS-DAS", "significant": "DAS"}
 
 
 def _dict(value):
@@ -70,24 +70,41 @@ def _counts(value, expected):
     return values
 
 
-def _rs_eligibility(frame, contrast):
-    """Actual count arrays in both declared arms, never a mean/old stable flag."""
+def _ps_audit_frame(frame, contrast):
+    """Evaluate PS-DAS (Precision-Supported DAS, bulk-quantile-precision-v2) + legacy all>=10 from original count arrays."""
+    from katana_next.science.bulk import READ_SUPPORT_POLICY_VERSION, apply_stable_event_qc
     n1, n2 = len(contrast["numerator"]["sample_ids"]), len(contrast["denominator"]["sample_ids"])
     required = ("IJC_SAMPLE_1", "SJC_SAMPLE_1", "IJC_SAMPLE_2", "SJC_SAMPLE_2")
     if not all(column in frame for column in required) or min(n1, n2) == 0:
-        return pd.Series(False, index=frame.index), "missing_original_count_arrays_or_declared_samples"
-    valid = []
-    for values in frame[list(required)].itertuples(index=False, name=None):
-        arrays = [_counts(values[i], n1 if i < 2 else n2) for i in range(4)]
-        valid.append(all(x is not None for x in arrays)
-                     and bool(((arrays[0] + arrays[1]) >= 10).all())
-                     and bool(((arrays[2] + arrays[3]) >= 10).all()))
-    usable = _num(frame, "fdr").between(0, 1) & _num(frame, "dpsi").between(-1, 1)
-    for psi_key, expected in (("IncLevel1", n1), ("IncLevel2", n2)):
-        if psi_key in frame:
-            usable &= frame[psi_key].map(lambda value: (values := _counts(value, expected)) is not None
-                                         and bool((values <= 1).all()))
-    return pd.Series(valid, index=frame.index) & usable, "original_counts_all_declared_samples_ge10"
+        return None, "missing_original_count_arrays_or_declared_samples"
+    work = frame.copy()
+    for arm_idx, n_exp in (("1", n1), ("2", n2)):
+        psi_col = f"IncLevel{arm_idx}"
+        if psi_col not in work:
+            def _make_psi(row, sfx=arm_idx, n_req=n_exp):
+                i_arr = _counts(row[f"IJC_SAMPLE_{sfx}"], n_req)
+                s_arr = _counts(row[f"SJC_SAMPLE_{sfx}"], n_req)
+                if i_arr is None or s_arr is None:
+                    return ""
+                tot = i_arr + s_arr
+                return ",".join(f"{(ii / tt) if tt > 0 else 0.5:.4f}" for ii, tt in zip(i_arr, tot))
+            work[psi_col] = work.apply(_make_psi, axis=1)
+    work["numerator_expected_samples"] = int(n1)
+    work["denominator_expected_samples"] = int(n2)
+    qc = apply_stable_event_qc(work, {})
+    usable_stats = _num(frame, "fdr").between(0, 1) & _num(frame, "dpsi").between(-1, 1)
+    qc["passes_precision_support"] = qc["passes_precision_support"].astype(bool) & usable_stats
+    qc["passes_read_support"] = qc["passes_precision_support"]
+    qc["passes_legacy_all10"] = qc["passes_legacy_all10"].astype(bool) & usable_stats
+    return qc, READ_SUPPORT_POLICY_VERSION
+
+
+def _rs_eligibility(frame, contrast):
+    """Evaluate PS-DAS precision & quantile eligibility on declared contrast arms."""
+    qc, rule = _ps_audit_frame(frame, contrast)
+    if qc is None:
+        return pd.Series(False, index=frame.index), rule
+    return qc["passes_precision_support"], rule
 
 
 def _native_significance(frame, fdr, effect=None, *, fdr_cutoff=.05, effect_cutoff=0):
@@ -124,8 +141,6 @@ class _Views:
                  and Path(item.get("path", "")).is_file()]
         if comparison is not None:
             scoped = [item for item in found if comparison in (item.get("contrast_ids") or [])]
-            # Legacy combined tables authenticate their rows through comparison_id.
-            # A table explicitly bound to another comparison is never a fallback.
             found = scoped or [item for item in found if not item.get("contrast_ids")
                                and not self.frame(item, comparison).empty]
             unique = {str(Path(item["path"]).resolve()): item for item in found}
@@ -620,11 +635,18 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
         if not as_frame.empty:
             original = as_frame.copy(deep=False)
             ordinary = _native_significance(as_frame, "fdr", "dpsi", effect_cutoff=.1)
-            eligible, rs_rule = _rs_eligibility(as_frame, contrast)
+            qc_audit, rs_rule = _ps_audit_frame(as_frame, contrast)
+            eligible = qc_audit["passes_precision_support"] if qc_audit is not None else pd.Series(False, index=as_frame.index)
             as_frame["report_das"] = ordinary
+            as_frame["report_ps_eligible"] = eligible
             as_frame["report_rs_eligible"] = eligible
+            as_frame["report_ps_das"] = ordinary & eligible
             as_frame["report_rs_das"] = ordinary & eligible
             as_frame["report_rs_policy"] = rs_rule
+            if qc_audit is not None:
+                for extra_col in ("passes_precision_support", "passes_legacy_all10", "jeffreys_se_dpsi", "effective_length_ratio", "nmd_asymmetry_rescued", "precision_support_reason"):
+                    if extra_col not in original:
+                        as_frame[extra_col] = qc_audit[extra_col]
             full = view.table(as_frame, "DAS-complete-original-and-report-flags", comparison, "exact_splicing_event")
             # Complete native columns survive even when historical stable flags
             # disagree with the independently reconstructed every-sample gate.
@@ -634,15 +656,15 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
             fig, ax = _axes("AS landscape | " + comparison, "Event type", "Events")
             x = np.arange(len(EVENTS))
             ax.bar(x - .2, raw_counts, .4, label="Raw completed events", color=GRAY)
-            ax.bar(x + .2, rs_counts, .4, label="Read support only (every sample ≥10)", color=BLUE)
+            ax.bar(x + .2, rs_counts, .4, label="PS-DAS precision & quantile qualified", color=BLUE)
             ax.set_xticks(x, EVENTS); ax.legend(frameon=False, fontsize=8)
-            view.figure(fig, comparison + "-AS-raw-versus-RS", 2, "Raw and read-supported AS | " + comparison,
-                        comparison, "Read support only does not apply a significance cutoff. Raw and supported counts are from this comparison's complete exact-event table.")
+            view.figure(fig, comparison + "-AS-raw-versus-RS", 2, "Raw vs PS-DAS precision-supported AS | " + comparison,
+                        comparison, "PS-DAS precision qualification (75% effective-length normalized count support + Jeffreys SE(ΔPSI) ≤ 0.16) prior to significance filtering.")
             view.bind_data(pd.DataFrame({'event_type': EVENTS, 'raw_events': raw_counts.to_numpy(),
-                'read_supported_events': rs_counts.to_numpy()}), 'exact_splicing_event_count',
-                full_results=[('Complete events and read-support evidence', full, 'exact_splicing_event')])
-            for label, values in (("Raw", raw_counts), ("Read-supported", rs_counts)):
-                fig, ax = _axes(label + " event types | " + comparison)
+                'ps_das_qualified_events': rs_counts.to_numpy()}), 'exact_splicing_event_count',
+                full_results=[('Complete events and PS-DAS precision evidence', full, 'exact_splicing_event')])
+            for slug_label, disp_label, values in (("Raw", "Raw", raw_counts), ("PS-DAS", "PS-DAS qualified", rs_counts)):
+                fig, ax = _axes(disp_label + " event types | " + comparison)
                 ax.grid(False)
                 if values.sum():
                     _, names, percentages = ax.pie(values, labels=EVENTS, colors=EVENT_COLORS, autopct="%1.1f%%", startangle=90)
@@ -652,8 +674,8 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
                             percentage.set_text("")
                 else:
                     ax.text(.5, .5, "No eligible events", transform=ax.transAxes, ha="center")
-                view.figure(fig, comparison + "-AS-composition-" + label, 2, label + " event composition | " + comparison,
-                            comparison, "Composition of all raw or read-supported events, independently of significance.")
+                view.figure(fig, comparison + "-AS-composition-" + slug_label, 2, disp_label + " event composition | " + comparison,
+                            comparison, "Composition of all raw or PS-DAS precision-qualified events, independently of significance.")
                 view.bind_data(pd.DataFrame({'event_type': EVENTS, 'events': values.to_numpy(),
                     'percent': values.to_numpy() / values.sum() * 100 if values.sum() else np.zeros(len(EVENTS)),
                     'display_color': EVENT_COLORS}), 'exact_splicing_event_count',
@@ -662,7 +684,7 @@ def build_comparison_views(project, artifacts, destination, event_set="stable_si
                 if policy == "stable_significant" and rs_rule.startswith("missing_"):
                     view.policy_data[policy][comparison] = {"available": False, "events": None, "genes": None,
                         "raw_events": len(as_frame), "read_supported_events": None, "reason": rs_rule}
-                    view.audit.append({"comparison_id": comparison, "analysis": "RS-DAS", "status": "not_computed", "reason": rs_rule})
+                    view.audit.append({"comparison_id": comparison, "analysis": "PS-DAS", "status": "not_computed", "reason": rs_rule})
                     continue
                 selected = as_frame.report_rs_das if policy == "stable_significant" else as_frame.report_das
                 display = as_frame.copy(deep=False).assign(report_significant=selected)

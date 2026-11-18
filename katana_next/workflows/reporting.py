@@ -40,7 +40,7 @@ class ReproducibilityReportWorkflow(WorkflowBase):
         expected_artifacts=5,
         parameters=(
             ParameterDefinition("event_set", "DAS event set", "select", "stable_significant",
-                "RS-DAS is the default. Include only matching completed switchable downstream results; absent results are not recomputed or relabelled. RS-required and measured-PSI modules keep their own declared scope.",
+                "PS-DAS is the default. Include only matching completed switchable downstream results; absent results are not recomputed or relabelled. RS-required and measured-PSI modules keep their own declared scope.",
                 ("stable_significant", "significant")),
             ParameterDefinition(
                 "latest_only",
@@ -272,7 +272,7 @@ def _artifact_scope_label(artifact: AnalysisArtifact) -> str:
     recorded = artifact.metadata.get("das_selection", {})
     saved = recorded.get("label") if isinstance(recorded, dict) else None
     if capability["mode"] == "rs_required":
-        return "RS-DAS required for new analysis; saved scope: " + (str(saved) if saved else "not recorded")
+        return "PS-DAS required for new analysis; saved scope: " + (str(saved) if saved else "not recorded")
     if capability["mode"] == "measurement_population":
         return "Declared measured PSI / read-support population; DAS switch does not apply"
     return str(saved) if saved else "Own recorded result scope; no DAS relabelling"
@@ -381,7 +381,7 @@ def _das_top10_frames(artifacts: list[AnalysisArtifact], event_set: str):
 def _das_top10_html(artifacts: list[AnalysisArtifact], event_set: str) -> str:
     sections = []
     for comparison, top, artifact in _das_top10_frames(artifacts, event_set):
-        label = "RS-DAS" if event_set == "stable_significant" else "DAS"
+        label = "PS-DAS" if event_set == "stable_significant" else "DAS"
         columns = [key for key in ("gene_symbol", "gene_id", "event_id", "event_type", "dpsi", "fdr") if key in top]
         detail = "".join(
             f"<details><summary>{html.escape(str(row.get('gene_symbol', row['event_id'])))}: event fields</summary>"
@@ -548,7 +548,7 @@ def _pdf_report(
         story.extend([Spacer(1, 6 * mm), Paragraph(analysis_id, styles["Heading2"])])
         story.append(Paragraph("DAS scope: " + html.escape(_artifact_scope_label(values[0])), styles["BodyText"]))
         if analysis_id == "differential.as" and das_policy:
-            label = "RS-DAS" if das_policy["event_set"] == "stable_significant" else "DAS"
+            label = "PS-DAS" if das_policy["event_set"] == "stable_significant" else "DAS"
             for comparison, top, source in _das_top10_frames(values, das_policy["event_set"]):
                 story.append(Paragraph(f"Top {len(top)} {label} events | {html.escape(comparison)}", styles["Heading3"]))
                 story.append(Paragraph("Ranked within the comparison by native FDR, absolute PSI effect and event ID. Complete fields remain in the HTML and original table.", styles["BodyText"]))

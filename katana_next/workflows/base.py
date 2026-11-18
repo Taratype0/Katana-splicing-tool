@@ -63,7 +63,7 @@ class WorkflowDefinition:
         if capability["mode"] == "switchable" and not any(p["key"] == "event_set" for p in payload["parameters"]):
             payload["parameters"].append(ParameterDefinition(
                 "event_set", "DAS event set", "select", "stable_significant",
-                "RS-DAS is the default: significant plus IJC + SJC >= 10 in every comparison sample. DAS uses original significance without the read-support foreground gate. Both original flags and caller statistics are preserved.",
+                "PS-DAS is the default: significant plus effective-length normalized replicate-quantile support and Jeffreys SE(ΔPSI) <= 0.16. DAS uses original significance without the read-support foreground gate. Both original flags and caller statistics are preserved.",
                 ("stable_significant", "significant"),
             ).to_dict())
         return payload

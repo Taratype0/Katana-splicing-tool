@@ -64,7 +64,7 @@ it("uses inclusive FDR 0.05 for the functional-label boundary without changing s
   vi.spyOn(api,"moduleDashboard").mockResolvedValue(d);
   render(<QueryClientProvider client={new QueryClient()}><ModuleDashboard projectId="p" artifactId="a" module="M1"/></QueryClientProvider>);
   const plot=await screen.findByRole("img",{name:"Module functional enrichment bubble plot"});
-  expect(plot.querySelector("circle")).toHaveAttribute("fill","#b85362");
-  expect(screen.getByText(/Red: FDR≤0.05/)).toBeInTheDocument();
+  expect(plot.querySelector("circle")).toHaveAttribute("fill","#162e51");
+  expect(screen.getByText(/Navy: FDR≤0.05/)).toBeInTheDocument();
   expect(d.enrichment[0].FDR).toBe(.05);vi.restoreAllMocks();
 });

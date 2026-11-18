@@ -21,15 +21,16 @@ def _events():
              IJC_SAMPLE_2="20,20,20", SJC_SAMPLE_2="0,0,0", IncLevel1=".2,.3,.4", IncLevel2=".4,.5,.6")
         for i, q, dpsi, selected, reads in [(0, 1e-250, .3, True, "10,10,10"),
                                            (1, .001, -.4, True, "20,20,9"),
-                                           (2, .9, .1, False, "20,20,20")]
+                                           (2, .9, .1, False, "20,20,20"),
+                                           (3, .002, -.35, True, "20,2,2")]
     ])
 
 
 def test_every_sample_count_gate_rejects_low_third_replicate_and_old_flags():
     frame = _events()
     eligible, reason = _rs_eligibility(frame, _contrast())
-    assert eligible.tolist() == [True, False, True]
-    assert reason == "original_counts_all_declared_samples_ge10"
+    assert eligible.tolist() == [True, True, True, False]
+    assert reason == "bulk-quantile-precision-v2"
     assert frame.stable_significant.all()
     for bad in ["10,10", "10,10,nan", "10,10,-1", "10,10,NA"]:
         broken = frame.copy()
@@ -76,18 +77,19 @@ def test_complete_report_views_keep_both_policies_units_and_native_values(tmp_pa
     assert all(group['status'] == 'not_applicable'
                for family in result['cross_comparison'].values() for group in family['groups'].values())
     assert not any(panel['chapter'] == 4 for panel in result['panels'])
-    assert result["policy_data"]["significant"]["B_vs_A"]["events"] == 2
-    assert result["policy_data"]["stable_significant"]["B_vs_A"]["events"] == 1
+    assert result["policy_data"]["significant"]["B_vs_A"]["events"] == 3
+    assert result["policy_data"]["stable_significant"]["B_vs_A"]["events"] == 2
     tops = {x["analysis"] + "-" + str(x["policy"]): x for x in result["top10"]}
     assert tops["DAS-stable_significant"]["rows"][0]["fdr"] == 1e-250
-    assert len(tops["DAS-significant"]["rows"]) == 2
+    assert len(tops["DAS-significant"]["rows"]) == 3
     assert tops["DTU-None"]["unit"] == "transcript"
     assert tops["DEXSeq-None"]["unit"] == "exon_bin"
     assert "dpsi" not in tops["DTU-None"]["columns"]
     as_table = next(t for t in result["tables"] if t["name"] == "DAS-complete-original-and-report-flags")
     saved = pd.read_parquet(tmp_path / "report" / as_table["path"])
     pd.testing.assert_frame_equal(saved[list(_events())], _events())
-    assert saved.report_rs_das.tolist() == [True, False, False]
+    assert saved.report_ps_das.tolist() == [True, True, False, False]
+    assert saved.passes_legacy_all10.tolist() == [True, False, True, False]
     for entry in result["gene_sets"]:
         foreground = pd.read_csv(tmp_path / "report" / entry["foreground"], sep="\t")
         background = pd.read_csv(tmp_path / "report" / entry["background"], sep="\t")

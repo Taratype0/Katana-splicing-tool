@@ -27,7 +27,7 @@ def test_usage_not_abundance_and_no_gene_fallback():
 
 def test_fixed_read_support_is_ten_for_every_sample():
     assert DEFAULT_MIN_READS == 10
-    assert READ_SUPPORT_POLICY_VERSION == "bulk-all-samples-counts-v1"
+    assert READ_SUPPORT_POLICY_VERSION == "bulk-quantile-precision-v2"
 
 def test_approximate_se_does_not_exclude_by_default():
     row=dict(IncLevel1='0.3,0.3',IncLevel2='0.6,0.6',IJC_SAMPLE_1='5,5',SJC_SAMPLE_1='5,5',

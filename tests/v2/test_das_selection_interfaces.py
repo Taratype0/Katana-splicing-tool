@@ -100,7 +100,7 @@ def test_report_top10_switches_actual_membership_preserving_source_flags_statist
     assert [len(top) for _, top, _ in supported] == [7, 6]
     assert ordinary[0][1].event_id.tolist() == [f"E{i:02}" for i in range(10)]
     assert supported[0][1].event_id.tolist() == [f"E{i:02}" for i in range(0, 13, 2)]
-    assert "Top 7 RS-DAS events | A" in _das_top10_html([source], "stable_significant")
+    assert "Top 7 PS-DAS events | A" in _das_top10_html([source], "stable_significant")
     assert "Top 10 DAS events | A" in _das_top10_html([source], "significant")
     assert "event fields" in _das_top10_html([source], "significant")
     assert hashlib.sha256(path.read_bytes()).hexdigest() == before
@@ -156,10 +156,10 @@ def test_real_evidence_export_separates_saved_foregrounds_without_reanalysis(tmp
         page = next(item.path for item in outputs if item.path.name == "KATANA_EVIDENCE_REPORT.html")
         content = page.read_text(encoding="utf-8")
         assert included in content and excluded not in content
-        assert "RS-DAS required for new analysis" in content
+        assert "PS-DAS required for new analysis" in content
         assert "measured PSI / read-support population" in content
         assert "not computed for this view" in content
-        assert ("Top 1 RS-DAS events | A" if selection == "stable_significant" else "Top 2 DAS events | A") in content
+        assert ("Top 1 PS-DAS events | A" if selection == "stable_significant" else "Top 2 DAS events | A") in content
         provenance = json.loads(next(item.path for item in outputs if item.path.name == "provenance.json").read_text(encoding="utf-8"))
         assert provenance["das_report_selection"]["event_set"] == selection
     assert {item.path: hashlib.sha256(item.path.read_bytes()).hexdigest() for item in sources} == before

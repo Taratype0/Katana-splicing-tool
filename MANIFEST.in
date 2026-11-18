@@ -8,3 +8,7 @@ recursive-include environments *.yml *.txt *.lock *.py
 recursive-include containers Dockerfile *.md *.json
 
 recursive-include katana_cosplice/_study_core/science *.py *.R *.html *.css *.js
+recursive-include katana_next/resources *.gz *.json *.tsv
+recursive-include katana_splicetrace/data *
+recursive-include katana_sc_splicetrace/data *
+recursive-include integrations/nf-core *.nf *.config *.json *.yml *.md

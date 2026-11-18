@@ -193,7 +193,7 @@ class WorkflowService:
         if source is not None:
             selected = selection_rows(context, parameters, source, pd.read_parquet(source.path))
             if selected.empty or not selected_event_mask(selected, "stable_significant").all():
-                raise ValueError("This module requires an explicit RS-DAS selection; ordinary/unsupported events are retained in their source but cannot be silently used or dropped here.")
+                raise ValueError("This module requires an explicit PS-DAS selection; ordinary/unsupported events are retained in their source but cannot be silently used or dropped here.")
 
     @staticmethod
     def _normalize_contrast_scope(

@@ -36,7 +36,7 @@ def main():
         command.add_argument("workflow")
         command.add_argument("--parameters", type=Path, help="JSON object using the same parameters as the web UI")
         command.add_argument("--event-set", choices=["stable_significant", "significant"],
-                             help="DAS selection: stable_significant is RS-DAS (default); significant is ordinary DAS. Only declared switchable modules accept both.")
+                             help="DAS selection: stable_significant is PS-DAS (default); significant is ordinary DAS. Only declared switchable modules accept both.")
         if action == "run":
             command.add_argument("--force", action="store_true")
     args = parser.parse_args()

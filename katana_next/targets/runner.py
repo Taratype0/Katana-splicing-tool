@@ -240,6 +240,10 @@ def _event_cards(request, target, tables):
     ordered_tables = sorted(tables, key=lambda item: len(set(item[1].columns) & set(GEOMETRY_COLUMNS)), reverse=True)
     for evidence, frame in ordered_tables:
         event_column = next((c for c in EVENT_COLUMNS if c in frame.columns), None)
+        # Gene/module/pathway context is retained in the complete evidence tables,
+        # but cannot become exact-event evidence merely through a target fallback.
+        if event_column is None:
+            continue
         for _, row in frame.iterrows():
             event_type = row.get("event_type", evidence.get("metadata", {}).get("event_type", target.get("event_type")))
             if event_type not in {"SE", "RI", "A3SS", "A5SS", "MXE"}:
@@ -254,7 +258,8 @@ def _event_cards(request, target, tables):
                 cid = str(evidence.get("metadata", {}).get("comparison_id", ""))
             if not cid and len(target.get("comparison_ids", [])) == 1:
                 cid = str(target["comparison_ids"][0])
-            geometry = {c: portable(row[c]) for c in GEOMETRY_COLUMNS if c in frame.columns and pd.notna(row[c])}
+            geometry = {c: portable(row[c]) for c in GEOMETRY_COLUMNS
+                        if c in frame.columns and pd.notna(row[c]) and str(row[c]).strip() != ""}
             if target["target_kind"] == "event":
                 geometry.update(target.get("event_geometry", {}))
             related = [(k, v) for k, v in found.items() if v["event_id"] == eid and v["comparison_id"] == cid
@@ -347,6 +352,23 @@ def _read_target_product(root, target, identity):
     return document
 
 
+def _write_evidence_table(directory, stem, item, frame):
+    """Keep complete typed data; avoid expanding large context into four copies."""
+    frame.to_parquet(directory / (stem + '.parquet'), index=True)
+    large = len(frame) > 5000 or frame.memory_usage(index=True, deep=True).sum() > 10 * 1024**2
+    preview = frame.head(200) if large else frame
+    files = {'parquet': stem + '.parquet', 'html': stem + '.html', 'preview_rows': len(preview)}
+    if not large:
+        frame.to_csv(directory / (stem + '.tsv'), sep='\t', index=False, float_format='%.17g')
+        write_json(directory / (stem + '.json'), {'columns': list(frame.columns), 'rows': frame.to_dict('records'),
+                                                  'dtypes': {str(c): str(d) for c, d in frame.dtypes.items()}})
+        files.update(tsv=stem + '.tsv', json=stem + '.json')
+    render_table(directory / (stem + '.html'), item.get('name', item['evidence_id']), preview,
+                 'Original native effects, P/FDR, columns and source statistical-family identities; no refit.',
+                 total_rows=len(frame), full_data=Path(stem).name + '.parquet')
+    return files
+
+
 def _target_execute(request, bundle_root, output_root, target, resources, method, progress=None):
     tid = target["target_id"]
     identity = _target_identity(request, target, resources, method)
@@ -390,15 +412,10 @@ def _target_execute(request, bundle_root, output_root, target, resources, method
             (directory / "tables").mkdir()
             for i, (item, frame) in enumerate(tables):
                 stem = f"tables/evidence-{i:04d}"
-                frame.to_parquet(directory / (stem + ".parquet"), index=True)
-                frame.to_csv(directory / (stem + ".tsv"), sep="\t", index=False, float_format="%.17g")
-                write_json(directory / (stem + ".json"), {"columns": list(frame.columns), "rows": frame.to_dict("records"),
-                                                         "dtypes": {str(c): str(d) for c, d in frame.dtypes.items()}})
-                render_table(directory / (stem + ".html"), item.get("name", item["evidence_id"]), frame,
-                             "Original native effects, P/FDR, columns and source statistical-family identities; no refit.")
+                files = _write_evidence_table(directory, stem, item, frame)
                 evidence_outputs.append({"evidence_id": item["evidence_id"], "analysis_id": item.get("analysis_id", ""),
                                          "name": item.get("name", item["evidence_id"]), "rows": len(frame),
-                                         "parquet": stem + ".parquet", "tsv": stem + ".tsv", "json": stem + ".json", "html": stem + ".html",
+                                         **files,
                                          "source_sha256": item.get("source_sha256", item["sha256"]),
                                          "source_fingerprint": item.get("source_fingerprint"), "parameters": item.get("parameters", {}),
                                          "metadata": item.get("metadata", {})})

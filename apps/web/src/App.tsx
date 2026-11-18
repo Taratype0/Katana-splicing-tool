@@ -21,10 +21,12 @@ import { ProjectGate } from "./components/ProjectGate";
 import { GeneFilterPanel } from "./components/GeneFilterPanel";
 import { SelectionBasket } from "./components/SelectionBasket";
 import { WorkflowControls } from "./components/WorkflowControls";
-import { WorkspaceNav } from "./components/WorkspaceNav";
 import { RunPlanPanel } from "./components/RunPlanPanel";
 import { RbpEvidenceGuide } from "./components/RbpEvidenceGuide";
 import { MotifTraceWorkbench, motifTraceModeParameters } from "./components/MotifTraceWorkbench";
+import {ReportWorkspace} from "./components/ReportWorkspace";
+import {ApplicationTree, applicationRoutes} from "./components/ApplicationTree";
+import { ReportExplorer } from "./components/ReportExplorer";
 import { TargetWorkbench } from "./components/TargetWorkbench";
 import { browsingSnapshot, makeTargetEntry, useTargetBasket } from "./targetBasket";
 import type { Artifact, ProjectPayload, WorkflowDefinition } from "./types";
@@ -47,8 +49,14 @@ export default function App() {
   const queryClient = useQueryClient();
   const [project, setProject] = useState<ProjectPayload>();
   const [activeWorkspace, setActiveWorkspace] = useState("project");
+  const [reportRoute,setReportRoute]=useState("project");
+  const [setup,setSetup]=useState(false);
+  function navigateReport(id:string){const r=applicationRoutes.find(r=>r.id===id);setReportRoute(id);setActiveWorkspace(r?.workspace||id);setSetup(false);
+    const method=r?.workflow||({deg:'differential.deg',das:'differential.as',thresholds:'quality.stable_as',network:'programs.cosplice',sashimi:'validate.native_sashimi',candidates:'prioritize.evidence',cross:'differential.cross_comparison',enrichment:'prioritize.enrichment',motif:'prioritize.rbp_sequence_results',isoform:'differential.dtu'} as Record<string,string>)[r?.parent||id];
+    if(method){const w=(workflows.data??[]).find(w=>w.workflow_id===method);if(w){setActiveWorkflowId(method);setActiveWorkspace(w.workspace_id);}}
+  }
   const [activeWorkflowId, setActiveWorkflowId] = useState("");
-  const [showAdvancedAnalyses, setShowAdvancedAnalyses] = useState(false);
+  const [showAdvancedAnalyses, setShowAdvancedAnalyses] = useState(true);
   const [selectedContrasts, setSelectedContrasts] = useState<Set<string>>(new Set());
   const [parameterStore, setParameterStore] = useState<Record<string, Record<string, unknown>>>({});
   const [dasEventSet, setDasEventSet] = useState<DasEventSet>(DEFAULT_DAS_EVENT_SET);
@@ -60,9 +68,11 @@ export default function App() {
   const [selectedRows, setSelectedRows] = useState<Record<string, Record<string, unknown>>>({});
   const [tableBrowse, setTableBrowse] = useState<Record<string, unknown>>({});
   const [targetError, setTargetError] = useState("");
+  const [geneCardFocus, setGeneCardFocus] = useState<{gene: string; eventId?: string; comparison?: string}>({gene: ""});
   const completedJobs = useRef(new Set<string>());
   const workspaceScroll = useRef<HTMLElement>(null);
   const automaticOpenAttempted = useRef(false);
+  const autoOpenSilentRef = useRef(false);
   const recentManifest = localStorage.getItem(RECENT_MANIFEST_KEY) ?? "";
 
   useEffect(() => {
@@ -75,6 +85,7 @@ export default function App() {
     enabled: activeWorkspace === "prioritize" });
 
   function acceptProject(payload: ProjectPayload) {
+    automaticOpenAttempted.current = true;
     localStorage.setItem(RECENT_MANIFEST_KEY, payload.snapshot.manifest_path);
     startTransition(() => {
       if (project?.snapshot.manifest_path !== payload.snapshot.manifest_path) {
@@ -85,11 +96,18 @@ export default function App() {
       setSelectedContrasts(new Set(payload.manifest.contrasts.map((contrast) => contrast.contrast_id)));
       setSelectedIds(new Set());
       setFocusedRow(undefined);
-      setActiveWorkspace("project");
+      setActiveWorkspace("project");setReportRoute("project");setSetup(false);
     });
   }
 
-  const openProject = useMutation({ mutationFn: api.openProject, onSuccess: acceptProject });
+  const importReport = useMutation({mutationFn:api.importReport,onSuccess:acceptProject});
+  const openProject = useMutation({
+    mutationFn: api.openProject,
+    onSuccess: acceptProject,
+    onError: () => {
+      try { localStorage.removeItem(RECENT_MANIFEST_KEY); } catch {}
+    },
+  });
   const migrateProject = useMutation({ mutationFn: api.migrateProject, onSuccess: acceptProject });
   const configureResources = useMutation({ mutationFn: api.configureResources, onSuccess: acceptProject });
   const configureGeneFilter = useMutation({
@@ -100,6 +118,7 @@ export default function App() {
   useEffect(() => {
     if (!recentManifest || automaticOpenAttempted.current) return;
     automaticOpenAttempted.current = true;
+    autoOpenSilentRef.current = true;
     openProject.mutate(recentManifest);
   }, [recentManifest]);
 
@@ -118,6 +137,7 @@ export default function App() {
   const activeWorkflow = (workflows.data ?? []).find((workflow) => workflow.workflow_id === activeWorkflowId);
   const projectId = project?.snapshot.project_id ?? "";
   const targets = useTargetBasket(projectId, project?.snapshot.manifest_fingerprint ?? "");
+
   const sourceArtifacts = useQuery({ queryKey: ["source-artifacts", projectId], queryFn: () => api.artifacts(projectId), enabled: Boolean(projectId) });
   const scConditions = useQuery({ queryKey: ["single-cell-conditions", projectId], queryFn: () => api.singleCellConditions(projectId), enabled: Boolean(projectId) && activeWorkspace === "single-cell" });
   const activeParameters = parametersWithDasSelection(activeWorkflow,
@@ -151,7 +171,7 @@ export default function App() {
         JSON.parse(parameterSignature) as Record<string, unknown>,
       );
     },
-    enabled: Boolean(projectId && activeWorkflowId && activeWorkspace !== "targets"),
+    enabled: Boolean(projectId && activeWorkflowId && activeWorkspace !== "targets" && (!project?.manifest.metadata?.report_workspace || setup)),
   });
   const jobsQuery = useQuery({
     queryKey: ["jobs", projectId],
@@ -305,14 +325,16 @@ export default function App() {
   }
 
   if (!project) {
+    const manualOpenError = autoOpenSilentRef.current ? undefined : openProject.error?.message;
     return (
       <ProjectGate
         defaultPath={recentManifest}
-        loading={openProject.isPending || migrateProject.isPending || configureResources.isPending}
-        error={openProject.error?.message ?? migrateProject.error?.message ?? configureResources.error?.message}
-        onOpen={(path) => openProject.mutate(path)}
-        onMigrate={(request) => migrateProject.mutate(request)}
-        onConfigureResources={(request) => configureResources.mutate(request)}
+        onImportReport={request => { autoOpenSilentRef.current = false; importReport.mutate(request); }}
+        loading={importReport.isPending || openProject.isPending || migrateProject.isPending || configureResources.isPending}
+        error={importReport.error?.message ?? manualOpenError ?? migrateProject.error?.message ?? configureResources.error?.message}
+        onOpen={(path) => { autoOpenSilentRef.current = false; openProject.mutate(path); }}
+        onMigrate={(request) => { autoOpenSilentRef.current = false; migrateProject.mutate(request); }}
+        onConfigureResources={(request) => { autoOpenSilentRef.current = false; configureResources.mutate(request); }}
       />
     );
   }
@@ -320,22 +342,24 @@ export default function App() {
   const conditions = activeWorkspace === "single-cell" ? (scConditions.data ?? []) : [...new Set(project.manifest.samples.map((sample) => sample.condition))];
   return (
     <div className="app-frame">
-      <WorkspaceNav workspaces={[...(workspaces.data ?? []), {workspace_id: "targets", label: "Gene / Event workspace", purpose: "Export exact targets, run selected cards and read evidence, and reopen returned results.", icon: "target", enabled: true, phase: 1}]} activeId={activeWorkspace} onChange={setActiveWorkspace} />
+      <ApplicationTree active={reportRoute} onSelect={navigateReport} assayMode={project.assay?.mode}/>
       <section ref={workspaceScroll} className="app-main" tabIndex={0} aria-label="Analysis workspace">
         <header className="topbar">
-          <div><span className="eyebrow">RNA splicing analysis</span><h1>{activeWorkspace === "targets" ? "Gene / Event workspace" : workspaces.data?.find((item) => item.workspace_id === activeWorkspace)?.label ?? "Katana"}</h1></div>
+          <div><span className="eyebrow">{project.manifest.metadata?.report_workspace ? project.manifest.name : "RNA splicing analysis"}</span><h1>{activeWorkspace === "report-explorer" ? "Report explorer" : activeWorkspace === "targets" ? "Gene / Event workspace" : (project.manifest.metadata?.report_workspace ? applicationRoutes.find(r=>r.id===reportRoute)?.label : workspaces.data?.find(item=>item.workspace_id===activeWorkspace)?.label) ?? "Katana"}</h1></div>
           <div className="topbar-actions">
-            <button type="button" className="ghost-action" onClick={() => setActiveWorkspace("targets")}>Targets ({targets.entries.reduce((sum, entry) => sum + entry.row_ids.length, 0)})</button>
-            <button type="button" className="ghost-action" aria-expanded={detailOpen} aria-controls="scientific-detail" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? "Hide methods" : "Methods & details"}</button>
-            <button type="button" className="ghost-action" aria-expanded={aboutOpen} onClick={() => setAboutOpen(!aboutOpen)}><Info size={16} />About</button>
+            {!!project.manifest.metadata?.report_workspace&&<button className="ghost-action" onClick={()=>setSetup(!setup)}>{setup?"Return to delivered results":"Analysis inputs & methods"}</button>}
+            <button type="button" className="ghost-action" onClick={() => navigateReport("targets")}>Targets ({targets.entries.reduce((sum, entry) => sum + entry.row_ids.length, 0)})</button>
+            {<button type="button" className="ghost-action" aria-expanded={detailOpen} aria-controls="scientific-detail" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? "Hide methods" : "Methods & details"}</button>}
+            {<button type="button" className="ghost-action" aria-expanded={aboutOpen} onClick={() => setAboutOpen(!aboutOpen)}><Info size={16} />About</button>}
             <button type="button" className="ghost-action" onClick={() => openOutput.mutate()}><FolderOpen size={16} />Output folder</button>
             <button type="button" className="ghost-action" onClick={closeProject}><FolderX size={16} />Close</button>
           </div>
         </header>
         {aboutOpen && <section className="software-info" aria-label="About Katana"><strong>Katana</strong><p>Bulk and single-cell RNA splicing analysis, visualization and reporting.</p><small>Software version: 2.0.0-beta.2. Browser and desktop use the same local analysis engine. Input files remain on this computer.</small></section>}
 
-        <ContextBar project={project} selectedContrastCount={selectedContrasts.size} workflowLabel={activeWorkflow?.label ?? "Choose workflow"} />
-        {activeWorkspace === "project" && <GeneFilterPanel key={project.snapshot.manifest_fingerprint} project={project}
+        {project.assay && <div className="assay-banner"><strong>{project.assay.label}</strong><span>{project.assay.mode === "single-cell" ? "Donor-aware results · filter cell types / clusters in Results. Cells are not biological replicates." : project.assay.mode === "unknown" ? "Assay identity is missing from this project; no bulk/single-cell assumption is made." : "Biological sample comparisons"}</span></div>}
+        {<ContextBar project={project} selectedContrastCount={selectedContrasts.size} workflowLabel={project.manifest.metadata?.report_workspace && !setup ? "Completed report" : activeWorkflow?.label ?? "Choose workflow"} />}
+        {activeWorkspace === "project" && (!project.manifest.metadata?.report_workspace||setup) && <GeneFilterPanel key={project.snapshot.manifest_fingerprint} project={project}
           busy={configureGeneFilter.isPending} error={configureGeneFilter.error?.message}
           onApply={settings=>configureGeneFilter.mutate(settings)}/>}
         {activeWorkspace === "project" && project.snapshot.warnings.length > 0 && (
@@ -347,8 +371,9 @@ export default function App() {
         )}
 
         {targetError && <p role="alert" className="warning-strip error-strip">{targetError}</p>}
-        {activeWorkspace === "targets" ? <TargetWorkbench key={`${projectId}:${project.snapshot.manifest_fingerprint}`} projectId={projectId}
+        {['inputs','settings'].includes(reportRoute) && !setup ? <ProjectGate defaultPath={project.snapshot.manifest_path} loading={openProject.isPending||migrateProject.isPending||configureResources.isPending||importReport.isPending} error={openProject.error?.message||migrateProject.error?.message||configureResources.error?.message||importReport.error?.message} onOpen={p=>openProject.mutate(p)} onImportReport={r=>importReport.mutate(r)} onMigrate={r=>migrateProject.mutate(r)} onConfigureResources={r=>configureResources.mutate(r)}/> : project.manifest.metadata?.report_workspace && activeWorkspace !== "targets" && !setup ? <ReportWorkspace key={reportRoute} project={project} artifacts={sourceArtifacts.data ?? []} route={(applicationRoutes.find(r=>r.id===reportRoute)??applicationRoutes[0])!} onNavigate={navigateReport} onSetup={()=>setSetup(true)} onAdd={targets.add} onOpenGeneCard={(g,ev,cmp)=>{setGeneCardFocus({gene:g,eventId:ev,comparison:cmp});navigateReport("targets");}}/> : activeWorkspace === "report-explorer" ? <ReportExplorer key={projectId} imported={!!project.manifest.metadata?.report_workspace} projectId={projectId} artifacts={sourceArtifacts.data ?? []} onAdd={targets.add}/> : activeWorkspace === "targets" ? <TargetWorkbench key={`${projectId}:${project.snapshot.manifest_fingerprint}`} projectId={projectId}
           projectFingerprint={project.snapshot.manifest_fingerprint} entries={targets.entries} contrasts={project.manifest.contrasts} storageError={targets.storageError}
+          initialGene={geneCardFocus.gene} initialEvent={geneCardFocus.eventId} initialComparison={geneCardFocus.comparison}
           onRemove={targets.remove} onClear={targets.clear}/> : <div className={`workspace-grid${detailOpen ? "" : " detail-closed"}`}>
           <main className="workbench">
             {activeWorkspace === "prioritize" && <MotifTraceWorkbench projectId={projectId}
@@ -402,7 +427,7 @@ export default function App() {
 
                 {requiresComparisons && selectedContrasts.size === 0 && <div className="warning-strip">Select at least one comparison. An empty selection never silently means all.</div>}
                 {(runWorkflow.error || lastWorkflowJob?.error) && <div className="warning-strip error-strip">{runWorkflow.error?.message ?? lastWorkflowJob?.error}</div>}
-                {activeWorkflow.workflow_id === "differential.as" && <div className="run-plan-panel"><p>This module uses the completed AS read-support result selected below. Set FDR and |dPSI| in Quality Control. Read support requires IJC + SJC of at least 10 in every selected sample.</p><button type="button" className="text-action" onClick={() => {setActiveWorkspace("quality"); setActiveWorkflowId("quality.stable_as");}}>Edit DAS thresholds</button></div>}
+                {activeWorkflow.workflow_id === "differential.as" && <div className="run-plan-panel"><p>This module uses the completed PS-DAS precision-qualification result selected below. Configure FDR, |dPSI|, effective read support, replicate quantile, and Jeffreys SE(ΔPSI) in Quality Control.</p><button type="button" className="text-action" onClick={() => {setActiveWorkspace("quality"); setActiveWorkflowId("quality.stable_as");}}>Edit DAS thresholds</button></div>}
                 {artifactQuery.error && <div className="warning-strip error-strip">Could not read compatible cache: {artifactQuery.error.message}</div>}
                 {!artifactQuery.isFetching && !latestArtifacts.length && savedSettingsArtifact && (
                   <div className="warning-strip">
@@ -457,10 +482,10 @@ export default function App() {
           {detailOpen && <Inspector workflow={activeWorkflow} artifact={activeArtifact} row={focusedRow} />}
         </div>}
 
-        {activeWorkspace !== "targets" && <SelectionBasket count={selectedIds.size} saving={saveSelection.isPending} onSave={() => saveSelection.mutate()} onClear={() => setSelectedIds(new Set())}
+        {(!project.manifest.metadata?.report_workspace||setup) && activeWorkspace !== "targets" && <SelectionBasket count={selectedIds.size} saving={saveSelection.isPending} onSave={() => saveSelection.mutate()} onClear={() => setSelectedIds(new Set())}
           onAddGenes={targetRows.length === selectedIds.size && targetRows.every(row => row.gene_id) ? () => addTargets("gene") : undefined}
           onAddEvents={targetRows.length === selectedIds.size && targetRows.every(row => row.event_id) ? () => addTargets("event") : undefined}/>}
-        <JobDrawer jobs={jobsQuery.data ?? []} />
+        {(!project.manifest.metadata?.report_workspace||setup) && <JobDrawer jobs={jobsQuery.data ?? []} />}
       </section>
     </div>
   );

@@ -20,8 +20,8 @@ it("links condition, event, heatmap, hubs and enrichment without launching analy
   render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><ModuleDashboard projectId="p" artifactId="a" module="M1"/></QueryClientProvider>);
   expect(await screen.findByRole("img",{name:"Row-scaled PSI heatmap"})).toBeInTheDocument();
   expect(screen.getByRole("img",{name:"Module functional enrichment bubble plot"})).toBeInTheDocument();
-  expect(screen.getByRole("img",{name:"Module score by condition"}).querySelectorAll("circle")[0]).toHaveAttribute("fill", "#287a98");
-  expect(screen.getByRole("img",{name:"Event PSI by condition"}).querySelectorAll("circle")[1]).toHaveAttribute("fill", "#b85362");
+  expect(screen.getByRole("img",{name:"Module score by condition"}).querySelectorAll("circle")[0]).toHaveAttribute("fill", "#005eb8");
+  expect(screen.getByRole("img",{name:"Event PSI by condition"}).querySelectorAll("circle")[1]).toHaveAttribute("fill", "#162e51");
   fireEvent.change(screen.getByLabelText("Network condition"),{target:{value:"tumor"}});
   await waitFor(()=>expect(read).toHaveBeenLastCalledWith("p","a","M1","tumor",undefined,false));
   fireEvent.click(screen.getByRole("button",{name:"Select event e2"}));

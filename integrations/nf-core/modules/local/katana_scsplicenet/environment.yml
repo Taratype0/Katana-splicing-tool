@@ -1,0 +1,14 @@
+name: katana_scsplicenet
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.11
+  - numpy>=1.26
+  - scipy>=1.11
+  - pandas>=2.2
+  - scikit-learn>=1.4
+  - pip
+  - pip:
+      - dynamicTreeCut>=0.1.1
+      - https://github.com/Taratype0/katana-sc-splicenet/releases/download/v2.2.2/katana_sc_splicenet-2.2.2-py3-none-any.whl

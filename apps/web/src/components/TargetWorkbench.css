@@ -1,4 +1,4 @@
-.target-workbench { --target-navy:#102e4a; --target-line:#d8dfe6; color:#182a3a; background:#fff; border:1px solid var(--target-line); padding:clamp(1rem,3vw,2rem); max-width:1200px; margin:1rem auto; line-height:1.6; }
+.target-workbench { --target-navy:#1e2630; --target-line:#d8dfe6; color:#1e2630; background:#fff; border:1px solid var(--target-line); padding:clamp(1rem,3vw,2rem); max-width:1200px; margin:1rem auto; line-height:1.6; }
 .target-workbench header { border-top:5px solid var(--target-navy); padding-top:1rem; }
 .target-workbench h2,.target-workbench h3,.target-workbench h4 { color:var(--target-navy); margin:.3rem 0 .8rem; }
 .target-workbench .target-eyebrow { color:#52677b; font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; }
@@ -19,3 +19,49 @@
 .target-workbench .target-error { color:#a82c39; border-left:3px solid #c63f4a; padding:.6rem; background:#fff4f5; }
 .target-workbench .target-note { color:#52677b; }
 .target-workbench .target-export { border:1px solid var(--target-line); padding:1rem; margin-top:1rem; }
+
+.report-explorer .report-filters {display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin:24px 0;align-items:start}
+.report-explorer .report-filters label {display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:600}
+.report-explorer .report-filters input,.report-explorer .report-filters select,.report-explorer textarea {width:100%;box-sizing:border-box;border:1px solid #bdcad6;border-radius:3px;padding:10px;background:#fff;font:inherit}
+.report-explorer textarea {min-height:85px;resize:vertical}
+.report-explorer table {border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+.report-explorer th,.report-explorer td {padding:10px 14px;white-space:nowrap;text-align:left;border-bottom:1px solid #dbe3e9}
+.report-explorer th {position:sticky;top:0;background:#eaf0f5;z-index:1}
+.report-explorer tbody tr:nth-child(even) {background:#f6f8fa}
+.report-explorer tbody tr:hover {background:#edf3f9}
+.report-explorer .target-actions {margin:16px 0}
+
+/* The report workflow keeps navigation, filters and actions in separate rows. */
+.report-explorer .report-toolbar {display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:20px}
+.report-explorer .report-toolbar select {font-size:18px;font-weight:600;max-width:75%;min-width:280px;border:0;border-bottom:1px solid #d8dfe6;padding-left:0}
+.report-explorer .report-toolbar a {white-space:nowrap;font-size:13px;margin:0}
+.report-explorer .report-filters {grid-template-columns:1.3fr 1fr 1fr 1.2fr 1.2fr;gap:10px;margin:16px 0 22px;align-items:start}
+.report-explorer .report-filters .paired-filter {display:grid;grid-template-columns:1fr 80px;gap:0}
+.report-explorer .paired-filter select {border-radius:3px 0 0 3px;min-width:0}
+.report-explorer .paired-filter input {border-left:0;border-radius:0 3px 3px 0;min-width:0}
+.report-explorer .identifier-filter {border:1px solid #bdcad6;border-radius:3px;padding:8px 10px;font-size:13px;position:relative}
+.report-explorer .identifier-filter summary {cursor:pointer;white-space:nowrap}
+.report-explorer .identifier-filter textarea {margin-top:10px;min-height:100px}
+.report-explorer .report-table-status {display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;color:#596d7e;margin:18px 0 8px}
+.report-explorer .report-table-status details {position:relative}
+.report-explorer .report-table-status details[open] {max-width:350px}
+.report-explorer .report-plot {margin:20px 0}
+.report-explorer .report-plot figcaption {font-size:12px;color:#596d7e;margin-bottom:8px}
+.target-workbench:not(.report-explorer) {display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);column-gap:36px;align-items:start}
+.target-workbench:not(.report-explorer)>section:first-of-type {grid-column:1;grid-row:1 / span 4;border:0;padding-top:0;margin-top:0}
+.target-workbench:not(.report-explorer)>section:not(:first-of-type),.target-workbench>.local-execution {grid-column:2;margin-top:0;padding:0 0 24px;border-top:0;border-bottom:1px solid #d8dfe6;margin-bottom:24px}
+.target-workbench>.local-execution>summary {cursor:pointer;font-weight:600;font-size:14px}
+.target-workbench>.target-error,.target-workbench>.target-run {grid-column:1 / -1}
+.target-workbench .target-selection {border-left:0;border:1px solid #d8dfe6;background:#fafbfc;border-radius:4px}
+.target-workbench .target-selection details {font-size:12px;color:#596d7e;margin-top:8px}
+.target-workbench .target-export {border:0;padding:12px 0;margin:0}
+@media(max-width:1100px){.report-explorer .report-filters {grid-template-columns:repeat(3,minmax(0,1fr))}.target-workbench:not(.report-explorer){display:block}}
+@media(max-width:700px){.report-explorer .report-filters{grid-template-columns:1fr}.report-explorer .report-toolbar{display:block}.report-explorer .report-toolbar select{max-width:100%;width:100%;min-width:0}.report-explorer .report-toolbar a{display:inline-block;margin-top:12px}}
+
+.target-workbench .path-picker-field>button {color:#2863a5;border-color:#2863a5}
+.target-workbench .file-dialog>header {border-top:0;padding:20px 24px}
+
+.target-workbench .target-result>a {display:inline-block;margin-left:1rem}
+@media(min-width:1101px){.target-workbench>section[aria-label="Import completed target results"]{grid-row:3}.target-workbench>.target-run{grid-row:5}}
+
+.assay-banner{display:flex;gap:18px;align-items:center;margin:8px 0 18px;padding:12px 18px;background:#edf5fb;border-left:3px solid #2863a5;border-radius:4px;color:#34485c}.assay-banner span{font-size:13px}.population-plot{margin:18px 0;padding:16px;border:1px solid #dbe5ee;border-radius:10px}.population-plot p,.population-plot figcaption{font-size:13px;color:#526274}.report-table-wrap{overflow:auto;max-height:520px;border:1px solid #e2e8ef;border-radius:6px}.report-table-wrap th{position:sticky;top:0;background:#f4f7fb}.report-table-wrap th button{border:0;background:transparent;font-weight:600;white-space:nowrap}.local-enrichment{margin-top:24px;padding:20px;border:1px solid #dbe5ee;border-radius:10px}.local-enrichment pre{max-height:260px;overflow:auto;white-space:pre-wrap}.report-filters select{max-width:220px}.report-filters label{font-size:12px}.report-filters input[type=number]{max-width:135px}

@@ -1,0 +1,13 @@
+name: "katana_splicetrace"
+description: "KatanaAS standalone package `katana-splicetrace` (2.4.3) nf-core DSL2 module"
+keywords:
+  - alternative-splicing
+  - rna-seq
+  - rbp
+  - nmd
+  - co-splicing
+tools:
+  - "katana_splicetrace":
+      description: "katana-splicetrace 2.4.3"
+      homepage: "https://github.com/Taratype0/katana-splicetrace"
+      licence: ["MIT"]

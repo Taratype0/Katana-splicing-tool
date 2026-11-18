@@ -91,6 +91,33 @@ def create_app(runtime: PlatformRuntime | None = None) -> FastAPI:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return _project_payload(context)
 
+    @app.post("/api/projects/create-bulk")
+    def create_bulk(request: dict[str, Any]) -> dict[str, Any]:
+        from katana_next.domain.models import ProjectManifest
+        try:
+            manifest = ProjectManifest.model_validate(request.get("manifest", {}))
+            if not manifest.samples or not manifest.contrasts:
+                raise ValueError("Declare samples, biological replicate IDs and comparisons first.")
+            known = {c.contrast_id for c in manifest.contrasts}
+            for asset in manifest.assets:
+                if asset.kind in {"rmats_result", "deg_result", "dtu_result", "dexseq_result"}:
+                    if asset.metadata.get("contrast_id") not in known:
+                        raise ValueError("Every differential input needs a declared comparison.")
+                if asset.kind == "rmats_result":
+                    if asset.metadata.get("event_type") not in {"SE", "RI", "A3SS", "A5SS", "MXE"}:
+                        raise ValueError("Each rMATS input needs its event type.")
+                    if not asset.metadata.get("numerator_sample_ids") or not asset.metadata.get("denominator_sample_ids"):
+                        raise ValueError("Declare rMATS sample order for both comparison arms.")
+            root = Path(request["workspace"]).expanduser().resolve()
+            active.projects._validate_output_root(root)
+            if root.exists() and any(root.iterdir()):
+                raise ValueError("Choose a new empty workspace; existing projects are preserved.")
+            context = active.projects.create_bulk_project(manifest, root / "katana.project.json")
+            active.jobs.bind_project(context.manifest.project_id, context.manifest.output_root)
+        except (OSError, ValueError, KeyError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _project_payload(context)
+
     @app.post("/api/projects/migrate")
     def migrate_project(request: MigrateProjectRequest) -> dict[str, Any]:
         try:
@@ -472,6 +499,12 @@ def create_app(runtime: PlatformRuntime | None = None) -> FastAPI:
 
         return StreamingResponse(stream(), media_type="text/event-stream")
 
+    from katana_next.api.local_files import create_local_files_router
+    app.include_router(create_local_files_router())
+
+    from katana_next.api.report_workspace import create_report_router
+    app.include_router(create_report_router(active))
+
     from katana_next.api.targets import create_targets_router
     app.include_router(create_targets_router(active))
 
@@ -500,7 +533,9 @@ def _context_or_404(active: PlatformRuntime, project_id: str):
 
 
 def _project_payload(context) -> dict[str, Any]:
+    from katana_next.services.assay import assay_identity
     return {
+        "assay": assay_identity(context.manifest.metadata, context.manifest.assets),
         "snapshot": context.snapshot.model_dump(mode="json"),
         "manifest": context.manifest.model_dump(mode="json"),
         "artifact_count": len(

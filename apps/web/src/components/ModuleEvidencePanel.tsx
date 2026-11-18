@@ -1,17 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import { api } from "../api";
 import { ModuleDashboard } from "./ModuleDashboard";
-import { SPLICE_MODULE_NAME } from "../branding";
 
 export function ModuleEvidencePanel({projectId, artifactId, module}: {projectId: string; artifactId: string; module: string}) {
   const [expanded,setExpanded] = useState(false);
   const result = useQuery({queryKey:["module-evidence",projectId,artifactId,module],queryFn:()=>api.moduleEvidence(projectId,artifactId,module)});
   return <section aria-label="Module evidence">
     <h3>Module {module}</h3>
-    <button className="module-open" onClick={()=>setExpanded(true)}>Explore event network, heatmap &amp; hubs</button>
-    {expanded && createPortal(<div className="module-modal-backdrop"><section role="dialog" aria-modal="true" aria-label={`Module ${module} explorer`} className="module-modal" onKeyDown={e=>{if(e.key==="Escape")setExpanded(false)}}><header><h3>{SPLICE_MODULE_NAME} / Module {module}</h3><button autoFocus onClick={()=>setExpanded(false)}>Close</button></header><ModuleDashboard key={`${artifactId}:${module}`} projectId={projectId} artifactId={artifactId} module={module}/></section></div>,document.body)}
+    <button className="module-open" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?"Hide network details":"Explore event network, heatmap & hubs"}</button>
+    {expanded && <section className="inline-module-details" aria-label={`Module ${module} explorer`}><h4>Event network, heatmap and hubs</h4><ModuleDashboard key={`${artifactId}:${module}`} projectId={projectId} artifactId={artifactId} module={module}/></section>}
     {result.isLoading && <p>Reading cached module evidence...</p>}
     {result.error && <p role="alert">{result.error.message}</p>}
     {result.data && <>

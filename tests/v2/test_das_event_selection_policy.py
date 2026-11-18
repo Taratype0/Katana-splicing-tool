@@ -28,7 +28,7 @@ def _events():
     ])
 
 
-@pytest.mark.parametrize("value", [None, "stable_significant", "RS-DAS", "rs_das"])
+@pytest.mark.parametrize("value", [None, "stable_significant", "PS-DAS", "ps_das", "RS-DAS", "rs_das"])
 def test_rs_default_and_aliases(value):
     assert normalize_event_set(value) == "stable_significant"
 
@@ -56,7 +56,7 @@ def test_selection_changes_only_membership_and_keeps_full_source():
     pd.testing.assert_frame_equal(events, before)
 
 
-@pytest.mark.parametrize("change", ["missing_flag", "missing_significance", "missing_audit", "missing_policy", "historical", "wrong_counts", "false_support", "not_subset", "string_flag"])
+@pytest.mark.parametrize("change", ["missing_flag", "missing_significance", "missing_audit", "missing_policy", "historical", "false_support", "not_subset", "string_flag"])
 def test_rs_missing_or_inconsistent_evidence_never_falls_back(change):
     events = _events()
     if change == "missing_flag":
@@ -93,7 +93,7 @@ def test_definitions_and_normalization_have_one_default_and_declared_boundaries(
     assert workflow_das_capability("programs.cosplice")["mode"] == "measurement_population"
     with pytest.raises(ValueError, match="does not apply"):
         normalize_workflow_selection("programs.cosplice", {"event_set": "significant"})
-    with pytest.raises(ValueError, match="requires RS-DAS"):
+    with pytest.raises(ValueError, match="requires PS-DAS"):
         normalize_workflow_selection("prioritize.rbp_mechanism", {"event_set": "significant"})
     assert normalize_workflow_selection("prioritize.event_motifs", {})["event_set"] == "stable_significant"
 
@@ -148,7 +148,7 @@ def test_service_rs_required_selection_checks_selected_rows_without_dropping_the
     parameters = {"event_set": "stable_significant", "selection_id": "explicit-choice"}
     monkeypatch.setattr(sources, "selected_source", lambda *_: source)
     monkeypatch.setattr(sources, "selection_rows", lambda *args: args[-1].iloc[[1]])
-    with pytest.raises(ValueError, match="requires an explicit RS-DAS selection"):
+    with pytest.raises(ValueError, match="requires an explicit PS-DAS selection"):
         WorkflowService._validate_das_parent_selection(context, "prioritize.event_motifs", parameters, [source])
     monkeypatch.setattr(sources, "selection_rows", lambda *args: args[-1].iloc[[0]])
     WorkflowService._validate_das_parent_selection(context, "prioritize.event_motifs", parameters, [source])

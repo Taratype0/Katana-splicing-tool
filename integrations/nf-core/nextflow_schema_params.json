@@ -1,0 +1,52 @@
+{
+  "definitions": {
+    "katana_as_options": {
+      "title": "KatanaAS Bulk & Single-Cell Alternative Splicing Suite (v2.4)",
+      "type": "object",
+      "properties": {
+        "run_katana_splicenet": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run katana-splicenet ExcessBioVar + Adaptive Signed TOM modules."
+        },
+        "run_katana_splicetrace": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run katana-splicetrace RBP, mature-mRNA, Module Bridge & GTF/UniProt ORF/NMD consequences."
+        },
+        "run_katana_sc_splicenet": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run katana-sc-splicenet on Smart-seq3 single-cell splicing usage."
+        },
+        "run_katana_sc_splicetrace": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run katana-sc-splicetrace on Smart-seq3 single-cell splicing."
+        },
+        "species": {
+          "type": "string",
+          "default": "human",
+          "enum": [
+            "human",
+            "mouse"
+          ],
+          "description": "Species symbol namespace (`human` or `mouse`)."
+        },
+        "gtf": {
+          "type": "string",
+          "format": "file-path",
+          "description": "Reference GTF (.gtf/.gtf.gz) for automated ORF, NMD, and UniProt domain consequences."
+        },
+        "splicenet_feature_cap": {
+          "type": "integer",
+          "default": 5000
+        },
+        "sc_splicenet_select_budget": {
+          "type": "integer",
+          "default": 350
+        }
+      }
+    }
+  }
+}

@@ -24,8 +24,12 @@ from katana_next.science.gene_filter import apply_gene_filter
 
 
 EVENT_TYPES = ("SE", "RI", "A3SS", "A5SS", "MXE")
-READ_SUPPORT_POLICY_VERSION = "bulk-all-samples-counts-v1"
+READ_SUPPORT_POLICY_VERSION = "bulk-quantile-precision-v2"
+LEGACY_ALL10_POLICY_VERSION = "bulk-all-samples-counts-v1"
 DEFAULT_MIN_READS = 10
+DEFAULT_MIN_RAW_READS = 5
+DEFAULT_MIN_SAMPLE_FRACTION = 0.75
+DEFAULT_MAX_JEFFREYS_SE = 0.16
 _BULK_EVENT_LOADER_VERSION = "4.0-all-declared-samples"
 EVENT_COORDINATES = (
     "chr",
@@ -571,7 +575,7 @@ def _finite_range(values: list[float]) -> float:
 
 
 def _validate_read_support_parameters(parameters: dict[str, Any]) -> str:
-    """Reject changed legacy gates; their old default values are inert compatibility input."""
+    """Validate configurable PS-DAS (Precision-Supported DAS) parameters while archiving retired legacy options."""
     legacy_defaults = {
         "stability_profile": "balanced",
         "min_supported_replicates": 2,
@@ -580,16 +584,25 @@ def _validate_read_support_parameters(parameters: dict[str, Any]) -> str:
         "apply_measurement_se_gate": False,
     }
     if "min_reads" in parameters and parameters["min_reads"] != DEFAULT_MIN_READS:
-        raise ValueError(f"{READ_SUPPORT_POLICY_VERSION} requires fixed min_reads={DEFAULT_MIN_READS} in every declared sample")
+        raise ValueError(f"Legacy min_reads={parameters['min_reads']!r} is retired; use min_effective_reads in {READ_SUPPORT_POLICY_VERSION}")
+    min_reads = float(parameters.get("min_effective_reads", DEFAULT_MIN_READS))
+    if not math.isfinite(min_reads) or min_reads < 1:
+        raise ValueError("min_reads must be >= 1")
+    min_frac = float(parameters.get("min_sample_fraction", DEFAULT_MIN_SAMPLE_FRACTION))
+    if not math.isfinite(min_frac) or not (0.25 <= min_frac <= 1.0):
+        raise ValueError("min_sample_fraction must lie in [0.25, 1.0]")
+    max_se = float(parameters.get("max_jeffreys_se", DEFAULT_MAX_JEFFREYS_SE))
+    if not math.isfinite(max_se) or not (0.01 <= max_se <= 0.50):
+        raise ValueError("max_jeffreys_se must lie in [0.01, 0.50]")
     requested = parameters.get("read_support_policy", READ_SUPPORT_POLICY_VERSION)
-    if requested != READ_SUPPORT_POLICY_VERSION:
-        raise ValueError(f"Unknown read-support policy: {requested}")
+    if requested not in {READ_SUPPORT_POLICY_VERSION, LEGACY_ALL10_POLICY_VERSION}:
+        raise ValueError(f"Unknown precision-support policy: {requested}")
     ignored = {}
     for name, previous_default in legacy_defaults.items():
         if name not in parameters:
             continue
         if parameters[name] != previous_default:
-            raise ValueError(f"Legacy QC option {name}={parameters[name]!r} is incompatible with {READ_SUPPORT_POLICY_VERSION}; direction, replicate-minimum and SE gates are no longer applied")
+            raise ValueError(f"Legacy QC option {name}={parameters[name]!r} is retired in {READ_SUPPORT_POLICY_VERSION}")
         ignored[name] = parameters[name]
     return json.dumps(ignored, sort_keys=True)
 
@@ -606,7 +619,24 @@ def _policy_vector(value: object) -> list[float]:
     return parse_number_list(value)
 
 
-def _arm_read_support(row: pd.Series, arm: str, suffix: str) -> dict[str, Any]:
+def _required_replicates(expected: int, min_fraction: float) -> int:
+    if expected <= 1:
+        return max(0, expected)
+    if min_fraction >= 0.999:
+        return expected
+    return max(2, int(math.ceil(min_fraction * expected - 1e-9)))
+
+
+def _arm_read_support(
+    row: pd.Series,
+    arm: str,
+    suffix: str,
+    *,
+    eff_len_mult: float = 1.0,
+    min_eff_reads: float = DEFAULT_MIN_READS,
+    min_raw_reads: float = DEFAULT_MIN_RAW_READS,
+    min_sample_fraction: float = DEFAULT_MIN_SAMPLE_FRACTION,
+) -> dict[str, Any]:
     psi = _policy_vector(row.get(f"IncLevel{suffix}"))
     ijc = _policy_vector(row.get(f"IJC_SAMPLE_{suffix}"))
     sjc = _policy_vector(row.get(f"SJC_SAMPLE_{suffix}"))
@@ -617,7 +647,7 @@ def _arm_read_support(row: pd.Series, arm: str, suffix: str) -> dict[str, Any]:
     if key in row:
         value = row[key]
         try:
-            if isinstance(value, (bool, np.bool_)) or not math.isfinite(float(value)) or float(value) != int(value) or int(value) < 1:
+            if value is None or isinstance(value, (bool, np.bool_)) or pd.isna(value) or not math.isfinite(float(value)) or float(value) != int(value) or int(value) < 1:
                 raise ValueError
             expected = int(value)
         except (TypeError, ValueError, OverflowError):
@@ -630,7 +660,11 @@ def _arm_read_support(row: pd.Series, arm: str, suffix: str) -> dict[str, Any]:
             reasons.append(f"{arm}:{label}_vector_length_{len(values)}_expected_{expected}")
     shape_valid = expected > 0 and len(psi) == len(ijc) == len(sjc) == expected
     count_shape_valid = expected > 0 and len(ijc) == len(sjc) == expected
-    usable = read_supported = supported = invalid = low_reads = 0
+
+    usable = raw_all10 = eff_pass = usable_eff_pass = raw_floor_pass = invalid = low_reads = corrupt_psi = invalid_count_pos = 0
+    eff_list: list[float] = []
+    sum_ijc = 0.0
+    sum_tot = 0.0
     observed_positions = min(expected, max(len(psi), len(ijc), len(sjc)))
     for index in range(observed_positions):
         p = psi[index] if index < len(psi) else math.nan
@@ -638,46 +672,90 @@ def _arm_read_support(row: pd.Series, arm: str, suffix: str) -> dict[str, Any]:
         s = sjc[index] if index < len(sjc) else math.nan
         psi_valid = math.isfinite(p) and 0 <= p <= 1
         counts_valid = math.isfinite(i) and math.isfinite(s) and i >= 0 and s >= 0 and math.isfinite(i + s)
-        read_pass = counts_valid and i + s >= DEFAULT_MIN_READS
+        raw_n = (i + s) if counts_valid else math.nan
+        eff_n = (i + s * eff_len_mult) if counts_valid else math.nan
+        if counts_valid:
+            eff_list.append(eff_n)
+            sum_ijc += i
+            sum_tot += raw_n
+        is_all10 = counts_valid and raw_n >= 10
+        is_eff_ok = counts_valid and eff_n >= min_eff_reads and raw_n >= min_raw_reads
+        is_floor_ok = counts_valid and raw_n >= min_raw_reads
+
         usable += int(psi_valid and counts_valid)
-        read_supported += int(read_pass)
-        supported += int(psi_valid and read_pass)
+        raw_all10 += int(psi_valid and is_all10)
+        eff_pass += int(is_eff_ok)
+        usable_eff_pass += int(psi_valid and is_eff_ok)
+        raw_floor_pass += int(is_floor_ok)
+        corrupt_psi += int(counts_valid and (raw_n > 0) and not psi_valid)
         invalid += int(not (psi_valid and counts_valid))
-        low_reads += int(counts_valid and not read_pass)
-        if not psi_valid:
+        low_reads += int(counts_valid and not is_eff_ok)
+        if counts_valid and not is_eff_ok:
+            reasons.append(f"{arm}:sample_{index + 1}:counts_below_{min_eff_reads:g}")
+        if counts_valid and not psi_valid:
             reasons.append(f"{arm}:sample_{index + 1}:invalid_PSI")
         if not counts_valid:
+            invalid_count_pos += 1
             reasons.append(f"{arm}:sample_{index + 1}:invalid_counts")
-        elif not read_pass:
-            reasons.append(f"{arm}:sample_{index + 1}:counts_below_{DEFAULT_MIN_READS}")
     if observed_positions < expected:
         invalid += expected - observed_positions
         reasons.append(f"{arm}:missing_sample_positions_{expected - observed_positions}")
+
+    req_k = _required_replicates(expected, min_sample_fraction)
+    med_eff = _finite_median(eff_list) if eff_list else 0.0
+    high_abun_k = sum(1 for x in eff_list if math.isfinite(x) and x >= max(12.0, min_eff_reads * 1.2))
+    counts_ok = count_shape_valid and (invalid_count_pos == 0)
+    data_ok = shape_valid and counts_ok and (corrupt_psi == 0) and (usable >= req_k)
+    maj_k = max(2, int(math.floor(0.66 * expected)))
+    high_depth_majority = (
+        expected >= 3
+        and counts_ok
+        and sum(1 for x in eff_list if math.isfinite(x) and x >= min_eff_reads * 1.5) >= maj_k
+        and math.isfinite(med_eff) and med_eff >= min_eff_reads * 1.5
+        and len(eff_list) == expected
+        and all(math.isfinite(x) and x >= min_eff_reads * 0.8 for x in eff_list)
+    )
+    quantile_pass = (counts_ok and (eff_pass >= req_k) and math.isfinite(med_eff) and (med_eff >= min_eff_reads)) or high_depth_majority
+    high_anchor_pass = counts_ok and (high_abun_k >= req_k) and math.isfinite(med_eff) and (med_eff >= max(20.0, min_eff_reads * 2.0))
+    nmd_partner_pass = counts_ok and (raw_floor_pass >= req_k)
+
     return {
         f"{arm}_expected_samples": expected,
+        f"{arm}_required_replicates": req_k,
         f"{arm}_sample_scope_basis": basis,
         f"{arm}_observed_psi_samples": len(psi),
         f"{arm}_observed_ijc_samples": len(ijc),
         f"{arm}_observed_sjc_samples": len(sjc),
-        f"{arm}_read_count_supported_samples": read_supported,
-        f"{arm}_supported_replicates": supported,
+        f"{arm}_read_count_supported_samples": eff_pass,
+        f"{arm}_supported_replicates": usable_eff_pass,
         f"{arm}_invalid_samples": invalid,
         f"{arm}_low_read_samples": low_reads,
+        f"{arm}_median_effective_reads": round(float(med_eff), 2) if math.isfinite(med_eff) else math.nan,
         f"{arm}_vector_lengths_match": shape_valid,
-        f"{arm}_data_usable": shape_valid and usable == expected,
-        f"{arm}_all_read_counts_pass": count_shape_valid and read_supported == expected,
+        f"{arm}_data_usable": data_ok,
+        f"{arm}_quantile_eff_pass": quantile_pass,
+        f"{arm}_all_read_counts_pass": shape_valid and raw_all10 == expected,
+        "_high_anchor": high_anchor_pass,
+        "_nmd_partner": nmd_partner_pass,
+        "_sum_ijc": sum_ijc,
+        "_sum_tot": sum_tot,
         "_reasons": reasons,
     }
 
 
 def apply_stable_event_qc(events: pd.DataFrame, parameters: dict[str, Any]) -> pd.DataFrame:
-    """Compatibility entry for fixed ten-count, all-declared-sample eligibility.
+    """Apply PS-DAS (Precision-Supported DAS, `bulk-quantile-precision-v2`).
 
-    Every sample in each selected contrast arm is checked independently. Native
-    PSI, count, P and FDR columns are never rewritten. Existing direction/SE
-    diagnostics are preserved as observations and do not select events.
+    Native PSI, count, P and FDR columns are NEVER rewritten; strict legacy all-sample>=10 is preserved in `passes_legacy_all10`.
     """
     ignored = _validate_read_support_parameters(parameters)
+    min_eff = float(parameters.get("min_effective_reads", parameters.get("min_reads", DEFAULT_MIN_READS)))
+    min_raw = float(parameters.get("min_raw_reads", DEFAULT_MIN_RAW_READS))
+    min_frac = float(parameters.get("min_sample_fraction", DEFAULT_MIN_SAMPLE_FRACTION))
+    max_se = float(parameters.get("max_jeffreys_se", DEFAULT_MAX_JEFFREYS_SE))
+    allow_nmd_rescue = bool(parameters.get("enable_nmd_asymmetry_rescue", True))
+    use_legacy_strict = parameters.get("read_support_policy") == LEGACY_ALL10_POLICY_VERSION
+
     retired = {
         "stability_profile", "differential_repeat_supported",
         "passes_direction_consistency", "passes_leave_one_out",
@@ -688,30 +766,96 @@ def apply_stable_event_qc(events: pd.DataFrame, parameters: dict[str, Any]) -> p
     audits = []
     for _, row in frame.iterrows():
         reverse = bool(row.get("reverse_direction", False))
-        numerator = _arm_read_support(row, "numerator", "2" if reverse else "1")
-        denominator = _arm_read_support(row, "denominator", "1" if reverse else "2")
+        if "IncFormLen" in row and "SkipFormLen" in row and pd.notna(row["IncFormLen"]) and pd.notna(row["SkipFormLen"]):
+            try:
+                eff_mult = max(1.0, min(3.0, float(row["IncFormLen"]) / max(1.0, float(row["SkipFormLen"]))))
+            except (TypeError, ValueError):
+                eff_mult = 1.0
+        else:
+            eff_mult = 1.0
+
+        numerator = _arm_read_support(
+            row, "numerator", "2" if reverse else "1",
+            eff_len_mult=eff_mult, min_eff_reads=min_eff, min_raw_reads=min_raw, min_sample_fraction=min_frac,
+        )
+        denominator = _arm_read_support(
+            row, "denominator", "1" if reverse else "2",
+            eff_len_mult=eff_mult, min_eff_reads=min_eff, min_raw_reads=min_raw, min_sample_fraction=min_frac,
+        )
         reasons = numerator.pop("_reasons") + denominator.pop("_reasons")
+        num_high, num_partner = numerator.pop("_high_anchor"), numerator.pop("_nmd_partner")
+        den_high, den_partner = denominator.pop("_high_anchor"), denominator.pop("_nmd_partner")
+        sum_i1, sum_t1 = numerator.pop("_sum_ijc"), numerator.pop("_sum_tot")
+        sum_i2, sum_t2 = denominator.pop("_sum_ijc"), denominator.pop("_sum_tot")
+
+        p1_j = (sum_i1 + 0.5) / (sum_t1 + 1.0)
+        p2_j = (sum_i2 + 0.5) / (sum_t2 + 1.0)
+        jeffreys_se = math.sqrt(p1_j * (1.0 - p1_j) / (sum_t1 + 1.0) + p2_j * (1.0 - p2_j) / (sum_t2 + 1.0))
+
+        min_arm_n = min(numerator["numerator_expected_samples"], denominator["denominator_expected_samples"])
+        eff_max_se = max_se if min_arm_n >= 2 else max(max_se, 0.22)
+        bilateral_ok = numerator["numerator_quantile_eff_pass"] and denominator["denominator_quantile_eff_pass"]
+        num_med = numerator["numerator_median_effective_reads"]
+        den_med = denominator["denominator_median_effective_reads"]
+        asymmetry_ok = (
+            math.isfinite(num_med) and math.isfinite(den_med)
+            and max(num_med, den_med) >= 2.5 * max(1.0, min(num_med, den_med))
+            and abs(p1_j - p2_j) >= 0.10
+        )
+        nmd_rescued = bool(allow_nmd_rescue and not bilateral_ok and asymmetry_ok and ((num_high and den_partner) or (den_high and num_partner)))
+        se_ok = jeffreys_se <= eff_max_se
+        legacy_all10 = bool(numerator["numerator_all_read_counts_pass"] and denominator["denominator_all_read_counts_pass"])
+
+        data_usable_both = bool(numerator["numerator_data_usable"] and denominator["denominator_data_usable"])
+        ps_pass = legacy_all10 if use_legacy_strict else bool(data_usable_both and (bilateral_ok or nmd_rescued) and se_ok)
+        if not ps_pass:
+            if not (bilateral_ok or nmd_rescued):
+                if not numerator["numerator_quantile_eff_pass"]:
+                    reasons.append(f"numerator:quantile_eff_reads_below_{min_eff:g}")
+                if not denominator["denominator_quantile_eff_pass"]:
+                    reasons.append(f"denominator:quantile_eff_reads_below_{min_eff:g}")
+            if not se_ok:
+                reasons.append(f"jeffreys_se_{jeffreys_se:.3f}_exceeds_{max_se:.2f}")
+
         audit = {**numerator, **denominator}
+        audit["effective_length_ratio"] = round(eff_mult, 3)
+        audit["jeffreys_se_dpsi"] = round(jeffreys_se, 5)
+        audit["nmd_asymmetry_rescued"] = bool(nmd_rescued and se_ok)
+        audit["passes_legacy_all10"] = legacy_all10
         audit["passes_replicate_count"] = numerator["numerator_vector_lengths_match"] and denominator["denominator_vector_lengths_match"]
         audit["passes_data_usability"] = numerator["numerator_data_usable"] and denominator["denominator_data_usable"]
-        audit["passes_read_counts"] = numerator["numerator_all_read_counts_pass"] and denominator["denominator_all_read_counts_pass"]
-        audit["passes_read_support"] = audit["passes_data_usability"] and audit["passes_read_counts"]
-        audit["measurement_eligible"] = audit["passes_read_support"]
-        audit["stable_event"] = audit["measurement_eligible"]
-        audit["read_support_failure_reason"] = "; ".join(reasons) or "passed"
-        audit["stability_failure_reason"] = audit["read_support_failure_reason"]
+        audit["passes_read_counts"] = bool(bilateral_ok or nmd_rescued)
+        audit["passes_precision_support"] = ps_pass
+        audit["passes_read_support"] = ps_pass
+        audit["measurement_eligible"] = ps_pass
+        audit["stable_event"] = ps_pass
+        reason_str = (
+            "passed_as_nmd_asymmetry_rescue"
+            if (ps_pass and nmd_rescued)
+            else ("passed" if ps_pass else ("; ".join(reasons) or "failed_precision_gate"))
+        )
+        audit["precision_support_reason"] = reason_str
+        audit["read_support_failure_reason"] = reason_str
+        audit["stability_failure_reason"] = reason_str
         audits.append(audit)
+
     audit_frame = pd.DataFrame(audits, index=frame.index)
     for column in audit_frame:
         frame[column] = audit_frame[column]
     if frame.empty:
-        for column in ("passes_replicate_count", "passes_data_usability", "passes_read_counts", "passes_read_support", "measurement_eligible", "stable_event"):
+        for column in (
+            "passes_replicate_count", "passes_data_usability", "passes_read_counts",
+            "passes_precision_support", "passes_read_support", "passes_legacy_all10",
+            "nmd_asymmetry_rescued", "measurement_eligible", "stable_event",
+        ):
             frame[column] = pd.Series(index=frame.index, dtype=bool)
-        for column in ("read_support_failure_reason", "stability_failure_reason"):
+        for column in ("precision_support_reason", "read_support_failure_reason", "stability_failure_reason"):
             frame[column] = pd.Series(index=frame.index, dtype=object)
-    frame["read_support_policy"] = READ_SUPPORT_POLICY_VERSION
-    frame["criterion_min_reads"] = DEFAULT_MIN_READS
-    frame["measurement_se_gate_enabled"] = False
+    frame["read_support_policy"] = LEGACY_ALL10_POLICY_VERSION if use_legacy_strict else READ_SUPPORT_POLICY_VERSION
+    frame["criterion_min_reads"] = min_eff
+    frame["criterion_min_sample_fraction"] = min_frac
+    frame["criterion_max_jeffreys_se"] = max_se
+    frame["measurement_se_gate_enabled"] = True
     frame["ignored_legacy_qc_options"] = ignored
     return frame
 
@@ -736,6 +880,7 @@ def significance_columns(events: pd.DataFrame, parameters: dict[str, Any]) -> pd
     frame["stable_significant"] = frame["significant"] & frame.get(
         "stable_event", pd.Series(False, index=frame.index)
     ).fillna(False)
+    frame["ps_das"] = frame["stable_significant"]
     frame["direction"] = np.select(
         [frame["dpsi"].gt(0), frame["dpsi"].lt(0)],
         ["higher inclusion in numerator", "lower inclusion in numerator"],

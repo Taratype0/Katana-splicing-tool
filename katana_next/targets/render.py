@@ -10,19 +10,19 @@ import pandas as pd
 from ._execution import PLOT_LOCK, portable, write_json
 
 
-STYLE = """body{font:15px system-ui,sans-serif;color:#152d45;background:#f4f6f8;margin:0}
-header{background:#102c46;color:white;padding:30px max(5%,24px)}h1{margin:0 0 10px;font-size:30px}
-main{max-width:1280px;margin:25px auto;padding:0 24px}section,article{background:white;padding:24px;
-margin:20px 0;border:1px solid #dde3e9;border-radius:3px}h2{font-size:21px;color:#102c46}
-a{color:#2863A5}p,li{line-height:1.6}table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{text-align:left;padding:9px;border-bottom:1px solid #e2e6eb;vertical-align:top;max-width:420px;
-overflow-wrap:anywhere}th{background:#edf2f6}img{max-width:100%;height:auto}.scroll{overflow-x:auto}
-.muted{color:#586b7d}.pill{display:inline-block;padding:4px 9px;background:#edf2f6;border-radius:3px}
-.complete{color:#2863A5}.failed{color:#C63F4A}input,button,select{font:inherit;padding:7px;border:1px solid #c6cfd8;
-background:white;border-radius:2px}button{cursor:pointer}nav{display:flex;gap:15px;flex-wrap:wrap;margin:14px 0}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,monospace}.grid{display:grid;
-grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.toolbar{display:flex;gap:12px;align-items:center;
-margin:12px 0;flex-wrap:wrap}.toolbar input{min-width:260px}.summary td:first-child{width:190px;font-weight:600}
+STYLE = """body{font:14px/1.6 'IBM Plex Sans','Inter','Segoe UI',system-ui,sans-serif;color:#1e293b;background:#f8fafc;margin:0;font-variant-numeric:tabular-nums}
+header{background:#051c2c;color:white;padding:32px max(5%,28px);border-bottom:2px solid #2251ff}h1{margin:0 0 8px;font:400 32px/1.15 'Newsreader',Georgia,serif;letter-spacing:-.02em}
+main{max-width:1320px;margin:28px auto;padding:0 28px}section,article{background:white;padding:24px 28px;
+margin:20px 0;border:1px solid #e2e8f0;border-top:2px solid #051c2c;border-radius:2px}h2{font:400 22px/1.2 'Newsreader',Georgia,serif;color:#051c2c;margin-top:0}
+a{color:#2251ff;text-decoration:none}a:hover{text-decoration:underline}p,li{line-height:1.6}table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{text-align:left;padding:9px 12px 9px 0;border-bottom:1px solid #e2e8f0;vertical-align:top;max-width:420px;
+overflow-wrap:anywhere}th{border-top:1.5px solid #051c2c;border-bottom:1px solid #94a3b8;color:#051c2c;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;background:#fff}img{max-width:100%;height:auto}.scroll{overflow-x:auto}
+.muted{color:#64748b}.pill{display:inline-block;padding:3px 9px;background:#eff6ff;color:#2251ff;border:1px solid #bfdbfe;border-radius:2px;font-size:11px;font-weight:600;text-transform:uppercase}
+.complete{color:#2251ff}.failed{color:#b83a4b}input,button,select{font:inherit;padding:7px 10px;border:1px solid #cbd5e1;
+background:white;border-radius:2px}button{cursor:pointer}nav{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0;font-size:12.5px;font-weight:500}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px 'IBM Plex Mono',ui-monospace,monospace;background:#f8fafc;padding:12px;border:1px solid #e2e8f0}.grid{display:grid;
+grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.toolbar{display:flex;gap:12px;align-items:center;
+margin:12px 0;flex-wrap:wrap}.toolbar input{min-width:260px}.summary td:first-child{width:190px;font-weight:600;color:#051c2c}
 """
 
 
@@ -38,15 +38,23 @@ def _json_script(value):
     return json.dumps(portable(value), ensure_ascii=False, allow_nan=False).replace("<", "\\u003c").replace("&", "\\u0026")
 
 
-def render_table(path, title, frame, note=""):
+def render_table(path, title, frame, note="", *, total_rows=None, full_data=None):
     """All rows searchable and paginated offline, no remote JS/fetch required."""
     columns = [str(c) for c in frame.columns]
     rows = portable(frame.to_dict("records"))
-    body = f"<p>{escape(note)}</p><p>{len(frame):,} complete rows. Search examines every row.</p>"
+    preview = total_rows is not None and total_rows > len(frame)
+    body = f"<p>{escape(note)}</p>"
+    if preview:
+        body += f"<p>Preview: {len(frame):,} of {total_rows:,} rows. Search covers this preview only. "
+        body += f"<a href='{escape(full_data, quote=True)}'>Download all {total_rows:,} rows (Parquet)</a>.</p>"
+    else:
+        body += f"<p>{len(frame):,} complete rows. Search examines every row.</p>"
     body += """<div class='toolbar'><input id='search' type='search' placeholder='Search all rows' aria-label='Search all rows'>
     <select id='size' aria-label='Rows per page'><option>25</option><option>50</option><option>100</option><option>250</option></select>
     <button id='previous'>Previous</button><span id='page'></span><button id='next'>Next</button></div>
     <div class='scroll'><table><thead id='head'></thead><tbody id='rows'></tbody></table></div>"""
+    if preview:
+        body = body.replace('Search all rows', 'Search preview')
     body += f"<script id='table-data' type='application/json'>{_json_script({'columns': columns, 'rows': rows})}</script>"
     body += """<script>(()=>{'use strict';const data=JSON.parse(document.getElementById('table-data').textContent);
     let page=0;const search=document.getElementById('search'),size=document.getElementById('size');
@@ -202,7 +210,8 @@ def render_target(root, request, target, evidence, cards, samples, plots, sashim
     body += "<thead><tr><th>Analysis / evidence</th><th>Rows</th><th>Complete data</th><th>Native source</th></tr></thead><tbody>"
     for table in evidence:
         links = " · ".join(f"<a href='{escape(table[key], quote=True)}'>{text}</a>" for key, text in
-                           (("html", "Browse all"), ("parquet", "Parquet"), ("tsv", "TSV"), ("json", "JSON")))
+                           (("html", "Preview" if table.get('preview_rows', table['rows']) < table['rows'] else "Browse all"),
+                            ("parquet", "Complete Parquet"), ("tsv", "TSV"), ("json", "JSON")) if table.get(key))
         body += (f"<tr><td>{escape(table['name'])}<br><span class='muted'>{escape(table['analysis_id'])}</span></td>"
                  f"<td>{table['rows']:,}</td><td>{links}</td><td><code>{escape(table['source_sha256'])}</code><br>"
                  f"{escape(str(table.get('metadata', {}).get('count_mode', 'unknown')))} · "

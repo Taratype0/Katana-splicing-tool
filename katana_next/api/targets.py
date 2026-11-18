@@ -7,6 +7,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import threading
+import zipfile
 from typing import Any, Literal
 from urllib.parse import quote
 from uuid import uuid4
@@ -196,6 +197,24 @@ def create_targets_router(runtime) -> APIRouter:
             record.update(status="failed", error=str(exc))
         _write(path, record)
 
+    @router.post("/nextflow")
+    def prepare_nextflow(project_id: str, payload: TargetBatchRequest):
+        from katana_next.targets.nextflow import prepare_task
+        try:
+            exported = request_record(project_id, payload)
+            task_id = "nf-" + uuid4().hex
+            result = prepare_task(exported["archive_path"], workspace(project_id) / "nextflow" / task_id,
+                                  resources=payload.resources)
+            return {**result, "task_id": task_id,
+                "download_url": f"/api/projects/{quote(project_id, safe='')}/targets/nextflow/{task_id}/download"}
+        except (ValueError, OSError, KeyError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/nextflow/{task_id}/download")
+    def download_nextflow(project_id: str, task_id: str):
+        path = _bounded(workspace(project_id), workspace(project_id) / "nextflow" / _identity(task_id) / "NEXTFLOW_TASK.zip", file=True)
+        return FileResponse(path, filename="NEXTFLOW_TASK.zip")
+
     @router.post("/export")
     def export_route(project_id: str, payload: TargetBatchRequest):
         try:
@@ -284,21 +303,25 @@ def create_targets_router(runtime) -> APIRouter:
     def import_route(project_id: str, payload: TargetImportRequest):
         try:
             source = Path(payload.manifest_path).expanduser().resolve()
-            verified = inspect_results(source)
-            if verified.get("verified") is not True or verified.get("project_id") != project_id:
-                raise ValueError("Import must contain verified results for this project")
-            source_root = Path(verified["manifest"]).resolve().parent
             run_id = uuid4().hex
             destination = workspace(project_id) / "imports" / run_id / "result"
-            destination.mkdir(parents=True, exist_ok=False)
-            names = set(verified["members"]) | {"result-manifest.json"}
-            if verified.get("archive"):
-                names.add(Path(verified["archive"]).name)
-            for name in sorted(names):
-                original = _bounded(source_root, name, file=True)
-                target = _bounded(destination, name)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(original, target)
+            if source.suffix.lower() == ".zip":
+                from katana_next.targets.restore import restore_results
+                restore_results(source, destination, expected_project_id=project_id)
+            else:
+                verified = inspect_results(source)
+                if verified.get("verified") is not True or verified.get("project_id") != project_id:
+                    raise ValueError("Import must contain verified results for this project")
+                source_root = Path(verified["manifest"]).resolve().parent
+                destination.mkdir(parents=True, exist_ok=False)
+                names = set(verified["members"]) | {"result-manifest.json"}
+                if verified.get("archive"):
+                    names.add(Path(verified["archive"]).name)
+                for name in sorted(names):
+                    original = _bounded(source_root, name, file=True)
+                    target = _bounded(destination, name)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(original, target)
             copied = inspect_results(destination)
             if copied.get("verified") is not True or copied.get("project_id") != project_id:
                 raise ValueError("Copied import failed verification")
@@ -306,7 +329,7 @@ def create_targets_router(runtime) -> APIRouter:
                       "output_directory": str(destination), "result": copied, "imported": True}
             _write(record_path(project_id, "runs", run_id), record)
             return public_run(project_id, record)
-        except (ValueError, OSError, KeyError) as exc:
+        except (ValueError, OSError, KeyError, zipfile.BadZipFile) as exc:
             raise HTTPException(422, str(exc)) from exc
 
     return router

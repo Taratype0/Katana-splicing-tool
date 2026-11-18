@@ -80,8 +80,8 @@ it("explains support in every selected sample and keeps differential cutoffs edi
     onToggleContrast={vi.fn()} onSelectAllContrasts={vi.fn()} onClearContrasts={vi.fn()}
     onParameterChange={change} onReset={vi.fn()} />);
   const policy = screen.getByRole("note", {name: "AS read-support policy"});
-  expect(policy).toHaveTextContent("IJC + SJC must be at least 10 in every selected sample across both groups.");
-  expect(policy).toHaveTextContent("Missing counts fail this check.");
+  expect(policy).toHaveTextContent("PS-DAS (Precision-Supported DAS)");
+  expect(policy).toHaveTextContent("Malformed or missing counts fail this check.");
   expect(policy).toHaveTextContent("FDR and |dPSI| thresholds are applied separately.");
   expect(screen.getByText("1 of 1 included")).toBeInTheDocument();
   const fdr = screen.getByRole("spinbutton", {name: /rMATS FDR/});
@@ -112,7 +112,7 @@ it("does not restore retired QC preset, replicate, direction or SE controls", ()
   expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   for (const parameter of retired) expect(screen.queryByText(parameter.label)).not.toBeInTheDocument();
   expect(screen.queryByText(/Choose Custom|75% direction|2 supporting replicates/)).not.toBeInTheDocument();
-  expect(screen.getByRole("note", {name: "AS read-support policy"})).toHaveTextContent("at least 10 in every selected sample");
+  expect(screen.getByRole("note", {name: "AS read-support policy"})).toHaveTextContent("PS-DAS (Precision-Supported DAS)");
 });
 
 it("shows the saved read-support result identity rather than a retired preset name", () => {

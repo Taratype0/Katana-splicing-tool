@@ -69,6 +69,7 @@ export type ManifestContrast = {
 };
 
 export type ProjectPayload = {
+  assay?: {mode:string;label:string;recorded:string|null;replicate_unit:string};
   snapshot: {
     project_id: string;
     manifest_path: string;

@@ -21,7 +21,7 @@ class StudyReportWorkflow(WorkflowBase):
         analysis_unit="completed analysis artifact and declared comparison", expected_artifacts=4,
         parameters=(
             ParameterDefinition("event_set", "DAS event set", "select", "stable_significant",
-                                "RS-DAS is the default. Switchable completed downstream results must match; RS-required and measured-PSI modules retain their own scope.",
+                                "PS-DAS is the default. Switchable completed downstream results must match; RS-required and measured-PSI modules retain their own scope.",
                                 ("stable_significant", "significant")),
         ),
         limitations="Unavailable analyses remain not computed. The report does not fit new models, rerun upstream tasks, pool comparisons or assign biological causality.",

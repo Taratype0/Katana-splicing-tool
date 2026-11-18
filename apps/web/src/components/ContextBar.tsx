@@ -20,7 +20,7 @@ export function ContextBar({ project, selectedContrastCount, workflowLabel }: Pr
       </div>
       <div className="context-field">
         <Database size={16} />
-        <span><small>Comparisons</small><strong>{selectedContrastCount} selected</strong></span>
+        <span><small>Comparisons</small><strong>{selectedContrastCount} {project.manifest?.metadata?.report_workspace ? "available" : "selected"}</strong></span>
       </div>
       <div className="context-field wide">
         <HardDrive size={16} />

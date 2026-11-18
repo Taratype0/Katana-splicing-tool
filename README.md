@@ -6,16 +6,43 @@ Start with the [Nextflow quick start](docs/NEXTFLOW_SIMPLE.md) or [standalone in
 
 Katana connects RNA-seq processing with expression, splicing, transcript usage and exon usage analysis. Start from bulk FASTQ, genome-aligned BAM, or existing analysis results. Explore the results in a browser and select genes or events for a closer look.
 
-## Start here
+## Start here — Two Independent Yet Converging Workflows
 
-| What do you have? | What to do |
-| --- | --- |
-| FASTQ or genome-aligned BAM | Run the [complete workflow](docs/QUICKSTART.md#1-start-from-fastq-or-bam). |
-| Existing RNA-seq/splicing results | [Connect your results](docs/QUICKSTART.md#2-start-from-existing-results) and run the remaining analyses. |
-| Completed Katana results | [Generate or open the report](docs/QUICKSTART.md#3-open-results-or-regenerate-a-report). |
-| Genes or events you want to inspect | [Create a target report](docs/QUICKSTART.md#4-inspect-selected-genes-or-events), including Sashimi when BAMs are available. |
+Katana v2.7 provides two independent entrypoints that converge on the same statistical engine, publication figures, and portable `REPORT.html` / `REPORT.zip` archive:
 
-Read the **[quick start](docs/QUICKSTART.md)** for installation, example input tables and commands. The [full usage guide](docs/NEXTFLOW_USAGE.md) and [parameter reference](docs/NEXTFLOW_PARAMETERS.md) cover advanced settings.
+| Entrypoint | Starting Inputs | Command |
+| --- | --- | --- |
+| **Route 1: Standalone Python Package** *(no Nextflow, Docker, or R needed)* | Completed `rMATS` (+ optional `DESeq2`, `MultiQC`, `FASTA`, `GTF`, `BAM`) or Single-Cell Smart-seq3 junction/PSI tables | `katana run-bulk --rmats ./rmats --samples samples.tsv -o ./report`<br>`katana run-sc --events sc_events.tsv --cells sc_cells.tsv -o ./sc_report` |
+| **Route 2: End-to-End Nextflow Pipeline** *(raw reads or aligned BAMs)* | Bulk `FASTQ` (`fastq_1,fastq_2`) **or** genome-aligned `BAM` (`genome_bam`) + `contrasts.csv` + `FASTA` + `GTF` | `nextflow run pipeline/main.nf --mode complete --input samples.csv --contrasts contrasts.csv --fasta genome.fa --gtf genes.gtf --outdir results` *(or `katana pipeline --suite-outdir ./report -- ...`)* |
+| **Convergence Bridge** | Any completed Nextflow upstream bundle (`katana_bundle`) | `katana run-bulk --bundle ./results/katana_bundle -o ./report` |
+| **Interactive Local Compute & Sashimi** | Any `REPORT.zip` or report directory | `katana view ./report/REPORT.zip` |
+
+### Python Quick Start (Standalone Package)
+
+```bash
+pip install -e ".[standalone]"
+
+# 1. Bulk splicing suite directly from rMATS (+ optional DESeq2, MultiQC 5'-3', FASTA & GTF)
+katana run-bulk \
+  --rmats ./rmats_contrasts \
+  --samples ./samples.tsv \
+  --multiqc ./multiqc_data \
+  --fasta ./genome.fa --gtf ./annotation.gtf \
+  --outdir ./katana_bulk_report
+
+# 2. Single-cell splicing suite (Precision-Kernel Event-PSI UMAP, Δ_kNN, SC-SpliceNet & ORA)
+katana run-sc \
+  --events ./sc_differential_splicing.tsv \
+  --cells ./cell_metadata.tsv \
+  --psi-matrix ./cell_psi.parquet \
+  --expression ./gene_logtpm.parquet \
+  --outdir ./katana_sc_report
+
+# 3. Open interactive local workspace (Live ORA, PSI Landscape Lab, 170-PWM Scanner, 4-Track GeneCard & Sashimi)
+katana view ./katana_bulk_report/REPORT.zip
+```
+
+Read the **[quick start](docs/QUICKSTART.md)** for full input table schemas. The [full Nextflow usage guide](docs/NEXTFLOW_USAGE.md) and [parameter reference](docs/NEXTFLOW_PARAMETERS.md) cover cluster profiles (`docker`, `singularity`, `apptainer`, `slurm`).
 
 ## What Katana analyzes
 
@@ -61,7 +88,7 @@ The study report has seven sections:
 Sequencing QC uses the original interactive MultiQC report. [Import completed QC](docs/QC_REUSE.md)
 to reuse Qualimap coverage and other measured metrics without another BAM scan.
 
-A comparison selector keeps the report focused. Tables link to complete results, and the splicing display can switch between ordinary significant events and read-supported significant events (RS-DAS, the default).
+A comparison selector keeps the report focused. Tables link to complete results, and the splicing display can switch between Precision-Supported DAS (`PS-DAS`, the default: effective-length normalized replicate-quantile + AS-NMD asymmetry rescue + Jeffreys Binomial Fisher precision) and unfiltered Ordinary DAS.
 
 A whole-study CoSplice result stays the same when the comparison selector changes. Its module composition, activities, associations and complete gene/event lists close the report. Imported older networks keep their recorded scope. [CoSplice](docs/COSPLICE.md) and [MotifTrace](docs/MOTIFTRACE.md) also have standalone commands and Python APIs.
 

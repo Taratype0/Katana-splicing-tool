@@ -9,7 +9,7 @@ function workflow(mode: NonNullable<WorkflowDefinition["das_selection"]>["mode"]
     method: "Completed native caller", output_summary: "DAS", analysis_unit: "event", expected_artifacts: 1,
     required_asset_kinds: [], optional_asset_kinds: [], supports_contrast_selection: false,
     enabled: true, limitations: "Unchanged caller statistics", das_selection: {
-      mode, label: mode === "rs_required" ? "RS-DAS required" : "DAS event selection", description: "Recorded selection contract", default_event_set: "stable_significant",
+      mode, label: mode === "rs_required" ? "PS-DAS required" : "DAS event selection", description: "Recorded selection contract", default_event_set: "stable_significant",
     }, parameters: mode === "switchable" ? [{key: "event_set", label: "DAS event set", kind: "select", default: "stable_significant",
       help: "Choose the foreground", options: ["stable_significant", "significant"]}] : []};
 }
@@ -19,25 +19,25 @@ it("shows readable DAS choices and sends the exact canonical value", () => {
   render(<WorkflowControls workflow={workflow("switchable")} parameters={{}} contrasts={[]} selectedContrasts={new Set()}
     selections={[]} conditions={[]} onToggleContrast={vi.fn()} onSelectAllContrasts={vi.fn()} onClearContrasts={vi.fn()}
     onReset={vi.fn()} onParameterChange={change} />);
-  expect(screen.getByRole("note", {name: "DAS event selection policy"})).toHaveTextContent("RS-DAS: significant + read support (default)");
+  expect(screen.getByRole("note", {name: "DAS event selection policy"})).toHaveTextContent("PS-DAS: precision & quantile support (default)");
   const select = screen.getByRole("combobox", {name: /DAS event set/});
   expect(select).toHaveValue("stable_significant");
   fireEvent.change(select, {target: {value: "significant"}});
   expect(change).toHaveBeenCalledWith("event_set", "significant");
-  expect(screen.getByRole("option", {name: "Ordinary DAS: significant events"})).toBeInTheDocument();
+  expect(screen.getByRole("option", {name: "Ordinary DAS: unfiltered significant events"})).toBeInTheDocument();
 });
 
 it("plainly labels RS-required modules without an ordinary-DAS control", () => {
   render(<DasSelectionNote workflow={workflow("rs_required")} parameters={{event_set: "stable_significant"}} />);
   const note = screen.getByRole("note", {name: "DAS event selection policy"});
-  expect(note).toHaveTextContent("RS-DAS required.");
+  expect(note).toHaveTextContent("PS-DAS required.");
   expect(note).toHaveTextContent("does not change this module's eligible input");
   expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 });
 
 it("keeps network measurement populations separate from significant foregrounds", () => {
   render(<DasSelectionNote workflow={workflow("measurement_population")} parameters={{}} />);
-  expect(screen.getByRole("note")).toHaveTextContent("The significant DAS / RS-DAS foreground does not replace this module's declared measured-input population.");
+  expect(screen.getByRole("note")).toHaveTextContent("The significant DAS / PS-DAS foreground does not replace this module's declared measured-input population.");
 });
 
 it("labels fixed completed report imports truthfully", () => {

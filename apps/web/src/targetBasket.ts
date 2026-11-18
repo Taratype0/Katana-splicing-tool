@@ -21,8 +21,8 @@ export function makeTargetEntry(artifact: Artifact, rows: Record<string, unknown
   return {
     basket_id: crypto.randomUUID(), source_artifact_id: artifact.artifact_id,
     source_name: artifact.name, row_ids: rowIds, target_kind: kind, filters: structuredClone(filters),
-    labels: unique.map(row => kind === "gene" ? String(row.gene_symbol || row.gene_id) :
-      `${row.gene_symbol || row.gene_id || ""} ${row.event_type || ""} ${row.event_id}`.trim()),
+    labels: unique.map(row => kind === "gene" ? String(row.gene_name || row.gene_symbol || row.gene_id) :
+      `${row.gene_name || row.gene_symbol || row.gene_id || ""} ${row.event_type || ""} ${row.event_id}`.trim()),
   };
 }
 

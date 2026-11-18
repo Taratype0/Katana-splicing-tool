@@ -22,7 +22,7 @@ def native_enrichment_scope(artifact):
             return None
         if policy == 'stable_significant':
             from katana_next.science.bulk import READ_SUPPORT_POLICY_VERSION
-            if selection.get('read_support_policy') != READ_SUPPORT_POLICY_VERSION:
+            if selection.get('read_support_policy') not in {READ_SUPPORT_POLICY_VERSION, 'bulk-all-samples-counts-v1'}:
                 return None
     return {'contrast_id': comparisons[0], 'foreground': foreground,
             'policy': policy, 'background': meta.get('background_source', foreground)}

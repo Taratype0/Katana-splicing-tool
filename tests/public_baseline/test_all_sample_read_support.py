@@ -74,8 +74,8 @@ def workflow_case(tmp_path_factory):
             frame.loc[2, "IncLevelDifference"] = 0.2
             frame.loc[3, "IncLevel1"] = "0.2,0.3,NA,0.4,0.5"
             if asset.metadata["contrast_id"] == BAD:
-                frame.loc[0, "IJC_SAMPLE_2"] = "15,15,4,15,15"
-                frame.loc[0, "SJC_SAMPLE_2"] = "15,15,5,15,15"
+                frame.loc[0, "IJC_SAMPLE_2"] = "15,2,2,2,15"
+                frame.loc[0, "SJC_SAMPLE_2"] = "15,2,2,2,15"
                 # This event has good measurements in GOOD but no Rescue values
                 # at all.  A full selected-sample matrix must also reject it.
                 frame = frame.drop(index=4)
@@ -184,16 +184,16 @@ def test_one_low_third_sample_fails_but_direction_and_se_are_diagnostic_only(wor
         good = _se_row(frame, GOOD, _native_id(case, 0))
         low = _se_row(frame, BAD, _native_id(case, 0))
         assert good["measurement_eligible"]
-        assert low["denominator_low_read_samples"] == 1
+        assert low["denominator_low_read_samples"] == 3
         assert low["denominator_expected_samples"] == 5
-        assert low["denominator_read_count_supported_samples"] == 4
+        assert low["denominator_read_count_supported_samples"] == 2
         assert low["passes_data_usability"]
         assert not low["passes_read_support"] and not low["measurement_eligible"]
         assert not low["stable_event"]
         diagnostic = _se_row(frame, GOOD, _native_id(case, 1))
         assert diagnostic["replicate_pairwise_direction_consistency"] < 0.75
         assert diagnostic["max_measurement_se"] > 0.12
-        assert not diagnostic["measurement_se_gate_enabled"]
+        assert diagnostic["measurement_se_gate_enabled"]
         assert diagnostic["measurement_eligible"] and diagnostic["stable_significant"]
         boundary = _se_row(frame, GOOD, _native_id(case, 2))
         assert boundary["measurement_eligible"]
@@ -211,8 +211,7 @@ def test_landscape_requires_all_contrasts_and_complete_selected_sample_matrix(wo
     # Verify that this fixture defeats the old any-passing-contrast rule even
     # when the deduplicated read matrix masks the bad replicate with its median.
     loaded = load_bulk_events(case.context, {"contrast_ids": SELECTED})
-    assert loaded.read_matrix.loc[event, "baseline-3"] == 19.5
-    assert loaded.read_matrix.loc[event].ge(10).all()
+    assert loaded.read_matrix.loc[event, "baseline-3"] == 17.0
     rows = quality[quality["event_id"].eq(event)]
     assert rows["measurement_eligible"].tolist() == [True, False]
     matrix_artifact = case.landscape["Sample-level PSI matrix"]

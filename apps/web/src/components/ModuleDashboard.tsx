@@ -3,11 +3,11 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, type HubEvent, type ModuleDashboard as Dashboard } from "../api";
 import { moduleFileStem, saveBlob, saveNetwork, tableTSV } from "./moduleDownloads";
 
-const colors = ["#287a98", "#b85362", "#3a8c78", "#a88337", "#646c9f"];
+const colors = ["#005eb8", "#162e51", "#0077b6", "#76b6d9", "#526b86"];
 function zColor(value: number|null) {
   if (value == null) return "#d8dcde";
   const t = Math.min(Math.abs(value) / 2, 1);
-  const end = value < 0 ? [122,171,205] : [221,151,158];
+  const end = value < 0 ? [22,46,81] : [0,119,182];
   return `rgb(${end.map(c => Math.round(250+(c-250)*t)).join(",")})`;
 }
 
@@ -22,7 +22,7 @@ function Network({data, select, svgRef}: {data: Dashboard; select: (event: strin
     <text x="10" y="15" fontSize="9" fill="#243f4b"><title>{selectedLabel}</title>Selected: {selectedLabel.length>60?selectedLabel.slice(0,57)+"...":selectedLabel}</text>
     {data.edges.map(e=>{const a=points.get(e.event_a)!, b=points.get(e.event_b)!; return <line key={`${e.event_a}:${e.event_b}`} x1={x(a.x)} y1={y(a.y)} x2={x(b.x)} y2={y(b.y)} stroke={e.same_gene?"#bf9095":"#9bb6bd"} strokeOpacity=".5" strokeWidth={.5+e.weight*2}><title>{e.same_gene?"Same gene; possible structural coupling. ":""}Association weight: {e.weight.toFixed(3)}</title></line>})}
     {data.nodes.map(n=><g key={n.event_key} onClick={()=>select(n.event_key)} tabIndex={0} role="button" aria-label={`Select event ${n.event_key}`} onKeyDown={e=>{if(e.key==="Enter")select(n.event_key)}}>
-      <circle cx={x(n.x)} cy={y(n.y)} r={3+6*Math.sqrt(n.connectivity/max)} fill={n.event_key===data.selected_event?"#b85362":"#287a98"} stroke="white"><title>{n.gene||"Unannotated gene"}: {n.event_key}; weighted connectivity {n.connectivity.toFixed(2)}</title></circle>
+      <circle cx={x(n.x)} cy={y(n.y)} r={3+6*Math.sqrt(n.connectivity/max)} fill={n.event_key===data.selected_event?"#162e51":"#005eb8"} stroke="white"><title>{n.gene||"Unannotated gene"}: {n.event_key}; weighted connectivity {n.connectivity.toFixed(2)}</title></circle>
     </g>)}
   </svg>;
 }
@@ -112,8 +112,8 @@ export function ModuleDashboard({projectId,artifactId,module}: {projectId:string
         <table><thead><tr>{metricHeading("event_key","Event")}{metricHeading("rank_all_edges","Full rank")}{metricHeading("rank_no_same_gene","Cross-gene rank")}{metricHeading("rank_change_no_same_gene","Rank change")}{metricHeading("kWithin","Full kWithin")}{metricHeading("kWithin_no_same_gene","Cross-gene kWithin")}{metricHeading("kME","kME")}{metricHeading("preset_selection_frequency_all_edges","Preset-selection frequency: all / cross-gene")}<th>Label / estimation status</th></tr></thead><tbody>{fullMetrics.map(h=><tr key={h.event_key}><td>{h.gene} | {h.event_key}</td><td>{h.rank_all_edges??"Unavailable"}</td><td>{h.rank_no_same_gene??"Unavailable"}</td><td>{h.rank_change_no_same_gene??"Unavailable"}</td><td>{h.kWithin?.toFixed(3)??"Unavailable"}</td><td>{h.kWithin_no_same_gene?.toFixed(3)??"Unavailable"}</td><td>{h.kME?.toFixed(3)??"Unavailable"}</td><td>{(h.preset_selection_frequency_all_edges??h.bootstrap_frequency_all_edges)?.toFixed(2)??"Unavailable"} / {(h.preset_selection_frequency_no_same_gene??h.bootstrap_frequency_no_same_gene)?.toFixed(2)??"Unavailable"}</td><td>{h.label_status??h.hub_label_status??"not recorded"}; {h.estimation_status??h.selection_reason??"not recorded"}</td></tr>)}</tbody></table></section>}
       <h5>Module Functions &amp; Contributing Genes</h5><p>{d.enrichment_scope}</p>
       {d.enrichment.length ? <><svg viewBox={`0 0 720 ${d.enrichment.length*28+28}`} role="img" aria-label="Module functional enrichment bubble plot">
-        {d.enrichment.map((e,i)=><g key={`${e.term}:${i}`}><text x="4" y={24+i*28} fontSize="11">{e.term.length>65?e.term.slice(0,62)+"...":e.term}</text><circle cx={540+Math.min(8,-Math.log10(Math.max(e.FDR??1,1e-300)))*18} cy={20+i*28} r={3+Math.sqrt(e.overlap_count)} fill={(e.FDR??1)<=.05?"#b85362":"#83abc3"}><title>{e.term}; {e.overlap_count} genes; FDR {e.FDR}; {e.overlap_genes}</title></circle><text x="694" y={24+i*28} fontSize="10">{e.overlap_count}</text></g>)}
-      </svg><p>Bubble size: contributing genes. Horizontal position: -log10(FDR). Red: FDR≤0.05; blue: other terms. Shown: {d.enrichment.length}/{d.enrichment_total} terms.</p><details><summary>Contributing gene lists and statistics</summary>{d.enrichment.map((e,i)=><p key={i}><strong>{e.term}</strong>: {e.overlap_genes||"No contributing genes"}; P={e.pvalue?.toPrecision(3)??"missing"}, FDR={e.FDR?.toPrecision(3)??"missing"}</p>)}</details></> : <p>No cached functional-enrichment result for this module. Configure a species-matched pathway resource and run module interpretation.</p>}
+        {d.enrichment.map((e,i)=><g key={`${e.term}:${i}`}><text x="4" y={24+i*28} fontSize="11">{e.term.length>65?e.term.slice(0,62)+"...":e.term}</text><circle cx={540+Math.min(8,-Math.log10(Math.max(e.FDR??1,1e-300)))*18} cy={20+i*28} r={3+Math.sqrt(e.overlap_count)} fill={(e.FDR??1)<=.05?"#162e51":"#83abc3"}><title>{e.term}; {e.overlap_count} genes; FDR {e.FDR}; {e.overlap_genes}</title></circle><text x="694" y={24+i*28} fontSize="10">{e.overlap_count}</text></g>)}
+      </svg><p>Bubble size: contributing genes. Horizontal position: -log10(FDR). Navy: FDR≤0.05; blue: other terms. Shown: {d.enrichment.length}/{d.enrichment_total} terms.</p><details><summary>Contributing gene lists and statistics</summary>{d.enrichment.map((e,i)=><p key={i}><strong>{e.term}</strong>: {e.overlap_genes||"No contributing genes"}; P={e.pvalue?.toPrecision(3)??"missing"}, FDR={e.FDR?.toPrecision(3)??"missing"}</p>)}</details></> : <p>No cached functional-enrichment result for this module. Configure a species-matched pathway resource and run module interpretation.</p>}
       <details><summary>How this view was built</summary><p>{d.display_rule}</p><p>{d.interpretation}</p><p>Discovery run: {d.discovery_run}</p>{d.sources.map(s=><a key={s.artifact_id} href={api.artifactExportUrl(projectId,s.artifact_id,"tsv")}>{s.name}</a>)}</details>
     </>}
   </section>;

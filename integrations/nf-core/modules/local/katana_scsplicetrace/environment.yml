@@ -1,0 +1,15 @@
+name: katana_scsplicetrace
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.11
+  - numpy>=1.26
+  - scipy>=1.11
+  - pandas>=2.2
+  - numba>=0.58
+  - matplotlib-base>=3.7
+  - pyarrow>=14.0
+  - pip
+  - pip:
+      - https://github.com/Taratype0/katana-sc-splicetrace/releases/download/v2.4.1/katana_sc_splicetrace-2.4.1-py3-none-any.whl

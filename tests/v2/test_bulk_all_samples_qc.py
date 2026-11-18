@@ -45,7 +45,7 @@ def test_ten_counts_in_every_sample_passes_without_direction_or_se_gates():
     assert row.read_support_policy == READ_SUPPORT_POLICY_VERSION
     assert row.measurement_eligible and row.stable_event
     assert row.passes_read_counts and row.passes_data_usability
-    assert not row.measurement_se_gate_enabled
+    assert row.measurement_se_gate_enabled
     assert "differential_repeat_supported" not in row
     assert "criterion_max_measurement_se" not in row
 

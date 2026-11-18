@@ -13,7 +13,7 @@ def apply_workflow_copy(payload):
         payload.update(label='Import completed study report',
                        question='Package a completed study report with its original result scope and parameters.',
                        output_summary='Completed report, linked figures, full source tables and ZIP. This import does not switch a saved DAS foreground.')
-        payload['limitations'] = 'Fixed completed-result import. The ordinary DAS / RS-DAS switch cannot refilter or relabel its existing tables, figures or original P/FDR. Use matching-scope results when building a new report.'
+        payload['limitations'] = 'Fixed completed-result import. The ordinary DAS / PS-DAS switch cannot refilter or relabel its existing tables, figures or original P/FDR. Use matching-scope results when building a new report.'
     if payload['workflow_id'] == 'project.audit':
         explanations = {'design_factors': ('Experimental factors', 'Metadata columns to include in the design, separated by commas; for example genotype,treatment.'), 'design_references': ('Reference groups (JSON)', 'Baseline for each factor; for example {"genotype":"WT"}. With {}, groups are ordered alphabetically.'), 'include_batch': ('Adjust for batch', 'Include the batch recorded in your sample metadata. Batch cannot be separated from a factor if they are fully confounded.'), 'pairing': ('Paired or independent samples', 'Use paired for repeated measurements from the same biological unit; unpaired for independent samples. Auto uses the recorded sample identities.')}
         for parameter in payload['parameters']:

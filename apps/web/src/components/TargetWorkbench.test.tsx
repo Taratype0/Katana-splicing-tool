@@ -5,7 +5,7 @@ import { api } from "../api";
 import { TargetWorkbench } from "./TargetWorkbench";
 import type { TargetBasketEntry } from "../types";
 
-vi.mock("../api", () => ({api: {exportTargets: vi.fn(), planTargets: vi.fn(), runTargets: vi.fn(), targetRun: vi.fn(),
+vi.mock("../api", () => ({api: {prepareTargetPipeline: vi.fn(), exportTargets: vi.fn(), planTargets: vi.fn(), runTargets: vi.fn(), targetRun: vi.fn(),
   importTargetResults: vi.fn(), targetFileUrl: (project: string, run: string, path: string) => `/api/${project}/${run}/${path}`}}));
 const entries: TargetBasketEntry[] = [{basket_id: "basket1", source_artifact_id: "source1", source_name: "DAS results",
   row_ids: ["B_vs_A::exact-event"], target_kind: "event", labels: ["Gene1 SE exact-event"],
@@ -28,6 +28,8 @@ it("exports exact target context, explicitly binds resources, runs and browses v
   vi.mocked(api.targetRun).mockResolvedValue({run_id: "run1", request_id: "request1", status: "partial", report_url: "/verified/INDEX.html", archive_url: "/verified/REPORT.zip",
     result: {status: "partial", targets: [{target_id: "event1", status: "partial", report: "targets/event1/REPORT.html", error: "Sashimi unavailable: missing verified BAM"}]}});
   mount();
+  expect(screen.getByRole('checkbox', {name:'Sashimi'})).not.toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', {name:'Sashimi'}));
   expect(api.exportTargets).not.toHaveBeenCalled();
   expect(api.runTargets).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", {name: "Export portable target request"}));
@@ -98,4 +100,28 @@ it("requires a nonempty explicit custom comparison selection and never treats em
   await screen.findByRole("link", {name: "Download request ZIP"});
   expect(api.exportTargets).toHaveBeenCalledWith("study", expect.objectContaining({contrast_ids: ["B_vs_A"]}));
   expect(screen.getByText("exact-event: B_vs_A")).toBeInTheDocument();
+});
+
+it("creates a pipeline task directly from selected rows and clears stale tasks after changing outputs", async()=>{
+ vi.mocked(api.exportTargets).mockResolvedValue({request_id:"direct1",request_path:"/r/request.json",archive_path:"/r/request.zip",bundle_directory:"/r",download_url:"/download",target_count:1,targets:[],resources:[]});
+ vi.mocked(api.prepareTargetPipeline).mockResolvedValue({task_id:"nf1",status:"prepared",command:"nextflow run main.nf -entry TARGETS",download_url:"/task.zip"});
+ mount();
+ fireEvent.click(screen.getByRole("button",{name:"Create Nextflow target task"}));
+ expect(await screen.findByRole("link",{name:"Download Nextflow task"})).toHaveAttribute("href","/task.zip");
+ expect(api.exportTargets).toHaveBeenCalledTimes(1);
+ expect(api.prepareTargetPipeline).toHaveBeenCalledWith("study",{request_id:"direct1"});
+ expect(screen.getByText("Prepared · not submitted")).toBeInTheDocument();
+ fireEvent.click(screen.getByRole("checkbox",{name:"Sashimi"}));
+ await waitFor(()=>expect(screen.queryByRole("link",{name:"Download Nextflow task"})).not.toBeInTheDocument());
+});
+
+it('generates saved-evidence cards locally without a manual export or BAM binding', async()=>{
+ vi.mocked(api.exportTargets).mockResolvedValue({request_id:'local1',request_path:'/r/request.json',archive_path:'/r/request.zip',bundle_directory:'/r',download_url:'/download',target_count:1,targets:[],resources:[]});
+ vi.mocked(api.runTargets).mockResolvedValue({run_id:'local-run',request_id:'local1',status:'complete',report_url:'/cards/INDEX.html'});
+ vi.mocked(api.targetRun).mockResolvedValue({run_id:'local-run',request_id:'local1',status:'complete',report_url:'/cards/INDEX.html'});
+ mount();
+ fireEvent.click(screen.getByRole('button',{name:'Generate cards locally'}));
+ expect(await screen.findByRole('link',{name:'Open target index'})).toHaveAttribute('href','/cards/INDEX.html');
+ expect(api.runTargets).toHaveBeenCalledWith('study',{request_id:'local1'});
+ expect(vi.mocked(api.exportTargets).mock.calls[0][1].modules).toEqual(['gene_card','event_card']);
 });

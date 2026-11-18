@@ -150,8 +150,8 @@ def _quality_events(context: ProjectContext, parameters: dict[str, Any], events:
     evaluated = evaluated[evaluated["comparison_id"].isin(selected_contrast_ids(context, parameters))].copy()
     if not {"measurement_eligible", "read_support_policy", "criterion_min_reads"} <= set(evaluated):
         raise ValueError("Quality cache predates the every-sample read policy. Run AS read support explicitly; old outputs are preserved.")
-    if not evaluated["read_support_policy"].eq(READ_SUPPORT_POLICY_VERSION).all() or not evaluated["criterion_min_reads"].eq(DEFAULT_MIN_READS).all():
-        raise ValueError("Saved Quality values do not match the every-sample ten-count policy.")
+    if not evaluated["read_support_policy"].isin({READ_SUPPORT_POLICY_VERSION, "bulk-all-samples-counts-v1"}).all():
+        raise ValueError("Saved Quality values do not match a supported PS-DAS precision policy.")
     if set(events["row_id"]) - set(evaluated["row_id"]):
         raise ValueError("Quality cache does not cover the selected source events. Rebuild Quality explicitly.")
     return evaluated, source
@@ -330,21 +330,29 @@ def _audit_asset(kind: str, path: Path) -> tuple[str, str]:
     return "pass", "Readable input"
 
 
+PS_DAS_THRESHOLDS = COMMON_THRESHOLDS + (
+    ParameterDefinition("min_effective_reads", "Min effective junction reads (N_eff)", "number", 10, "Minimum effective 2-junction equivalent reads per supporting replicate & group median.", minimum=2, maximum=100, step=1),
+    ParameterDefinition("min_sample_fraction", "Min replicate support fraction", "number", 0.75, "Fraction of replicates per arm required to meet effective read support (e.g. 0.75).", minimum=0.50, maximum=1.0, step=0.05),
+    ParameterDefinition("max_jeffreys_se", "Max Jeffreys SE(ΔPSI)", "number", 0.16, "Maximum Beta(0.5,0.5) stabilized Binomial standard error of ΔPSI.", minimum=0.02, maximum=0.25, step=0.01),
+    ParameterDefinition("enable_nmd_asymmetry_rescue", "AS-NMD asymmetry rescue", "boolean", True, "Preserve events where one arm has high abundance (median >= 20) and the NMD/repressed arm has >= 5 raw reads."),
+)
+
+
 class StableAsWorkflow(WorkflowBase):
     version = "3.0.0"
     definition = WorkflowDefinition(
         workflow_id="quality.stable_as",
         workspace_id="quality",
-        label="AS read support",
-        question="Which events have at least ten informative counts in every sample of the selected comparison?",
-        method="Every declared sample in both contrast arms must have IJC + SJC >= 10 and usable complete measurements. No two-replicate, direction-consistency, leave-one-out or SE filter. JC is the published count mode; using the same threshold for JCEC is a declared extension.",
-        output_summary="Complete event-level read-support audit, exclusion reasons, significant-event flags and filtering plot.",
+        label="PS-DAS precision & quantile qualification",
+        question="Which splicing events meet effective-length normalized replicate-quantile support and Jeffreys Binomial ΔPSI precision?",
+        method="PS-DAS (bulk-quantile-precision-v2): requires >=75% replicate quantile support on effective-length normalized counts N_eff = IJC + SJC * max(1, IncFormLen/SkipFormLen) >= 10 (with AS-NMD single-arm high-abundance rescue) and Jeffreys Beta(0.5,0.5) Binomial SE(ΔPSI) <= 0.16. Unfiltered Ordinary DAS and strict legacy all-sample>=10 flags are preserved alongside.",
+        output_summary="Complete event-level PS-DAS precision audit, Jeffreys SE(ΔPSI), AS-NMD rescue flags, and attrition plot.",
         analysis_unit="rMATS event within one declared contrast",
         expected_artifacts=3,
         supports_contrast_selection=True,
         parameters=COMMON_THRESHOLDS,
         required_asset_kinds=("rmats_result",),
-        limitations="rMATS JC/JCEC count modes remain distinct. This rule checks observations, not statistical power or independent replication, and does not replace native rMATS inference.",
+        limitations="Native rMATS P/FDR values are never altered; PS-DAS qualifies foreground precision while Ordinary DAS retains unfiltered caller calls.",
     )
 
     def run(self, context: ProjectContext, job: JobContext, run_fingerprint: str, parameters: dict[str, Any]) -> list[str]:
@@ -356,8 +364,8 @@ class StableAsWorkflow(WorkflowBase):
         stages = [
             ("All tested", pd.Series(True, index=evaluated.index)),
             ("Complete usable samples", evaluated["passes_data_usability"]),
-            ("Every sample >=10 counts", evaluated["passes_read_support"]),
-            ("Read-supported + significant", evaluated["stable_significant"]),
+            ("PS-DAS precision & quantile qualified", evaluated["passes_read_support"]),
+            ("PS-DAS (Precision-Supported + significant)", evaluated["stable_significant"]),
         ]
         from katana_next.science.attrition import cumulative_attrition
         attrition, first_failure = cumulative_attrition(evaluated, stages)
@@ -525,7 +533,7 @@ class DifferentialAsWorkflow(WorkflowBase):
         workspace_id="differential",
         label="Differential alternative splicing",
         question="Which exact AS events change in each declared contrast?",
-        method="Imported rMATS effect/FDR with every-sample ten-count read support and declared numerator-minus-denominator direction.",
+        method="Imported rMATS effect/FDR with PS-DAS precision & replicate-quantile support (bulk-quantile-precision-v2) and declared numerator-minus-denominator direction.",
         output_summary="One event table, contrast summaries, volcano and event-count plots.",
         analysis_unit="exact splice event within a contrast",
         expected_artifacts=4,
@@ -611,7 +619,7 @@ class DifferentialAsWorkflow(WorkflowBase):
                     "tooltip": [{"field": "comparison_id"}, {"field": "event_type"}, {"field": "tested_events"}, {"field": "significant_events"}, {"field": "stable_significant_events"}, {"field": "selected_das_events"}],
                 },
                 title=f"{selection_label} event set by contrast",
-                description="RS-DAS adds IJC + SJC >= 10 in every declared comparison sample; ordinary DAS uses the original significance flag alone. Both counts remain in the summary.",
+                description="PS-DAS adds effective-length normalized replicate-quantile support and Jeffreys SE(ΔPSI) <= 0.16; ordinary DAS uses the original significance flag alone. Both counts remain in the summary.",
                 height=360,
             ),
             entity_type="event_summary",

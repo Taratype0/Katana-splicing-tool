@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "katana-splicing-tool"
-version = "2.0.0b5.dev2026111401"
-description = "Artifact-driven bulk and single-cell RNA splicing evidence workspace."
+version = "2.7.0"
+description = "Precision-aware bulk and single-cell RNA splicing statistical suite, interactive workspace, and FASTQ/BAM Nextflow pipeline."
 readme = "README.md"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "pipeline/UPSTREAM_LICENSE", "pipeline/vendor/dexseq/LICENSE.GPL-3.0", "THIRD_PARTY_LICENSES/*"]
 requires-python = ">=3.11"
@@ -30,6 +30,11 @@ dependencies = [
 ]
 
 [project.scripts]
+katana = "katana.cli:main"
+katana-splicetrace = "katana_splicetrace.cli:main"
+katana-splicenet = "katana_splicenet.cli:main"
+katana-sc-splicetrace = "katana_sc_splicetrace.cli:main"
+katana-sc-splicenet = "katana_sc_splicenet.cli:main"
 katana-open = "katana_next.launcher:main"
 katana-next = "katana_next.cli:main"
 katana-motiftrace = "katana_motiftrace.cli:main"
@@ -123,11 +128,36 @@ next-dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app", "app.*", "katana_cosplice", "katana_cosplice.*", "katana_motiftrace", "katana_motiftrace.*", "katana_next", "katana_next.*", "scripts", "src", "src.*"]
+include = [
+  "katana",
+  "katana.*",
+  "katana_splicetrace",
+  "katana_splicetrace.*",
+  "katana_splicenet",
+  "katana_splicenet.*",
+  "katana_sc_splicetrace",
+  "katana_sc_splicetrace.*",
+  "katana_sc_splicenet",
+  "katana_sc_splicenet.*",
+  "app",
+  "app.*",
+  "katana_cosplice",
+  "katana_cosplice.*",
+  "katana_motiftrace",
+  "katana_motiftrace.*",
+  "katana_next",
+  "katana_next.*",
+  "scripts",
+  "src",
+  "src.*",
+]
 namespaces = false
 
 [tool.setuptools.package-data]
 "katana_cosplice._study_core" = ["science/*.py", "science/*.R", "science/*.html", "science/*.css", "science/*.js"]
+"katana_splicetrace" = ["data/*", "data/**/*"]
+"katana_sc_splicetrace" = ["data/*", "data/**/*"]
+"katana_next.resources" = ["*.gz", "*.json", "*.tsv"]
 "katana_next.science" = ["rbp_sequence_browser.html", "motiftrace_windows.html", "motiftrace_consequences.html", "motiftrace_parallel.html", "rbp_evidence_layers.json", "*.R"]
 "katana_next" = ["vendor/DJExpress_SOURCE_SHA256.json", "vendor/DJExpress/*", "vendor/DJExpress/R/*.R", "vendor/MAPP/SOURCE.json", "vendor/MAPP/LICENSE", "vendor/MAPP/COPYING*", "vendor/MAPP/modules/*/scripts/*"]
 "katana_next.contracts" = ["schemas/*.json", "data/*.json"]

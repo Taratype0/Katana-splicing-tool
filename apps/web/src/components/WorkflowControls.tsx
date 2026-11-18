@@ -35,8 +35,9 @@ export function WorkflowControls({
 }: Props) {
   const showComparisons = contrasts.length > 0 && workflow.supports_contrast_selection;
   const isReadSupport = workflow.workflow_id === "quality.stable_as";
+  const RETIRED_QC_KEYS = new Set(["stability_profile", "min_reads", "min_supported_replicates", "min_direction_consistency", "apply_measurement_se_gate", "max_measurement_se"]);
   const visibleParameters = isReadSupport
-    ? workflow.parameters.filter((parameter) => ["fdr", "min_abs_dpsi"].includes(parameter.key))
+    ? workflow.parameters.filter((parameter) => !RETIRED_QC_KEYS.has(parameter.key))
     : workflow.parameters;
 
   return (
@@ -180,7 +181,7 @@ export function WorkflowControls({
           })}
         </div>
       )}
-      {isReadSupport && <p className="preset-description" role="note" aria-label="AS read-support policy">Read support: IJC + SJC must be at least 10 in every selected sample across both groups. Missing counts fail this check. FDR and |dPSI| thresholds are applied separately.</p>}
+      {isReadSupport && <p className="preset-description" role="note" aria-label="AS read-support policy">PS-DAS (Precision-Supported DAS): requires ≥75% replicate-quantile support on effective-length normalized counts (N_eff ≥ 10, with AS-NMD high-anchor rescue) and Jeffreys Binomial SE(ΔPSI) ≤ 0.16. Malformed or missing counts fail this check. FDR and |dPSI| thresholds are applied separately.</p>}
     </section>
   );
 }

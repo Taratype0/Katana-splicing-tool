@@ -62,9 +62,6 @@ def _digest(path):
 
 
 def _read_portable_table(path):
-    # Own the descriptor explicitly: Arrow's path/dataset reader can retain a
-    # Windows handle until collection, beyond TemporaryDirectory cleanup.
-    # Evidence members are individual Parquet files, not partitioned datasets.
     with Path(path).open("rb") as stream:
         return pq.read_table(stream)
 
@@ -159,7 +156,7 @@ def _column(table, candidates):
 
 def _in(table, column, values):
     if not column or not values:
-        return pa.array([False] * table.num_rows)
+        return pa.array([False] * table.num_rows, type=pa.bool_())
     return pc.fill_null(pc.is_in(pc.cast(table[column], pa.string()),
                                 value_set=pa.array(sorted(values), type=pa.string())), False)
 
@@ -203,6 +200,8 @@ def _verified_source(context, artifact):
     if (artifact.project_id != context.manifest.project_id or not artifact.path.is_file() or
             artifact.metadata.get("project_snapshot_fingerprint") != context.snapshot.manifest_fingerprint):
         raise ValueError("Selected source is unavailable, foreign or stale for the current project")
+    if artifact.metadata.get("imported_table_sha256") and _digest(artifact.path) != artifact.metadata["imported_table_sha256"]:
+        raise ValueError("Imported report table changed after verification")
     before = artifact.path.stat()
     digest = _digest(artifact.path)
     if artifact.metadata.get("artifact_contract_version") == "3.0-correctness":
@@ -270,6 +269,17 @@ def _resources(context, samples):
         path = getattr(context.manifest.annotation, kind)
         if path:
             references[kind + "_resource_id"] = add(kind, path)
+    if context.manifest.metadata.get("report_workspace"):
+        for row in sample_entries:
+            for kind in ("bam", "bai"):
+                rid = "resource-" + hashlib.sha256(_canonical([kind, row["sample_id"]])).hexdigest()[:24]
+                row[kind + "_resource_id"] = rid
+                resources.append({"resource_id": rid, "kind": kind, "sample_id": row["sample_id"],
+                    "sha256": None, "bytes": None, "verification": {"state": "not_verified", "hash_method": "unavailable"}})
+        rid = "resource-" + hashlib.sha256(_canonical(["gtf", "reference"])).hexdigest()[:24]
+        references["gtf_resource_id"] = rid
+        resources.append({"resource_id": rid, "kind": "gtf", "sha256": None, "bytes": None,
+            "verification": {"state": "not_verified", "hash_method": "unavailable"}})
     return resources, sample_entries, references, bindings, path_ids
 
 
@@ -291,6 +301,26 @@ def _sanitize_table(table, paths):
         typ = field.type.value_type if pa.types.is_dictionary(field.type) else field.type
         if not (pa.types.is_string(typ) or pa.types.is_large_string(typ) or pa.types.is_list(typ)
                 or pa.types.is_large_list(typ) or pa.types.is_struct(typ) or pa.types.is_map(typ)):
+            continue
+        if pa.types.is_string(typ) or pa.types.is_large_string(typ):
+            # Large enrichment tables repeat entire gene lists thousands of times.
+            # Check each distinct string without materializing every copy in Python;
+            # retain exact occurrence counts and all original rows/nulls.
+            chunks, count = [], 0
+            for chunk in table.column(i).chunks:
+                encoded = chunk if pa.types.is_dictionary(chunk.type) else pc.dictionary_encode(chunk)
+                checked = [redact(v) for v in encoded.dictionary.to_pylist()]
+                changed = [j for j, (_, n) in enumerate(checked) if n]
+                if changed:
+                    mask = pc.is_in(encoded.indices, value_set=pa.array(changed, type=encoded.indices.type))
+                    count += pc.sum(pc.cast(mask, pa.int64())).as_py() or 0
+                    values = pa.array([v for v, _ in checked], type=typ)
+                    chunk = (pa.DictionaryArray.from_arrays(encoded.indices, values)
+                             if pa.types.is_dictionary(field.type) else pc.take(values, encoded.indices))
+                chunks.append(chunk)
+            if count:
+                redactions[field.name] = count
+                table = table.set_column(i, field, pa.chunked_array(chunks, type=field.type))
             continue
         values = table.column(i).to_pylist()
         converted_counts = [redact(v) for v in values]
